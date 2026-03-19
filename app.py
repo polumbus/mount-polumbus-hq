@@ -1,0 +1,2006 @@
+import streamlit as st
+import subprocess
+import json
+import re
+import os
+import time
+import requests
+import tomli
+from datetime import datetime, timedelta
+from pathlib import Path
+
+# ─── Page Config ────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Mount Polumbus HQ",
+    page_icon="mountain",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ─── Constants ──────────────────────────────────────────────────────────────
+CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
+DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+SECRETS_PATH = "/home/polfam/.openclaw/workspace-redzone/.streamlit/secrets.toml"
+try:
+    with open(SECRETS_PATH, "rb") as f:
+        _secrets = tomli.load(f)
+    TWITTER_API_IO_KEY = _secrets.get("TWITTER_API_IO_KEY", "")
+except Exception:
+    TWITTER_API_IO_KEY = ""
+
+TYLER_HANDLE = "tyler_polumbus"
+
+# ─── Tyler's Voice System Prompt ─────────────────────────────────────────────
+TYLER_CONTEXT = """You are a content assistant for Tyler Polumbus — former NFL offensive lineman, Super Bowl 50 champion with the Denver Broncos, and current sports media personality.
+
+Tyler's profile:
+- Played 8 NFL seasons as an undrafted free agent, started 60+ games
+- Host of The PhD Show on Altitude 92.5 radio (Denver)
+- Runs Mount Polumbus podcast/YouTube channel
+- Colorado native, deep Denver sports loyalist
+- Covers Broncos (primary ~80% of content), Nuggets, Avalanche, CU Buffs
+- 42K+ followers on X (@tyler_polumbus)
+- Communication style: direct, blunt, no fluff, former-player perspective, knows the game from inside the trenches
+
+Tyler's voice on X:
+- Short punchy sentences. Never sounds like a press release.
+- Uses "we" when talking Broncos — it's personal
+- Hot takes that have teeth — backed by real football knowledge
+- Doesn't hedge. If he thinks something, he says it.
+- Occasional humor but never tries too hard
+- Knows X-specific hooks: numbers, provocative openers, "unpopular opinion" frames
+- Never uses emojis unless it's the fire emoji or a sport-specific one
+- Threads are rare but devastating when used
+- Keeps tweets under 200 characters when possible for max punch
+
+Denver sports context:
+- Broncos: Always relevant, always rebuilding faith post-Super Bowl 50
+- Nuggets: Back-to-back runs, Jokic era content is premium
+- Avalanche: Stanley Cup window, Nathan MacKinnon era
+- CU Buffs: Deion Sanders era is must-cover content
+
+IMPORTANT: Never use emojis in your output. Write plain text only."""
+
+# ─── Styles ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+.stApp { background: #0a0a0f; color: #e8e8f0; }
+section[data-testid="stSidebar"] { background: #0d0d18 !important; border-right: 1px solid #1e1e30; }
+section[data-testid="stSidebar"] .stButton > button { background: transparent !important; border: none !important; color: #aaaacc !important; text-align: left !important; padding: 6px 12px !important; font-size: 14px !important; font-weight: 400 !important; box-shadow: none !important; border-radius: 8px !important; }
+section[data-testid="stSidebar"] .stButton > button:hover { background: #151525 !important; color: #e8e8f0 !important; transform: none !important; box-shadow: none !important; }
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] { background: #1a2a2a !important; color: #4ecdc4 !important; font-weight: 600 !important; border-left: 3px solid #4ecdc4 !important; border-radius: 0 8px 8px 0 !important; }
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { transform: none !important; box-shadow: none !important; }
+.logo-block { padding: 8px 0 24px 0; text-align: center; }
+.logo-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; display: block; }
+.logo-sub { font-size: 10px; color: #555577; letter-spacing: 4px; text-transform: uppercase; margin-top: 4px; display: block; }
+.main-header { font-family: 'Bebas Neue', sans-serif; font-size: 48px; letter-spacing: 2px; line-height: 1; margin-bottom: 4px; }
+.main-header span { background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.tool-desc { color: #8888aa; font-size: 14px; margin-bottom: 28px; }
+.stat-card { background: #111120; border: 1px solid #1e1e35; border-radius: 12px; padding: 20px; text-align: center; }
+.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #FF6B00; line-height: 1; }
+.stat-label { font-size: 11px; color: #666688; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
+.stTextArea textarea, .stTextInput input { background: #111120 !important; border: 1px solid #1e1e35 !important; border-radius: 10px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; }
+.stTextArea textarea:focus, .stTextInput input:focus { border-color: #FF6B00 !important; box-shadow: 0 0 0 2px rgba(255,107,0,0.15) !important; }
+.stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
+@media (max-width: 768px) {
+    .main-header { font-size: 32px !important; }
+    .tool-desc { font-size: 13px !important; }
+    .stat-card { padding: 12px !important; }
+    .stat-num { font-size: 28px !important; }
+    .tweet-card { padding: 12px 14px !important; }
+    .output-box { padding: 14px !important; font-size: 13px !important; }
+    [data-testid="column"] { min-width: 100% !important; flex: 100% !important; }
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    section[data-testid="stSidebar"] { min-width: 180px !important; max-width: 220px !important; }
+    .stButton > button { padding: 8px 14px !important; font-size: 13px !important; }
+    .nav-section { font-size: 9px !important; }
+}
+.stButton > button { background: linear-gradient(135deg, #FF6B00, #cc4a00) !important; color: white !important; border: none !important; border-radius: 10px !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 14px !important; padding: 10px 24px !important; transition: all 0.15s ease !important; letter-spacing: 0.3px; }
+.stButton > button:hover { transform: translateY(-1px) !important; box-shadow: 0 6px 20px rgba(255,107,0,0.35) !important; }
+.output-box { background: #111120; border: 1px solid #1e1e35; border-left: 3px solid #FF6B00; border-radius: 10px; padding: 20px 22px; margin: 12px 0; font-size: 14px; line-height: 1.7; color: #d8d8e8; white-space: pre-wrap; font-family: 'DM Sans', sans-serif; }
+.tweet-card { background: #111120; border: 1px solid #1e1e35; border-radius: 12px; padding: 18px 20px; margin: 10px 0; position: relative; }
+.tweet-card:hover { border-color: #FF6B00; transition: border-color 0.2s; }
+.tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #FF6B00; letter-spacing: 1px; margin-bottom: 8px; }
+.tag { display: inline-block; background: #1e1e35; border-radius: 6px; padding: 3px 10px; font-size: 11px; color: #8888cc; margin: 2px; font-weight: 500; }
+.tag-hot { background: rgba(255,107,0,0.15); color: #FF6B00; border: 1px solid rgba(255,107,0,0.3); }
+.section-divider { border: none; border-top: 1px solid #1e1e35; margin: 24px 0; }
+.metric-label { font-size: 12px; color: #8888aa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.metric-score { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #FF6B00; }
+.score-bar-wrap { background: #1a1a2e; border-radius: 6px; height: 8px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 6px; transition: width 0.8s ease; }
+.stSelectbox > div > div { background: #111120 !important; border-color: #1e1e35 !important; color: #e8e8f0 !important; }
+.stSlider .st-br { background: #FF6B00 !important; }
+.stTabs [data-baseweb="tab-list"] { background: #0d0d18 !important; border-radius: 10px; gap: 4px; padding: 4px; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: #8888aa !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 13px !important; }
+.stTabs [aria-selected="true"] { background: #FF6B00 !important; color: white !important; }
+.stSpinner > div > div { border-top-color: #FF6B00 !important; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0a0f; }
+::-webkit-scrollbar-thumb { background: #1e1e35; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FF6B00; }
+.nav-section { font-size: 10px; color: #555577; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; margin: 16px 0 6px 4px; }
+.char-count { font-size: 12px; color: #666688; text-align: right; margin-top: -10px; margin-bottom: 10px; }
+.char-over { color: #ef4444 !important; }
+.chat-msg { border-radius: 10px; padding: 16px 20px; margin: 10px 0; }
+.chat-user { background: #111120; border-left: 1px solid #1e1e35; }
+.chat-ai { background: #1a1a30; border-left: 3px solid #FF6B00; }
+.chat-role { font-size: 11px; color: #666688; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+.progress-bar-bg { background: #1a1a2e; border-radius: 8px; height: 14px; width: 100%; overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ─── Helpers ────────────────────────────────────────────────────────────────
+def get_voice_context():
+    """Build Tyler's voice context from his actual tweet history."""
+    tweets = load_json("tweet_history.json", [])
+    if not tweets:
+        return TYLER_CONTEXT
+
+    # Get top 15 tweets by engagement as voice examples
+    top = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:15]
+    examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
+
+    return TYLER_CONTEXT + f"""
+
+TYLER'S ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
+{examples}
+
+Match this exact voice, tone, sentence structure, and style in everything you write."""
+
+
+def analyze_personal_patterns():
+    """Analyze Tyler's tweet history to build personal scoring benchmarks."""
+    tweets = load_json("tweet_history.json", [])
+    if len(tweets) < 20:
+        return None
+
+    # Filter out RTs and replies
+    originals = [t for t in tweets if not t.get("text", "").startswith("RT ") and not t.get("text", "").startswith("@")]
+    if len(originals) < 10:
+        return None
+
+    # Sort by engagement
+    for t in originals:
+        t["_eng"] = t.get("likeCount", 0) + t.get("retweetCount", 0) * 3 + t.get("replyCount", 0) * 2
+
+    sorted_tweets = sorted(originals, key=lambda t: t["_eng"], reverse=True)
+    top_20pct = sorted_tweets[:max(5, len(sorted_tweets) // 5)]
+    bottom_20pct = sorted_tweets[-max(5, len(sorted_tweets) // 5):]
+
+    patterns = {}
+
+    # Average character length
+    patterns["top_avg_chars"] = sum(len(t.get("text", "")) for t in top_20pct) // len(top_20pct)
+    patterns["bottom_avg_chars"] = sum(len(t.get("text", "")) for t in bottom_20pct) // len(bottom_20pct)
+    patterns["optimal_char_range"] = (min(len(t.get("text", "")) for t in top_20pct), max(len(t.get("text", "")) for t in top_20pct))
+
+    # Ellipsis usage
+    patterns["top_ellipsis_pct"] = round(sum(1 for t in top_20pct if "..." in t.get("text", "")) / len(top_20pct) * 100)
+    patterns["bottom_ellipsis_pct"] = round(sum(1 for t in bottom_20pct if "..." in t.get("text", "")) / len(bottom_20pct) * 100)
+
+    # Question marks
+    patterns["top_question_pct"] = round(sum(1 for t in top_20pct if "?" in t.get("text", "")) / len(top_20pct) * 100)
+    patterns["bottom_question_pct"] = round(sum(1 for t in bottom_20pct if "?" in t.get("text", "")) / len(bottom_20pct) * 100)
+
+    # Line breaks
+    patterns["top_linebreaks_avg"] = round(sum(t.get("text", "").count("\n") for t in top_20pct) / len(top_20pct), 1)
+
+    # Average engagement
+    patterns["avg_likes"] = sum(t.get("likeCount", 0) for t in originals) // len(originals)
+    patterns["avg_rts"] = sum(t.get("retweetCount", 0) for t in originals) // len(originals)
+    patterns["avg_replies"] = sum(t.get("replyCount", 0) for t in originals) // len(originals)
+    patterns["avg_views"] = sum(t.get("viewCount", 0) for t in originals) // len(originals)
+
+    # Top 10 tweets as examples
+    patterns["top_examples"] = [{"text": t.get("text", ""), "likes": t.get("likeCount", 0), "rts": t.get("retweetCount", 0), "replies": t.get("replyCount", 0)} for t in top_20pct[:10]]
+    patterns["bottom_examples"] = [{"text": t.get("text", ""), "likes": t.get("likeCount", 0)} for t in bottom_20pct[:5]]
+
+    # First-word patterns in top tweets
+    first_words = [t.get("text", "").split()[0].lower() if t.get("text", "").split() else "" for t in top_20pct]
+    patterns["top_first_words"] = first_words
+
+    # Top reply-getters
+    reply_sorted = sorted(originals, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
+    patterns["top_reply_examples"] = [{"text": t.get("text", ""), "replies": t.get("replyCount", 0), "likes": t.get("likeCount", 0)} for t in reply_sorted]
+
+    return patterns
+
+
+def build_patterns_context(patterns):
+    """Build a string context block from personal patterns for prompt injection."""
+    if not patterns:
+        return ""
+
+    top_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['likes']} likes, {ex['rts']} RTs, {ex['replies']} replies)" for ex in patterns.get("top_examples", [])[:10]])
+    bottom_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['likes']} likes)" for ex in patterns.get("bottom_examples", [])[:5]])
+    reply_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['replies']} replies, {ex['likes']} likes)" for ex in patterns.get("top_reply_examples", [])[:5]])
+    first_words = ", ".join(patterns.get("top_first_words", [])[:10])
+    opt_range = patterns.get("optimal_char_range", (0, 280))
+
+    return f"""
+TYLER'S PERSONAL TWEET BENCHMARKS (from his actual tweet history):
+
+Character Length:
+- Top tweets average {patterns.get('top_avg_chars', 0)} characters
+- Bottom tweets average {patterns.get('bottom_avg_chars', 0)} characters
+- Optimal range: {opt_range[0]}-{opt_range[1]} characters
+
+Style Patterns (top performers):
+- {patterns.get('top_ellipsis_pct', 0)}% use ellipsis (...) vs {patterns.get('bottom_ellipsis_pct', 0)}% in bottom tweets
+- {patterns.get('top_question_pct', 0)}% end with a question vs {patterns.get('bottom_question_pct', 0)}% in bottom tweets
+- Average {patterns.get('top_linebreaks_avg', 0)} line breaks per top tweet
+- Common first words in top tweets: {first_words}
+
+Engagement Averages:
+- Average likes: {patterns.get('avg_likes', 0)}
+- Average RTs: {patterns.get('avg_rts', 0)}
+- Average replies: {patterns.get('avg_replies', 0)}
+- Average views: {patterns.get('avg_views', 0)}
+
+Top 10 Performing Tweets:
+{top_ex}
+
+Bottom 5 Performing Tweets:
+{bottom_ex}
+
+Top Reply-Getters (conversation starters):
+{reply_ex}
+"""
+
+
+def auto_height(text, min_h=80, chars_per_line=60, line_h=24):
+    """Calculate text_area height based on content length."""
+    if not text:
+        return min_h
+    lines = text.count('\n') + 1
+    char_lines = max(1, len(text) // chars_per_line)
+    total = max(lines, char_lines) + 1
+    return max(min_h, min(600, total * line_h))
+
+
+def _call_groq(prompt: str, system: str = "", max_tokens: int = 1500) -> str:
+    """Fallback to Groq when Claude CLI is unavailable or rate-limited."""
+    groq_key = ""
+    try:
+        env_path = os.path.expanduser("~/.openclaw/.env")
+        if os.path.exists(env_path):
+            for line in open(env_path):
+                if line.startswith("GROQ_API_KEY="):
+                    groq_key = line.split("=", 1)[1].strip()
+    except Exception:
+        pass
+    # Also check Streamlit secrets
+    if not groq_key:
+        groq_key = st.secrets.get("GROQ_API_KEY", "")
+    if not groq_key:
+        return "Error: No Groq API key available"
+    try:
+        from groq import Groq
+        client = Groq(api_key=groq_key)
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error (Groq): {str(e)}"
+
+
+def _is_local():
+    """Check if running locally (Claude CLI available) vs Streamlit Cloud."""
+    return os.path.exists(CLAUDE_CLI)
+
+
+def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
+    if system is None:
+        system = get_voice_context()
+    full_prompt = f"{system}\n\n{prompt}" if system else prompt
+
+    # Try Claude CLI first (local only)
+    if _is_local():
+        try:
+            result = subprocess.run(
+                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-20250514"],
+                input=full_prompt, capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            # Claude failed (rate limit, error) — fall through to Groq
+            err = result.stderr.strip()[:100] if result.stderr else ""
+            if "rate" in err.lower() or "overloaded" in err.lower() or not result.stdout.strip():
+                pass  # Fall through to Groq
+            else:
+                return f"Error: {err}"
+        except subprocess.TimeoutExpired:
+            pass  # Fall through to Groq
+        except Exception:
+            pass  # Fall through to Groq
+
+    # Fallback to Groq
+    return _call_groq(prompt, system or "", max_tokens)
+
+
+def load_json(filename: str, default=None):
+    path = DATA_DIR / filename
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            pass
+    return default if default is not None else []
+
+
+def save_json(filename: str, data):
+    path = DATA_DIR / filename
+    path.write_text(json.dumps(data, indent=2, default=str))
+
+
+def fetch_tweets(query: str, count: int = 50) -> list:
+    if not TWITTER_API_IO_KEY:
+        return []
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/tweet/advanced_search",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"query": query, "queryType": "Latest", "cursor": ""},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            tweets = data.get("tweets", [])
+            return tweets[:count]
+    except Exception:
+        pass
+    return []
+
+
+def fetch_user_info(handle: str) -> dict:
+    if not TWITTER_API_IO_KEY:
+        return {}
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/user/info",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"userName": handle},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("data", {})
+    except Exception:
+        pass
+    return {}
+
+
+def render_tweet_card(tweet: dict, idx: int = 0):
+    text = tweet.get("text", "")
+    likes = tweet.get("likeCount", 0)
+    rts = tweet.get("retweetCount", 0)
+    replies = tweet.get("replyCount", 0)
+    views = tweet.get("viewCount", 0)
+    created = tweet.get("createdAt", "")
+    author = tweet.get("author", {})
+    name = author.get("name", "") if author else ""
+    handle = author.get("userName", "") if author else ""
+    st.markdown(f"""
+    <div class="tweet-card">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <span class="tweet-num">{name} @{handle}</span>
+            <span style="font-size:11px; color:#444466;">{created[:16] if created else ''}</span>
+        </div>
+        <div style="color:#d8d8e8; font-size:14px; margin-bottom:10px; line-height:1.6;">{text}</div>
+        <div style="display:flex; gap:20px; font-size:12px; color:#666688;">
+            <span>Likes: {likes:,}</span>
+            <span>RTs: {rts:,}</span>
+            <span>Replies: {replies:,}</span>
+            <span>Views: {views:,}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─── Sidebar Navigation ────────────────────────────────────────────────────
+NAV_ITEMS = {
+    "CREATE": [
+        ("Brain Dump", "pencil2"),
+        ("Compose Ideas", "bulb"),
+        ("Content Coach", "speech_balloon"),
+        ("Article Writer", "memo"),
+    ],
+    "ANALYZE": [
+        ("Tweet History", "clock3"),
+        ("Algo Analyzer", "bar_chart"),
+        ("Health Check", "stethoscope"),
+        ("Account Pulse", "chart_with_upwards_trend"),
+        ("Account Researcher", "mag"),
+    ],
+    "ENGAGE": [
+        ("Reply Guy", "left_speech_bubble"),
+        ("Inspiration", "sparkles"),
+    ],
+}
+
+NAV_ICONS = {
+    "Brain Dump": "✏️", "Compose Ideas": "💡", "Content Coach": "💬", "Article Writer": "📝",
+    "Tweet History": "🕐", "Algo Analyzer": "📊", "Health Check": "🩺", "Account Pulse": "📈",
+    "Account Researcher": "🔍", "Reply Guy": "🗨️", "Inspiration": "✨",
+}
+
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Brain Dump"
+
+with st.sidebar:
+    st.markdown("""
+    <div class="logo-block">
+        <span class="logo-title">MOUNT POLUMBUS</span>
+        <span class="logo-sub">Content HQ</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for section, items in NAV_ITEMS.items():
+        st.markdown(f'<div class="nav-section">{section}</div>', unsafe_allow_html=True)
+        for name, _ in items:
+            icon = NAV_ICONS.get(name, "")
+            is_active = st.session_state.current_page == name
+            if st.button(f"{icon}  {name}", key=f"nav_{name}",
+                        use_container_width=True,
+                        type="primary" if is_active else "secondary"):
+                st.session_state.current_page = name
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("""<div style="font-size: 11px; color: #333355; text-align: center;">
+    @tyler_polumbus | PhD Show | Altitude 92.5
+    </div>""", unsafe_allow_html=True)
+
+page = st.session_state.current_page
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: BRAIN DUMP
+# ═══════════════════════════════════════════════════════════════════════════
+def page_brain_dump():
+    st.markdown('<div class="main-header">BRAIN <span>DUMP</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Set a timer, dump your thoughts, turn them into content.</div>', unsafe_allow_html=True)
+
+    # Timer
+    if "bd_timer_end" not in st.session_state:
+        st.session_state.bd_timer_end = None
+    if "bd_timer_mins" not in st.session_state:
+        st.session_state.bd_timer_mins = 0
+
+    tcols = st.columns([1, 1, 1, 1, 2])
+    for i, mins in enumerate([5, 10, 15, 30]):
+        with tcols[i]:
+            if st.button(f"{mins} min", key=f"timer_{mins}", use_container_width=True):
+                st.session_state.bd_timer_end = time.time() + mins * 60
+                st.session_state.bd_timer_mins = mins
+
+    with tcols[4]:
+        if st.session_state.bd_timer_end:
+            remaining = max(0, st.session_state.bd_timer_end - time.time())
+            m, s = divmod(int(remaining), 60)
+            if remaining > 0:
+                st.markdown(f'<div class="stat-card"><div class="stat-num">{m:02d}:{s:02d}</div><div class="stat-label">Remaining</div></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="stat-card"><div class="stat-num" style="color:#22c55e;">DONE</div><div class="stat-label">Time\'s up</div></div>', unsafe_allow_html=True)
+
+    col_main, col_saved = st.columns([2, 1])
+
+    with col_main:
+        dump_text = st.text_area("Drop your raw thoughts:", height=200,
+            placeholder="Whatever is in your head -- game reaction, hot take, rant, observation...",
+            key="bd_text")
+
+        bc1, bc2, bc3, bc4 = st.columns(4)
+        with bc1:
+            if st.button("Give Me a Subject", use_container_width=True, key="bd_subject"):
+                with st.spinner("Thinking..."):
+                    result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
+                    st.session_state["bd_subject_result"] = result
+        with bc2:
+            if st.button("Generate Content Ideas", use_container_width=True, key="bd_ideas"):
+                if dump_text.strip():
+                    with st.spinner("Generating ideas..."):
+                        result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
+                        st.session_state["bd_ideas_result"] = result
+        with bc3:
+            if st.button("Save Brain Dump", use_container_width=True, key="bd_save"):
+                if dump_text.strip():
+                    dumps = load_json("brain_dumps.json", [])
+                    dumps.append({"text": dump_text, "saved_at": datetime.now().isoformat(), "timer_mins": st.session_state.bd_timer_mins})
+                    save_json("brain_dumps.json", dumps)
+                    st.success("Saved.")
+        with bc4:
+            if st.button("New Brain Dump", use_container_width=True, key="bd_new"):
+                st.session_state.bd_timer_end = None
+                st.session_state.bd_timer_mins = 0
+                for k in ["bd_subject_result", "bd_ideas_result", "bd_tweets", "bd_longform", "bd_video"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+        if st.session_state.get("bd_subject_result"):
+            st.markdown(f'<div class="output-box">{st.session_state["bd_subject_result"]}</div>', unsafe_allow_html=True)
+        if st.session_state.get("bd_ideas_result"):
+            st.markdown(f'<div class="output-box">{st.session_state["bd_ideas_result"]}</div>', unsafe_allow_html=True)
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # Collapsible generation sections
+        with st.expander("Tweet Ideas"):
+            if st.button("Generate Tweet Ideas", key="bd_gen_tweets"):
+                if dump_text.strip():
+                    with st.spinner("Generating tweets..."):
+                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
+                        st.session_state["bd_tweets"] = result
+            if st.session_state.get("bd_tweets"):
+                st.markdown(f'<div class="output-box">{st.session_state["bd_tweets"]}</div>', unsafe_allow_html=True)
+
+        with st.expander("Long-form Post Idea"):
+            if st.button("Generate Long-form Idea", key="bd_gen_long"):
+                if dump_text.strip():
+                    with st.spinner("Generating..."):
+                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
+                        st.session_state["bd_longform"] = result
+            if st.session_state.get("bd_longform"):
+                st.markdown(f'<div class="output-box">{st.session_state["bd_longform"]}</div>', unsafe_allow_html=True)
+
+        with st.expander("Video Script Outline"):
+            if st.button("Generate Video Outline", key="bd_gen_video"):
+                if dump_text.strip():
+                    with st.spinner("Generating..."):
+                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
+                        st.session_state["bd_video"] = result
+            if st.session_state.get("bd_video"):
+                st.markdown(f'<div class="output-box">{st.session_state["bd_video"]}</div>', unsafe_allow_html=True)
+
+    with col_saved:
+        st.markdown("### Saved Brain Dumps")
+        dumps = load_json("brain_dumps.json", [])
+        if not dumps:
+            st.markdown('<div class="output-box">No saved brain dumps yet.</div>', unsafe_allow_html=True)
+        else:
+            for i, d in enumerate(reversed(dumps[-20:])):
+                ts = d.get("saved_at", "")[:16].replace("T", " ")
+                preview = d.get("text", "")[:120]
+                timer_info = f" ({d.get('timer_mins', '?')}m)" if d.get('timer_mins') else ""
+                st.markdown(f"""<div class="tweet-card">
+                    <div class="tweet-num">{ts}{timer_info}</div>
+                    <div style="color:#d8d8e8; font-size:13px;">{preview}{'...' if len(d.get('text','')) > 120 else ''}</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: COMPOSE IDEAS
+# ═══════════════════════════════════════════════════════════════════════════
+def page_compose_ideas():
+    st.markdown('<div class="main-header">COMPOSE <span>IDEAS</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Draft, refine, and save your content ideas.</div>', unsafe_allow_html=True)
+
+    col_main, col_saved = st.columns([2, 1])
+
+    with col_main:
+        tweet_text = st.text_area("Write your tweet idea:", height=140, key="ci_text",
+            placeholder="Start typing your idea here...")
+        char_len = len(tweet_text)
+        cls = "char-over" if char_len > 280 else ""
+        st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
+        with fc2:
+            voice = st.selectbox("Voice", ["Default", "Critical", "Homer"], key="ci_voice",
+                help="Default = Tyler's natural voice | Critical = skeptical, tough love | Homer = ultra positive, hype mode")
+
+        sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+        with sc1:
+            banger = st.button("Make me a banger", key="ci_banger", use_container_width=True)
+        with sc2:
+            viral = st.button("Will this go viral?", key="ci_viral", use_container_width=True)
+        with sc3:
+            engage = st.button("Algorithm Grades", key="ci_engage", use_container_width=True)
+        with sc4:
+            biz = st.button("Preview", key="ci_biz", use_container_width=True)
+        with sc5:
+            repurpose = st.button("Repurpose", key="ci_repurpose", use_container_width=True)
+
+        # Voice modifier for prompts
+        voice_mod = ""
+        if voice == "Critical":
+            voice_mod = """Voice style: CRITICAL — Accountability mode. Tyler as the tough-love analyst.
+
+ALGORITHM-SAFE CRITICAL RULES:
+- ALWAYS pair criticism with a specific stat, fact, or film observation. "The O-line allowed pressure on 42% of dropbacks" is safe. "This team sucks" gets throttled.
+- Frame as accountability, never contempt. Energy: "I'm saying this because I believe this team can be better."
+- NEVER attack individual fans, players personally, or use all-caps rants. X penalizes combative tone with up to 80% reach reduction.
+- End with a constructive angle or question. This converts criticism into conversation (replies = 27x a like).
+- Think: disappointed parent who played in the NFL, not angry fan on a barstool.
+- Skeptical, direct, calls out what others won't say. But always backed by evidence or experience."""
+        elif voice == "Homer":
+            voice_mod = """Voice style: HOMER — Rally mode. Tyler as the ultimate believer.
+
+ALGORITHM-BOOSTED HOMER RULES:
+- Positive sentiment is explicitly boosted by X's Grok sentiment analysis. Zero risk of negative signal penalties.
+- ALWAYS tie optimism to something specific. "I love what I'm seeing from Troy Franklin's route-running" beats "LET'S GOOOO."
+- Defend positions with data or insider perspective. "Everyone's writing off this team, but the underlying numbers tell a different story" is credible homer content.
+- Celebrate with substance. After wins: "Here's what went RIGHT" with specific plays/players.
+- Rally the fanbase by making them feel included. Use "we" language. Fans follow sports accounts to feel good about their fandom.
+- No blind cheerleading — genuine optimism grounded in real football knowledge from Tyler's 8 years in the league."""
+        else:
+            voice_mod = """Voice style: DEFAULT — Tyler's natural voice. The balanced authority.
+
+This is the algorithm's sweet spot. Balanced content generates the most diverse engagement (bookmarks + retweets + replies) which maximizes algorithmic value.
+- Direct, confident, former-player authority
+- Mix of positive and critical in the same post when appropriate
+- Lead with insight, not just opinion
+- Sentence structure: short punchy lines, ellipsis as signature, questions to drive replies
+- 70% positive/neutral, 30% critical — the optimal content ratio for sustained growth"""
+
+        result = None
+        if banger and tweet_text.strip():
+            with st.spinner("Perfecting your tweet..."):
+                pp = analyze_personal_patterns()
+                patterns_ctx = build_patterns_context(pp) if pp else ""
+                banger_prompt = f"""Tyler drafted this tweet. Your job: rewrite it to score 9+ on every X algorithm metric AND match his proven winning style.
+
+Draft: "{tweet_text}"
+
+{voice_mod}
+{patterns_ctx}
+
+Optimize for ALL of these:
+- Tonal Clarity (direct, passionate, not toxic)
+- Reading Level (7th-9th grade, accessible)
+- No Harsh/Offensive Language
+- Engagement Potential (invites replies, quote tweets)
+- Formatting & Readability (varied line lengths, paragraph breaks)
+- Hook & Pattern Breakers (first line MUST stop the scroll — reference his top hooks above)
+- Grammar & Spelling (perfect)
+- No Hashtags, Links, or Tags
+{"- Character length should be in his optimal range of " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
+{"- " + str(pp.get("top_question_pct", 0)) + "% of his top tweets use a question — consider adding one" if pp and pp.get("top_question_pct", 0) > 40 else ""}
+{"- " + str(pp.get("top_ellipsis_pct", 0)) + "% of his top tweets use ellipsis — match that style" if pp and pp.get("top_ellipsis_pct", 0) > 30 else ""}
+
+Give exactly 3 rewrite options. Each under 280 characters. Tyler's voice: direct, former NFL player authority, uses ellipsis, no emojis. Number them 1-3. After each, show the character count. Reference which top tweet pattern each rewrite is modeled after."""
+                result = call_claude(banger_prompt)
+        elif viral and tweet_text.strip():
+            with st.spinner("Analyzing viral potential against your history..."):
+                history = get_tweet_knowledge_base()
+                pp = analyze_personal_patterns()
+                patterns_ctx = build_patterns_context(pp) if pp else ""
+
+                if history:
+                    avg_likes = sum(t.get("likeCount", 0) for t in history) // max(len(history), 1)
+                    avg_rts = sum(t.get("retweetCount", 0) for t in history) // max(len(history), 1)
+                    avg_replies = sum(t.get("replyCount", 0) for t in history) // max(len(history), 1)
+                    top_tweets = sorted(history, key=lambda t: t.get("likeCount", 0), reverse=True)[:10]
+                    top_examples = "\n".join([f"- {t.get('text','')[:120]} (likes:{t.get('likeCount',0)}, rts:{t.get('retweetCount',0)}, replies:{t.get('replyCount',0)})" for t in top_tweets])
+                    history_ctx = f"\n\nTyler's average tweet performance: {avg_likes} likes, {avg_rts} RTs, {avg_replies} replies.\n\nHis top 10 tweets:\n{top_examples}"
+                else:
+                    history_ctx = "\n\nNo tweet history available — sync tweets first for better predictions."
+                    avg_likes = 50
+                    avg_rts = 5
+                    avg_replies = 10
+
+                viral_prompt = f"""Analyze this draft tweet's viral potential based on Tyler's ACTUAL historical data and personal benchmarks.
+
+Draft: "{tweet_text}"
+{history_ctx}
+{patterns_ctx}
+
+Compare this draft against Tyler's personal patterns:
+- His top tweets average {pp.get('top_avg_chars', 'N/A') if pp else 'N/A'} characters — this draft is {len(tweet_text)} characters
+- {pp.get('top_question_pct', 'N/A') if pp else 'N/A'}% of his top tweets use questions
+- {pp.get('top_ellipsis_pct', 'N/A') if pp else 'N/A'}% of his top tweets use ellipsis
+- His optimal character range is {pp.get('optimal_char_range', 'N/A') if pp else 'N/A'}
+
+Return ONLY this JSON format:
+{{
+    "predicted_likes": [number based on his history],
+    "predicted_retweets": [number],
+    "predicted_comments": [number],
+    "total_predicted_engagement": [sum],
+    "confidence": "High" or "Medium" or "Low",
+    "compared_to_average": "Above average" or "Average" or "Below average",
+    "reasoning": "[2-3 sentences explaining why, referencing specific similar tweets from his history that performed well or poorly and comparing against his personal benchmarks]",
+    "improvements": ["specific tip referencing his data 1", "specific tip referencing his data 2", "specific tip referencing his data 3"]
+}}"""
+                raw = call_claude(viral_prompt)
+                try:
+                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                    vdata = json.loads(json_match.group()) if json_match else None
+                except Exception:
+                    vdata = None
+
+                if vdata and "predicted_likes" in vdata:
+                    st.session_state["ci_viral_data"] = vdata
+                else:
+                    result = raw
+        elif engage and tweet_text.strip():
+            with st.spinner("Grading against the algorithm and your history..."):
+                pp = analyze_personal_patterns()
+                patterns_ctx = build_patterns_context(pp) if pp else ""
+
+                grade_prompt = f"""Grade this tweet against X's CONFIRMED algorithm signals (from the open-sourced recommendation code) AND Tyler's personal tweet performance history.
+
+CONFIRMED X ALGORITHM SIGNAL WEIGHTS:
+- Author replies to replies on own tweet: 150x a like (THE #1 signal)
+- Replies from others: 27x a like
+- Profile clicks: 24x a like
+- Dwell time (2+ min): 20x a like
+- Bookmarks: 20x a like
+- Retweets: 2x a like
+- Likes: 1x (baseline)
+- External links: CONFIRMED 30-50% reach penalty
+- 3+ hashtags: CONFIRMED ~40% reach penalty
+- Negative/combative tone: reduces distribution since 2026 (Grok sentiment analysis)
+- First 30 minutes are critical — early engagement determines distribution
+
+Tweet: "{tweet_text}"
+{patterns_ctx}
+
+This draft is {len(tweet_text)} characters.
+{"It " + ("contains" if "?" in tweet_text else "does NOT contain") + " a question mark." if pp else ""}
+{"It " + ("uses" if "..." in tweet_text else "does NOT use") + " ellipsis." if pp else ""}
+
+Score each category 1-10. Each detail MUST reference Tyler's actual data or a specific confirmed algorithm signal.
+
+Return ONLY this JSON:
+{{
+    "algorithm_score": [0-100 for algorithm compliance],
+    "tyler_score": [0-100 for matching Tyler's proven patterns],
+    "grades": [
+        {{"name": "Hook Strength (Dwell Time)", "score": 8, "detail": "The algorithm measures dwell time — how long users pause on your post. A strong hook = longer dwell = algorithmic boost. Compare this first line to Tyler's top hooks.", "benchmark": "Top hook: '[his best first line]' ([X] likes)"}},
+        {{"name": "Conversation Catalyst", "score": 7, "detail": "Replies are 27x a like. Author replying to replies is 150x. Is this tweet structured so Tyler can meaningfully reply to responses? Open-ended? Invites debate? Compare to his top reply-getters.", "benchmark": "Top reply-getter: '[snippet]' ([X] replies)"}},
+        {{"name": "Bookmark Worthiness", "score": 6, "detail": "Bookmarks are 20x a like — the 'silent like.' Does this tweet have save-for-later value? Reference, insight, or take worth returning to?", "benchmark": "Reference-worthy content scores highest"}},
+        {{"name": "Share/Quote Potential", "score": 7, "detail": "Retweets are 20x a like. Would someone share this with THEIR audience? Hot takes, surprising stats, and strong opinions get shared most.", "benchmark": "Tyler's most shared: '[snippet]' ([X] RTs)"}},
+        {{"name": "Engagement Triggers", "score": 7, "detail": "Questions, ellipsis, line breaks, open-ended statements. Compare to Tyler's patterns.", "benchmark": "[X]% of his top tweets use questions, [X]% use ellipsis"}},
+        {{"name": "Algorithm Compliance", "score": 9, "detail": "External links get 30-50% penalty. 3+ hashtags get 40% penalty. Negative tone reduces reach. Check for all confirmed penalties.", "benchmark": "No links, 0-2 hashtags, constructive tone"}},
+        {{"name": "Dwell Time Potential", "score": 7, "detail": "Beyond the hook — does the FULL tweet reward reading? Posts viewed <3 seconds get negative quality signals. Posts with 2+ min dwell get 20x boost. Line breaks, story structure, and payoff increase dwell.", "benchmark": "Multi-paragraph tweets with payoff perform best"}},
+        {{"name": "Voice Match", "score": 8, "detail": "How closely does this match Tyler's proven winning patterns? Sentence length, punctuation style, authority level. Reference his actual style data.", "benchmark": "Tyler's voice: [key patterns]"}}
+    ],
+    "personal_insights": [
+        "Data-driven insight comparing this draft to Tyler's actual patterns",
+        "Another data-driven insight with specific numbers from his history"
+    ],
+    "suggestions": ["specific improvement 1 referencing confirmed algorithm signals", "specific improvement 2", "specific improvement 3"]
+}}"""
+                raw = call_claude(grade_prompt)
+                try:
+                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                    gdata = json.loads(json_match.group()) if json_match else None
+                except Exception:
+                    gdata = None
+                if gdata and "grades" in gdata:
+                    st.session_state["ci_grades"] = gdata
+                    st.session_state.pop("ci_result", None)
+                else:
+                    result = raw
+
+        elif biz and tweet_text.strip():
+            # Preview — show how tweet looks on X
+            st.session_state["ci_preview"] = tweet_text
+            st.session_state.pop("ci_result", None)
+            st.session_state.pop("ci_repurposed", None)
+
+        elif repurpose and tweet_text.strip():
+            with st.spinner("Repurposing in your voice..."):
+                repurpose_prompt = f"""Someone else wrote this tweet. Tyler wants to make a NEW original tweet on the same subject in his own voice.
+
+Original tweet (NOT Tyler's): "{tweet_text}"
+
+{voice_mod}
+
+Write a completely NEW tweet about the same topic/subject. Do NOT copy any of the original phrasing. This must be 100% Tyler's voice and perspective as a former NFL player. Optimize for the X algorithm:
+- Strong hook in the first line
+- Under 280 characters
+- Invites engagement/replies
+- No hashtags, no emojis
+- 7th-9th grade reading level
+
+Give the repurposed tweet, then show character count."""
+                repurposed = call_claude(repurpose_prompt)
+                st.session_state["ci_repurposed"] = repurposed
+                st.session_state.pop("ci_result", None)
+                st.session_state.pop("ci_viral_data", None)
+                st.session_state.pop("ci_grades", None)
+                st.session_state.pop("ci_preview", None)
+
+        if result:
+            st.session_state["ci_result"] = result
+            st.session_state.pop("ci_viral_data", None)
+            st.session_state.pop("ci_grades", None)
+            st.session_state.pop("ci_preview", None)
+            st.session_state.pop("ci_repurposed", None)
+
+        # Render results based on which button was pressed
+
+        # Banger / general result — editable text area
+        if st.session_state.get("ci_result"):
+            st.markdown('<div style="font-weight:700; margin:12px 0 8px;">Result:</div>', unsafe_allow_html=True)
+            edited = st.text_area("Edit your result:", value=st.session_state["ci_result"], height=auto_height(st.session_state.get("ci_result","")), key="ci_result_edit")
+            rc1, rc2, rc3 = st.columns(3)
+            with rc1:
+                if st.button("Save As New Idea", key="ci_save_result", use_container_width=True):
+                    ideas = load_json("saved_ideas.json", [])
+                    ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                    save_json("saved_ideas.json", ideas)
+                    st.success("Saved.")
+            with rc2:
+                if st.button("Copy to Draft", key="ci_copy_draft", use_container_width=True):
+                    st.session_state["ci_text"] = edited
+                    st.session_state.pop("ci_result", None)
+                    st.rerun()
+
+        # Repurposed content — editable
+        if st.session_state.get("ci_repurposed"):
+            st.markdown('<div style="font-weight:700; font-size:16px; margin:16px 0 8px;">Repurposed Content</div>', unsafe_allow_html=True)
+            edited_rp = st.text_area("Edit repurposed tweet:", value=st.session_state["ci_repurposed"], height=auto_height(st.session_state.get("ci_repurposed","")), key="ci_rp_edit")
+            rpc1, rpc2, rpc3 = st.columns(3)
+            with rpc1:
+                if st.button("Save As New Idea", key="ci_save_rp", use_container_width=True):
+                    ideas = load_json("saved_ideas.json", [])
+                    ideas.append({"text": edited_rp, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                    save_json("saved_ideas.json", ideas)
+                    st.success("Saved.")
+            with rpc2:
+                if st.button("Copy to Draft", key="ci_copy_rp", use_container_width=True):
+                    st.session_state["ci_text"] = edited_rp
+                    st.session_state.pop("ci_repurposed", None)
+                    st.rerun()
+
+        # Viral Potential Analysis
+        if st.session_state.get("ci_viral_data"):
+            vd = st.session_state["ci_viral_data"]
+            total = vd.get("total_predicted_engagement", 0)
+            conf = vd.get("confidence", "Medium")
+            compared = vd.get("compared_to_average", "Average")
+            conf_color = "#22c55e" if conf == "High" else "#FF6B00" if conf == "Medium" else "#ef4444"
+            comp_color = "#22c55e" if "Above" in compared else "#FF6B00" if "Average" in compared else "#ef4444"
+
+            st.markdown(f"""<div class="output-box">
+                <div style="font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:1px; margin-bottom:16px;">Viral Potential Analysis</div>
+                <div style="font-size:13px; color:#8888aa; margin-bottom:16px;">Analyzing your tweet's potential performance based on your historical data.</div>
+                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Likes:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_likes', 0):,}</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Retweets:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_retweets', 0):,}</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Comments:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_comments', 0):,}</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:8px 0;"><span>Total Predicted Engagement:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#FF6B00;">{total:,}</span></div>
+                </div>
+                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:12px;">
+                    <div style="font-weight:700; margin-bottom:8px;">Analysis Details</div>
+                    <div style="margin-bottom:6px;">Confidence: <span style="background:{conf_color}; color:white; padding:2px 10px; border-radius:4px; font-size:12px;">{conf}</span></div>
+                    <div style="margin-bottom:6px; color:#8888aa;">Compared to your average:</div>
+                    <div style="color:{comp_color}; margin-bottom:12px;">{"↑" if "Above" in compared else "→" if "Average" in compared else "↓"} {compared}</div>
+                    <div style="color:#8888aa; font-size:12px; margin-bottom:4px;">Reasoning:</div>
+                    <div style="font-size:14px; line-height:1.6;">{vd.get('reasoning', '')}</div>
+                </div>
+                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px;">
+                    <div style="font-weight:700; margin-bottom:8px;">How to improve engagement</div>
+                    <ul style="margin:0; padding-left:20px;">{''.join([f'<li style="margin-bottom:8px; line-height:1.5;">{tip}</li>' for tip in vd.get('improvements', [])])}</ul>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+        # Algorithm Grades
+        if st.session_state.get("ci_grades"):
+            gd = st.session_state["ci_grades"]
+            algo_score = gd.get("algorithm_score", 0)
+            tyler_score = gd.get("tyler_score", 0)
+            algo_color = "#22c55e" if algo_score >= 75 else "#FF6B00" if algo_score >= 55 else "#ef4444"
+            tyler_color = "#22c55e" if tyler_score >= 75 else "#FF6B00" if tyler_score >= 55 else "#ef4444"
+
+            st.markdown(f"""<div style="display:flex; gap:20px; margin:16px 0;">
+                <div style="flex:1; background:#0d0d18; border:1px solid #1e1e35; border-radius:12px; padding:20px; text-align:center;">
+                    <div style="font-family:'Bebas Neue',sans-serif; font-size:52px; color:{algo_color}; line-height:1;">{algo_score}</div>
+                    <div style="font-size:11px; color:#666688; letter-spacing:2px; text-transform:uppercase; margin-top:4px;">Algorithm Score</div>
+                </div>
+                <div style="flex:1; background:#0d0d18; border:1px solid #1e1e35; border-radius:12px; padding:20px; text-align:center;">
+                    <div style="font-family:'Bebas Neue',sans-serif; font-size:52px; color:{tyler_color}; line-height:1;">{tyler_score}</div>
+                    <div style="font-size:11px; color:#666688; letter-spacing:2px; text-transform:uppercase; margin-top:4px;">Tyler Score</div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            # Personal insights
+            insights = gd.get("personal_insights", [])
+            if insights:
+                insights_html = "".join([f'<div style="background:#1a1a30; border-left:3px solid #FF6B00; border-radius:6px; padding:10px 14px; margin-bottom:8px; font-size:13px; color:#d8d8e8; line-height:1.5;">{ins}</div>' for ins in insights])
+                st.markdown(f"""<div style="margin-bottom:16px;">
+                    <div style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1px; color:#8888aa; margin-bottom:8px;">Personal Insights</div>
+                    {insights_html}
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif; font-size:22px; letter-spacing:1px; margin:8px 0 8px;">Grade Breakdown</div>', unsafe_allow_html=True)
+            grades = gd.get("grades", [])
+            # Display in 2-column grid
+            for row_start in range(0, len(grades), 2):
+                cols = st.columns(2)
+                for col_idx in range(2):
+                    idx = row_start + col_idx
+                    if idx < len(grades):
+                        g = grades[idx]
+                        score = g.get("score", 0)
+                        score_color = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
+                        benchmark = g.get("benchmark", "")
+                        benchmark_html = f'<div style="font-size:11px; color:#FF6B00; margin-top:8px; font-style:italic;">{benchmark}</div>' if benchmark else ""
+                        with cols[col_idx]:
+                            st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:10px; min-height:160px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                    <span style="font-weight:700; font-size:14px;">{g.get('name','')}</span>
+                                    <span style="font-family:'JetBrains Mono',monospace; font-size:14px; background:{score_color}22; color:{score_color}; padding:2px 10px; border-radius:4px;">Score: {score}/10</span>
+                                </div>
+                                <div style="font-size:13px; color:#9999aa; line-height:1.5;">{g.get('detail','')}</div>
+                                {benchmark_html}
+                            </div>""", unsafe_allow_html=True)
+
+            suggestions = gd.get("suggestions", [])
+            if suggestions:
+                st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-top:8px;">
+                    <div style="font-weight:700; margin-bottom:10px;">Suggestions for Improvement</div>
+                    <ul style="margin:0; padding-left:20px; color:#9999aa;">{''.join([f'<li style="margin-bottom:8px; line-height:1.5;">{s}</li>' for s in suggestions])}</ul>
+                </div>""", unsafe_allow_html=True)
+
+        # Preview
+        if st.session_state.get("ci_preview"):
+            preview_text = st.session_state["ci_preview"]
+            truncated = preview_text[:280]
+            show_more = len(preview_text) > 280
+            now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
+            st.markdown(f"""<div class="output-box">
+                <div style="font-weight:700; font-size:16px; margin-bottom:16px;">Post Preview</div>
+                <div style="background:#0d0d18; border:1px solid #2e2e45; border-radius:16px; padding:20px;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, #FF6B00, #cc4a00); display:flex; align-items:center; justify-content:center; font-weight:700; color:white;">T</div>
+                        <div><span style="font-weight:700;">Tyler Polumbus</span> <span style="color:#666688;">@{TYLER_HANDLE}</span></div>
+                    </div>
+                    <div style="font-size:15px; line-height:1.6; white-space:pre-wrap;">{truncated}{'<br><span style="color:#1d9bf0; cursor:pointer;">Show more</span>' if show_more else ''}</div>
+                    <div style="color:#666688; font-size:13px; margin-top:12px;">{now_str} · X</div>
+                    <div style="display:flex; gap:40px; margin-top:12px; color:#666688; font-size:14px;">
+                        <span>💬</span><span>🔁</span><span>❤️</span><span>📊</span><span>—</span>
+                    </div>
+                </div>
+                <div style="color:#8888aa; font-size:13px; margin-top:12px;">This preview shows how your post will appear on X{', including where the "Show more" button will be placed (after 280 characters). It is critical you make the hook before the show more button make users want to click it.' if show_more else '.'}</div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # Save idea
+        sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
+        if st.button("Save Idea", key="ci_save", use_container_width=True):
+            if tweet_text.strip():
+                ideas = load_json("saved_ideas.json", [])
+                ideas.append({
+                    "text": tweet_text,
+                    "format": fmt,
+                    "category": sc_cat,
+                    "saved_at": datetime.now().isoformat(),
+                })
+                save_json("saved_ideas.json", ideas)
+                st.success("Idea saved.")
+
+    with col_saved:
+        st.markdown("### Saved Ideas")
+        ideas = load_json("saved_ideas.json", [])
+        folder = st.selectbox("Folder", ["All Ideas", "Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_folder")
+        filtered = ideas if folder == "All Ideas" else [i for i in ideas if i.get("category") == folder]
+        if not filtered:
+            st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+        else:
+            for i, idea in enumerate(reversed(filtered[-30:])):
+                ts = idea.get("saved_at", "")[:10]
+                cat = idea.get("category", "")
+                st.markdown(f"""<div class="tweet-card">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="tweet-num">{idea.get('format','')}</span>
+                        <span style="font-size:11px; color:#444466;">{ts}</span>
+                    </div>
+                    <div style="color:#d8d8e8; font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text','')) > 150 else ''}</div>
+                    <span class="tag">{cat}</span>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: CONTENT COACH
+# ═══════════════════════════════════════════════════════════════════════════
+def page_content_coach():
+    st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Your personal AI content strategist. Ask anything about growing on X.</div>', unsafe_allow_html=True)
+
+    if "coach_history" not in st.session_state:
+        st.session_state.coach_history = []
+
+    with st.sidebar:
+        st.markdown("---")
+        coach_fmt = st.selectbox("Output Format", ["Short Tweet", "Thread", "Long-form Post", "Video Script", "General Advice"], key="coach_fmt")
+
+    # Display chat
+    for msg in st.session_state.coach_history:
+        role_label = "Tyler" if msg["role"] == "user" else "Coach"
+        cls = "chat-user" if msg["role"] == "user" else "chat-ai"
+        st.markdown(f"""<div class="chat-msg {cls}">
+            <div class="chat-role">{role_label}</div>
+            <div style="color:#d8d8e8; font-size:14px; line-height:1.7; white-space:pre-wrap;">{msg["content"]}</div>
+        </div>""", unsafe_allow_html=True)
+
+    # Quick prompts
+    if not st.session_state.coach_history:
+        st.markdown("**Quick starters:**")
+        prompts = [
+            "What should I post about right now?",
+            "How do I grow from 42K to 100K?",
+            "Best posting schedule for a radio host?",
+            "How do I get more replies on my posts?",
+            "What content types perform best on X right now?",
+            "Give me 3 tweet ideas for today",
+        ]
+        cols = st.columns(3)
+        for i, qp in enumerate(prompts):
+            with cols[i % 3]:
+                if st.button(qp, key=f"qp_{i}", use_container_width=True):
+                    st.session_state.coach_history.append({"role": "user", "content": qp})
+                    with st.spinner("Coach is thinking..."):
+                        coach_sys = TYLER_CONTEXT + f"\n\nYou are Tyler's personal content coach. Answer directly and practically. No fluff. Preferred output format: {coach_fmt}. Always end with a follow-up question to keep the conversation going. Suggest specific content types when relevant."
+                        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in st.session_state.coach_history])
+                        reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=coach_sys, max_tokens=800)
+                        st.session_state.coach_history.append({"role": "assistant", "content": reply})
+                    st.rerun()
+
+    # Input
+    user_input = st.text_input("Ask your content coach:", placeholder="What topics should I own right now?", key="coach_input")
+    col_send, col_clear = st.columns([4, 1])
+    with col_send:
+        if st.button("➡️", use_container_width=True, key="coach_send") and user_input.strip():
+            st.session_state.coach_history.append({"role": "user", "content": user_input})
+            with st.spinner("Coach is thinking..."):
+                coach_sys = TYLER_CONTEXT + f"\n\nYou are Tyler's personal content coach. Answer directly and practically. No fluff. Preferred output format: {coach_fmt}. Always end with a follow-up question. Suggest specific content types when relevant."
+                history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in st.session_state.coach_history])
+                reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=coach_sys, max_tokens=800)
+                st.session_state.coach_history.append({"role": "assistant", "content": reply})
+            st.rerun()
+    with col_clear:
+        if st.button("Clear Chat", use_container_width=True, key="coach_clear"):
+            st.session_state.coach_history = []
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: ARTICLE WRITER
+# ═══════════════════════════════════════════════════════════════════════════
+def page_article_writer():
+    st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Expand a tweet into a full article or start from scratch.</div>', unsafe_allow_html=True)
+
+    col_main, col_saved = st.columns([2, 1])
+
+    with col_main:
+        source = st.radio("Start from:", ["Recent Tweet", "Manual Input"], horizontal=True, key="aw_source")
+
+        selected_tweet_text = ""
+        if source == "Recent Tweet":
+            if "aw_tweets" not in st.session_state:
+                st.session_state.aw_tweets = []
+            if st.button("Load Recent Tweets", key="aw_load"):
+                with st.spinner("Fetching tweets..."):
+                    st.session_state.aw_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=10)
+            if st.session_state.aw_tweets:
+                options = [t.get("text", "")[:80] + "..." for t in st.session_state.aw_tweets]
+                sel = st.selectbox("Select a tweet to expand:", range(len(options)), format_func=lambda x: options[x], key="aw_sel")
+                selected_tweet_text = st.session_state.aw_tweets[sel].get("text", "")
+                st.markdown(f'<div class="output-box">{selected_tweet_text}</div>', unsafe_allow_html=True)
+        else:
+            selected_tweet_text = st.text_area("Enter your text:", height=120, key="aw_manual",
+                placeholder="Paste a tweet or idea to expand into an article...")
+
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            if st.button("Start from scratch", use_container_width=True, key="aw_scratch"):
+                if selected_tweet_text.strip():
+                    with st.spinner("Writing article..."):
+                        result = call_claude(f'Tyler wants to write a full article based on this seed:\n\n"{selected_tweet_text}"\n\nWrite a 500-800 word article in Tyler\'s voice. Former NFL player perspective. Direct, opinionated, backed by knowledge from inside the game. Include a strong headline. No emojis.', max_tokens=1500)
+                        st.session_state["aw_result"] = result
+        with ac2:
+            if st.button("Generate Outline", use_container_width=True, key="aw_outline"):
+                if selected_tweet_text.strip():
+                    with st.spinner("Generating outline..."):
+                        result = call_claude(f'Tyler wants to write an article based on:\n\n"{selected_tweet_text}"\n\nGenerate a detailed outline:\n- Headline (punchy, clickable)\n- Hook paragraph summary\n- 4-6 section headers with 2-3 bullet points each\n- Closing angle\n\nKeep Tyler\'s voice: direct, opinionated, former-player authority.', max_tokens=800)
+                        st.session_state["aw_result"] = result
+
+        if st.session_state.get("aw_result"):
+            st.markdown(f'<div class="output-box">{st.session_state["aw_result"]}</div>', unsafe_allow_html=True)
+            if st.button("Save Article", key="aw_save"):
+                articles = load_json("saved_articles.json", [])
+                articles.append({
+                    "content": st.session_state["aw_result"],
+                    "seed": selected_tweet_text[:200],
+                    "saved_at": datetime.now().isoformat(),
+                })
+                save_json("saved_articles.json", articles)
+                st.success("Article saved.")
+
+    with col_saved:
+        st.markdown("### Saved Articles")
+        articles = load_json("saved_articles.json", [])
+        if not articles:
+            st.markdown('<div class="output-box">No saved articles yet.</div>', unsafe_allow_html=True)
+        else:
+            for a in reversed(articles[-10:]):
+                ts = a.get("saved_at", "")[:10]
+                preview = a.get("content", "")[:150]
+                st.markdown(f"""<div class="tweet-card">
+                    <div class="tweet-num">{ts}</div>
+                    <div style="color:#d8d8e8; font-size:13px;">{preview}...</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: TWEET HISTORY
+# ═══════════════════════════════════════════════════════════════════════════
+def sync_tweet_history():
+    """Fetch up to 500 tweets and save to local knowledge base."""
+    all_tweets = []
+    cursor = ""
+    batches = 0
+    while batches < 10:  # 10 batches x 50 = 500 max
+        try:
+            params = {"query": f"from:{TYLER_HANDLE}", "queryType": "Latest", "count": "50"}
+            if cursor:
+                params["cursor"] = cursor
+            resp = requests.get(
+                "https://api.twitterapi.io/twitter/tweet/advanced_search",
+                headers={"X-API-Key": TWITTER_API_IO_KEY},
+                params=params, timeout=30,
+            )
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            tweets = data.get("tweets", [])
+            if not tweets:
+                break
+            all_tweets.extend(tweets)
+            cursor = data.get("next_cursor", "")
+            if not cursor:
+                break
+            batches += 1
+            import time; time.sleep(0.5)
+        except Exception:
+            break
+    # Deduplicate by ID
+    seen = set()
+    unique = []
+    for t in all_tweets:
+        tid = t.get("id", "")
+        if tid and tid not in seen:
+            seen.add(tid)
+            unique.append(t)
+    save_json("tweet_history.json", unique)
+    return unique
+
+
+def get_tweet_knowledge_base():
+    """Load the local tweet history — this is the knowledge base for the whole app."""
+    return load_json("tweet_history.json", [])
+
+
+def classify_tweet(tweet):
+    """Classify a tweet into categories."""
+    text = tweet.get("text", "")
+    likes = tweet.get("likeCount", 0)
+    rts = tweet.get("retweetCount", 0)
+    replies = tweet.get("replyCount", 0)
+    views = tweet.get("viewCount", 0)
+    eng_rate = (likes + rts + replies) / max(views, 1) * 100
+
+    tags = []
+    if len(text) < 140:
+        tags.append("Short")
+    if len(text) > 200:
+        tags.append("Long")
+    if likes > 100 or rts > 20:
+        tags.append("High Engagement")
+    if views > 10000:
+        tags.append("Viral")
+    if replies > likes * 0.3 and replies > 5:
+        tags.append("Conversation Starter")
+    if eng_rate > 5:
+        tags.append("Hot")
+    if not text.startswith("@") and not text.startswith("RT ") and "http" not in text:
+        tags.append("Original")
+    if text.startswith("@"):
+        tags.append("Reply")
+    if "RT " in text[:5]:
+        tags.append("Repost")
+    # Evergreen detection — no time-sensitive words
+    time_words = ["today", "tonight", "right now", "just", "breaking", "live"]
+    if not any(w in text.lower() for w in time_words) and likes > 20:
+        tags.append("Evergreen")
+
+    return tags
+
+
+def page_tweet_history():
+    st.markdown('<div class="main-header">YOUR CONTENT <span>HISTORY</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Your knowledge base. Every AI feature in this app learns from these tweets.</div>', unsafe_allow_html=True)
+
+    # Load stored tweets
+    tweets = get_tweet_knowledge_base()
+
+    # Header stats
+    hc1, hc2, hc3, hc4 = st.columns([1, 1, 1, 2])
+    with hc1:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{len(tweets)}</div><div class="stat-label">Total Tweets</div></div>', unsafe_allow_html=True)
+    with hc2:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
+    with hc3:
+        last_sync = ""
+        if tweets:
+            dates = [t.get("createdAt", "") for t in tweets if t.get("createdAt")]
+            if dates:
+                last_sync = sorted(dates, reverse=True)[0][:10]
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
+    with hc4:
+        if st.button("Sync Tweets (pull last 500)", use_container_width=True, key="th_sync"):
+            with st.spinner("Syncing up to 500 tweets from X... this may take a minute."):
+                tweets = sync_tweet_history()
+                st.success(f"Synced {len(tweets)} tweets.")
+                st.rerun()
+
+    if not tweets:
+        st.warning("No tweets stored. Click 'Sync Tweets' to pull your history from X.")
+        return
+
+    # Search
+    search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search")
+
+    # Filter buttons as columns
+    filters = ["All Posts", "Short Posts", "Long Posts", "High Engagement", "Viral Posts",
+               "Conversation Starters", "Evergreen", "Hot", "Original", "Replies"]
+    filter_type = st.selectbox("Filter", filters, key="th_filter")
+
+    # AI filter buttons inline
+    ac1, ac2, ac3, ac4 = st.columns(4)
+    with ac1:
+        if st.button("Find my best hooks", key="th_ai_hooks", use_container_width=True):
+            top = sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
+            hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
+            st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
+    with ac2:
+        if st.button("Find my worst performers", key="th_ai_worst", use_container_width=True):
+            worst = sorted(tweets, key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
+            st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
+    with ac3:
+        if st.button("Analyze my voice patterns", key="th_ai_voice", use_container_width=True):
+            sample = [t.get("text", "") for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
+            with st.spinner("Analyzing your voice..."):
+                result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
+                st.session_state["th_ai_result"] = result
+    with ac4:
+        if st.button("What topics perform best?", key="th_ai_topics", use_container_width=True):
+            sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
+            with st.spinner("Analyzing topics..."):
+                result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
+                st.session_state["th_ai_result"] = result
+
+    if st.session_state.get("th_ai_result"):
+        st.markdown(f'<div class="output-box">{st.session_state["th_ai_result"]}</div>', unsafe_allow_html=True)
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # Apply filters
+    filtered = tweets
+    if search:
+        filtered = [t for t in filtered if search.lower() in t.get("text", "").lower()]
+
+    if filter_type != "All Posts":
+        tag_map = {
+            "Short Posts": "Short", "Long Posts": "Long", "High Engagement": "High Engagement",
+            "Viral Posts": "Viral", "Conversation Starters": "Conversation Starter",
+            "Evergreen": "Evergreen", "Hot": "Hot", "Original": "Original", "Replies": "Reply",
+        }
+        target_tag = tag_map.get(filter_type, "")
+        filtered = [t for t in filtered if target_tag in classify_tweet(t)]
+
+    st.markdown(f"**Showing {len(filtered)} of {len(tweets)} tweets**")
+
+    # Display tweets with classification tags and engagement scores
+    for i, t in enumerate(filtered[:100]):
+        text = t.get("text", "")
+        likes = t.get("likeCount", 0)
+        rts = t.get("retweetCount", 0)
+        replies = t.get("replyCount", 0)
+        views = t.get("viewCount", 0)
+        created = t.get("createdAt", "")
+        tags = classify_tweet(t)
+        eng_rate = round((likes + rts + replies) / max(views, 1) * 100, 1)
+
+        # Engagement score (0-100)
+        score = min(100, int((likes * 2 + rts * 5 + replies * 3) / max(1, views / 1000)))
+
+        hot_tags = {"Viral", "Hot", "High Engagement"}
+        tags_html = " ".join([f'<span class="tag{" tag-hot" if tg in hot_tags else ""}">{tg}</span>' for tg in tags])
+
+        score_color = "#22c55e" if score >= 60 else "#FF6B00" if score >= 30 else "#ef4444"
+
+        st.markdown(f"""<div class="tweet-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>{tags_html}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:11px; color:#444466;">{created[:16] if created else ''}</span>
+                    <span style="font-family:'Bebas Neue',sans-serif; font-size:20px; color:{score_color};">{score}</span>
+                </div>
+            </div>
+            <div style="color:#d8d8e8; font-size:14px; margin-bottom:10px; line-height:1.6;">{text}</div>
+            <div style="display:flex; gap:24px; font-size:12px; color:#666688;">
+                <span>Likes: {likes:,}</span>
+                <span>RTs: {rts:,}</span>
+                <span>Replies: {replies:,}</span>
+                <span>Views: {views:,}</span>
+                <span>Eng: {eng_rate}%</span>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: ALGO ANALYZER
+# ═══════════════════════════════════════════════════════════════════════════
+def page_algo_analyzer():
+    st.markdown('<div class="main-header">ALGO <span>ANALYZER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Run your content through the algorithm lens before you post.</div>', unsafe_allow_html=True)
+
+    col_ideas, col_analyze = st.columns([1, 2])
+
+    with col_ideas:
+        st.markdown("### Saved Ideas")
+        ideas = load_json("saved_ideas.json", [])
+        if not ideas:
+            st.markdown('<div class="output-box">No saved ideas. Use Compose Ideas to save some.</div>', unsafe_allow_html=True)
+        else:
+            for i, idea in enumerate(reversed(ideas[-15:])):
+                if st.button(idea.get("text", "")[:60] + "...", key=f"aa_idea_{i}", use_container_width=True):
+                    st.session_state["aa_text"] = idea.get("text", "")
+
+    with col_analyze:
+        content = st.text_area("Content to Analyze:", height=160, key="aa_input",
+            value=st.session_state.get("aa_text", ""),
+            placeholder="Paste or type content to analyze against the algorithm...")
+        char_len = len(content)
+        cls = "char-over" if char_len > 280 else ""
+        st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+
+        if st.button("AI Algo Analyzer", use_container_width=True, key="aa_run"):
+            if content.strip():
+                with st.spinner("Analyzing against the algorithm..."):
+                    prompt = f"""Analyze this content for X algorithm performance:
+
+"{content}"
+
+Score each factor 1-10 and explain in one sentence:
+1. HOOK STRENGTH - Does the first line stop the scroll?
+2. ENGAGEMENT POTENTIAL - Will people reply, like, RT?
+3. CONTROVERSY FACTOR - Does it invite debate without being toxic?
+4. FORMAT OPTIMIZATION - Is the length/structure optimal for X?
+5. SHAREABILITY - Would someone share this with their audience?
+6. TIMING RELEVANCE - Is this timely content?
+7. VOICE AUTHENTICITY - Does it sound like a real person with authority?
+
+Then give:
+- OVERALL SCORE (out of 100)
+- TOP IMPROVEMENT: The single change that would boost performance most
+- REWRITE: An optimized version
+
+Return as JSON:
+{{"scores": {{"Hook Strength": {{"score": 7, "note": "..."}}, ...}}, "overall": 72, "improvement": "...", "rewrite": "..."}}"""
+                    raw = call_claude(prompt, max_tokens=800)
+                    try:
+                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                        data = json.loads(json_match.group()) if json_match else None
+                    except Exception:
+                        data = None
+
+                    if data and "scores" in data:
+                        overall = data.get("overall", 0)
+                        color = "#22c55e" if overall >= 75 else "#FF6B00" if overall >= 55 else "#ef4444"
+                        st.markdown(f"""<div style="text-align:center; padding:20px 0;">
+                            <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{overall}</div>
+                            <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Algorithm Score / 100</div>
+                        </div>""", unsafe_allow_html=True)
+
+                        for metric, val in data["scores"].items():
+                            score = val.get("score", 0) if isinstance(val, dict) else val
+                            note = val.get("note", "") if isinstance(val, dict) else ""
+                            bar_color = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
+                            st.markdown(f"""<div style="margin-bottom:12px;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span class="metric-label">{metric}</span>
+                                    <span class="metric-score">{score}/10</span>
+                                </div>
+                                <div class="score-bar-wrap"><div class="score-bar-fill" style="width:{score*10}%; background:{bar_color};"></div></div>
+                                <div style="font-size:12px; color:#888899;">{note}</div>
+                            </div>""", unsafe_allow_html=True)
+
+                        if data.get("improvement"):
+                            st.markdown(f'**Top Improvement:** {data["improvement"]}')
+                        if data.get("rewrite"):
+                            st.markdown(f'<div class="output-box"><strong>Optimized Version:</strong>\n\n{data["rewrite"]}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: HEALTH CHECK
+# ═══════════════════════════════════════════════════════════════════════════
+def page_health_check():
+    st.markdown('<div class="main-header">HEALTH <span>CHECK</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Audit your X account against best practices.</div>', unsafe_allow_html=True)
+
+    st.markdown(f"**Account:** @{TYLER_HANDLE}")
+
+    if st.button("Run Health Check", use_container_width=True, key="hc_run"):
+        with st.spinner("Pulling tweets and analyzing..."):
+            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=30)
+            if not tweets:
+                st.error("Could not fetch tweets. Check API key.")
+                return
+
+            tweet_texts = "\n---\n".join([f"Tweet: {t.get('text','')}\nLikes: {t.get('likeCount',0)} | RTs: {t.get('retweetCount',0)} | Replies: {t.get('replyCount',0)} | Views: {t.get('viewCount',0)}" for t in tweets[:20]])
+
+            prompt = f"""Analyze Tyler Polumbus's (@tyler_polumbus) recent X activity against best practices.
+
+Here are his recent 20 tweets with engagement:
+{tweet_texts}
+
+Provide a health check report:
+
+1. HEALTH SCORE (0-100) - Overall account health
+2. POSTING FREQUENCY - How often is he posting? Is it enough?
+3. ENGAGEMENT RATE - Are likes/RTs/replies proportional to views?
+4. HOOK QUALITY - Are his openers stopping scrolls?
+5. CONTENT MIX - Good balance of takes, analysis, humor, engagement?
+6. FLAGGED TWEETS - Any tweets that underperformed badly? Why?
+7. TOP 3 RECOMMENDATIONS - Specific, actionable changes
+8. WHAT'S WORKING - Top 2-3 things to keep doing
+
+Return as JSON:
+{{"health_score": 72, "sections": [{{"title": "...", "grade": "B+", "detail": "..."}}], "flagged": ["..."], "recommendations": ["..."]}}"""
+
+            raw = call_claude(prompt, max_tokens=1200)
+            try:
+                json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                data = json.loads(json_match.group()) if json_match else None
+            except Exception:
+                data = None
+
+            if data and "health_score" in data:
+                score = data["health_score"]
+                color = "#22c55e" if score >= 75 else "#FF6B00" if score >= 55 else "#ef4444"
+                st.markdown(f"""<div style="text-align:center; padding:20px 0;">
+                    <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{score}</div>
+                    <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Health Score / 100</div>
+                </div>""", unsafe_allow_html=True)
+
+                for section in data.get("sections", []):
+                    with st.expander(f"{section.get('title', '')} — {section.get('grade', '')}"):
+                        st.markdown(f'<div class="output-box">{section.get("detail", "")}</div>', unsafe_allow_html=True)
+
+                if data.get("flagged"):
+                    st.markdown("### Flagged Tweets")
+                    for f in data["flagged"]:
+                        st.markdown(f'<div class="output-box" style="border-left-color:#ef4444;">{f}</div>', unsafe_allow_html=True)
+
+                if data.get("recommendations"):
+                    st.markdown("### Recommendations")
+                    for r in data["recommendations"]:
+                        st.markdown(f"- {r}")
+            else:
+                st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: ACCOUNT PULSE
+# ═══════════════════════════════════════════════════════════════════════════
+def page_account_pulse():
+    st.markdown('<div class="main-header">ACCOUNT <span>PULSE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
+
+    if st.button("Load Account Data", use_container_width=True, key="ap_load"):
+        with st.spinner("Fetching account data..."):
+            user = fetch_user_info(TYLER_HANDLE)
+            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
+            st.session_state["ap_user"] = user
+            st.session_state["ap_tweets"] = tweets
+
+    user = st.session_state.get("ap_user", {})
+    tweets = st.session_state.get("ap_tweets", [])
+
+    if not user:
+        st.info("Click 'Load Account Data' to pull your stats.")
+        return
+
+    followers = user.get("followersCount", 0)
+    following = user.get("followingCount", 0)
+    tweet_count = user.get("statusesCount", 0)
+    ratio = round(followers / max(following, 1), 1)
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{followers:,}</div><div class="stat-label">Followers</div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{ratio}x</div><div class="stat-label">Following Ratio</div></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{tweet_count:,}</div><div class="stat-label">Total Posts</div></div>', unsafe_allow_html=True)
+    with c4:
+        freq = len(tweets) if tweets else 0
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{freq}</div><div class="stat-label">Recent Posts (batch)</div></div>', unsafe_allow_html=True)
+
+    if tweets:
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # Analyze posting times and engagement
+        total_likes = sum(t.get("likeCount", 0) for t in tweets)
+        total_views = sum(t.get("viewCount", 0) for t in tweets)
+        avg_likes = round(total_likes / max(len(tweets), 1))
+        avg_views = round(total_views / max(len(tweets), 1))
+
+        ac1, ac2, ac3 = st.columns(3)
+        with ac1:
+            st.markdown(f'<div class="stat-card"><div class="stat-num">{avg_likes:,}</div><div class="stat-label">Avg Likes/Post</div></div>', unsafe_allow_html=True)
+        with ac2:
+            st.markdown(f'<div class="stat-card"><div class="stat-num">{avg_views:,}</div><div class="stat-label">Avg Views/Post</div></div>', unsafe_allow_html=True)
+        with ac3:
+            eng_rate = round((total_likes / max(total_views, 1)) * 100, 2)
+            st.markdown(f'<div class="stat-card"><div class="stat-num">{eng_rate}%</div><div class="stat-label">Engagement Rate</div></div>', unsafe_allow_html=True)
+
+        # Top 5 tweets
+        st.markdown("### Top 5 Tweets (by likes)")
+        top5 = sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:5]
+        for t in top5:
+            render_tweet_card(t)
+
+        # AI analysis
+        if st.button("AI Pulse Analysis", key="ap_ai"):
+            with st.spinner("Analyzing patterns..."):
+                tweet_summary = "\n".join([f"- {t.get('text','')[:100]} (Likes:{t.get('likeCount',0)}, Views:{t.get('viewCount',0)})" for t in tweets[:20]])
+                result = call_claude(f"""Analyze Tyler's recent posting patterns:
+
+Followers: {followers:,} | Following: {following:,} | Ratio: {ratio}x
+Avg Likes: {avg_likes} | Avg Views: {avg_views} | Engagement: {eng_rate}%
+
+Recent tweets:
+{tweet_summary}
+
+Give:
+1. BEST POSTING TIME - When do his best tweets seem to land?
+2. TOP GROWTH OPPORTUNITIES - 3 specific things to improve
+3. CONTENT MIX ASSESSMENT - What should he post more/less of?
+4. AVERAGE DAILY GROWTH ESTIMATE - Based on current trajectory""", max_tokens=800)
+                st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: ACCOUNT RESEARCHER
+# ═══════════════════════════════════════════════════════════════════════════
+def page_account_researcher():
+    st.markdown('<div class="main-header">ACCOUNT <span>RESEARCHER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Research any X account. Understand their strategy.</div>', unsafe_allow_html=True)
+
+    col_main, col_recent = st.columns([2, 1])
+
+    with col_main:
+        handle = st.text_input("Enter X handle:", placeholder="username (without @)", key="ar_handle")
+
+        if st.button("Research Account", use_container_width=True, key="ar_run"):
+            if handle.strip():
+                handle_clean = handle.strip().lstrip("@")
+                with st.spinner(f"Researching @{handle_clean}..."):
+                    tweets = fetch_tweets(f"from:{handle_clean}", count=30)
+                    user_info = fetch_user_info(handle_clean)
+
+                    # Save to recent searches
+                    recent = load_json("recent_searches.json", [])
+                    if handle_clean not in [r.get("handle") for r in recent]:
+                        recent.append({"handle": handle_clean, "searched_at": datetime.now().isoformat()})
+                        save_json("recent_searches.json", recent[-20:])
+
+                    if tweets:
+                        st.session_state["ar_tweets"] = tweets
+                        st.session_state["ar_user"] = user_info
+                        st.session_state["ar_handle"] = handle_clean
+
+                        st.markdown(f"### @{handle_clean}")
+                        if user_info:
+                            fc = user_info.get("followersCount", 0)
+                            st.markdown(f'Followers: **{fc:,}** | Following: **{user_info.get("followingCount",0):,}**')
+
+                        for t in tweets[:10]:
+                            render_tweet_card(t)
+
+                        tweet_texts = "\n---\n".join([f"{t.get('text','')}\nLikes:{t.get('likeCount',0)} RTs:{t.get('retweetCount',0)} Views:{t.get('viewCount',0)}" for t in tweets[:15]])
+                        result = call_claude(f"""Analyze @{handle_clean}'s X strategy based on their recent tweets:
+
+{tweet_texts}
+
+Provide:
+1. CONTENT STRATEGY - What are they doing? What topics, formats, posting style?
+2. WHAT'S WORKING - Their top performing content patterns
+3. HOOK FORMULAS - What opener types do they use?
+4. ENGAGEMENT TACTICS - How do they drive replies/RTs?
+5. TYLER'S EDGE - Where does Tyler's former-player credibility beat this account?
+6. STEAL-WORTHY - 2 tactics Tyler should borrow (structure, not content)
+7. VERDICT - Is this account worth watching? One sentence.""", max_tokens=1000)
+                        st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
+                    else:
+                        st.warning(f"Could not fetch tweets for @{handle_clean}")
+
+    with col_recent:
+        st.markdown("### Recent Searches")
+        recent = load_json("recent_searches.json", [])
+        if not recent:
+            st.markdown('<div class="output-box">No recent searches.</div>', unsafe_allow_html=True)
+        else:
+            for r in reversed(recent[-10:]):
+                st.markdown(f"""<div class="tweet-card">
+                    <div class="tweet-num">@{r.get('handle','')}</div>
+                    <div style="font-size:11px; color:#444466;">{r.get('searched_at','')[:10]}</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: REPLY GUY
+# ═══════════════════════════════════════════════════════════════════════════
+def page_reply_guy():
+    XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
+    LISTS = {"Broncos Reporters": "1294328608417177604", "Nuggets": "1755985316752642285",
+             "Morning Engagement": "2011987998699897046", "Work": "1182699241329721344"}
+
+    st.markdown('<div class="main-header">REPLY <span>GUY</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
+
+    # --- Load & roll-over progress ---
+    progress = load_json("reply_progress.json", {"today": "", "count": 0, "streak": 0, "history": []})
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if progress.get("today") != today_str:
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        if progress.get("today") == yesterday and progress.get("count", 0) >= 10:
+            progress["streak"] = progress.get("streak", 0) + 1
+        elif progress.get("today") != yesterday:
+            progress["streak"] = 0
+        if progress.get("today"):
+            progress["history"].append({"date": progress["today"], "count": progress.get("count", 0)})
+        progress["history"] = progress["history"][-30:]
+        progress["today"] = today_str
+        progress["count"] = 0
+        save_json("reply_progress.json", progress)
+    reply_count = progress.get("count", 0)
+    streak = progress.get("streak", 0)
+    replied_tweets = load_json("replied_tweets.json", [])
+
+    def _bump_reply():
+        progress["count"] = progress.get("count", 0) + 1
+        save_json("reply_progress.json", progress)
+
+    def _mark_replied(tweet_id):
+        if tweet_id not in replied_tweets:
+            replied_tweets.append(tweet_id)
+            save_json("replied_tweets.json", replied_tweets[-500:])
+
+    # ── PART 1: Top Stats Bar ──
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        pct = min(reply_count / 50 * 100, 100)
+        st.markdown(f'<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+                    f'<span class="metric-label">Daily Reply Progress</span><span class="metric-score">{reply_count}/50</span></div>'
+                    f'<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{pct}%;"></div></div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Day Streak</div></div>', unsafe_allow_html=True)
+    day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
+    hist_map[today_str] = reply_count
+    cols = st.columns(7)
+    for d in range(6, -1, -1):
+        dt = datetime.now() - timedelta(days=d)
+        ds = dt.strftime("%Y-%m-%d")
+        label = day_labels[dt.weekday()]
+        cnt = hist_map.get(ds, 0)
+        cols[6 - d].markdown(f'<div style="text-align:center;"><div style="color:#aaa;font-size:11px;">{label}</div>'
+                             f'<div style="color:#fff;font-size:18px;font-weight:700;">{cnt}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # Force rerun if flagged (workaround for st.rerun inside nested columns)
+    if st.session_state.get("rg_force_rerun"):
+        st.session_state.pop("rg_force_rerun")
+        st.rerun()
+
+    # ── PART 2: My Tweet Replies — Conversation Depth ──
+    st.markdown("### My Tweet Replies -- Conversation Depth")
+    btn_c1, btn_c2 = st.columns(2)
+    with btn_c1:
+        load_all = st.button("Load All Tweet Replies", key="rg_load_all", use_container_width=True)
+    with btn_c2:
+        load_verified = st.button("Load Verified Follower Replies", key="rg_load_verified", use_container_width=True)
+
+    if load_all or load_verified:
+        with st.spinner("Fetching tweets and replies..."):
+            my_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=15)
+            filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
+            st.session_state["rg_my_tweets"] = filtered
+            for idx, tw in enumerate(filtered):
+                replies = fetch_tweets(f"conversation_id:{tw.get('id', '')} to:{TYLER_HANDLE}", count=15)
+                if load_verified:
+                    replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
+                replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
+                st.session_state[f"rg_replies_{idx}"] = replies[:8]
+
+    for idx, tw in enumerate(st.session_state.get("rg_my_tweets", [])):
+        txt = tw.get("text", "")
+        likes = tw.get("likeCount", tw.get("like_count", 0))
+        rts = tw.get("retweetCount", tw.get("retweet_count", 0))
+        rpl = tw.get("replyCount", tw.get("reply_count", 0))
+        views = tw.get("viewCount", tw.get("view_count", 0))
+        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #FF6B00;">'
+                    f'<div style="color:#FF6B00;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
+                    f'<div style="color:#e8e8f0;font-size:14px;line-height:1.5;margin-bottom:8px;">{txt}</div>'
+                    f'<div style="font-size:11px;color:#666688;">{likes:,} likes | {rts:,} RTs | {rpl:,} replies | {views:,} views</div></div>', unsafe_allow_html=True)
+
+        # Table header for replies
+        if st.session_state.get(f"rg_replies_{idx}"):
+            rhc1, rhc2, rhc3, rhc4 = st.columns([1, 3, 3, 1])
+            rhc1.markdown("**Account**")
+            rhc2.markdown("**Reply**")
+            rhc3.markdown("**Your Response**")
+            rhc4.markdown("**Done?**")
+            st.markdown('<hr style="margin:2px 0;border-color:#1e1e35;">', unsafe_allow_html=True)
+
+        for ri, rp in enumerate(st.session_state.get(f"rg_replies_{idx}", [])):
+            rauthor = rp.get("author", {}).get("userName", rp.get("user", {}).get("screen_name", ""))
+            rid = rp.get("id", "")
+            rtext = rp.get("text", "")
+            r_likes = rp.get("likeCount", rp.get("like_count", 0))
+            already_replied = rid in replied_tweets
+            input_key = f"rg_ri_{idx}_{ri}"
+
+            rc1, rc2, rc3, rc4 = st.columns([1, 3, 3, 1])
+            with rc1:
+                st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{rauthor}</div>', unsafe_allow_html=True)
+            with rc2:
+                st.markdown(f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{rtext[:250]}</div>'
+                            f'<div style="font-size:11px;color:#888;margin-top:4px;">{r_likes} likes</div>', unsafe_allow_html=True)
+            with rc3:
+                ic1, ic2, ic3, ic4 = st.columns([6, 1, 1, 1])
+                with ic2:
+                    if st.button("✨", key=f"rg_gen_{idx}_{ri}", use_container_width=True):
+                        sug = call_claude(f'Tyler originally tweeted: "{txt[:200]}"\n\nSomeone replied to Tyler\'s tweet. Tyler wants to reply back.\n\n@{rauthor} replied: "{rtext[:200]}"\n\nWrite Tyler\'s reply. Under 150 chars. Conversational, uses ellipsis, former NFL player perspective. No emojis. Just the reply text, nothing else.', max_tokens=80)
+                        st.session_state[input_key] = sug
+                with ic1:
+                    reply_val = st.text_area("r", key=input_key, label_visibility="collapsed", placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
+                with ic3:
+                    liked_tweets = load_json("liked_tweets.json", [])
+                    already_liked = rid in liked_tweets
+                    if already_liked:
+                        st.button("💚", key=f"rg_like_{idx}_{ri}", use_container_width=True, disabled=True)
+                    elif st.button("❤️", key=f"rg_like_{idx}_{ri}", use_container_width=True):
+                        subprocess.run([XURL, "like", rid], capture_output=True, text=True, timeout=10)
+                        liked_tweets.append(rid)
+                        save_json("liked_tweets.json", liked_tweets[-500:])
+                        st.session_state["rg_force_rerun"] = True
+                with ic4:
+                    if st.button("➡️", key=f"rg_send_{idx}_{ri}", use_container_width=True, disabled=already_replied):
+                        if reply_val.strip():
+                            res = subprocess.run([XURL, "reply", rid, reply_val.strip()], capture_output=True, text=True, timeout=15)
+                            if res.returncode == 0:
+                                _bump_reply()
+                                _mark_replied(rid)
+                                st.session_state["rg_force_rerun"] = True
+                            else:
+                                st.error(res.stderr[:100])
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── PART 3: Engagement Targets — Table Layout ──
+    st.markdown("### Engagement Targets")
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 2])
+    with ctrl1:
+        list_source = st.selectbox("List", ["My Custom List"] + list(LISTS.keys()), key="rg_source", label_visibility="collapsed")
+    with ctrl2:
+        do_load = st.button("Load Posts", key="rg_load_posts", use_container_width=True)
+    with ctrl3:
+        new_acc = st.text_input("Add account", key="rg_add_acc", placeholder="@handle", label_visibility="collapsed")
+
+    if list_source == "My Custom List":
+        custom_accounts = st.text_input("Accounts (comma-separated):", placeholder="@MikeKlis, @TroyRenck", key="rg_accounts")
+
+    if do_load:
+        with st.spinner("Fetching posts..."):
+            all_tweets = []
+            if list_source == "My Custom List":
+                accs = [a.strip().lstrip("@") for a in (custom_accounts if list_source == "My Custom List" else "").replace(",", "\n").split("\n") if a.strip()]
+                if new_acc.strip():
+                    accs.append(new_acc.strip().lstrip("@"))
+                for acc in accs[:12]:
+                    tweets = fetch_tweets(f"from:{acc}", count=1)
+                    for t in tweets:
+                        t["_target_account"] = acc
+                    all_tweets.extend(tweets)
+            else:
+                lid = LISTS.get(list_source, "")
+                if lid:
+                    try:
+                        res = subprocess.run(
+                            [XURL, f"/2/lists/{lid}/tweets?max_results=15&tweet.fields=created_at,public_metrics,author_id&expansions=author_id&user.fields=username,public_metrics"],
+                            capture_output=True, text=True, timeout=20)
+                        if res.returncode == 0:
+                            data = json.loads(res.stdout)
+                            users = {u["id"]: u for u in data.get("includes", {}).get("users", [])}
+                            for t in data.get("data", []):
+                                author = users.get(t.get("author_id", ""), {})
+                                metrics = t.get("public_metrics", {})
+                                all_tweets.append({
+                                    "id": t.get("id", ""), "text": t.get("text", ""),
+                                    "createdAt": t.get("created_at", ""),
+                                    "likeCount": metrics.get("like_count", 0), "retweetCount": metrics.get("retweet_count", 0),
+                                    "replyCount": metrics.get("reply_count", 0), "viewCount": metrics.get("impression_count", 0),
+                                    "_target_account": author.get("username", ""),
+                                    "author": {"userName": author.get("username", ""), "name": author.get("name", "")},
+                                })
+                    except Exception as e:
+                        st.error(f"List fetch error: {str(e)[:100]}")
+            st.session_state["rg_tweets"] = all_tweets
+
+    # Table header
+    tweets_data = st.session_state.get("rg_tweets", [])
+    if tweets_data:
+        hc1, hc2, hc3, hc4 = st.columns([1, 3, 3, 1])
+        hc1.markdown("**Account**")
+        hc2.markdown("**Latest Post**")
+        hc3.markdown("**Reply**")
+        hc4.markdown("**Done?**")
+        st.markdown('<hr style="margin:4px 0;border-color:#1e1e35;">', unsafe_allow_html=True)
+
+    for i, t in enumerate(tweets_data):
+        acc = t.get("_target_account", "")
+        text = t.get("text", "")
+        tid = t.get("id", "")
+        likes = t.get("likeCount", t.get("like_count", 0))
+        rts = t.get("retweetCount", t.get("retweet_count", 0))
+        rpl = t.get("replyCount", t.get("reply_count", 0))
+        views = t.get("viewCount", t.get("view_count", 0))
+        created = t.get("createdAt", t.get("created_at", ""))[:16]
+        already = tid in replied_tweets
+        sug_key = f"rg_et_sug_{i}"
+
+        rc1, rc2, rc3, rc4 = st.columns([1, 3, 3, 1])
+        with rc1:
+            st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{acc}</div>', unsafe_allow_html=True)
+        with rc2:
+            st.markdown(f'<div style="font-size:15px;color:#d8d8e8;line-height:1.5;">{text[:150]}</div>'
+                        f'<div style="font-size:12px;color:#888;margin-top:4px;">{created} | {likes} likes | {rpl} replies | {rts} RTs | {views} views</div>', unsafe_allow_html=True)
+        with rc3:
+            et_input_key = f"rg_et_{i}"
+            ic1, ic2, ic3, ic4 = st.columns([6, 1, 1, 1])
+            with ic2:
+                if st.button("✨", key=f"rg_etg_{i}", use_container_width=True):
+                    sug = call_claude(f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". Write ONE short reply under 150 chars. Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis.', max_tokens=80)
+                    st.session_state[et_input_key] = sug
+            with ic1:
+                reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed", placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key,"")))
+            with ic3:
+                et_liked = load_json("liked_tweets.json", [])
+                et_already_liked = tid in et_liked
+                if et_already_liked:
+                    st.button("💚", key=f"rg_etl_{i}", use_container_width=True, disabled=True)
+                elif st.button("❤️", key=f"rg_etl_{i}", use_container_width=True):
+                    subprocess.run([XURL, "like", tid], capture_output=True, text=True, timeout=10)
+                    et_liked.append(tid)
+                    save_json("liked_tweets.json", et_liked[-500:])
+                    st.session_state["rg_force_rerun"] = True
+            with ic4:
+                if st.button("➡️", key=f"rg_ets_{i}", use_container_width=True, disabled=already):
+                    if reply_text.strip() and tid:
+                        res = subprocess.run([XURL, "reply", tid, reply_text.strip()], capture_output=True, text=True, timeout=15)
+                        if res.returncode == 0:
+                            _bump_reply()
+                            _mark_replied(tid)
+                            st.session_state["rg_force_rerun"] = True
+                        else:
+                            st.error(res.stderr[:100])
+        with rc4:
+            if already:
+                st.markdown('<div style="text-align:center;padding-top:8px;color:#22c55e;font-size:18px;">&#10003;</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: INSPIRATION
+# ═══════════════════════════════════════════════════════════════════════════
+def page_inspiration():
+    st.markdown('<div class="main-header">INSPIRATION <span>VAULT</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Save tweets that inspire you. Reference them when you need ideas.</div>', unsafe_allow_html=True)
+
+    inspo = load_json("inspiration.json", [])
+
+    col_add, col_view = st.columns([1, 1])
+
+    with col_add:
+        st.markdown("### Save New Inspiration")
+        inspo_text = st.text_area("Tweet text:", height=100, key="insp_text",
+            placeholder="Paste the tweet that caught your eye...")
+        inspo_author = st.text_input("Author:", placeholder="@username", key="insp_author")
+        inspo_tags = st.text_input("Tags (comma-separated):", placeholder="hook, thread, broncos", key="insp_tags")
+        inspo_likes = st.number_input("Likes (optional):", min_value=0, value=0, key="insp_likes")
+        inspo_views = st.number_input("Views (optional):", min_value=0, value=0, key="insp_views")
+
+        if st.button("Save to Vault", use_container_width=True, key="insp_save"):
+            if inspo_text.strip():
+                inspo.append({
+                    "text": inspo_text,
+                    "author": inspo_author,
+                    "tags": [t.strip() for t in inspo_tags.split(",") if t.strip()],
+                    "likes": inspo_likes,
+                    "views": inspo_views,
+                    "saved_at": datetime.now().isoformat(),
+                })
+                save_json("inspiration.json", inspo)
+                st.success("Saved to vault.")
+                st.rerun()
+
+    with col_view:
+        st.markdown(f"### Vault ({len(inspo)} saved)")
+        search = st.text_input("Search:", placeholder="Filter by keyword or tag...", key="insp_search")
+        tag_filter = st.text_input("Filter by tag:", placeholder="e.g. hook", key="insp_tag_filter")
+
+        filtered = inspo
+        if search:
+            filtered = [i for i in filtered if search.lower() in i.get("text", "").lower() or search.lower() in i.get("author", "").lower()]
+        if tag_filter:
+            filtered = [i for i in filtered if tag_filter.lower() in [t.lower() for t in i.get("tags", [])]]
+
+        if not filtered:
+            st.markdown('<div class="output-box">No inspiration saved yet. Start collecting posts that hit different.</div>', unsafe_allow_html=True)
+        else:
+            for item in reversed(filtered[-20:]):
+                tags_html = " ".join([f'<span class="tag">{t}</span>' for t in item.get("tags", [])])
+                metrics = ""
+                if item.get("likes"):
+                    metrics += f"Likes: {item['likes']:,} "
+                if item.get("views"):
+                    metrics += f"Views: {item['views']:,}"
+                st.markdown(f"""<div class="tweet-card">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span class="tweet-num">{item.get('author','')}</span>
+                        <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
+                    </div>
+                    <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
+                    <div style="margin-bottom:4px;">{tags_html}</div>
+                    <div style="font-size:11px; color:#666688;">{metrics}</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ROUTE TO PAGES
+# ═══════════════════════════════════════════════════════════════════════════
+page_map = {
+    "Brain Dump": page_brain_dump,
+    "Compose Ideas": page_compose_ideas,
+    "Content Coach": page_content_coach,
+    "Article Writer": page_article_writer,
+    "Tweet History": page_tweet_history,
+    "Algo Analyzer": page_algo_analyzer,
+    "Health Check": page_health_check,
+    "Account Pulse": page_account_pulse,
+    "Account Researcher": page_account_researcher,
+    "Reply Guy": page_reply_guy,
+    "Inspiration": page_inspiration,
+}
+
+page_fn = page_map.get(page)
+if page_fn:
+    page_fn()
