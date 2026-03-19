@@ -4,6 +4,7 @@ import json
 import re
 import os
 import time
+import uuid
 import requests
 import tomli
 from datetime import datetime, timedelta
@@ -151,7 +152,9 @@ def get_voice_context():
 TYLER'S ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
 {examples}
 
-Match this exact voice, tone, sentence structure, and style in everything you write."""
+Match this exact voice, tone, sentence structure, and style in everything you write.
+
+Note: Format-specific rules (character limits, structure, thread formatting, article layout) will be provided separately. Follow those format rules for structure while maintaining this voice."""
 
 
 def analyze_personal_patterns():
@@ -264,72 +267,150 @@ def auto_height(text, min_h=80, chars_per_line=60, line_h=24):
     return max(min_h, min(600, total * line_h))
 
 
-def _call_groq(prompt: str, system: str = "", max_tokens: int = 1500) -> str:
-    """Fallback to Groq when Claude CLI is unavailable or rate-limited."""
-    groq_key = ""
+OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+CREDENTIALS_PATH = os.path.expanduser("~/.claude/.credentials.json")
+
+
+def _load_oauth_credentials():
+    """Load OAuth credentials from local credentials file."""
     try:
-        env_path = os.path.expanduser("~/.openclaw/.env")
-        if os.path.exists(env_path):
-            for line in open(env_path):
-                if line.startswith("GROQ_API_KEY="):
-                    groq_key = line.split("=", 1)[1].strip()
+        with open(CREDENTIALS_PATH) as f:
+            creds = json.load(f)
+        oauth = creds.get("claudeAiOauth", {})
+        return oauth.get("accessToken"), oauth.get("refreshToken"), oauth.get("expiresAt", 0)
+    except Exception:
+        return None, None, 0
+
+
+def _save_oauth_credentials(access_token, refresh_token, expires_at):
+    """Persist refreshed tokens back to credentials file."""
+    try:
+        with open(CREDENTIALS_PATH) as f:
+            creds = json.load(f)
+        creds["claudeAiOauth"]["accessToken"] = access_token
+        creds["claudeAiOauth"]["refreshToken"] = refresh_token
+        creds["claudeAiOauth"]["expiresAt"] = expires_at
+        with open(CREDENTIALS_PATH, "w") as f:
+            json.dump(creds, f, indent=2)
     except Exception:
         pass
-    # Also check Streamlit secrets
-    if not groq_key:
-        groq_key = st.secrets.get("GROQ_API_KEY", "")
-    if not groq_key:
-        return "Error: No Groq API key available"
+
+
+def _refresh_oauth_token(refresh_token):
+    """Exchange refresh token for a fresh access token."""
+    import urllib.request, urllib.parse
+    body = urllib.parse.urlencode({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": OAUTH_CLIENT_ID,
+    }).encode()
+    req = urllib.request.Request(
+        OAUTH_TOKEN_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "claude-code/2.1.78",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    return data["access_token"], data.get("refresh_token", refresh_token), data["expires_in"]
+
+
+def _get_access_token():
+    """Return a valid OAuth access token, refreshing if needed."""
+    # Check session cache first
+    cached = st.session_state.get("_oauth_access_token")
+    cached_exp = st.session_state.get("_oauth_expires_at", 0)
+    if cached and time.time() < cached_exp - 300:  # 5-min buffer
+        return cached
+
+    # Try Streamlit secret (cloud deployment) — store only the refresh token
+    refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
+
+    # Fall back to local credentials file
+    if not refresh_token:
+        _, refresh_token, _ = _load_oauth_credentials()
+
+    # Check if local access token is still fresh enough
+    local_access, _, local_exp = _load_oauth_credentials()
+    if local_access and time.time() < (local_exp / 1000) - 300:
+        st.session_state["_oauth_access_token"] = local_access
+        st.session_state["_oauth_expires_at"] = local_exp / 1000
+        return local_access
+
+    if not refresh_token:
+        return None
+
     try:
-        from groq import Groq
-        client = Groq(api_key=groq_key)
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=0.7,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error (Groq): {str(e)}"
+        access_token, new_refresh, expires_in = _refresh_oauth_token(refresh_token)
+        expires_at = time.time() + expires_in
+        st.session_state["_oauth_access_token"] = access_token
+        st.session_state["_oauth_expires_at"] = expires_at
+        _save_oauth_credentials(access_token, new_refresh, int(expires_at * 1000))
+        return access_token
+    except Exception:
+        return None
 
 
-def _is_local():
-    """Check if running locally (Claude CLI available) vs Streamlit Cloud."""
-    return os.path.exists(CLAUDE_CLI)
+def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
+    """Call Claude API directly using OAuth bearer token."""
+    import urllib.request
+    access_token = _get_access_token()
+    if not access_token:
+        return "Error: No OAuth token available"
+
+    messages = [{"role": "user", "content": prompt}]
+    body = json.dumps({
+        "model": "claude-sonnet-4-6",
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": messages,
+    }).encode()
+    req = urllib.request.Request(
+        ANTHROPIC_API_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-code/2.1.78",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read())
+    return data["content"][0]["text"].strip()
 
 
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     if system is None:
         system = get_voice_context()
-    full_prompt = f"{system}\n\n{prompt}" if system else prompt
 
-    # Try Claude CLI first (local only)
-    if _is_local():
+    # Try OAuth direct API call first (works locally and on Streamlit Cloud)
+    try:
+        return _call_claude_oauth(prompt, system or "", max_tokens)
+    except Exception:
+        pass
+
+    # Fall back to CLI if available (local only)
+    if os.path.exists(CLAUDE_CLI):
         try:
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
             result = subprocess.run(
-                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-20250514"],
+                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
                 input=full_prompt, capture_output=True, text=True, timeout=120,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
-            # Claude failed (rate limit, error) — fall through to Groq
-            err = result.stderr.strip()[:100] if result.stderr else ""
-            if "rate" in err.lower() or "overloaded" in err.lower() or not result.stdout.strip():
-                pass  # Fall through to Groq
-            else:
-                return f"Error: {err}"
-        except subprocess.TimeoutExpired:
-            pass  # Fall through to Groq
         except Exception:
-            pass  # Fall through to Groq
+            pass
 
-    # Fallback to Groq
-    return _call_groq(prompt, system or "", max_tokens)
+    return "Error: Unable to reach Claude. Check OAuth credentials."
 
 
 def load_json(filename: str, default=None):
@@ -601,8 +682,8 @@ def page_compose_ideas():
         with fc1:
             fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
         with fc2:
-            voice = st.selectbox("Voice", ["Default", "Critical", "Homer"], key="ci_voice",
-                help="Default = Tyler's natural voice | Critical = skeptical, tough love | Homer = ultra positive, hype mode")
+            voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"], key="ci_voice",
+                help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
 
         sc1, sc2, sc3, sc4, sc5 = st.columns(5)
         with sc1:
@@ -638,6 +719,18 @@ ALGORITHM-BOOSTED HOMER RULES:
 - Celebrate with substance. After wins: "Here's what went RIGHT" with specific plays/players.
 - Rally the fanbase by making them feel included. Use "we" language. Fans follow sports accounts to feel good about their fandom.
 - No blind cheerleading — genuine optimism grounded in real football knowledge from Tyler's 8 years in the league."""
+        elif voice == "Sarcastic":
+            voice_mod = """Voice style: SARCASTIC — Dry wit, deadpan delivery.
+
+ALGORITHM-SAFE SARCASTIC RULES:
+- Sarcasm through understatement, not mockery. "Oh cool, the Broncos did nothing again. Shocking." not "This franchise is a joke."
+- The humor comes from stating the obvious with fake surprise or calm acceptance of absurdity.
+- Dry, deadpan — like a former player who has seen everything and nothing surprises him anymore.
+- NEVER punch down at fans or individuals. Punch at situations, decisions, outcomes.
+- Sarcasm should make people laugh AND think. If it's just mean, it triggers blocks (-148x penalty).
+- End with a genuine point wrapped in wit — the sarcasm is the delivery method for real analysis.
+- Think: press conference energy where the player says something dry and the room cracks up.
+- Still Tyler's voice — former NFL authority, but with an eyebrow raised."""
         else:
             voice_mod = """Voice style: DEFAULT — Tyler's natural voice. The balanced authority.
 
@@ -647,6 +740,187 @@ This is the algorithm's sweet spot. Balanced content generates the most diverse 
 - Lead with insight, not just opinion
 - Sentence structure: short punchy lines, ellipsis as signature, questions to drive replies
 - 70% positive/neutral, 30% critical — the optimal content ratio for sustained growth"""
+
+        # Pull live patterns for format templates (evolves with each sync)
+        _fp = analyze_personal_patterns()
+        _fp_avg = _fp.get("top_avg_chars", 162) if _fp else 162
+        _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
+        _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
+        _fp_range = _fp.get("optimal_char_range", (40, 387)) if _fp else (40, 387)
+        _fp_hooks = []
+        if _fp and _fp.get("top_examples"):
+            _fp_hooks = [ex.get("text", "")[:80] for ex in _fp["top_examples"][:5]]
+        _hooks_str = "\n".join([f"  - \"{h}...\"" for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+
+        format_mod = ""
+        if fmt == "Short Tweet":
+            format_mod = f"""FORMAT: SHORT TWEET (under 200 characters)
+
+TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+- Average top tweet length: {_fp_avg} chars
+- Optimal range: {_fp_range[0]}-{_fp_range[1]} chars
+- {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
+- {_fp_ell}% of top tweets use ellipsis (his signature)
+- Top performing hooks to model after:
+{_hooks_str}
+
+STRUCTURE:
+[Confrontational hook or bold declaration]
+
+[Punch line, trailing thought, or question]
+
+RULES:
+- Under 200 characters total
+- Use line break between hook and payoff
+- No hashtags, no links, no emojis
+- End with question OR ellipsis, not both
+- Must stop the scroll in the first 8 words
+- Model the hook after one of Tyler's top hooks above
+
+IMAGE RECOMMENDATION:
+- Hot take / opinion → NO image (text-only gets higher engagement rate on short tweets)
+- Stat or comparison → YES — simple stat graphic
+- Reaction to news → OPTIONAL — screenshot of the news article headline
+- If no image: that's fine, text-only short tweets outperform media posts by 30% on engagement rate"""
+
+        elif fmt == "Long Tweet":
+            format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
+
+TYLER'S LIVE DATA (updates every sync):
+- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
+- Top hooks to model the opening after:
+{_hooks_str}
+
+STRUCTURE:
+[Hot take — complete thought in first 280 chars, visible before "Show More" fold]
+
+[Line break]
+
+[Evidence paragraph — 1-2 sentences]
+
+[Line break]
+
+[Comparison list or supporting points]
+
+[Line break]
+
+[Closing question or trailing ellipsis]
+
+RULES:
+- 600-1200 characters total
+- First 280 chars MUST work as a standalone tweet (the fold)
+- Short paragraphs with line breaks between each
+- Use comparison list format when relevant (Team A: X / Team B: Y / etc.)
+- No hashtags, no links
+- End with debate invitation
+
+IMAGE RECOMMENDATION:
+- YES — include 1 supporting image
+- Best: stat graphic, comparison chart, or relevant screenshot
+- Place context for the image ABOVE the Show More fold
+- Images increase total impressions even though text-only has higher engagement rate"""
+
+        elif fmt == "Thread":
+            format_mod = f"""FORMAT: THREAD (5-8 tweets)
+
+TYLER'S LIVE DATA (updates every sync):
+- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
+- Top hooks to model Tweet 1 after:
+{_hooks_str}
+
+STRUCTURE:
+TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
+
+TWEET 2: [Set the stage — specific situation with numbers/facts]
+
+TWEET 3: [Point 1 — standalone insight with line breaks]
+
+TWEET 4: [Point 2 — comparison list format OR insider perspective]
+
+TWEET 5: [Point 3 — the contrarian angle nobody else is saying]
+
+TWEET 6: [Bold conclusion — no hedging, pick a side]
+
+TWEET 7: [Question CTA to drive replies]
+
+RULES:
+- 5-8 tweets total
+- Each tweet must stand alone as a good tweet
+- Use line breaks within each tweet
+- No hashtags except possibly in last tweet
+- Include one tweet with comparison list or specific stats
+- Tweet 1 must stop the scroll
+- Last tweet must drive replies (replies = 13.5x algorithm weight)
+
+IMAGE RECOMMENDATION:
+- Include at least 1 image in the thread (35% more retweets confirmed)
+- DO NOT put image in Tweet 1 — hook should be pure text
+- Best placement: Tweet 2-4 (data chart, stat graphic, or supporting visual)
+- For 7+ tweet threads: include 2 images spread across the middle tweets
+- Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
+
+        elif fmt == "Article":
+            format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+
+WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
+
+TYLER'S LIVE DATA (updates every sync):
+- Top hooks to model headline/intro after:
+{_hooks_str}
+- {_fp_q}% of top tweets use questions — use them between sections
+- {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
+
+STRUCTURE:
+HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
+- Numbers perform 2x better than vague headlines
+- Specificity over vagueness — name the player, name the stat
+- Model after Tyler's top hooks above
+[IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
+
+INTRO (2-3 paragraphs — this is the feed preview, must hook):
+[Provocative claim, surprising stat, or contrarian take]
+[Why this matters right now — urgency/timeliness]
+
+SECTION 1: [SUBHEADING]
+[2-3 short paragraphs with **bold key stats** — 2-3 bold items per section]
+[IMAGE: Supporting chart, stat graphic, or screenshot]
+
+SECTION 2: [SUBHEADING]
+[2-3 short paragraphs]
+[Include comparison list format if relevant (Team A: X / Team B: Y)]
+
+SECTION 3: [SUBHEADING]
+[Contrarian angle or insider perspective — former NFL player authority]
+[IMAGE: Supporting visual]
+
+SECTION 4: WHAT COMES NEXT
+[Bold prediction with reasoning — no hedging, pick a side]
+
+CONCLUSION:
+[**1-sentence hot take summary — bold it**]
+[Discussion question to drive comments (replies = 13.5x algorithm weight)]
+
+PROMOTION:
+[Suggest a companion tweet to promote this article — pull the most provocative stat]
+
+RULES:
+- 1,500-2,000 words (6-8 minute read — optimal for dwell time bonus)
+- Paragraphs: 2-4 sentences max
+- Subheadings every ~300 words
+- Bold key stats and claims (2-3 per section)
+- Tyler's voice throughout — direct, no hedging, former-player authority
+- Every point must reference specific players/schemes/numbers
+- Hero image REQUIRED (articles without hero images look like broken cards in feed)
+- 2-3 supporting images placed between sections
+- End with debate invitation to drive replies
+
+IMAGE RECOMMENDATION:
+- HERO IMAGE required — this becomes the feed thumbnail. Use: game photo, player action shot, or custom graphic
+- 2-3 SUPPORTING IMAGES throughout the body, placed between sections
+- Best types: stat charts, play diagrams, comparison graphics, game screenshots
+- Bold your image captions
+- Articles WITHOUT hero images look like broken cards in the feed — always include one
+- [IMAGE PLACEMENT] markers in the template show where to add each image"""
 
         result = None
         if banger and tweet_text.strip():
@@ -658,6 +932,8 @@ This is the algorithm's sweet spot. Balanced content generates the most diverse 
 Draft: "{tweet_text}"
 
 {voice_mod}
+
+{format_mod}
 {patterns_ctx}
 
 Optimize for ALL of these:
@@ -673,7 +949,9 @@ Optimize for ALL of these:
 {"- " + str(pp.get("top_question_pct", 0)) + "% of his top tweets use a question — consider adding one" if pp and pp.get("top_question_pct", 0) > 40 else ""}
 {"- " + str(pp.get("top_ellipsis_pct", 0)) + "% of his top tweets use ellipsis — match that style" if pp and pp.get("top_ellipsis_pct", 0) > 30 else ""}
 
-Give exactly 3 rewrite options. Each under 280 characters. Tyler's voice: direct, former NFL player authority, uses ellipsis, no emojis. Number them 1-3. After each, show the character count. Reference which top tweet pattern each rewrite is modeled after."""
+{"Give exactly 3 rewrite options. Each under 200 characters. Number them 1-3. After each, show the character count." if fmt == "Short Tweet" else "Give exactly 2 rewrite options. Each 600-1200 characters with line breaks and paragraph structure. The first 280 characters must work as a standalone hook above the Show More fold." if fmt == "Long Tweet" else "Give exactly 1 complete thread of 5-8 tweets. Format as TWEET 1: ... TWEET 2: ... etc. Each tweet must stand alone. Last tweet must drive replies." if fmt == "Thread" else "Write a COMPLETE X Article (not an outline). Include: HEADLINE (bold, takes a position), INTRO (2-3 punchy paragraphs — the hook visible in feed preview), then 4 sections with subheadings. Each section: 2-3 short paragraphs. Use Tyler's voice throughout — direct, insider perspective, specific player/scheme references. Total: 1500-2500 words. End with a bold 1-sentence take and a question to drive comments." if fmt == "Article" else "Give exactly 3 rewrite options. Number them 1-3."}
+
+Tyler's voice: direct, former NFL player authority, uses ellipsis, no emojis. Reference which top tweet pattern each rewrite is modeled after."""
                 result = call_claude(banger_prompt)
         elif viral and tweet_text.strip():
             with st.spinner("Analyzing viral potential against your history..."):
@@ -699,6 +977,8 @@ Give exactly 3 rewrite options. Each under 280 characters. Tyler's voice: direct
 Draft: "{tweet_text}"
 {history_ctx}
 {patterns_ctx}
+
+{format_mod}
 
 Compare this draft against Tyler's personal patterns:
 - His top tweets average {pp.get('top_avg_chars', 'N/A') if pp else 'N/A'} characters — this draft is {len(tweet_text)} characters
@@ -751,6 +1031,8 @@ CONFIRMED X ALGORITHM SIGNAL WEIGHTS:
 Tweet: "{tweet_text}"
 {patterns_ctx}
 
+{format_mod}
+
 This draft is {len(tweet_text)} characters.
 {"It " + ("contains" if "?" in tweet_text else "does NOT contain") + " a question mark." if pp else ""}
 {"It " + ("uses" if "..." in tweet_text else "does NOT use") + " ellipsis." if pp else ""}
@@ -802,6 +1084,8 @@ Return ONLY this JSON:
 Original tweet (NOT Tyler's): "{tweet_text}"
 
 {voice_mod}
+
+{format_mod}
 
 Write a completely NEW tweet about the same topic/subject. Do NOT copy any of the original phrasing. This must be 100% Tyler's voice and perspective as a former NFL player. Optimize for the X algorithm:
 - Strong hook in the first line
@@ -1015,62 +1299,142 @@ Give the repurposed tweet, then show character count."""
 # ═══════════════════════════════════════════════════════════════════════════
 def page_content_coach():
     st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Your personal AI content strategist. Ask anything about growing on X.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
 
-    if "coach_history" not in st.session_state:
-        st.session_state.coach_history = []
+    # --- Initialize session state ---
+    if "coach_conversations" not in st.session_state:
+        st.session_state.coach_conversations = load_json("coach_conversations.json", [])
+    if "coach_current" not in st.session_state:
+        st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
 
-    with st.sidebar:
-        st.markdown("---")
-        coach_fmt = st.selectbox("Output Format", ["Short Tweet", "Thread", "Long-form Post", "Video Script", "General Advice"], key="coach_fmt")
+    COACH_SYSTEM = get_voice_context() + """
 
-    # Display chat
-    for msg in st.session_state.coach_history:
-        role_label = "Tyler" if msg["role"] == "user" else "Coach"
-        cls = "chat-user" if msg["role"] == "user" else "chat-ai"
-        st.markdown(f"""<div class="chat-msg {cls}">
-            <div class="chat-role">{role_label}</div>
-            <div style="color:#d8d8e8; font-size:14px; line-height:1.7; white-space:pre-wrap;">{msg["content"]}</div>
-        </div>""", unsafe_allow_html=True)
+You are Tyler's personal social media coach. You are an EXPERT on:
+- X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
+- Content strategy: hook formulas, thread structures, engagement tactics, audience growth
+- Tyler's specific data: his top performing tweets, patterns, optimal character length, question/ellipsis usage rates, what topics work for him
+- All social media platforms (YouTube, Instagram, TikTok, LinkedIn) for future expansion
+- Sports content specifically: what makes sports commentary go viral, fan psychology, timing around games/events
 
-    # Quick prompts
-    if not st.session_state.coach_history:
-        st.markdown("**Quick starters:**")
-        prompts = [
-            "What should I post about right now?",
-            "How do I grow from 42K to 100K?",
-            "Best posting schedule for a radio host?",
-            "How do I get more replies on my posts?",
-            "What content types perform best on X right now?",
-            "Give me 3 tweet ideas for today",
-        ]
-        cols = st.columns(3)
-        for i, qp in enumerate(prompts):
-            with cols[i % 3]:
-                if st.button(qp, key=f"qp_{i}", use_container_width=True):
-                    st.session_state.coach_history.append({"role": "user", "content": qp})
-                    with st.spinner("Coach is thinking..."):
-                        coach_sys = TYLER_CONTEXT + f"\n\nYou are Tyler's personal content coach. Answer directly and practically. No fluff. Preferred output format: {coach_fmt}. Always end with a follow-up question to keep the conversation going. Suggest specific content types when relevant."
-                        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in st.session_state.coach_history])
-                        reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=coach_sys, max_tokens=800)
-                        st.session_state.coach_history.append({"role": "assistant", "content": reply})
-                    st.rerun()
+Your coaching style:
+- Direct and practical — no fluff, no "great question!" filler
+- Always reference Tyler's actual data when giving advice
+- Give specific, actionable recommendations with examples
+- Challenge Tyler when his ideas won't perform well — don't just agree
+- Think in terms of SYSTEMS not individual posts — build repeatable frameworks
+- Always explain WHY something works in terms of the algorithm
+"""
 
-    # Input
-    user_input = st.text_input("Ask your content coach:", placeholder="What topics should I own right now?", key="coach_input")
-    col_send, col_clear = st.columns([4, 1])
-    with col_send:
-        if st.button("➡️", use_container_width=True, key="coach_send") and user_input.strip():
-            st.session_state.coach_history.append({"role": "user", "content": user_input})
-            with st.spinner("Coach is thinking..."):
-                coach_sys = TYLER_CONTEXT + f"\n\nYou are Tyler's personal content coach. Answer directly and practically. No fluff. Preferred output format: {coach_fmt}. Always end with a follow-up question. Suggest specific content types when relevant."
-                history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in st.session_state.coach_history])
-                reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=coach_sys, max_tokens=800)
-                st.session_state.coach_history.append({"role": "assistant", "content": reply})
+    DEMO_QUESTIONS = [
+        "What topics work best for me?", "What topics should I avoid?",
+        "What hooks get me the most engagement?", "What's my best posting time based on my data?",
+        "Give me 5 tweet templates based on what works for me", "What should I write about today?",
+        "Analyze my worst performing tweets — what went wrong?",
+        "What content types should I try that I haven't been doing?",
+        "How do I grow from 42K to 100K followers?", "What's my engagement rate and how do I improve it?",
+        "Compare my style to [competitor] — what can I learn?",
+        "What's the X algorithm prioritizing right now?",
+    ]
+
+    def _save_current():
+        conv = st.session_state.coach_current
+        if not conv["messages"]:
+            return
+        if conv["id"] is None:
+            conv["id"] = str(uuid.uuid4())
+            conv["created_at"] = datetime.now().isoformat()
+        # Auto-title from first user message
+        first_user = next((m["content"] for m in conv["messages"] if m["role"] == "user"), "Untitled")
+        conv["title"] = first_user[:40].strip()
+        # Upsert into saved list
+        convs = st.session_state.coach_conversations
+        existing = next((i for i, c in enumerate(convs) if c["id"] == conv["id"]), None)
+        if existing is not None:
+            convs[existing] = conv
+        else:
+            convs.append(conv)
+        save_json("coach_conversations.json", convs)
+
+    def _send_message(user_text, include_history, coach_fmt):
+        msgs = st.session_state.coach_current["messages"]
+        msgs.append({"role": "user", "content": user_text})
+        # Build system prompt
+        sys_prompt = COACH_SYSTEM
+        if include_history:
+            patterns = analyze_personal_patterns()
+            if patterns:
+                sys_prompt += build_patterns_context(patterns)
+        if coach_fmt != "General Advice":
+            sys_prompt += f"\n\nFormat your actionable suggestions as: {coach_fmt}"
+        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in msgs])
+        reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=sys_prompt, max_tokens=1200)
+        msgs.append({"role": "assistant", "content": reply})
+        _save_current()
+
+    # --- Layout: 3 columns ---
+    col_left, col_center, col_right = st.columns([1, 3, 1])
+
+    with col_left:
+        st.markdown("##### Conversations")
+        if st.button("+ New Conversation", use_container_width=True, key="coach_new"):
+            st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
             st.rerun()
-    with col_clear:
-        if st.button("Clear Chat", use_container_width=True, key="coach_clear"):
-            st.session_state.coach_history = []
+        for conv in reversed(st.session_state.coach_conversations[-20:]):
+            label = conv.get("title", "Untitled")[:30]
+            is_active = conv.get("id") == st.session_state.coach_current.get("id")
+            if st.button((">> " if is_active else "") + label, key=f"cv_{conv['id']}", use_container_width=True):
+                st.session_state.coach_current = json.loads(json.dumps(conv))
+                st.rerun()
+        if st.session_state.coach_conversations:
+            if st.button("Clear All", key="coach_clear_all", use_container_width=True):
+                st.session_state.coach_conversations = []
+                st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
+                save_json("coach_conversations.json", [])
+                st.rerun()
+
+    with col_right:
+        st.markdown("##### Output Format")
+        coach_fmt = st.selectbox("Format", ["General Advice", "Short Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed")
+        st.markdown("---")
+        st.markdown("##### Quick Save to Ideas")
+        save_text = st.text_area("Save to Compose Ideas:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Save Idea", use_container_width=True, key="coach_save_idea") and save_text.strip():
+                ideas = load_json("saved_ideas.json", [])
+                ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Coach", "created_at": datetime.now().isoformat()})
+                save_json("saved_ideas.json", ideas)
+                st.success("Saved!")
+        with c2:
+            if st.button("Repurpose", use_container_width=True, key="coach_repurpose") and save_text.strip():
+                with st.spinner("Repurposing..."):
+                    repurposed = call_claude(f"Repurpose this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
+                    st.session_state.coach_save_text_result = repurposed
+        if "coach_save_text_result" in st.session_state:
+            st.markdown(f"**Repurposed:**\n\n{st.session_state.coach_save_text_result}")
+
+    with col_center:
+        include_history = st.checkbox("Include Tweet History (check on first message per conversation)", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle")
+
+        # Demo questions dropdown
+        if not st.session_state.coach_current["messages"]:
+            demo_pick = st.selectbox("Demo questions:", ["-- Pick a question --"] + DEMO_QUESTIONS, key="coach_demo")
+            if demo_pick != "-- Pick a question --":
+                with st.spinner("Coach is thinking..."):
+                    _send_message(demo_pick, include_history, coach_fmt)
+                st.rerun()
+
+        # Chat display
+        for msg in st.session_state.coach_current.get("messages", []):
+            role_label = "Tyler" if msg["role"] == "user" else "Coach"
+            cls = "chat-user" if msg["role"] == "user" else "chat-ai"
+            st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:14px;line-height:1.7;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
+
+        # Input
+        user_input = st.text_area("Ask your coach:", height=80, key="coach_input", placeholder="What should I write about today?")
+        if st.button("Send", use_container_width=True, key="coach_send") and user_input.strip():
+            with st.spinner("Coach is thinking..."):
+                _send_message(user_input.strip(), include_history, coach_fmt)
             st.rerun()
 
 
@@ -1079,68 +1443,151 @@ def page_content_coach():
 # ═══════════════════════════════════════════════════════════════════════════
 def page_article_writer():
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Expand a tweet into a full article or start from scratch.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
 
     col_main, col_saved = st.columns([2, 1])
 
+    # ── Left 2/3: Tweet / Brain Dump selectors + generation ──────────────
     with col_main:
-        source = st.radio("Start from:", ["Recent Tweet", "Manual Input"], horizontal=True, key="aw_source")
+        # Section 1 — Choose a Tweet
+        st.markdown("#### Choose a Tweet to Expand")
+        st.caption("Select a tweet to expand into an article")
+        tweets = load_json("tweet_history.json", [])
+        top_tweets = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:8] if tweets else []
 
-        selected_tweet_text = ""
-        if source == "Recent Tweet":
-            if "aw_tweets" not in st.session_state:
-                st.session_state.aw_tweets = []
-            if st.button("Load Recent Tweets", key="aw_load"):
-                with st.spinner("Fetching tweets..."):
-                    st.session_state.aw_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=10)
-            if st.session_state.aw_tweets:
-                options = [t.get("text", "")[:80] + "..." for t in st.session_state.aw_tweets]
-                sel = st.selectbox("Select a tweet to expand:", range(len(options)), format_func=lambda x: options[x], key="aw_sel")
-                selected_tweet_text = st.session_state.aw_tweets[sel].get("text", "")
-                st.markdown(f'<div class="output-box">{selected_tweet_text}</div>', unsafe_allow_html=True)
+        if "aw_sel_tweet" not in st.session_state:
+            st.session_state.aw_sel_tweet = None
+
+        for i, tw in enumerate(top_tweets):
+            txt = tw.get("text", "")
+            dt = tw.get("createdAt", "")[:10]
+            likes = tw.get("likeCount", 0)
+            rts = tw.get("retweetCount", 0)
+            reps = tw.get("replyCount", 0)
+            views = tw.get("viewCount", 0)
+            selected = st.session_state.aw_sel_tweet == i
+            border = "border-left:3px solid #FF6B00;" if selected else ""
+            st.markdown(f"""<div class="tweet-card" style="{border}">
+                <div class="tweet-num">{dt}</div>
+                <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
+                <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
+            </div>""", unsafe_allow_html=True)
+            if st.button("Select", key=f"aw_tw_{i}", use_container_width=True):
+                st.session_state.aw_sel_tweet = i
+                st.session_state.aw_sel_dump = None
+                st.rerun()
+
+        if not top_tweets:
+            st.info("No tweet history yet. Sync tweets in Tweet History first.")
+
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # Section 2 — Choose a Brain Dump
+        st.markdown("#### Or Choose a Brain Dump")
+        dumps = load_json("brain_dumps.json", [])
+        if "aw_sel_dump" not in st.session_state:
+            st.session_state.aw_sel_dump = None
+
+        if not dumps:
+            st.markdown('<div class="output-box">No brain dumps yet. Create one in Brain Dump tool first.</div>', unsafe_allow_html=True)
         else:
-            selected_tweet_text = st.text_area("Enter your text:", height=120, key="aw_manual",
-                placeholder="Paste a tweet or idea to expand into an article...")
+            for j, d in enumerate(reversed(dumps[-6:])):
+                ts = d.get("saved_at", "")[:16].replace("T", " ")
+                preview = d.get("text", "")[:160]
+                selected = st.session_state.aw_sel_dump == j
+                border = "border-left:3px solid #FF6B00;" if selected else ""
+                st.markdown(f"""<div class="tweet-card" style="{border}">
+                    <div class="tweet-num">{ts}</div>
+                    <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
+                </div>""", unsafe_allow_html=True)
+                if st.button("Select", key=f"aw_bd_{j}", use_container_width=True):
+                    st.session_state.aw_sel_dump = j
+                    st.session_state.aw_sel_tweet = None
+                    st.rerun()
 
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+        # Resolve seed text
+        seed_text = ""
+        if st.session_state.aw_sel_tweet is not None and top_tweets:
+            seed_text = top_tweets[st.session_state.aw_sel_tweet].get("text", "")
+        elif st.session_state.aw_sel_dump is not None and dumps:
+            idx = st.session_state.aw_sel_dump
+            rev = list(reversed(dumps[-6:]))
+            if idx < len(rev):
+                seed_text = rev[idx].get("text", "")
+
+        manual = st.text_area("Or type / paste your own seed:", height=80, key="aw_manual",
+            placeholder="Paste a tweet, idea, or topic to expand...")
+        if manual.strip():
+            seed_text = manual.strip()
+
+        # Section 3 — Generation buttons
         ac1, ac2 = st.columns(2)
         with ac1:
             if st.button("Start from scratch", use_container_width=True, key="aw_scratch"):
-                if selected_tweet_text.strip():
-                    with st.spinner("Writing article..."):
-                        result = call_claude(f'Tyler wants to write a full article based on this seed:\n\n"{selected_tweet_text}"\n\nWrite a 500-800 word article in Tyler\'s voice. Former NFL player perspective. Direct, opinionated, backed by knowledge from inside the game. Include a strong headline. No emojis.', max_tokens=1500)
-                        st.session_state["aw_result"] = result
+                if seed_text:
+                    with st.spinner("Writing full article..."):
+                        voice = get_voice_context()
+                        pp = analyze_personal_patterns()
+                        pp_note = ""
+                        if pp:
+                            pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
+                        prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
+                        st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
         with ac2:
             if st.button("Generate Outline", use_container_width=True, key="aw_outline"):
-                if selected_tweet_text.strip():
+                if seed_text:
                     with st.spinner("Generating outline..."):
-                        result = call_claude(f'Tyler wants to write an article based on:\n\n"{selected_tweet_text}"\n\nGenerate a detailed outline:\n- Headline (punchy, clickable)\n- Hook paragraph summary\n- 4-6 section headers with 2-3 bullet points each\n- Closing angle\n\nKeep Tyler\'s voice: direct, opinionated, former-player authority.', max_tokens=800)
-                        st.session_state["aw_result"] = result
+                        voice = get_voice_context()
+                        prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
+                        st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
 
+        # Section 4 — Output + editor
         if st.session_state.get("aw_result"):
             st.markdown(f'<div class="output-box">{st.session_state["aw_result"]}</div>', unsafe_allow_html=True)
-            if st.button("Save Article", key="aw_save"):
-                articles = load_json("saved_articles.json", [])
-                articles.append({
-                    "content": st.session_state["aw_result"],
-                    "seed": selected_tweet_text[:200],
-                    "saved_at": datetime.now().isoformat(),
-                })
-                save_json("saved_articles.json", articles)
-                st.success("Article saved.")
+            edited = st.text_area("Edit article:", value=st.session_state["aw_result"], height=300, key="aw_editor")
+            bc1, bc2, bc3 = st.columns(3)
+            with bc1:
+                if st.button("Save Article", use_container_width=True, key="aw_save"):
+                    articles = load_json("saved_articles.json", [])
+                    articles.append({"content": edited, "seed": seed_text[:200], "saved_at": datetime.now().isoformat()})
+                    save_json("saved_articles.json", articles)
+                    st.success("Article saved.")
+            with bc2:
+                if st.button("Copy", use_container_width=True, key="aw_copy"):
+                    st.code(edited, language=None)
+                    st.info("Text displayed above -- copy from there.")
+            with bc3:
+                if st.button("New Article", use_container_width=True, key="aw_new"):
+                    for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
+                        st.session_state.pop(k, None)
+                    st.rerun()
 
+    # ── Right 1/3: Saved Articles ────────────────────────────────────────
     with col_saved:
-        st.markdown("### Saved Articles")
+        sc1, sc2 = st.columns([2, 1])
+        with sc1:
+            st.markdown("### Saved Articles")
+        with sc2:
+            if st.button("New Article", key="aw_side_new", use_container_width=True):
+                for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
         articles = load_json("saved_articles.json", [])
         if not articles:
             st.markdown('<div class="output-box">No saved articles yet.</div>', unsafe_allow_html=True)
         else:
-            for a in reversed(articles[-10:]):
+            for idx, a in enumerate(reversed(articles[-10:])):
                 ts = a.get("saved_at", "")[:10]
-                preview = a.get("content", "")[:150]
+                preview = a.get("content", "")[:100]
                 st.markdown(f"""<div class="tweet-card">
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8; font-size:13px;">{preview}...</div>
                 </div>""", unsafe_allow_html=True)
+                if st.button("Load", key=f"aw_load_{idx}", use_container_width=True):
+                    st.session_state["aw_result"] = a.get("content", "")
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1717,8 +2164,7 @@ def page_reply_guy():
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # Force rerun if flagged (workaround for st.rerun inside nested columns)
-    if st.session_state.get("rg_force_rerun"):
-        st.session_state.pop("rg_force_rerun")
+    if st.session_state.pop("rg_force_rerun", False):
         st.rerun()
 
     # ── PART 2: My Tweet Replies — Conversation Depth ──
@@ -1792,15 +2238,21 @@ def page_reply_guy():
                         subprocess.run([XURL, "like", rid], capture_output=True, text=True, timeout=10)
                         liked_tweets.append(rid)
                         save_json("liked_tweets.json", liked_tweets[-500:])
-                        st.session_state["rg_force_rerun"] = True
+                        st.rerun()
                 with ic4:
-                    if st.button("➡️", key=f"rg_send_{idx}_{ri}", use_container_width=True, disabled=already_replied):
+                    # Check replied status fresh (same pattern as likes)
+                    fresh_replied = load_json("replied_tweets.json", [])
+                    is_replied_now = rid in fresh_replied
+                    if is_replied_now:
+                        st.button("✅", key=f"rg_send_{idx}_{ri}", use_container_width=True, disabled=True)
+                    elif st.button("➡️", key=f"rg_send_{idx}_{ri}", use_container_width=True):
                         if reply_val.strip():
                             res = subprocess.run([XURL, "reply", rid, reply_val.strip()], capture_output=True, text=True, timeout=15)
                             if res.returncode == 0:
                                 _bump_reply()
-                                _mark_replied(rid)
-                                st.session_state["rg_force_rerun"] = True
+                                fresh_replied.append(rid)
+                                save_json("replied_tweets.json", fresh_replied[-500:])
+                                st.rerun()
                             else:
                                 st.error(res.stderr[:100])
 
@@ -1902,15 +2354,20 @@ def page_reply_guy():
                     subprocess.run([XURL, "like", tid], capture_output=True, text=True, timeout=10)
                     et_liked.append(tid)
                     save_json("liked_tweets.json", et_liked[-500:])
-                    st.session_state["rg_force_rerun"] = True
+                    st.rerun()
             with ic4:
-                if st.button("➡️", key=f"rg_ets_{i}", use_container_width=True, disabled=already):
+                fresh_et_replied = load_json("replied_tweets.json", [])
+                et_is_replied = tid in fresh_et_replied
+                if et_is_replied:
+                    st.button("✅", key=f"rg_ets_{i}", use_container_width=True, disabled=True)
+                elif st.button("➡️", key=f"rg_ets_{i}", use_container_width=True):
                     if reply_text.strip() and tid:
                         res = subprocess.run([XURL, "reply", tid, reply_text.strip()], capture_output=True, text=True, timeout=15)
                         if res.returncode == 0:
                             _bump_reply()
-                            _mark_replied(tid)
-                            st.session_state["rg_force_rerun"] = True
+                            fresh_et_replied.append(tid)
+                            save_json("replied_tweets.json", fresh_et_replied[-500:])
+                            st.rerun()
                         else:
                             st.error(res.stderr[:100])
         with rc4:

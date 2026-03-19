@@ -1,0 +1,33 @@
+.hq-btn-container {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 4px;
+}
+.hq-btn {
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid #333;
+  background: transparent;
+  color: #8899aa;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  transition: all 0.15s;
+}
+.hq-btn:hover {
+  border-color: #ff6b00;
+  color: #ff6b00;
+}
+.hq-save:hover {
+  border-color: #4ecdc4;
+  color: #4ecdc4;
+}
+.hq-repurpose:hover {
+  border-color: #ff6b00;
+  color: #ff6b00;
+}
+.hq-saved {
+  border-color: #22c55e !important;
+  color: #22c55e !important;
+}
