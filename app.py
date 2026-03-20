@@ -161,7 +161,7 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { tran
 .char-over { color: #ef4444 !important; }
 
 /* Chat */
-.chat-msg { border-radius: 14px; padding: 16px 20px; margin: 10px 0; }
+.chat-msg { border-radius: 14px; padding: 20px 24px; margin: 12px 0; }
 .chat-user { background: rgba(255,255,255,0.025); border-left: 1px solid rgba(255,255,255,0.06); }
 .chat-ai { background: rgba(255,107,0,0.05); border-left: 3px solid #FF6B00; }
 .chat-role { font-size: 11px; color: #505070; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
@@ -1872,7 +1872,7 @@ Your coaching style:
         for msg in st.session_state.coach_current.get("messages", []):
             role_label = "Tyler" if msg["role"] == "user" else "Coach"
             cls = "chat-user" if msg["role"] == "user" else "chat-ai"
-            st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:14px;line-height:1.7;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:16px;line-height:1.8;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
 
         # Input
         user_input = st.text_area("Ask your coach:", height=80, key="coach_input", placeholder="What should I write about today?")
