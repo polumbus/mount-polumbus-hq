@@ -23,13 +23,16 @@ CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-SECRETS_PATH = "/home/polfam/.openclaw/workspace-redzone/.streamlit/secrets.toml"
 try:
-    with open(SECRETS_PATH, "rb") as f:
-        _secrets = tomli.load(f)
-    TWITTER_API_IO_KEY = _secrets.get("TWITTER_API_IO_KEY", "")
+    TWITTER_API_IO_KEY = st.secrets["TWITTER_API_IO_KEY"]
 except Exception:
-    TWITTER_API_IO_KEY = ""
+    SECRETS_PATH = "/home/polfam/.openclaw/workspace-redzone/.streamlit/secrets.toml"
+    try:
+        with open(SECRETS_PATH, "rb") as f:
+            _secrets = tomli.load(f)
+        TWITTER_API_IO_KEY = _secrets.get("TWITTER_API_IO_KEY", "")
+    except Exception:
+        TWITTER_API_IO_KEY = ""
 
 TYLER_HANDLE = "tyler_polumbus"
 
@@ -636,7 +639,7 @@ NAV_ICONS = {
 }
 
 if "current_page" not in st.session_state:
-    st.session_state.current_page = "Brain Dump"
+    st.session_state.current_page = st.query_params.get("page", "Brain Dump")
 
 with st.sidebar:
     st.markdown("""
@@ -655,6 +658,7 @@ with st.sidebar:
                         use_container_width=True,
                         type="primary" if is_active else "secondary"):
                 st.session_state.current_page = name
+                st.query_params["page"] = name
                 st.rerun()
 
     st.markdown("---")
@@ -2537,32 +2541,39 @@ def page_inspiration():
         if tag_filter:
             filtered = [i for i in filtered if tag_filter.lower() in [t.lower() for t in i.get("tags", [])]]
 
+        # Handle delete via query param
+        del_idx = st.query_params.get("del_inspo")
+        if del_idx is not None:
+            try:
+                inspo.pop(int(del_idx))
+                save_inspiration_gist(inspo)
+            except Exception:
+                pass
+            st.query_params.pop("del_inspo", None)
+            st.rerun()
+
         if not filtered:
             st.markdown('<div class="output-box">No inspiration saved yet. Start collecting posts that hit different.</div>', unsafe_allow_html=True)
         else:
-            for idx, item in enumerate(reversed(filtered[-20:])):
+            real_indices = list(range(len(inspo)))
+            filtered_with_idx = [(inspo.index(item) if item in inspo else -1, item) for item in reversed(filtered[-20:])]
+            for real_idx, item in filtered_with_idx:
                 tags_html = " ".join([f'<span class="tag">{t}</span>' for t in item.get("tags", [])])
                 metrics = ""
                 if item.get("likes"):
                     metrics += f"Likes: {item['likes']:,} "
                 if item.get("views"):
                     metrics += f"Views: {item['views']:,}"
-                col_card, col_del = st.columns([20, 1])
-                with col_card:
-                    st.markdown(f"""<div class="tweet-card">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span class="tweet-num">{item.get('author','')}</span>
-                            <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
-                        </div>
-                        <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
-                        <div style="margin-bottom:4px;">{tags_html}</div>
-                        <div style="font-size:11px; color:#666688;">{metrics}</div>
-                    </div>""", unsafe_allow_html=True)
-                with col_del:
-                    if st.button("✕", key=f"del_inspo_{idx}", help="Delete"):
-                        inspo = [i for i in inspo if i != item]
-                        save_inspiration_gist(inspo)
-                        st.rerun()
+                st.markdown(f"""<div class="tweet-card" style="position:relative;">
+                    <a href="?page=Inspiration&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">✕</a>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; padding-right:20px;">
+                        <span class="tweet-num">{item.get('author','')}</span>
+                        <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
+                    </div>
+                    <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
+                    <div style="margin-bottom:4px;">{tags_html}</div>
+                    <div style="font-size:11px; color:#666688;">{metrics}</div>
+                </div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
