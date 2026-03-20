@@ -1161,12 +1161,12 @@ Give the repurposed tweet, then show character count."""
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
+        fmt = st.selectbox("Format", ["Short Tweet", "Punchy", "Long Tweet", "Thread", "Article"], key="ci_format")
     with fc2:
         _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Punchy", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
         voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
-            help="Default = natural | Punchy = 2 sentences, get in get out | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
+            help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
 
     # Row 1: primary action + 2 supporting
     sr1, sr2, sr3 = st.columns([2, 1, 1])
@@ -1201,17 +1201,6 @@ The tone is: calm, pointed, credible. Former player who knows what winning looks
 WRONG: "The Broncos need to improve their running game."
 RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
 === END CRITICAL VOICE ==="""
-    elif voice == "Punchy":
-        voice_mod = """=== PUNCHY VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this in exactly TWO sentences. Not one. Not three. Two.
-
-SENTENCE 1: The take. Lead with the sharpest, most specific version of the point — no setup, no context, no "I think." Drop it cold.
-SENTENCE 2: The engagement hook. A direct question, a forced choice, or a provocative statement that makes someone feel they HAVE to respond. No trailing off. No ellipsis. Hit and exit.
-
-The tone is: confident, direct, zero fat. Every word earns its place or gets cut.
-WRONG: "This is an interesting situation. The Broncos have some decisions to make and fans are wondering what will happen next. What do you think?"
-RIGHT: "The 2026 WR room is better than 2015 and nobody wants to admit it. Prove me wrong."
-=== END PUNCHY VOICE ==="""
     elif voice == "Homer":
         voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
 YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
@@ -1259,7 +1248,28 @@ Tyler's natural voice — direct, confident, former-player authority. The output
     _hooks_str = "\n".join([f"  - \"{h}...\"" for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
-    if fmt == "Short Tweet":
+    if fmt == "Punchy":
+        format_mod = f"""FORMAT: PUNCHY (2 sentences maximum — get in, bait engagement, get out)
+
+STRUCTURE:
+SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
+SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
+
+RULES:
+- Exactly 2 sentences. Not one. Not three. Two.
+- Under 200 characters total
+- No hashtags, no emojis, no ellipsis
+- No "I think" / "maybe" / "honestly" — state it flat
+- Every word earns its place or gets cut
+- Sentence 2 must make the reader feel compelled to reply
+
+Top hooks to model Sentence 1 after:
+{_hooks_str}
+
+WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
+RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
+
+    elif fmt == "Short Tweet":
         format_mod = f"""FORMAT: SHORT TWEET (under 200 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
@@ -1433,7 +1443,7 @@ IMAGE RECOMMENDATION:
         with st.spinner("Perfecting your tweet..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp) if pp else ""
-            _char_limit = 250 if fmt == "Short Tweet" else None
+            _char_limit = 200 if fmt == "Punchy" else (250 if fmt == "Short Tweet" else None)
             _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
             if _char_limit:
                 # Clamp the range so synced long-tweet examples don't override the hard limit
@@ -1679,7 +1689,7 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp) if pp else ""
-                _redo_char_limit = 250 if fmt == "Short Tweet" else None
+                _redo_char_limit = 200 if fmt == "Punchy" else (250 if fmt == "Short Tweet" else None)
                 _redo_char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_redo_char_limit} characters total — no exceptions." if _redo_char_limit else ""
                 banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
