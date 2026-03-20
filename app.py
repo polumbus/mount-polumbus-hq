@@ -2427,10 +2427,10 @@ def classify_tweet(tweet):
     else:
         # Format classification — matches Creator Studio format options
         char_len = len(text)
-        if char_len <= 220 and not has_url:
+        if char_len <= 200 and not has_url:
             tags.append("Punchy Tweet")
         elif char_len <= 420:
-            tags.append("Short")
+            tags.append("Normal Tweet")
         else:
             tags.append("Long")
         if not has_url:
@@ -2487,7 +2487,7 @@ def page_tweet_history():
     search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search")
 
     # Filter buttons as columns
-    filters = ["All Posts", "Punchy Tweet", "Short Posts", "Long Posts", "High Engagement",
+    filters = ["All Posts", "Punchy Tweet", "Normal Posts", "Long Posts", "High Engagement",
                "Viral Posts", "Conversation Starters", "Evergreen", "Hot", "Original"]
     filter_type = st.selectbox("Filter", filters, key="th_filter")
 
@@ -2565,7 +2565,7 @@ def page_tweet_history():
 
     if filter_type != "All Posts":
         tag_map = {
-            "Punchy Tweet": "Punchy Tweet", "Short Posts": "Short", "Long Posts": "Long",
+            "Punchy Tweet": "Punchy Tweet", "Normal Posts": "Normal Tweet", "Long Posts": "Long",
             "High Engagement": "High Engagement", "Viral Posts": "Viral",
             "Conversation Starters": "Conversation Starter",
             "Evergreen": "Evergreen", "Hot": "Hot", "Original": "Original",
