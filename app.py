@@ -261,14 +261,14 @@ Top Reply-Getters (conversation starters):
 """
 
 
-def auto_height(text, min_h=80, chars_per_line=60, line_h=24):
+def auto_height(text, min_h=80, chars_per_line=55, line_h=22):
     """Calculate text_area height based on content length."""
     if not text:
         return min_h
     lines = text.count('\n') + 1
     char_lines = max(1, len(text) // chars_per_line)
-    total = max(lines, char_lines) + 1
-    return max(min_h, min(600, total * line_h))
+    total = max(lines, char_lines) + 2
+    return max(min_h, total * line_h)
 
 
 OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
@@ -836,7 +836,7 @@ Give the repurposed tweet, then show character count."""
             st.session_state["ci_repurposed"] = call_claude(repurpose_prompt)
 
     with col_main:
-        tweet_text = st.text_area("Write your tweet idea:", height=140, key="ci_text",
+        tweet_text = st.text_area("Write your tweet idea:", height=auto_height(st.session_state.get("ci_text", ""), min_h=140), key="ci_text",
             placeholder="Start typing your idea here...")
         char_len = len(tweet_text)
         cls = "char-over" if char_len > 280 else ""
@@ -1126,6 +1126,7 @@ Return ONLY this JSON, no other text:
                         raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                     banger_data = json.loads(raw_clean)
                     st.session_state["ci_banger_data"] = banger_data
+                    st.session_state["ci_last_action"] = {"type": "banger", "text": tweet_text, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                 except Exception:
                     result = raw  # fallback to plain text
@@ -1255,7 +1256,7 @@ Return ONLY this JSON:
 
         elif build_this and tweet_text.strip():
             with st.spinner("Building your tweet..."):
-                build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants to turn into a perfect algorithm tweet. He's described what he wants below — your job is to materialize it into the actual tweet.
+                build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
@@ -1264,20 +1265,17 @@ CONCEPT/ANGLE:
 
 {format_mod}
 
-Your job: Turn this CONCEPT into the actual tweet. This is not a rewrite or repurpose — you're taking a raw idea and crafting it into something that will perform.
+TASK: Extract the best version of this idea and write the finished tweet. This is NOT a rewrite — you are crafting the actual tweet from a raw concept description.
 
-Rules:
-- The concept describes what Tyler WANTS to say. Extract the best version of that idea.
-- Use Tyler's voice: direct, former-player authority, no hedging, occasional ellipsis
-- Strong hook — the first line must stop the scroll
+- Strong hook — first line stops the scroll
 - No hashtags, no emojis
 - 7th-9th grade reading level
-- End with something that makes people want to reply or argue
+- End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
-{"- Under 280 characters" if fmt == "Short Tweet" else "- Long form, 500-1200 characters with line breaks, hook in first 280 chars" if fmt == "Long Tweet" else "- Thread of 5-8 tweets, format as TWEET 1: ... TWEET 2: ... Last tweet drives replies" if fmt == "Thread" else "- Full X Article, 1500+ words with sections and subheadings"}
 
-Give ONLY the finished tweet/thread/article. No explanation, no character count, no commentary."""
+Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                 st.session_state["ci_result"] = call_claude(build_prompt)
+                st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
                 st.session_state.pop("ci_grades", None)
@@ -1304,6 +1302,7 @@ Write a completely NEW tweet about the same topic/subject. Do NOT copy any of th
 Give the repurposed tweet, then show character count."""
                 repurposed = call_claude(repurpose_prompt)
                 st.session_state["ci_repurposed"] = repurposed
+                st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_result", None)
                 st.session_state.pop("ci_viral_data", None)
                 st.session_state.pop("ci_grades", None)
@@ -1318,6 +1317,58 @@ Give the repurposed tweet, then show character count."""
             st.session_state.pop("ci_banger_data", None)
 
         # Render results based on which button was pressed
+
+        # Refresh button — re-runs last action with current format/voice
+        last = st.session_state.get("ci_last_action")
+        has_result = st.session_state.get("ci_result") or st.session_state.get("ci_banger_data") or st.session_state.get("ci_repurposed")
+        if last and has_result:
+            if st.button("↺  Regenerate with current format/voice", key="ci_refresh", use_container_width=True):
+                st.session_state["ci_refresh_trigger"] = True
+                st.rerun()
+
+        if st.session_state.pop("ci_refresh_trigger", False):
+            last = st.session_state.get("ci_last_action", {})
+            _rtype = last.get("type")
+            _rtext = last.get("text", tweet_text)
+            _rfmt = last.get("fmt", fmt)
+            _rvoice = last.get("voice", voice)
+            if _rtype in ("build_this", "repurpose", "banger"):
+                st.session_state["ci_refresh_pending"] = {"type": _rtype, "text": _rtext}
+                st.session_state["ci_last_action"] = {"type": _rtype, "text": _rtext, "fmt": fmt, "voice": voice}
+
+        # Handle refresh pending
+        _pending = st.session_state.pop("ci_refresh_pending", None)
+        if _pending:
+            _rtype = _pending["type"]
+            _rtext = _pending["text"]
+            if _rtype == "build_this":
+                with st.spinner("Rebuilding..."):
+                    build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
+
+CONCEPT/ANGLE:
+\"{_rtext}\"
+
+{voice_mod}
+
+{format_mod}
+
+TASK: Extract the best version of this idea and write the finished tweet. This is NOT a rewrite — you are crafting the actual tweet from a raw concept description.
+
+- Strong hook — first line stops the scroll
+- No hashtags, no emojis
+- 7th-9th grade reading level
+- End with something that makes people reply or argue
+
+Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
+                    st.session_state["ci_result"] = call_claude(build_prompt)
+                    st.session_state.pop("ci_banger_data", None)
+                    st.session_state.pop("ci_repurposed", None)
+            elif _rtype == "repurpose":
+                with st.spinner("Repurposing..."):
+                    rp = f"""Someone else wrote this tweet. Rewrite it in Tyler Polumbus's voice.\n\n{voice_mod}\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
+                    st.session_state["ci_repurposed"] = call_claude(rp)
+                    st.session_state.pop("ci_result", None)
+                    st.session_state.pop("ci_banger_data", None)
 
         # Banger — 3 separate boxes + recommendation at bottom
         if st.session_state.get("ci_banger_data"):
