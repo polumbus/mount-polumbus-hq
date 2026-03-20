@@ -1404,7 +1404,8 @@ Return ONLY this JSON, no other text:
                 if opt_text:
                     if pattern:
                         st.markdown(f'<div style="font-size:11px; color:#666688; letter-spacing:1px; margin-top:16px; margin-bottom:4px;">OPTION {idx} — {pattern}</div>', unsafe_allow_html=True)
-                    edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text), key=f"ci_banger_opt_{idx}")
+                    _banger_display = st.session_state.get(f"ci_banger_opt_{idx}", opt_text)
+                    edited_opt = st.text_area("", value=opt_text, height=auto_height(_banger_display, min_h=120), key=f"ci_banger_opt_{idx}")
                     b1, b2 = st.columns(2)
                     with b1:
                         if st.button("Save", key=f"ci_banger_save_{idx}", use_container_width=True):
