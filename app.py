@@ -435,66 +435,106 @@ def analyze_personal_patterns():
     if len(tweets) < 20:
         return None
 
-    # Filter out RTs and replies
-    originals = [t for t in tweets if not t.get("text", "").startswith("RT ") and not t.get("text", "").startswith("@")]
+    # Filter: exclude RTs, @-replies, and URL tweets (different engagement dynamics)
+    originals = [
+        t for t in tweets
+        if not t.get("text", "").startswith("RT ")
+        and not t.get("text", "").startswith("@")
+        and "http" not in t.get("text", "")
+    ]
     if len(originals) < 10:
         return None
 
-    # Sort by engagement
+    # Field-safe getters — API returns likeCount or like_count depending on endpoint
+    def _likes(t): return t.get("likeCount", t.get("like_count", 0))
+    def _rts(t):   return t.get("retweetCount", t.get("retweet_count", 0))
+    def _reps(t):  return t.get("replyCount", t.get("reply_count", 0))
+    def _views(t): return t.get("viewCount", t.get("view_count", 0))
+
+    # Engagement score: 70% raw (reach) + 30% rate (efficiency vs views)
+    def _eng(t):
+        raw = _likes(t) + _rts(t) * 3 + _reps(t) * 2
+        rate_bonus = (raw / max(_views(t), 1)) * 10000
+        return raw * 0.7 + rate_bonus * 0.3
+
     for t in originals:
-        t["_eng"] = t.get("likeCount", 0) + t.get("retweetCount", 0) * 3 + t.get("replyCount", 0) * 2
+        t["_eng"] = _eng(t)
 
     sorted_tweets = sorted(originals, key=lambda t: t["_eng"], reverse=True)
-    top_20pct = sorted_tweets[:max(5, len(sorted_tweets) // 5)]
-    bottom_20pct = sorted_tweets[-max(5, len(sorted_tweets) // 5):]
+    n = len(sorted_tweets)
+    top_n = max(5, n // 5)
+    top_20pct  = sorted_tweets[:top_n]
+    bottom_20pct = sorted_tweets[-top_n:]
 
     patterns = {}
 
-    # Average character length
-    patterns["top_avg_chars"] = sum(len(t.get("text", "")) for t in top_20pct) // len(top_20pct)
+    # Percentile-based char range — 25th to 75th of top performers (not min-max)
+    top_lengths = sorted(len(t.get("text", "")) for t in top_20pct)
+    p25 = top_lengths[max(0, len(top_lengths) // 4)]
+    p75 = top_lengths[min(len(top_lengths) - 1, 3 * len(top_lengths) // 4)]
+    patterns["optimal_char_range"] = (p25, p75)
+    patterns["top_avg_chars"] = sum(top_lengths) // len(top_lengths)
     patterns["bottom_avg_chars"] = sum(len(t.get("text", "")) for t in bottom_20pct) // len(bottom_20pct)
-    patterns["optimal_char_range"] = (min(len(t.get("text", "")) for t in top_20pct), max(len(t.get("text", "")) for t in top_20pct))
 
-    # Ellipsis usage
-    patterns["top_ellipsis_pct"] = round(sum(1 for t in top_20pct if "..." in t.get("text", "")) / len(top_20pct) * 100)
+    # Style patterns
+    patterns["top_ellipsis_pct"]    = round(sum(1 for t in top_20pct if "..." in t.get("text", "")) / len(top_20pct) * 100)
     patterns["bottom_ellipsis_pct"] = round(sum(1 for t in bottom_20pct if "..." in t.get("text", "")) / len(bottom_20pct) * 100)
-
-    # Question marks
-    patterns["top_question_pct"] = round(sum(1 for t in top_20pct if "?" in t.get("text", "")) / len(top_20pct) * 100)
+    patterns["top_question_pct"]    = round(sum(1 for t in top_20pct if "?" in t.get("text", "")) / len(top_20pct) * 100)
     patterns["bottom_question_pct"] = round(sum(1 for t in bottom_20pct if "?" in t.get("text", "")) / len(bottom_20pct) * 100)
+    patterns["top_linebreaks_avg"]  = round(sum(t.get("text", "").count("\n") for t in top_20pct) / len(top_20pct), 1)
 
-    # Line breaks
-    patterns["top_linebreaks_avg"] = round(sum(t.get("text", "").count("\n") for t in top_20pct) / len(top_20pct), 1)
+    # Engagement averages
+    patterns["avg_likes"]  = sum(_likes(t)  for t in originals) // len(originals)
+    patterns["avg_rts"]    = sum(_rts(t)    for t in originals) // len(originals)
+    patterns["avg_replies"]= sum(_reps(t)   for t in originals) // len(originals)
+    patterns["avg_views"]  = sum(_views(t)  for t in originals) // len(originals)
 
-    # Average engagement
-    patterns["avg_likes"] = sum(t.get("likeCount", 0) for t in originals) // len(originals)
-    patterns["avg_rts"] = sum(t.get("retweetCount", 0) for t in originals) // len(originals)
-    patterns["avg_replies"] = sum(t.get("replyCount", 0) for t in originals) // len(originals)
-    patterns["avg_views"] = sum(t.get("viewCount", 0) for t in originals) // len(originals)
+    # Format-split top examples so short formats get short examples, long gets long
+    def _ex(t):
+        return {"text": t.get("text", ""), "likes": _likes(t), "rts": _rts(t),
+                "replies": _reps(t), "score": round(t["_eng"])}
 
-    # Top 10 tweets as examples
-    patterns["top_examples"] = [{"text": t.get("text", ""), "likes": t.get("likeCount", 0), "rts": t.get("retweetCount", 0), "replies": t.get("replyCount", 0)} for t in top_20pct[:10]]
-    patterns["bottom_examples"] = [{"text": t.get("text", ""), "likes": t.get("likeCount", 0)} for t in bottom_20pct[:5]]
+    short_tops = [t for t in top_20pct if len(t.get("text", "")) <= 220]
+    long_tops  = [t for t in top_20pct if len(t.get("text", "")) > 220]
+    patterns["top_examples"]       = [_ex(t) for t in top_20pct[:10]]
+    patterns["top_examples_short"] = [_ex(t) for t in short_tops[:8]]
+    patterns["top_examples_long"]  = [_ex(t) for t in long_tops[:8]]
+    patterns["bottom_examples"]    = [{"text": t.get("text", ""), "likes": _likes(t)} for t in bottom_20pct[:5]]
 
-    # First-word patterns in top tweets
-    first_words = [t.get("text", "").split()[0].lower() if t.get("text", "").split() else "" for t in top_20pct]
-    patterns["top_first_words"] = first_words
+    patterns["top_first_words"] = [
+        t.get("text", "").split()[0].lower() for t in top_20pct if t.get("text", "").split()
+    ]
 
-    # Top reply-getters
-    reply_sorted = sorted(originals, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
-    patterns["top_reply_examples"] = [{"text": t.get("text", ""), "replies": t.get("replyCount", 0), "likes": t.get("likeCount", 0)} for t in reply_sorted]
+    reply_sorted = sorted(originals, key=lambda t: _reps(t), reverse=True)[:5]
+    patterns["top_reply_examples"] = [
+        {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
+    ]
 
     return patterns
 
 
-def build_patterns_context(patterns):
-    """Build a string context block from personal patterns for prompt injection."""
+def build_patterns_context(patterns, fmt=""):
+    """Build a string context block from personal patterns for prompt injection.
+    fmt: pass the current format so examples are filtered to matching length."""
     if not patterns:
         return ""
 
-    top_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['likes']} likes, {ex['rts']} RTs, {ex['replies']} replies)" for ex in patterns.get("top_examples", [])[:10]])
-    bottom_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['likes']} likes)" for ex in patterns.get("bottom_examples", [])[:5]])
-    reply_ex = "\n".join([f"  - \"{ex['text'][:120]}\" ({ex['replies']} replies, {ex['likes']} likes)" for ex in patterns.get("top_reply_examples", [])[:5]])
+    _short_fmt = fmt in ("Punchy Tweet", "Normal Tweet")
+    _long_fmt  = fmt in ("Long Tweet", "Thread", "Article")
+
+    if _short_fmt and patterns.get("top_examples_short"):
+        top_pool = patterns["top_examples_short"]
+        pool_label = "Top Performing SHORT Tweets (model these — do NOT copy long examples)"
+    elif _long_fmt and patterns.get("top_examples_long"):
+        top_pool = patterns["top_examples_long"]
+        pool_label = "Top Performing LONG Tweets (model these)"
+    else:
+        top_pool = patterns.get("top_examples", [])
+        pool_label = "Top Performing Tweets"
+
+    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:8]])
+    bottom_ex = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes)' for ex in patterns.get("bottom_examples", [])[:5]])
+    reply_ex  = "\n".join([f'  - "{ex["text"][:120]}" ({ex["replies"]} replies, {ex["likes"]} likes)' for ex in patterns.get("top_reply_examples", [])[:5]])
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
     opt_range = patterns.get("optimal_char_range", (0, 280))
 
@@ -502,26 +542,25 @@ def build_patterns_context(patterns):
 TYLER'S PERSONAL TWEET BENCHMARKS (from his actual tweet history):
 
 Character Length:
-- Top tweets average {patterns.get('top_avg_chars', 0)} characters
-- Bottom tweets average {patterns.get('bottom_avg_chars', 0)} characters
-- Optimal range: {opt_range[0]}-{opt_range[1]} characters
+- Top tweets average {patterns.get("top_avg_chars", 0)} characters
+- Sweet spot: {opt_range[0]}–{opt_range[1]} characters (25th–75th percentile of top performers)
 
 Style Patterns (top performers):
-- {patterns.get('top_ellipsis_pct', 0)}% use ellipsis (...) vs {patterns.get('bottom_ellipsis_pct', 0)}% in bottom tweets
-- {patterns.get('top_question_pct', 0)}% end with a question vs {patterns.get('bottom_question_pct', 0)}% in bottom tweets
-- Average {patterns.get('top_linebreaks_avg', 0)} line breaks per top tweet
+- {patterns.get("top_ellipsis_pct", 0)}% use ellipsis (...) vs {patterns.get("bottom_ellipsis_pct", 0)}% in bottom tweets
+- {patterns.get("top_question_pct", 0)}% end with a question vs {patterns.get("bottom_question_pct", 0)}% in bottom tweets
+- Average {patterns.get("top_linebreaks_avg", 0)} line breaks per top tweet
 - Common first words in top tweets: {first_words}
 
 Engagement Averages:
-- Average likes: {patterns.get('avg_likes', 0)}
-- Average RTs: {patterns.get('avg_rts', 0)}
-- Average replies: {patterns.get('avg_replies', 0)}
-- Average views: {patterns.get('avg_views', 0)}
+- Average likes: {patterns.get("avg_likes", 0)}
+- Average RTs: {patterns.get("avg_rts", 0)}
+- Average replies: {patterns.get("avg_replies", 0)}
+- Average views: {patterns.get("avg_views", 0)}
 
-Top 10 Performing Tweets:
+{pool_label}:
 {top_ex}
 
-Bottom 5 Performing Tweets:
+Bottom 5 Performing Tweets (avoid these patterns):
 {bottom_ex}
 
 Top Reply-Getters (conversation starters):
@@ -1161,7 +1200,7 @@ Give the repurposed tweet, then show character count."""
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        fmt = st.selectbox("Format", ["Short Tweet", "Punchy", "Long Tweet", "Thread", "Article"], key="ci_format")
+        fmt = st.selectbox("Format", ["Normal Tweet", "Punchy Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
     with fc2:
         _custom_voices = load_json("voice_styles.json", [])
         _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
@@ -1241,15 +1280,21 @@ Tyler's natural voice — direct, confident, former-player authority. The output
     _fp_avg = _fp.get("top_avg_chars", 162) if _fp else 162
     _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
     _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
-    _fp_range = _fp.get("optimal_char_range", (40, 387)) if _fp else (40, 387)
+    _fp_range = _fp.get("optimal_char_range", (40, 250)) if _fp else (40, 250)
     _fp_hooks = []
-    if _fp and _fp.get("top_examples"):
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _fp["top_examples"][:5]]
-    _hooks_str = "\n".join([f"  - \"{h}...\"" for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+    if _fp:
+        # Use format-specific examples so short formats only see short hooks
+        _hook_pool = (
+            _fp.get("top_examples_short", []) if fmt in ("Punchy Tweet", "Normal Tweet")
+            else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
+            else _fp.get("top_examples", [])
+        )
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
+    _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
-    if fmt == "Punchy":
-        format_mod = f"""FORMAT: PUNCHY (2 sentences maximum — get in, bait engagement, get out)
+    if fmt == "Punchy Tweet":
+        format_mod = f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
 
 STRUCTURE:
 SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
@@ -1269,8 +1314,8 @@ Top hooks to model Sentence 1 after:
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
-    elif fmt == "Short Tweet":
-        format_mod = f"""FORMAT: SHORT TWEET (under 200 characters)
+    elif fmt == "Normal Tweet":
+        format_mod = f"""FORMAT: NORMAL TWEET (under 250 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Average top tweet length: {_fp_avg} chars
@@ -1442,8 +1487,8 @@ IMAGE RECOMMENDATION:
     if banger and tweet_text.strip():
         with st.spinner("Perfecting your tweet..."):
             pp = analyze_personal_patterns()
-            patterns_ctx = build_patterns_context(pp) if pp else ""
-            _char_limit = 200 if fmt == "Punchy" else (250 if fmt == "Short Tweet" else None)
+            patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
+            _char_limit = 200 if fmt == "Punchy Tweet" else (250 if fmt == "Normal Tweet" else None)
             _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
             if _char_limit:
                 # Clamp the range so synced long-tweet examples don't override the hard limit
@@ -1488,7 +1533,7 @@ Return ONLY this JSON, no other text:
         with st.spinner("Analyzing viral potential against your history..."):
             history = get_tweet_knowledge_base()
             pp = analyze_personal_patterns()
-            patterns_ctx = build_patterns_context(pp) if pp else ""
+            patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
 
             if history:
                 avg_likes = sum(t.get("likeCount", 0) for t in history) // max(len(history), 1)
@@ -1688,8 +1733,8 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
         elif _rtype == "banger" and _rtext:
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
-                patterns_ctx = build_patterns_context(pp) if pp else ""
-                _redo_char_limit = 200 if fmt == "Punchy" else (250 if fmt == "Short Tweet" else None)
+                patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
+                _redo_char_limit = 200 if fmt == "Punchy Tweet" else (250 if fmt == "Normal Tweet" else None)
                 _redo_char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_redo_char_limit} characters total — no exceptions." if _redo_char_limit else ""
                 banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
@@ -2063,7 +2108,7 @@ Your coaching style:
 
     with col_right:
         st.markdown("##### Output Format")
-        coach_fmt = st.selectbox("Format", ["General Advice", "Short Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed")
+        coach_fmt = st.selectbox("Format", ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed")
         st.markdown("---")
         st.markdown("##### Quick Save to Ideas")
         save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
@@ -2332,34 +2377,42 @@ def get_tweet_knowledge_base():
 
 
 def classify_tweet(tweet):
-    """Classify a tweet into categories."""
-    text = tweet.get("text", "")
-    likes = tweet.get("likeCount", 0)
-    rts = tweet.get("retweetCount", 0)
-    replies = tweet.get("replyCount", 0)
-    views = tweet.get("viewCount", 0)
+    """Classify a tweet — format tags map to Creator Studio formats."""
+    text  = tweet.get("text", "")
+    likes = tweet.get("likeCount", tweet.get("like_count", 0))
+    rts   = tweet.get("retweetCount", tweet.get("retweet_count", 0))
+    replies = tweet.get("replyCount", tweet.get("reply_count", 0))
+    views = tweet.get("viewCount", tweet.get("view_count", 0))
     eng_rate = (likes + rts + replies) / max(views, 1) * 100
+    has_url = "http" in text
 
     tags = []
-    if len(text) < 140:
-        tags.append("Short")
-    if len(text) > 200:
-        tags.append("Long")
+
+    if text.startswith("RT "):
+        tags.append("Repost")
+    elif text.startswith("@"):
+        tags.append("Reply")
+    else:
+        # Format classification — matches Creator Studio format options
+        char_len = len(text)
+        if char_len <= 220 and not has_url:
+            tags.append("Punchy Tweet")
+        elif char_len <= 420:
+            tags.append("Short")
+        else:
+            tags.append("Long")
+        if not has_url:
+            tags.append("Original")
+
+    # Engagement tags
     if likes > 100 or rts > 20:
         tags.append("High Engagement")
     if views > 10000:
         tags.append("Viral")
     if replies > likes * 0.3 and replies > 5:
         tags.append("Conversation Starter")
-    if eng_rate > 5:
+    if eng_rate > 3:
         tags.append("Hot")
-    if not text.startswith("@") and not text.startswith("RT ") and "http" not in text:
-        tags.append("Original")
-    if text.startswith("@"):
-        tags.append("Reply")
-    if "RT " in text[:5]:
-        tags.append("Repost")
-    # Evergreen detection — no time-sensitive words
     time_words = ["today", "tonight", "right now", "just", "breaking", "live"]
     if not any(w in text.lower() for w in time_words) and likes > 20:
         tags.append("Evergreen")
@@ -2402,8 +2455,8 @@ def page_tweet_history():
     search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search")
 
     # Filter buttons as columns
-    filters = ["All Posts", "Short Posts", "Long Posts", "High Engagement", "Viral Posts",
-               "Conversation Starters", "Evergreen", "Hot", "Original"]
+    filters = ["All Posts", "Punchy Tweet", "Short Posts", "Long Posts", "High Engagement",
+               "Viral Posts", "Conversation Starters", "Evergreen", "Hot", "Original"]
     filter_type = st.selectbox("Filter", filters, key="th_filter")
 
     # AI filter buttons inline
@@ -2442,14 +2495,35 @@ def page_tweet_history():
 
     if filter_type != "All Posts":
         tag_map = {
-            "Short Posts": "Short", "Long Posts": "Long", "High Engagement": "High Engagement",
-            "Viral Posts": "Viral", "Conversation Starters": "Conversation Starter",
+            "Punchy Tweet": "Punchy Tweet", "Short Posts": "Short", "Long Posts": "Long",
+            "High Engagement": "High Engagement", "Viral Posts": "Viral",
+            "Conversation Starters": "Conversation Starter",
             "Evergreen": "Evergreen", "Hot": "Hot", "Original": "Original",
         }
         target_tag = tag_map.get(filter_type, "")
         filtered = [t for t in filtered if target_tag in classify_tweet(t)]
 
     st.markdown(f"**Showing {len(filtered)} of {len(tweets)} tweets**")
+
+    # Debug panel — shows exactly which tweets are treated as top performers
+    with st.expander("Debug: Pattern Analysis", expanded=False):
+        _pp = analyze_personal_patterns()
+        if not _pp:
+            st.warning("Not enough data to compute patterns (need 20+ tweets with no URLs).")
+        else:
+            _diag_tweets = load_json("tweet_history.json", [])
+            _has_likeCount = sum(1 for t in _diag_tweets if "likeCount" in t)
+            _has_like_count = sum(1 for t in _diag_tweets if "like_count" in t)
+            st.markdown(f"**Field name check:** `likeCount` present in {_has_likeCount} tweets | `like_count` present in {_has_like_count} tweets")
+            st.markdown(f"**Optimal char range (25th–75th pct):** {_pp.get('optimal_char_range')}")
+            st.markdown(f"**Top avg chars:** {_pp.get('top_avg_chars')} | **Short examples:** {len(_pp.get('top_examples_short',[]))} | **Long examples:** {len(_pp.get('top_examples_long',[]))}")
+            st.markdown("**Top performers used for pattern analysis:**")
+            for ex in _pp.get("top_examples", []):
+                sc = ex.get("score", 0)
+                sc_color = "#22c55e" if sc > 50 else "#FF6B00"
+                st.markdown(
+                    f'<div style="background:#0d0d18;border-left:3px solid {sc_color};border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;">'                    f'<span style="color:{sc_color};font-weight:700;">Score {sc}</span> · '                    f'<span style="color:#888;">{len(ex.get("text",""))} chars · {ex.get("likes",0)} likes · {ex.get("replies",0)} replies</span><br>'                    f'<span style="color:#d8d8e8;">{ex.get("text","")[:150]}</span></div>',
+                    unsafe_allow_html=True)
 
     # Display tweets with classification tags and engagement scores
     for i, t in enumerate(filtered[:100]):
