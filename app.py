@@ -3151,6 +3151,14 @@ page_map = {
     "Inspiration": page_inspiration,
 }
 
+# Auto-sync tweets on every load (once per session to avoid hammering the API)
+if not st.session_state.get("_tweets_synced"):
+    try:
+        sync_tweet_history()
+    except Exception:
+        pass
+    st.session_state["_tweets_synced"] = True
+
 page_fn = page_map.get(page)
 if page_fn:
     page_fn()
