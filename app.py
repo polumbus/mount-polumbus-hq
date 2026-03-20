@@ -420,14 +420,46 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
         raise Exception(f"HTTP {e.code}: {body}")
 
 
+def _get_proxy_url() -> str:
+    """Get proxy URL — from Gist (auto-updated by watchdog) or fall back to secret."""
+    # Try Gist first (self-healing: watchdog updates this when tunnel URL changes)
+    try:
+        gist_id = st.secrets["GIST_ID"]
+        github_pat = st.secrets["GITHUB_PAT"]
+        import urllib.request as _ur
+        req = _ur.Request(
+            f"https://api.github.com/gists/{gist_id}",
+            headers={"Authorization": f"Bearer {github_pat}", "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": "2022-11-28"}
+        )
+        cached = st.session_state.get("_proxy_url_cached_at", 0)
+        if time.time() - cached > 300:  # re-fetch every 5 min
+            with _ur.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+            url_file = data["files"].get("hq_proxy_url.json", {}).get("content")
+            if url_file:
+                proxy_url = json.loads(url_file)["proxy_url"]
+                st.session_state["_proxy_url"] = proxy_url
+                st.session_state["_proxy_url_cached_at"] = time.time()
+        cached_url = st.session_state.get("_proxy_url")
+        if cached_url:
+            return cached_url
+    except Exception:
+        pass
+    # Fall back to static secret
+    return st.secrets.get("CLAUDE_PROXY_URL", "")
+
+
 def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
+    proxy_url = _get_proxy_url()
+    if not proxy_url:
+        raise Exception("No proxy configured")
     try:
-        proxy_url = st.secrets["CLAUDE_PROXY_URL"]
         proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
     except Exception:
-        raise Exception("No proxy configured")
+        proxy_key = ""
 
     body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens}).encode()
     headers = {"Content-Type": "application/json"}
