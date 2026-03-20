@@ -2330,38 +2330,65 @@ def page_article_writer():
 # ═══════════════════════════════════════════════════════════════════════════
 def sync_tweet_history(quick=False):
     """Fetch tweets and merge into local knowledge base.
-    quick=True: fetch 1 batch (50 tweets) for auto-sync on load.
-    quick=False: fetch up to 500 tweets for manual full sync.
+    quick=True: fetch latest ~25 tweets (fast, every page load).
+    quick=False: sliding 2-week windows going back 6 months to collect up to 500 tweets.
+                 Bypasses cursor pagination depth limits.
     """
-    all_tweets = []
-    cursor = ""
-    batches = 0
-    max_batches = 1 if quick else 10
-    while batches < max_batches:  # quick=1 batch, full=10 batches x 50 = 500 max
-        try:
-            params = {"query": f"from:{TYLER_HANDLE}", "queryType": "Latest", "count": "25" if quick else "50"}
-            if cursor:
-                params["cursor"] = cursor
-            resp = requests.get(
-                "https://api.twitterapi.io/twitter/tweet/advanced_search",
-                headers={"X-API-Key": TWITTER_API_IO_KEY},
-                params=params, timeout=30,
-            )
-            if resp.status_code != 200:
+    import time as _time
+
+    def _fetch_window(query):
+        """Fetch all pages for a single query window using cursor pagination."""
+        window_tweets = []
+        cursor = ""
+        for _ in range(4):  # up to 4 pages per window (200 tweets max per window)
+            try:
+                params = {"query": query, "queryType": "Latest", "count": "50"}
+                if cursor:
+                    params["cursor"] = cursor
+                resp = requests.get(
+                    "https://api.twitterapi.io/twitter/tweet/advanced_search",
+                    headers={"X-API-Key": TWITTER_API_IO_KEY},
+                    params=params, timeout=30,
+                )
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                batch = data.get("tweets", [])
+                if not batch:
+                    break
+                window_tweets.extend(batch)
+                cursor = data.get("next_cursor", "")
+                if not cursor:
+                    break
+                _time.sleep(0.3)
+            except Exception:
                 break
-            data = resp.json()
-            tweets = data.get("tweets", [])
-            if not tweets:
+        return window_tweets
+
+    if quick:
+        all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:25]
+    else:
+        # Slide backwards in 2-week windows for 6 months (13 windows × ~38 tweets/window ≈ 500)
+        all_tweets = []
+        seen_ids = set()
+        end_dt = datetime.now()
+        for _ in range(13):
+            start_dt = end_dt - timedelta(days=14)
+            since_str = start_dt.strftime("%Y-%m-%d")
+            until_str = end_dt.strftime("%Y-%m-%d")
+            query = f"from:{TYLER_HANDLE} since:{since_str} until:{until_str}"
+            window = _fetch_window(query)
+            for t in window:
+                tid = t.get("id", "")
+                if tid and tid not in seen_ids:
+                    seen_ids.add(tid)
+                    all_tweets.append(t)
+            end_dt = start_dt
+            _time.sleep(0.5)
+            if len(all_tweets) >= 500:
                 break
-            all_tweets.extend(tweets)
-            cursor = data.get("next_cursor", "")
-            if not cursor:
-                break
-            batches += 1
-            import time; time.sleep(0.5)
-        except Exception:
-            break
-    # Merge with existing history (quick sync only adds new tweets)
+
+    # Merge with existing history
     existing = load_json("tweet_history.json", [])
     combined = all_tweets + existing
     seen = set()
@@ -2371,7 +2398,7 @@ def sync_tweet_history(quick=False):
         if tid and tid not in seen:
             seen.add(tid)
             unique.append(t)
-    unique = unique[:500]  # cap at 500
+    unique = unique[:500]
     save_json("tweet_history.json", unique)
     return unique
 
