@@ -1115,14 +1115,25 @@ def page_brain_dump():
 # PAGE: COMPOSE IDEAS
 # ═══════════════════════════════════════════════════════════════════════════
 def page_compose_ideas():
-    st.markdown('<div class="main-header">COMPOSE <span>IDEAS</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and save your content ideas.</div>', unsafe_allow_html=True)
 
-    # Handle pending draft injection BEFORE widgets render (fixes "Use" button crash)
-    if "_ci_pending_draft" in st.session_state:
-        st.session_state["ci_text"] = st.session_state.pop("_ci_pending_draft")
+    _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview", "ci_viral_data"]
 
-    col_main, col_saved = st.columns([2, 1])
+    # on_click callbacks for Use buttons — sets ci_text BEFORE widget re-renders (no crash)
+    def _use_option(opt_key):
+        val = st.session_state.get(opt_key, "")
+        if val:
+            st.session_state["ci_text"] = val
+        for _k in _RESULT_KEYS:
+            st.session_state.pop(_k, None)
+
+    def _use_result(edit_key):
+        val = st.session_state.get(edit_key, "")
+        if val:
+            st.session_state["ci_text"] = val
+        for _k in _RESULT_KEYS:
+            st.session_state.pop(_k, None)
 
     # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
@@ -1133,7 +1144,7 @@ def page_compose_ideas():
             repurpose_prompt = f"""Rewrite this tweet in Tyler Polumbus's voice.
 
 Original tweet:
-\"{seed}\"
+\"{seed}"
 
 Tyler's voice: direct, no hashtags, ellipsis signature, former-player authority, concise.
 Keep the core insight but make it sound like Tyler wrote it from scratch.
@@ -1142,44 +1153,43 @@ Give the repurposed tweet, then show character count."""
             st.session_state["ci_repurposed"] = call_claude(repurpose_prompt)
             st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
 
-    with col_main:
-        tweet_text = st.text_area("Write your tweet idea:", height=auto_height(st.session_state.get("ci_text", ""), min_h=140), key="ci_text",
-            placeholder="Start typing your idea here...")
-        char_len = len(tweet_text)
-        cls = "char-over" if char_len > 280 else ""
-        st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+    tweet_text = st.text_area("Write your tweet idea:", height=auto_height(st.session_state.get("ci_text", ""), min_h=140), key="ci_text",
+        placeholder="Start typing your idea here...")
+    char_len = len(tweet_text)
+    cls = "char-over" if char_len > 280 else ""
+    st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
 
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
-        with fc2:
-            _custom_voices = load_json("voice_styles.json", [])
-            _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
-            voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
-                help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
+    with fc2:
+        _custom_voices = load_json("voice_styles.json", [])
+        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
+            help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
 
-        # Row 1: primary action + 2 supporting
-        sr1, sr2, sr3 = st.columns([2, 1, 1])
-        with sr1:
-            banger = st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary")
-        with sr2:
-            repurpose = st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True)
-        with sr3:
-            build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
-        # Row 2: utility actions
-        sr4, sr5, sr6 = st.columns(3)
-        with sr4:
-            engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
-        with sr5:
-            biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
-        with sr6:
-            regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
-        viral = False  # removed from main buttons
+    # Row 1: primary action + 2 supporting
+    sr1, sr2, sr3 = st.columns([2, 1, 1])
+    with sr1:
+        banger = st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary")
+    with sr2:
+        repurpose = st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True)
+    with sr3:
+        build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
+    # Row 2: utility actions
+    sr4, sr5, sr6 = st.columns(3)
+    with sr4:
+        engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
+    with sr5:
+        biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
+    with sr6:
+        regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
+    viral = False  # removed from main buttons
 
-        # Voice modifier for prompts
-        voice_mod = ""
-        if voice == "Critical":
-            voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
+    # Voice modifier for prompts
+    voice_mod = ""
+    if voice == "Critical":
+        voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
 YOU MUST write this as a hard accountability take. The output MUST:
 1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
 2. Call out exactly what isn't working and why it matters
@@ -1191,8 +1201,8 @@ The tone is: calm, pointed, credible. Former player who knows what winning looks
 WRONG: "The Broncos need to improve their running game."
 RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
 === END CRITICAL VOICE ==="""
-        elif voice == "Homer":
-            voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
+    elif voice == "Homer":
+        voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
 YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
 1. Use "we" or "this team" — make the reader feel included in the belief
 2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
@@ -1204,8 +1214,8 @@ The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerl
 WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
 RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
 === END HOMER VOICE ==="""
-        elif voice == "Sarcastic":
-            voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
+    elif voice == "Sarcastic":
+        voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
 YOU MUST write this as dry, deadpan understatement. The output MUST:
 1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
 2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
@@ -1217,8 +1227,8 @@ The tone is: former player press conference energy. Seen everything. Nothing sur
 WRONG: "This franchise is a disaster and everyone is incompetent."
 RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
 === END SARCASTIC VOICE ==="""
-        else:
-            voice_mod = """=== DEFAULT VOICE MODE ===
+    else:
+        voice_mod = """=== DEFAULT VOICE MODE ===
 Tyler's natural voice — direct, confident, former-player authority. The output MUST:
 1. Lead with the insight or take — no throat-clearing
 2. Short punchy sentences. Ellipsis (...) as signature where appropriate
@@ -1226,20 +1236,20 @@ Tyler's natural voice — direct, confident, former-player authority. The output
 4. End with either a trailing thought (...) or a question that invites debate
 === END DEFAULT VOICE ==="""
 
-        # Pull live patterns for format templates (evolves with each sync)
-        _fp = analyze_personal_patterns()
-        _fp_avg = _fp.get("top_avg_chars", 162) if _fp else 162
-        _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
-        _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
-        _fp_range = _fp.get("optimal_char_range", (40, 387)) if _fp else (40, 387)
-        _fp_hooks = []
-        if _fp and _fp.get("top_examples"):
-            _fp_hooks = [ex.get("text", "")[:80] for ex in _fp["top_examples"][:5]]
-        _hooks_str = "\n".join([f"  - \"{h}...\"" for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+    # Pull live patterns for format templates (evolves with each sync)
+    _fp = analyze_personal_patterns()
+    _fp_avg = _fp.get("top_avg_chars", 162) if _fp else 162
+    _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
+    _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
+    _fp_range = _fp.get("optimal_char_range", (40, 387)) if _fp else (40, 387)
+    _fp_hooks = []
+    if _fp and _fp.get("top_examples"):
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _fp["top_examples"][:5]]
+    _hooks_str = "\n".join([f"  - \"{h}...\"" for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-        format_mod = ""
-        if fmt == "Short Tweet":
-            format_mod = f"""FORMAT: SHORT TWEET (under 200 characters)
+    format_mod = ""
+    if fmt == "Short Tweet":
+        format_mod = f"""FORMAT: SHORT TWEET (under 200 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Average top tweet length: {_fp_avg} chars
@@ -1268,8 +1278,8 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline
 - If no image: that's fine, text-only short tweets outperform media posts by 30% on engagement rate"""
 
-        elif fmt == "Long Tweet":
-            format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
+    elif fmt == "Long Tweet":
+        format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
 
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
@@ -1305,8 +1315,8 @@ IMAGE RECOMMENDATION:
 - Place context for the image ABOVE the Show More fold
 - Images increase total impressions even though text-only has higher engagement rate"""
 
-        elif fmt == "Thread":
-            format_mod = f"""FORMAT: THREAD (5-8 tweets)
+    elif fmt == "Thread":
+        format_mod = f"""FORMAT: THREAD (5-8 tweets)
 
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
@@ -1344,8 +1354,8 @@ IMAGE RECOMMENDATION:
 - For 7+ tweet threads: include 2 images spread across the middle tweets
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
-        elif fmt == "Article":
-            format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+    elif fmt == "Article":
+        format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
 
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
@@ -1407,12 +1417,12 @@ IMAGE RECOMMENDATION:
 - Articles WITHOUT hero images look like broken cards in the feed — always include one
 - [IMAGE PLACEMENT] markers in the template show where to add each image"""
 
-        result = None
-        if banger and tweet_text.strip():
-            with st.spinner("Perfecting your tweet..."):
-                pp = analyze_personal_patterns()
-                patterns_ctx = build_patterns_context(pp) if pp else ""
-                banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+    result = None
+    if banger and tweet_text.strip():
+        with st.spinner("Perfecting your tweet..."):
+            pp = analyze_personal_patterns()
+            patterns_ctx = build_patterns_context(pp) if pp else ""
+            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
@@ -1436,38 +1446,38 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "which top tweet pattern this is modeled after",
   "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
 }}"""
-                raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
-                try:
-                    raw_clean = raw.strip()
-                    if raw_clean.startswith("```"):
-                        raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                    banger_data = json.loads(raw_clean)
-                    st.session_state["ci_banger_data"] = banger_data
-                    for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)  # fresh widget per new generation
-                    st.session_state["ci_last_action"] = {"type": "banger", "text": tweet_text, "fmt": fmt, "voice": voice}
-                    st.session_state.pop("ci_result", None)
-                except Exception:
-                    result = raw  # fallback to plain text
-        elif viral and tweet_text.strip():
-            with st.spinner("Analyzing viral potential against your history..."):
-                history = get_tweet_knowledge_base()
-                pp = analyze_personal_patterns()
-                patterns_ctx = build_patterns_context(pp) if pp else ""
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                banger_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = banger_data
+                for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)  # fresh widget per new generation
+                st.session_state["ci_last_action"] = {"type": "banger", "text": tweet_text, "fmt": fmt, "voice": voice}
+                st.session_state.pop("ci_result", None)
+            except Exception:
+                result = raw  # fallback to plain text
+    elif viral and tweet_text.strip():
+        with st.spinner("Analyzing viral potential against your history..."):
+            history = get_tweet_knowledge_base()
+            pp = analyze_personal_patterns()
+            patterns_ctx = build_patterns_context(pp) if pp else ""
 
-                if history:
-                    avg_likes = sum(t.get("likeCount", 0) for t in history) // max(len(history), 1)
-                    avg_rts = sum(t.get("retweetCount", 0) for t in history) // max(len(history), 1)
-                    avg_replies = sum(t.get("replyCount", 0) for t in history) // max(len(history), 1)
-                    top_tweets = sorted(history, key=lambda t: t.get("likeCount", 0), reverse=True)[:10]
-                    top_examples = "\n".join([f"- {t.get('text','')[:120]} (likes:{t.get('likeCount',0)}, rts:{t.get('retweetCount',0)}, replies:{t.get('replyCount',0)})" for t in top_tweets])
-                    history_ctx = f"\n\nTyler's average tweet performance: {avg_likes} likes, {avg_rts} RTs, {avg_replies} replies.\n\nHis top 10 tweets:\n{top_examples}"
-                else:
-                    history_ctx = "\n\nNo tweet history available — sync tweets first for better predictions."
-                    avg_likes = 50
-                    avg_rts = 5
-                    avg_replies = 10
+            if history:
+                avg_likes = sum(t.get("likeCount", 0) for t in history) // max(len(history), 1)
+                avg_rts = sum(t.get("retweetCount", 0) for t in history) // max(len(history), 1)
+                avg_replies = sum(t.get("replyCount", 0) for t in history) // max(len(history), 1)
+                top_tweets = sorted(history, key=lambda t: t.get("likeCount", 0), reverse=True)[:10]
+                top_examples = "\n".join([f"- {t.get('text','')[:120]} (likes:{t.get('likeCount',0)}, rts:{t.get('retweetCount',0)}, replies:{t.get('replyCount',0)})" for t in top_tweets])
+                history_ctx = f"\n\nTyler's average tweet performance: {avg_likes} likes, {avg_rts} RTs, {avg_replies} replies.\n\nHis top 10 tweets:\n{top_examples}"
+            else:
+                history_ctx = "\n\nNo tweet history available — sync tweets first for better predictions."
+                avg_likes = 50
+                avg_rts = 5
+                avg_replies = 10
 
-                viral_prompt = f"""Analyze this draft tweet's viral potential based on Tyler's ACTUAL historical data and personal benchmarks.
+            viral_prompt = f"""Analyze this draft tweet's viral potential based on Tyler's ACTUAL historical data and personal benchmarks.
 
 Draft: "{tweet_text}"
 {history_ctx}
@@ -1483,30 +1493,30 @@ Compare this draft against Tyler's personal patterns:
 
 Return ONLY this JSON format:
 {{
-    "predicted_likes": [number based on his history],
-    "predicted_retweets": [number],
-    "predicted_comments": [number],
-    "total_predicted_engagement": [sum],
-    "confidence": "High" or "Medium" or "Low",
-    "compared_to_average": "Above average" or "Average" or "Below average",
-    "reasoning": "[2-3 sentences explaining why, referencing specific similar tweets from his history that performed well or poorly and comparing against his personal benchmarks]",
-    "improvements": ["specific tip referencing his data 1", "specific tip referencing his data 2", "specific tip referencing his data 3"]
+"predicted_likes": [number based on his history],
+"predicted_retweets": [number],
+"predicted_comments": [number],
+"total_predicted_engagement": [sum],
+"confidence": "High" or "Medium" or "Low",
+"compared_to_average": "Above average" or "Average" or "Below average",
+"reasoning": "[2-3 sentences explaining why, referencing specific similar tweets from his history that performed well or poorly and comparing against his personal benchmarks]",
+"improvements": ["specific tip referencing his data 1", "specific tip referencing his data 2", "specific tip referencing his data 3"]
 }}"""
-                raw = call_claude(viral_prompt)
-                try:
-                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                    vdata = json.loads(json_match.group()) if json_match else None
-                except Exception:
-                    vdata = None
+            raw = call_claude(viral_prompt)
+            try:
+                json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                vdata = json.loads(json_match.group()) if json_match else None
+            except Exception:
+                vdata = None
 
-                if vdata and "predicted_likes" in vdata:
-                    st.session_state["ci_viral_data"] = vdata
-                else:
-                    result = raw
-        elif engage and tweet_text.strip():
-            with st.spinner("Grading against the algorithm and your history..."):
+            if vdata and "predicted_likes" in vdata:
+                st.session_state["ci_viral_data"] = vdata
+            else:
+                result = raw
+    elif engage and tweet_text.strip():
+        with st.spinner("Grading against the algorithm and your history..."):
 
-                grade_prompt = f"""Grade this tweet for X algorithm performance.
+            grade_prompt = f"""Grade this tweet for X algorithm performance.
 
 X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
 
@@ -1517,43 +1527,43 @@ Grade these 8 categories (score 1-10). For each, give a specific detail referenc
 
 Return ONLY valid JSON:
 {{
-    "algorithm_score": 0-100,
-    "tyler_score": 0-100,
-    "grades": [
-        {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
-        {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
-        {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
-        {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
-        {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
-        {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
-        {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
-        {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
-    ],
-    "personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
-    "suggestions": ["improvement 1", "improvement 2", "improvement 3"]
+"algorithm_score": 0-100,
+"tyler_score": 0-100,
+"grades": [
+    {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
+    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
+    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
+    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
+    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
+    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
+    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
+    {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
+],
+"personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
+"suggestions": ["improvement 1", "improvement 2", "improvement 3"]
 }}"""
-                raw = call_claude(grade_prompt, system=TYLER_CONTEXT)
-                try:
-                    clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-                    json_match = re.search(r'\{.*\}', clean, re.DOTALL)
-                    gdata = json.loads(json_match.group()) if json_match else None
-                except Exception:
-                    gdata = None
-                if gdata and "grades" in gdata:
-                    st.session_state["ci_grades"] = gdata
-                    st.session_state.pop("ci_result", None)
-                else:
-                    result = raw
+            raw = call_claude(grade_prompt, system=TYLER_CONTEXT)
+            try:
+                clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
+                json_match = re.search(r'\{.*\}', clean, re.DOTALL)
+                gdata = json.loads(json_match.group()) if json_match else None
+            except Exception:
+                gdata = None
+            if gdata and "grades" in gdata:
+                st.session_state["ci_grades"] = gdata
+                st.session_state.pop("ci_result", None)
+            else:
+                result = raw
 
-        elif biz and tweet_text.strip():
-            # Preview — show how tweet looks on X
-            st.session_state["ci_preview"] = tweet_text
-            st.session_state.pop("ci_result", None)
-            st.session_state.pop("ci_repurposed", None)
+    elif biz and tweet_text.strip():
+        # Preview — show how tweet looks on X
+        st.session_state["ci_preview"] = tweet_text
+        st.session_state.pop("ci_result", None)
+        st.session_state.pop("ci_repurposed", None)
 
-        elif build_this and tweet_text.strip():
-            with st.spinner("Building your tweet..."):
-                build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
+    elif build_this and tweet_text.strip():
+        with st.spinner("Building your tweet..."):
+            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
@@ -1570,18 +1580,18 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
-                st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
-                st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
-                st.session_state.pop("ci_repurposed", None)
-                st.session_state.pop("ci_viral_data", None)
-                st.session_state.pop("ci_grades", None)
-                st.session_state.pop("ci_preview", None)
-                st.session_state.pop("ci_banger_data", None)
+            st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+            st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
+            st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
+            st.session_state.pop("ci_repurposed", None)
+            st.session_state.pop("ci_viral_data", None)
+            st.session_state.pop("ci_grades", None)
+            st.session_state.pop("ci_preview", None)
+            st.session_state.pop("ci_banger_data", None)
 
-        elif repurpose and tweet_text.strip():
-            with st.spinner("Repurposing in your voice..."):
-                repurpose_prompt = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject — do NOT copy any original phrasing.
+    elif repurpose and tweet_text.strip():
+        with st.spinner("Repurposing in your voice..."):
+            repurpose_prompt = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject — do NOT copy any original phrasing.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
@@ -1594,33 +1604,33 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 
 
 Give the repurposed tweet, then show character count."""
-                repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
-                st.session_state["ci_repurposed"] = repurposed
-                st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
-                st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
-                st.session_state.pop("ci_result", None)
-                st.session_state.pop("ci_viral_data", None)
-                st.session_state.pop("ci_grades", None)
-                st.session_state.pop("ci_preview", None)
-
-        if result:
-            st.session_state["ci_result"] = result
-            st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
+            repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
+            st.session_state["ci_repurposed"] = repurposed
+            st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
+            st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
+            st.session_state.pop("ci_result", None)
             st.session_state.pop("ci_viral_data", None)
             st.session_state.pop("ci_grades", None)
             st.session_state.pop("ci_preview", None)
-            st.session_state.pop("ci_repurposed", None)
-            st.session_state.pop("ci_banger_data", None)
 
-        # Regenerate — re-runs last action with current format/voice
-        # (button is declared above voice_mod so it fires in the same render cycle)
-        if regenerate:
-            last = st.session_state.get("ci_last_action", {})
-            _rtype = last.get("type")
-            _rtext = last.get("text", tweet_text)
-            if _rtype == "build_this" and _rtext:
-                with st.spinner("Rebuilding..."):
-                    build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
+    if result:
+        st.session_state["ci_result"] = result
+        st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
+        st.session_state.pop("ci_viral_data", None)
+        st.session_state.pop("ci_grades", None)
+        st.session_state.pop("ci_preview", None)
+        st.session_state.pop("ci_repurposed", None)
+        st.session_state.pop("ci_banger_data", None)
+
+    # Regenerate — re-runs last action with current format/voice
+    # (button is declared above voice_mod so it fires in the same render cycle)
+    if regenerate:
+        last = st.session_state.get("ci_last_action", {})
+        _rtype = last.get("type")
+        _rtext = last.get("text", tweet_text)
+        if _rtype == "build_this" and _rtext:
+            with st.spinner("Rebuilding..."):
+                build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
 
 CONCEPT/ANGLE:
 \"{_rtext}\"
@@ -1636,24 +1646,24 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                    st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
-                    st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
-                    st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
-                    st.session_state.pop("ci_banger_data", None)
-                    st.session_state.pop("ci_repurposed", None)
-            elif _rtype == "repurpose" and _rtext:
-                with st.spinner("Repurposing..."):
-                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
-                    st.session_state["ci_repurposed"] = call_claude(rp, system=get_system_for_voice(voice, voice_mod))
-                    st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
-                    st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
-                    st.session_state.pop("ci_result", None)
-                    st.session_state.pop("ci_banger_data", None)
-            elif _rtype == "banger" and _rtext:
-                with st.spinner("Perfecting your tweet..."):
-                    pp = analyze_personal_patterns()
-                    patterns_ctx = build_patterns_context(pp) if pp else ""
-                    banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+                st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+                st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
+                st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
+                st.session_state.pop("ci_banger_data", None)
+                st.session_state.pop("ci_repurposed", None)
+        elif _rtype == "repurpose" and _rtext:
+            with st.spinner("Repurposing..."):
+                rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
+                st.session_state["ci_repurposed"] = call_claude(rp, system=get_system_for_voice(voice, voice_mod))
+                st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
+                st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
+                st.session_state.pop("ci_result", None)
+                st.session_state.pop("ci_banger_data", None)
+        elif _rtype == "banger" and _rtext:
+            with st.spinner("Perfecting your tweet..."):
+                pp = analyze_personal_patterns()
+                patterns_ctx = build_patterns_context(pp) if pp else ""
+                banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{_rtext}"
 
@@ -1673,265 +1683,257 @@ Return ONLY this JSON, no other text:
   "option3": "tweet text", "option3_pattern": "pattern name",
   "recommendation": "which to post and why"
 }}"""
-                    raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
-                    try:
-                        raw_clean = raw.strip()
-                        if raw_clean.startswith("```"):
-                            raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                        st.session_state["ci_banger_data"] = json.loads(raw_clean)
-                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                        st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
-                        st.session_state.pop("ci_result", None)
-                    except Exception:
-                        st.session_state["ci_result"] = raw
-                        st.session_state["ci_result_edit"] = raw
-                        st.session_state.pop("ci_banger_data", None)  # clear old 3-box view
-                        st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
+                raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
+                try:
+                    raw_clean = raw.strip()
+                    if raw_clean.startswith("```"):
+                        raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                    st.session_state["ci_banger_data"] = json.loads(raw_clean)
+                    for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                    st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
+                    st.session_state.pop("ci_result", None)
+                except Exception:
+                    st.session_state["ci_result"] = raw
+                    st.session_state["ci_result_edit"] = raw
+                    st.session_state.pop("ci_banger_data", None)  # clear old 3-box view
+                    st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
 
-        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # Save idea (stays in left panel)
-        sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
-        if st.button("↓ Save Post", key="ci_save", use_container_width=True):
-            if tweet_text.strip():
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── RESULTS (full width, below buttons) ──
+    if st.session_state.get("ci_banger_data"):
+        bd = st.session_state["ci_banger_data"]
+        _la = st.session_state.get("ci_last_action", {})
+        _la_fmt = (_la.get("fmt") or fmt).upper()
+        _la_voice = (_la.get("voice") or voice).upper()
+
+        hdr1, hdr2 = st.columns([4, 1])
+        with hdr1:
+            st.markdown(
+                f'<div style="font-size:11px;color:#666888;font-weight:700;letter-spacing:1.5px;margin:4px 0 12px;">{_la_fmt} · {_la_voice} VOICE</div>',
+                unsafe_allow_html=True)
+        with hdr2:
+            if st.button("✕ Clear", key="ci_clear_banger"):
+                for _k in _RESULT_KEYS:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        for ti, (opt_text, pattern) in enumerate(opts):
+            opt_key = f"ci_banger_opt_{ti + 1}"
+            st.markdown(
+                f'<div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>',
+                unsafe_allow_html=True)
+            if pattern:
+                st.markdown(
+                    f'<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>',
+                    unsafe_allow_html=True)
+            edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100),
+                                      key=opt_key, label_visibility="collapsed")
+            b1, b2 = st.columns(2)
+            with b1:
+                if st.button("↓ Save", key=f"ci_banger_save_{ti + 1}", use_container_width=True):
+                    ideas = load_json("saved_ideas.json", [])
+                    ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized",
+                                  "saved_at": datetime.now().isoformat()})
+                    save_json("saved_ideas.json", ideas)
+                    st.success("Saved.")
+            with b2:
+                st.button("↗ Use", key=f"ci_banger_use_{ti + 1}", use_container_width=True,
+                          type="primary", on_click=_use_option, args=(opt_key,))
+
+        if bd.get("recommendation"):
+            st.markdown(
+                '<div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>',
+                unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="background:rgba(255,107,0,0.05);border:1px solid rgba(255,107,0,0.15);border-left:3px solid #FF6B00;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>',
+                unsafe_allow_html=True)
+
+    elif st.session_state.get("ci_grades"):
+        gd = st.session_state["ci_grades"]
+        gd = st.session_state["ci_grades"]
+        algo_score = gd.get("algorithm_score", 0)
+        tyler_score = gd.get("tyler_score", 0)
+        algo_color = "#22c55e" if algo_score >= 75 else "#FF6B00" if algo_score >= 55 else "#ef4444"
+        tyler_color = "#22c55e" if tyler_score >= 75 else "#FF6B00" if tyler_score >= 55 else "#ef4444"
+        st.markdown(f"""<div style="display:flex;gap:12px;margin-bottom:14px;">
+            <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{algo_color};line-height:1;">{algo_score}</div>
+                <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Algo Score</div>
+            </div>
+            <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{tyler_color};line-height:1;">{tyler_score}</div>
+                <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Tyler Score</div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+        insights = gd.get("personal_insights", [])
+        if insights:
+            for ins in insights:
+                st.markdown(f'<div style="background:#1a1a30;border-left:3px solid #FF6B00;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:#d8d8e8;line-height:1.5;">{ins}</div>', unsafe_allow_html=True)
+        grades = gd.get("grades", [])
+        if grades:
+            st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Grade Breakdown</div>', unsafe_allow_html=True)
+            for g in grades:
+                score = g.get("score", 0)
+                sc = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
+                fix = g.get("fix", "")
+                fix_html = f'<div style="font-size:11px;color:#4ecdc4;margin-top:6px;border-left:2px solid #4ecdc4;padding-left:8px;">Fix: {fix}</div>' if fix else ""
+                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:8px;padding:12px;margin-bottom:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-weight:600;font-size:13px;">{g.get('name','')}</span>
+                        <span style="font-size:13px;color:{sc};font-weight:700;">{score}/10</span>
+                    </div>
+                    <div style="font-size:12px;color:#9999aa;line-height:1.5;">{g.get('detail','')}</div>
+                    {fix_html}
+                </div>""", unsafe_allow_html=True)
+        suggestions = gd.get("suggestions", [])
+        if suggestions:
+            st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Improvements</div>', unsafe_allow_html=True)
+            for s in suggestions:
+                st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;line-height:1.5;">{s}</div>', unsafe_allow_html=True)
+
+    elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
+        _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
+        _val = st.session_state[_rkey]
+        _edit_key = f"ci_right_edit_{hash(_val) & 0xFFFFFF}"
+        edited = st.text_area("", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
+        r1, r2 = st.columns(2)
+        with r1:
+            if st.button("↓ Save", key="ci_right_save", use_container_width=True):
                 ideas = load_json("saved_ideas.json", [])
-                ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
+                ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
-                st.success("Idea saved.")
+                st.success("Saved.")
+        with r2:
+            st.button("↗ Use", key="ci_right_use", use_container_width=True, type="primary",
+                      on_click=_use_result, args=(_edit_key,))
 
-    # ── Right panel: Results when active, Bank otherwise ──
-    _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview", "ci_viral_data"]
-    _show_results = any(st.session_state.get(k) for k in _RESULT_KEYS)
 
-    with col_saved:
-        if _show_results:
-            # Panel header + close
-            _la = st.session_state.get("ci_last_action", {})
-            _la_label = {"banger": "BANGER OPTIONS", "grades": "ALGORITHM GRADES",
-                         "repurpose": "REPURPOSED", "build_this": "BUILD RESULT",
-                         "preview": "POST PREVIEW"}.get(_la.get("type",""), "RESULT")
-            ph1, ph2 = st.columns([3, 1])
-            with ph1:
-                st.markdown(f'<div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin-bottom:4px;">{_la_label}</div>'
-                            f'<div style="font-size:11px;color:#444466;">{_la.get("fmt","")}{" · " + _la.get("voice","") if _la.get("voice") else ""}</div>',
-                            unsafe_allow_html=True)
-            with ph2:
-                if st.button("✕ Clear", key="ci_close_results"):
-                    for _k in _RESULT_KEYS:
-                        st.session_state.pop(_k, None)
+    elif st.session_state.get("ci_preview"):
+        preview_text = st.session_state["ci_preview"]
+        truncated = preview_text[:280]
+        show_more = len(preview_text) > 280
+        now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
+        st.markdown(f"""<div style="background:#0d0d18;border:1px solid #2e2e45;border-radius:16px;padding:18px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FF6B00,#cc4a00);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
+                <div style="font-size:14px;"><span style="font-weight:700;">Tyler Polumbus</span><br><span style="color:#666688;font-size:12px;">@{TYLER_HANDLE}</span></div>
+            </div>
+            <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#e8e8f0;">{truncated}{'<span style="color:#1d9bf0;"> Show more</span>' if show_more else ''}</div>
+            <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
+        </div>
+        {'<div style="font-size:11px;color:#555578;margin-top:8px;">Hook lands before "Show more" cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#FF6B00;margin-top:8px;">280 char cutoff above. Make sure the hook is before it.</div>'}""", unsafe_allow_html=True)
+
+    elif st.session_state.get("ci_viral_data"):
+        vd = st.session_state["ci_viral_data"]
+        total = vd.get("total_predicted_engagement", 0)
+        conf = vd.get("confidence", "Medium")
+        compared = vd.get("compared_to_average", "Average")
+        conf_color = "#22c55e" if conf == "High" else "#FF6B00" if conf == "Medium" else "#ef4444"
+        comp_icon = "↑" if "Above" in compared else "→" if "Average" in compared else "↓"
+        st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted Likes</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_likes',0):,}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted RTs</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_retweets',0):,}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="font-size:13px;color:#8888aa;">Total Engagement</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#FF6B00;">{total:,}</span></div>
+        </div>
+        <div style="margin-bottom:10px;font-size:13px;">Confidence: <span style="background:{conf_color};color:white;padding:2px 8px;border-radius:4px;font-size:11px;">{conf}</span> &nbsp; {comp_icon} {compared}</div>
+        <div style="font-size:13px;color:#c0c0d8;line-height:1.6;">{vd.get('reasoning','')}</div>""", unsafe_allow_html=True)
+        for tip in vd.get("improvements", []):
+            st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;">{tip}</div>', unsafe_allow_html=True)
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
+    # ── Save Post ──
+    sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
+    if st.button("↓ Save Post", key="ci_save", use_container_width=True):
+        if tweet_text.strip():
+            ideas = load_json("saved_ideas.json", [])
+            ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
+            save_json("saved_ideas.json", ideas)
+            st.success("Idea saved.")
+
+    # ── Bank ──
+    with st.expander("Bank", expanded=False):
+        st.markdown("### Bank")
+
+        _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
+        _all_folders = load_json("saved_ideas_folders.json", _default_folders)
+        _folder_opts = ["All Ideas"] + _all_folders + ["Idea Bank Vault", "Rewrite Queue"]
+
+        folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
+
+        with st.expander("Manage Folders"):
+            new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
+            if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
+                fname = new_folder_name.strip()
+                if fname not in _all_folders:
+                    _all_folders.append(fname)
+                    save_json("saved_ideas_folders.json", _all_folders)
+                    st.rerun()
+            for cf in list(_all_folders):
+                if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
+                    _all_folders = [f for f in _all_folders if f != cf]
+                    save_json("saved_ideas_folders.json", _all_folders)
                     st.rerun()
 
-            st.markdown('<hr style="margin:8px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
-
-            # ── BANGER: 3 options in tabs ──
-            if st.session_state.get("ci_banger_data"):
-                bd = st.session_state["ci_banger_data"]
-                opts = [(bd.get(f"option{i}",""), bd.get(f"option{i}_pattern","")) for i in [1,2,3] if bd.get(f"option{i}")]
-                tab_labels = [f"Option {i+1}" for i in range(len(opts))]
-                has_rec = bool(bd.get("recommendation"))
-                if has_rec:
-                    tab_labels.append("Pick")
-                tabs = st.tabs(tab_labels)
-                for ti, (opt_text, pattern) in enumerate(opts):
-                    with tabs[ti]:
-                        if pattern:
-                            st.markdown(f'<div style="font-size:11px;color:#666688;letter-spacing:1px;margin-bottom:8px;">{pattern}</div>', unsafe_allow_html=True)
-                        edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=110), key=f"ci_banger_opt_{ti+1}", label_visibility="collapsed")
-                        b1, b2 = st.columns(2)
-                        with b1:
-                            if st.button("↓ Save", key=f"ci_banger_save_{ti+1}", use_container_width=True):
-                                ideas = load_json("saved_ideas.json", [])
-                                ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                                save_json("saved_ideas.json", ideas)
-                                st.success("Saved.")
-                        with b2:
-                            if st.button("↗ Use", key=f"ci_banger_use_{ti+1}", use_container_width=True, type="primary"):
-                                st.session_state["_ci_pending_draft"] = edited_opt
-                                for _k in _RESULT_KEYS:
-                                    st.session_state.pop(_k, None)
-                                st.rerun()
-                if has_rec:
-                    with tabs[-1]:
-                        st.markdown(f'<div style="font-size:13px;color:#c0c0d8;line-height:1.7;padding:4px 0;">{bd["recommendation"]}</div>', unsafe_allow_html=True)
-
-            # ── GRADES: scores + per-grade breakdown ──
-            elif st.session_state.get("ci_grades"):
-                gd = st.session_state["ci_grades"]
-                algo_score = gd.get("algorithm_score", 0)
-                tyler_score = gd.get("tyler_score", 0)
-                algo_color = "#22c55e" if algo_score >= 75 else "#FF6B00" if algo_score >= 55 else "#ef4444"
-                tyler_color = "#22c55e" if tyler_score >= 75 else "#FF6B00" if tyler_score >= 55 else "#ef4444"
-                st.markdown(f"""<div style="display:flex;gap:12px;margin-bottom:14px;">
-                    <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
-                        <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{algo_color};line-height:1;">{algo_score}</div>
-                        <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Algo Score</div>
-                    </div>
-                    <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
-                        <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{tyler_color};line-height:1;">{tyler_score}</div>
-                        <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Tyler Score</div>
-                    </div>
-                </div>""", unsafe_allow_html=True)
-                insights = gd.get("personal_insights", [])
-                if insights:
-                    for ins in insights:
-                        st.markdown(f'<div style="background:#1a1a30;border-left:3px solid #FF6B00;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:#d8d8e8;line-height:1.5;">{ins}</div>', unsafe_allow_html=True)
-                grades = gd.get("grades", [])
-                if grades:
-                    st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Grade Breakdown</div>', unsafe_allow_html=True)
-                    for g in grades:
-                        score = g.get("score", 0)
-                        sc = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
-                        fix = g.get("fix", "")
-                        fix_html = f'<div style="font-size:11px;color:#4ecdc4;margin-top:6px;border-left:2px solid #4ecdc4;padding-left:8px;">Fix: {fix}</div>' if fix else ""
-                        st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:8px;padding:12px;margin-bottom:8px;">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-weight:600;font-size:13px;">{g.get('name','')}</span>
-                                <span style="font-size:13px;color:{sc};font-weight:700;">{score}/10</span>
-                            </div>
-                            <div style="font-size:12px;color:#9999aa;line-height:1.5;">{g.get('detail','')}</div>
-                            {fix_html}
-                        </div>""", unsafe_allow_html=True)
-                suggestions = gd.get("suggestions", [])
-                if suggestions:
-                    st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Improvements</div>', unsafe_allow_html=True)
-                    for s in suggestions:
-                        st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;line-height:1.5;">{s}</div>', unsafe_allow_html=True)
-
-            # ── SINGLE RESULT (Build, Rewrite, etc.) ──
-            elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
-                _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
-                _val = st.session_state[_rkey]
-                _edit_key = f"ci_right_edit_{hash(_val) & 0xFFFFFF}"
-                edited = st.text_area("", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
-                r1, r2 = st.columns(2)
-                with r1:
-                    if st.button("↓ Save", key="ci_right_save", use_container_width=True):
-                        ideas = load_json("saved_ideas.json", [])
-                        ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                        save_json("saved_ideas.json", ideas)
-                        st.success("Saved.")
-                with r2:
-                    if st.button("↗ Use", key="ci_right_use", use_container_width=True, type="primary"):
-                        st.session_state["_ci_pending_draft"] = edited
-                        for _k in _RESULT_KEYS:
-                            st.session_state.pop(_k, None)
+        if folder in ("Idea Bank Vault", "Rewrite Queue"):
+            gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
+            try:
+                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+                gist_data = resp.json()
+                inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
+            except Exception:
+                inspo_items = []
+            if not inspo_items:
+                st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
+            else:
+                for ii, item in enumerate(reversed(inspo_items[-30:])):
+                    orig_text = item.get("repurposed_text") or item.get("text", "")
+                    author = item.get("author", "") or item.get("handle", "")
+                    ts = item.get("saved_at", "")[:10]
+                    st.markdown(f"""<div class="tweet-card">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                            <span class="tweet-num">{author}</span>
+                            <span style="font-size:11px;color:#444466;">{ts}</span>
+                        </div>
+                        <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
+                        st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
+                        st.session_state["ci_auto_repurpose"] = True
                         st.rerun()
-
-            # ── PREVIEW ──
-            elif st.session_state.get("ci_preview"):
-                preview_text = st.session_state["ci_preview"]
-                truncated = preview_text[:280]
-                show_more = len(preview_text) > 280
-                now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
-                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #2e2e45;border-radius:16px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FF6B00,#cc4a00);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
-                        <div style="font-size:14px;"><span style="font-weight:700;">Tyler Polumbus</span><br><span style="color:#666688;font-size:12px;">@{TYLER_HANDLE}</span></div>
-                    </div>
-                    <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#e8e8f0;">{truncated}{'<span style="color:#1d9bf0;"> Show more</span>' if show_more else ''}</div>
-                    <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
-                </div>
-                {'<div style="font-size:11px;color:#555578;margin-top:8px;">Hook lands before "Show more" cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#FF6B00;margin-top:8px;">280 char cutoff above. Make sure the hook is before it.</div>'}""", unsafe_allow_html=True)
-
-            # ── VIRAL ──
-            elif st.session_state.get("ci_viral_data"):
-                vd = st.session_state["ci_viral_data"]
-                total = vd.get("total_predicted_engagement", 0)
-                conf = vd.get("confidence", "Medium")
-                compared = vd.get("compared_to_average", "Average")
-                conf_color = "#22c55e" if conf == "High" else "#FF6B00" if conf == "Medium" else "#ef4444"
-                comp_icon = "↑" if "Above" in compared else "→" if "Average" in compared else "↓"
-                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:16px;margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted Likes</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_likes',0):,}</span></div>
-                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted RTs</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_retweets',0):,}</span></div>
-                    <div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="font-size:13px;color:#8888aa;">Total Engagement</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#FF6B00;">{total:,}</span></div>
-                </div>
-                <div style="margin-bottom:10px;font-size:13px;">Confidence: <span style="background:{conf_color};color:white;padding:2px 8px;border-radius:4px;font-size:11px;">{conf}</span> &nbsp; {comp_icon} {compared}</div>
-                <div style="font-size:13px;color:#c0c0d8;line-height:1.6;">{vd.get('reasoning','')}</div>""", unsafe_allow_html=True)
-                for tip in vd.get("improvements", []):
-                    st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;">{tip}</div>', unsafe_allow_html=True)
-
         else:
-            # ── Bank panel (shown when no results) ──
-            st.markdown("### Bank")
-
-            _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
-            _all_folders = load_json("saved_ideas_folders.json", _default_folders)
-            _folder_opts = ["All Ideas"] + _all_folders + ["Idea Bank Vault", "Rewrite Queue"]
-
-            folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
-
-            with st.expander("Manage Folders"):
-                new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
-                if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
-                    fname = new_folder_name.strip()
-                    if fname not in _all_folders:
-                        _all_folders.append(fname)
-                        save_json("saved_ideas_folders.json", _all_folders)
-                        st.rerun()
-                for cf in list(_all_folders):
-                    if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
-                        _all_folders = [f for f in _all_folders if f != cf]
-                        save_json("saved_ideas_folders.json", _all_folders)
-                        st.rerun()
-
-            if folder in ("Idea Bank Vault", "Rewrite Queue"):
-                gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
+            ideas = load_json("saved_ideas.json", [])
+            if folder == "All Ideas":
+                inspo_as_ideas = []
                 try:
                     gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
                     resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
                     gist_data = resp.json()
-                    inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
+                    raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
+                    inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
                 except Exception:
-                    inspo_items = []
-                if not inspo_items:
-                    st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
-                else:
-                    for ii, item in enumerate(reversed(inspo_items[-30:])):
-                        orig_text = item.get("repurposed_text") or item.get("text", "")
-                        author = item.get("author", "") or item.get("handle", "")
-                        ts = item.get("saved_at", "")[:10]
-                        st.markdown(f"""<div class="tweet-card">
-                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                                <span class="tweet-num">{author}</span>
-                                <span style="font-size:11px;color:#444466;">{ts}</span>
-                            </div>
-                            <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
-                        </div>""", unsafe_allow_html=True)
-                        if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
-                            st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
-                            st.session_state["ci_auto_repurpose"] = True
-                            st.rerun()
+                    pass
+                filtered = ideas + inspo_as_ideas
+                filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
             else:
-                ideas = load_json("saved_ideas.json", [])
-                if folder == "All Ideas":
-                    inspo_as_ideas = []
-                    try:
-                        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-                        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-                        gist_data = resp.json()
-                        raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
-                        inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
-                    except Exception:
-                        pass
-                    filtered = ideas + inspo_as_ideas
-                    filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
-                else:
-                    filtered = [i for i in ideas if i.get("category") == folder]
-                if not filtered:
-                    st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
-                else:
-                    for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
-                        ts = idea.get("saved_at", "")[:10]
-                        cat = idea.get("category", "")
-                        st.markdown(f"""<div class="tweet-card">
-                            <div style="display:flex;justify-content:space-between;">
-                                <span class="tweet-num">{idea.get('format','')}</span>
-                                <span style="font-size:11px;color:#444466;">{ts} <span class="tag">{cat}</span></span>
-                            </div>
-                            <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
-                        </div>""", unsafe_allow_html=True)
-
+                filtered = [i for i in ideas if i.get("category") == folder]
+            if not filtered:
+                st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+            else:
+                for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
+                    ts = idea.get("saved_at", "")[:10]
+                    cat = idea.get("category", "")
+                    st.markdown(f"""<div class="tweet-card">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span class="tweet-num">{idea.get('format','')}</span>
+                            <span style="font-size:11px;color:#444466;">{ts} <span class="tag">{cat}</span></span>
+                        </div>
+                        <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
+                    </div>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: CONTENT COACH
@@ -2926,7 +2928,7 @@ def page_reply_guy():
     with c1:
         pct = min(reply_count / 50 * 100, 100)
         st.markdown(f'<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-                    f'<span class="metric-label">Today's Replies</span><span class="metric-score">{reply_count}/50</span></div>'
+                    f'<span class="metric-label">Today&#39;s Replies</span><span class="metric-score">{reply_count}/50</span></div>'
                     f'<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{pct}%;"></div></div></div>', unsafe_allow_html=True)
     with c2:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
