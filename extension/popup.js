@@ -1,33 +1,22 @@
+const PROXY_URL = "https://gertrude-spectroscopic-nominally.ngrok-free.dev";
 const statusEl = document.getElementById("status");
-const urlInput = document.getElementById("api-url");
 
-chrome.storage.local.get("apiBase", (data) => {
-  if (data.apiBase) urlInput.value = data.apiBase;
-});
-
-const saveBtn = document.getElementById("save-btn");
-saveBtn.onclick = () => {
-  const url = urlInput.value.trim() || "http://localhost:8505";
-  chrome.storage.local.set({ apiBase: url });
-  saveBtn.textContent = "Saved!";
-  setTimeout(() => { saveBtn.textContent = "Save Settings"; }, 1500);
-  checkConnection(url);
-};
-
-async function checkConnection(base) {
+async function checkConnection() {
   try {
-    const resp = await fetch((base || "http://localhost:8505") + "/api/health");
+    const resp = await fetch(`${PROXY_URL}/health`, {
+      headers: { "ngrok-skip-browser-warning": "1" }
+    });
     const data = await resp.json();
     if (data.status === "ok") {
-      statusEl.textContent = "Connected to HQ";
+      statusEl.textContent = "HQ proxy connected";
       statusEl.className = "status connected";
+    } else {
+      throw new Error("bad status");
     }
   } catch {
-    statusEl.textContent = "Not connected — check URL";
+    statusEl.textContent = "Proxy offline — check watchdog";
     statusEl.className = "status disconnected";
   }
 }
 
-chrome.storage.local.get("apiBase", (data) => {
-  checkConnection(data.apiBase || "http://localhost:8505");
-});
+checkConnection();

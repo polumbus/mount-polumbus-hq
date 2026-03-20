@@ -9,6 +9,10 @@ Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
 import json, os, subprocess, time, urllib.request, urllib.error, re
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
@@ -120,6 +124,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
+        self.send_header("Connection", "close")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Proxy-Key, ngrok-skip-browser-warning")
         self.end_headers()
@@ -331,7 +336,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not PROXY_API_KEY:
         print("WARNING: HQ_PROXY_KEY not set — proxy is unprotected!")
-    server = HTTPServer(("0.0.0.0", PORT), ProxyHandler)
+    server = ThreadedHTTPServer(("0.0.0.0", PORT), ProxyHandler)
     print(f"Claude proxy listening on port {PORT}")
     print("To expose publicly: ssh -R 80:localhost:7821 nokey@localhost.run")
     server.serve_forever()
