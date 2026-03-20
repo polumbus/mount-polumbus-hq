@@ -668,6 +668,35 @@ def save_inspiration_gist(items: list):
         pass
 
 
+def _load_actions_gist() -> dict:
+    """Load liked/replied tweet ID sets from Gist."""
+    if "_actions_cache" in st.session_state:
+        return st.session_state["_actions_cache"]
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        data = resp.json()
+        content = data.get("files", {}).get("hq_actions.json", {}).get("content", "{}")
+        result = json.loads(content)
+    except Exception:
+        result = {}
+    result.setdefault("liked", [])
+    result.setdefault("replied", [])
+    st.session_state["_actions_cache"] = result
+    return result
+
+
+def _save_actions_gist(actions: dict):
+    """Persist liked/replied IDs to Gist so they survive Streamlit restarts."""
+    st.session_state["_actions_cache"] = actions
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        payload = json.dumps({"files": {"hq_actions.json": {"content": json.dumps(actions, indent=2)}}})
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=5)
+    except Exception:
+        pass
+
+
 def load_json(filename: str, default=None):
     path = DATA_DIR / filename
     if path.exists():
@@ -1689,7 +1718,30 @@ Return ONLY this JSON, no other text:
 
     with col_saved:
         st.markdown("### Saved Ideas")
-        folder = st.selectbox("Folder", ["All Ideas", "Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas", "Inspiration Vault", "Repurpose Queue"], key="ci_folder")
+
+        # Custom folders — persisted in saved_ideas_folders.json
+        _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
+        _custom_folders = load_json("saved_ideas_folders.json", [])
+        _all_folders = _default_folders + [f for f in _custom_folders if f not in _default_folders]
+        _folder_opts = ["All Ideas"] + _all_folders + ["Inspiration Vault", "Repurpose Queue"]
+
+        folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
+
+        # Folder management
+        with st.expander("Manage Folders"):
+            new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
+            if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
+                fname = new_folder_name.strip()
+                if fname not in _all_folders:
+                    _custom_folders.append(fname)
+                    save_json("saved_ideas_folders.json", _custom_folders)
+                    st.rerun()
+            # Delete custom folders
+            for cf in _custom_folders:
+                if st.button(f"✕ Delete '{cf}'", key=f"ci_del_{cf}"):
+                    _custom_folders = [f for f in _custom_folders if f != cf]
+                    save_json("saved_ideas_folders.json", _custom_folders)
+                    st.rerun()
 
         if folder in ("Inspiration Vault", "Repurpose Queue"):
             gist_file = "hq_inspiration.json" if folder == "Inspiration Vault" else "hq_repurpose.json"
@@ -1721,20 +1773,34 @@ Return ONLY this JSON, no other text:
                         st.rerun()
         else:
             ideas = load_json("saved_ideas.json", [])
-            filtered = ideas if folder == "All Ideas" else [i for i in ideas if i.get("category") == folder]
+            # "All Ideas" merges saved ideas + inspiration vault items
+            if folder == "All Ideas":
+                inspo_as_ideas = []
+                try:
+                    gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+                    resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+                    gist_data = resp.json()
+                    raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
+                    inspo_as_ideas = [{"text": i.get("text",""), "category": "Inspiration", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
+                except Exception:
+                    pass
+                filtered = ideas + inspo_as_ideas
+                filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
+            else:
+                filtered = [i for i in ideas if i.get("category") == folder]
+
             if not filtered:
                 st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
             else:
-                for i, idea in enumerate(reversed(filtered[-30:])):
+                for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
                     ts = idea.get("saved_at", "")[:10]
                     cat = idea.get("category", "")
                     st.markdown(f"""<div class="tweet-card">
                         <div style="display:flex; justify-content:space-between;">
                             <span class="tweet-num">{idea.get('format','')}</span>
-                            <span style="font-size:11px; color:#444466;">{ts}</span>
+                            <span style="font-size:11px; color:#444466;">{ts} <span class="tag">{cat}</span></span>
                         </div>
                         <div style="color:#d8d8e8; font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text','')) > 150 else ''}</div>
-                        <span class="tag">{cat}</span>
                     </div>""", unsafe_allow_html=True)
 
 
@@ -2868,10 +2934,9 @@ def page_reply_guy():
             reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed",
                 placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key, "")))
             # Action buttons as styled HTML — Streamlit buttons below
-            et_liked = load_json("liked_tweets.json", [])
-            et_already_liked = tid in et_liked
-            fresh_et_replied = load_json("replied_tweets.json", [])
-            et_is_replied = tid in fresh_et_replied
+            _actions = _load_actions_gist()
+            et_already_liked = tid in _actions["liked"]
+            et_is_replied = tid in _actions["replied"]
 
             etb1, etb2, etb3 = st.columns(3)
             with etb1:
@@ -2882,23 +2947,39 @@ def page_reply_guy():
             with etb2:
                 if et_already_liked:
                     st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
-                elif st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True):
-                    _proxy_tweet_action("like", tid)
-                    et_liked.append(tid)
-                    save_json("liked_tweets.json", et_liked[-500:])
-                    st.rerun()
+                else:
+                    bc1, bc2 = st.columns(2)
+                    with bc1:
+                        if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True):
+                            _proxy_tweet_action("like", tid)
+                            _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
+                            _save_actions_gist(_actions)
+                            st.rerun()
+                    with bc2:
+                        if st.button("✓ Done", key=f"rg_etld_{i}", use_container_width=True):
+                            _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
+                            _save_actions_gist(_actions)
+                            st.rerun()
             with etb3:
                 if et_is_replied or already:
                     st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
-                elif st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True):
-                    if reply_text.strip() and tid:
-                        if _proxy_tweet_action("reply", tid, reply_text.strip()):
-                            _bump_reply()
-                            fresh_et_replied.append(tid)
-                            save_json("replied_tweets.json", fresh_et_replied[-500:])
+                else:
+                    sb1, sb2 = st.columns(2)
+                    with sb1:
+                        if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True):
+                            if reply_text.strip() and tid:
+                                if _proxy_tweet_action("reply", tid, reply_text.strip()):
+                                    _bump_reply()
+                                    _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
+                                    _save_actions_gist(_actions)
+                                    st.rerun()
+                                else:
+                                    st.error("Reply failed — check proxy")
+                    with sb2:
+                        if st.button("✓ Done", key=f"rg_etrd_{i}", use_container_width=True):
+                            _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
+                            _save_actions_gist(_actions)
                             st.rerun()
-                        else:
-                            st.error("Reply failed — check proxy connection")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
