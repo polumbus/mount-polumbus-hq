@@ -523,11 +523,10 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     # Try proxy server (Streamlit Cloud path — calls Tyler's local machine)
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens)
-    except Exception as proxy_err:
-        if "No proxy configured" not in str(proxy_err):
-            return f"Error calling Claude: {proxy_err}"
+    except Exception:
+        pass  # Proxy down or unreachable — fall through to OAuth
 
-    # Last resort: direct OAuth (only works with haiku scope, not sonnet)
+    # Fallback: direct OAuth
     try:
         return _call_claude_oauth(prompt, system or "", max_tokens)
     except Exception as e:
@@ -641,10 +640,14 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
 NAV_ITEMS = {
     "CREATE": [
-        ("Brain Dump", "pencil2"),
         ("Compose Ideas", "bulb"),
+        ("Brain Dump", "pencil2"),
         ("Content Coach", "speech_balloon"),
         ("Article Writer", "memo"),
+    ],
+    "ENGAGE": [
+        ("Reply Guy", "left_speech_bubble"),
+        ("Inspiration", "sparkles"),
     ],
     "ANALYZE": [
         ("Tweet History", "clock3"),
@@ -652,10 +655,6 @@ NAV_ITEMS = {
         ("Health Check", "stethoscope"),
         ("Account Pulse", "chart_with_upwards_trend"),
         ("Account Researcher", "mag"),
-    ],
-    "ENGAGE": [
-        ("Reply Guy", "left_speech_bubble"),
-        ("Inspiration", "sparkles"),
     ],
 }
 
@@ -666,7 +665,7 @@ NAV_ICONS = {
 }
 
 if "current_page" not in st.session_state:
-    st.session_state.current_page = st.query_params.get("page", "Brain Dump")
+    st.session_state.current_page = st.query_params.get("page", "Compose Ideas")
 
 with st.sidebar:
     st.markdown("""

@@ -31,3 +31,126 @@
   border-color: #22c55e !important;
   color: #22c55e !important;
 }
+
+/* ── Repurpose Modal ── */
+#hq-repurpose-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.hq-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+}
+.hq-modal-box {
+  position: relative;
+  background: #0d0d18;
+  border: 1px solid #2a2a4a;
+  border-radius: 14px;
+  padding: 22px;
+  width: 520px;
+  max-width: 92vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+}
+.hq-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.hq-modal-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ff6b00;
+}
+.hq-modal-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.hq-modal-close:hover { color: #fff; }
+.hq-modal-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #666688;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.hq-modal-original {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.hq-modal-source-text {
+  color: #c0c0d8;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hq-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: #e8e8f0;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 12px;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.hq-modal-textarea:focus {
+  border-color: #ff6b00;
+}
+.hq-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.hq-modal-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.hq-modal-btn:disabled { opacity: 0.5; cursor: default; }
+.hq-modal-ai {
+  background: #1a1a2e;
+  border: 1px solid #ff6b00;
+  color: #ff6b00;
+}
+.hq-modal-ai:hover:not(:disabled) { background: #ff6b0018; }
+.hq-modal-save {
+  background: #ff6b00;
+  color: #fff;
+}
+.hq-modal-save:hover:not(:disabled) { opacity: 0.85; }
+.hq-modal-status {
+  font-size: 12px;
+  margin-top: 10px;
+  text-align: center;
+  min-height: 18px;
+}

@@ -4,12 +4,13 @@
 const PROXY_URL = "https://gertrude-spectroscopic-nominally.ngrok-free.dev";
 const PROXY_KEY = "polumbus_hq_proxy_2026";
 
-async function saveToProxy(type, tweet) {
-  await fetch(`${PROXY_URL}/save-tweet`, {
+async function callProxy(path, body) {
+  const resp = await fetch(`${PROXY_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Proxy-Key": PROXY_KEY },
-    body: JSON.stringify({ type, tweet })
+    body: JSON.stringify(body)
   });
+  return resp.json();
 }
 
 function extractTweetData(tweetElement) {
@@ -51,6 +52,97 @@ function extractTweetData(tweetElement) {
   return { text, author, handle, likes, retweets, tweet_url: tweetUrl, tags: [] };
 }
 
+// ── Repurpose Modal ──────────────────────────────────────────────────────────
+
+function openRepurposeModal(tweetData) {
+  // Remove existing modal if any
+  const existing = document.getElementById("hq-repurpose-modal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "hq-repurpose-modal";
+  modal.innerHTML = `
+    <div class="hq-modal-backdrop"></div>
+    <div class="hq-modal-box">
+      <div class="hq-modal-header">
+        <span class="hq-modal-title">REPURPOSE TWEET</span>
+        <button class="hq-modal-close">✕</button>
+      </div>
+      <div class="hq-modal-original">
+        <div class="hq-modal-label">ORIGINAL — ${tweetData.author} ${tweetData.handle}</div>
+        <div class="hq-modal-source-text">${tweetData.text}</div>
+      </div>
+      <div class="hq-modal-label" style="margin-top:14px;">YOUR VERSION</div>
+      <textarea class="hq-modal-textarea" placeholder="Write your repurposed version..." rows="5">${tweetData.text}</textarea>
+      <div class="hq-modal-actions">
+        <button class="hq-modal-btn hq-modal-ai" id="hq-ai-btn">⚡ Generate with AI</button>
+        <button class="hq-modal-btn hq-modal-save" id="hq-save-draft-btn">Save Draft</button>
+      </div>
+      <div class="hq-modal-status" id="hq-modal-status"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const backdrop = modal.querySelector(".hq-modal-backdrop");
+  const closeBtn = modal.querySelector(".hq-modal-close");
+  const textarea = modal.querySelector(".hq-modal-textarea");
+  const aiBtn = modal.querySelector("#hq-ai-btn");
+  const saveBtn = modal.querySelector("#hq-save-draft-btn");
+  const status = modal.querySelector("#hq-modal-status");
+
+  function close() { modal.remove(); }
+  backdrop.addEventListener("click", close);
+  closeBtn.addEventListener("click", close);
+
+  aiBtn.addEventListener("click", async () => {
+    aiBtn.disabled = true;
+    aiBtn.textContent = "Generating...";
+    status.textContent = "";
+    try {
+      const result = await callProxy("/call", {
+        prompt: `You are Tyler Polumbus — former NFL player turned sports media personality. Repurpose this tweet in your voice: direct, no hashtags, ellipsis signature, former-player authority. Give ONLY the tweet text, nothing else.\n\nOriginal tweet by ${tweetData.author}:\n"${tweetData.text}"`
+      });
+      if (result.text) {
+        textarea.value = result.text;
+      } else {
+        status.textContent = "AI failed — write it yourself";
+        status.style.color = "#ff4444";
+      }
+    } catch (e) {
+      status.textContent = "Proxy unreachable";
+      status.style.color = "#ff4444";
+    }
+    aiBtn.disabled = false;
+    aiBtn.textContent = "⚡ Generate with AI";
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const draftText = textarea.value.trim();
+    if (!draftText) return;
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    try {
+      await callProxy("/save-tweet", {
+        type: "repurpose",
+        tweet: {
+          ...tweetData,
+          repurposed_text: draftText,
+        }
+      });
+      status.textContent = "Saved to repurpose queue!";
+      status.style.color = "#22c55e";
+      setTimeout(close, 1500);
+    } catch (e) {
+      status.textContent = "Save failed";
+      status.style.color = "#ff4444";
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Draft";
+    }
+  });
+}
+
+// ── Buttons ──────────────────────────────────────────────────────────────────
+
 function createHQButtons(tweetElement) {
   if (tweetElement.querySelector(".hq-btn-container")) return;
 
@@ -69,7 +161,7 @@ function createHQButtons(tweetElement) {
     e.preventDefault();
     saveBtn.textContent = "Saving...";
     try {
-      await saveToProxy("inspiration", extractTweetData(tweetElement));
+      await callProxy("/save-tweet", { type: "inspiration", tweet: extractTweetData(tweetElement) });
       saveBtn.textContent = "Saved!";
       saveBtn.classList.add("hq-saved");
     } catch {
@@ -81,19 +173,11 @@ function createHQButtons(tweetElement) {
   const repurposeBtn = document.createElement("button");
   repurposeBtn.className = "hq-btn hq-repurpose";
   repurposeBtn.textContent = "Repurpose";
-  repurposeBtn.title = "Save to Repurpose queue";
-  repurposeBtn.onclick = async (e) => {
+  repurposeBtn.title = "Repurpose this tweet";
+  repurposeBtn.onclick = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    repurposeBtn.textContent = "Saving...";
-    try {
-      await saveToProxy("repurpose", extractTweetData(tweetElement));
-      repurposeBtn.textContent = "Queued!";
-      repurposeBtn.classList.add("hq-saved");
-    } catch {
-      repurposeBtn.textContent = "Error";
-    }
-    setTimeout(() => { repurposeBtn.textContent = "Repurpose"; repurposeBtn.classList.remove("hq-saved"); }, 2000);
+    openRepurposeModal(extractTweetData(tweetElement));
   };
 
   container.appendChild(saveBtn);
