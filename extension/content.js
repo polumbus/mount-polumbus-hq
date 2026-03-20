@@ -7,7 +7,11 @@ const PROXY_KEY = "polumbus_hq_proxy_2026";
 async function callProxy(path, body) {
   const resp = await fetch(`${PROXY_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Proxy-Key": PROXY_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Proxy-Key": PROXY_KEY,
+      "ngrok-skip-browser-warning": "1"
+    },
     body: JSON.stringify(body)
   });
   return resp.json();

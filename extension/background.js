@@ -19,7 +19,11 @@ async function syncCookiesToProxy() {
   try {
     await fetch(`${PROXY_URL}/sync-cookies`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Proxy-Key": PROXY_KEY },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Proxy-Key": PROXY_KEY,
+        "ngrok-skip-browser-warning": "1"
+      },
       body: JSON.stringify({ auth_token: authToken, ct0 })
     });
     console.log("[HQ] Cookies synced at", new Date().toISOString());
