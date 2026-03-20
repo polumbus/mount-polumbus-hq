@@ -79,7 +79,7 @@ if ! /usr/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://
     echo "[$(date)] Proxy down — restarting..."
     pkill -f "claude_proxy.py" 2>/dev/null
     sleep 1
-    nohup bash -c "HQ_PROXY_KEY=$HQ_PROXY_KEY HQ_GITHUB_PAT=$HQ_GITHUB_PAT /usr/bin/python3 /home/polfam/mount_polumbus_hq/claude_proxy.py" > /tmp/hq_proxy.log 2>&1 &
+    nohup bash -c "HQ_PROXY_KEY=$HQ_PROXY_KEY HQ_GITHUB_PAT=$HQ_GITHUB_PAT HQ_TWITTER_API_IO_KEY=new1_3078a53a02404301adf3180659be6f16 /usr/bin/python3 /home/polfam/mount_polumbus_hq/claude_proxy.py" > /tmp/hq_proxy.log 2>&1 &
     sleep 3
 fi
 

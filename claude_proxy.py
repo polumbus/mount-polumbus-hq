@@ -18,6 +18,7 @@ PORT = 7821
 TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 GIST_ID = "15fb167bbbfdaa79d5ce11c266c3f652"
 GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
+TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
 
 _cookie_cache = {"auth_token": "", "ct0": "", "fetched_at": 0}
 
@@ -117,8 +118,17 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Proxy-Key, ngrok-skip-browser-warning")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Proxy-Key, ngrok-skip-browser-warning")
+        self.end_headers()
 
     def _check_auth(self):
         auth = self.headers.get("X-Proxy-Key", "")
@@ -244,6 +254,65 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     self.send_json(500, {"error": result.stderr.strip() or "empty response"})
             except subprocess.TimeoutExpired:
                 self.send_json(504, {"error": "timeout"})
+            except Exception as e:
+                self.send_json(500, {"error": str(e)})
+
+        elif self.path == "/save-tweet-url":
+            # iOS Shortcut sends tweet URL → fetch content → save to inspiration Gist
+            url = body.get("url", "").strip()
+            tweet_type = body.get("type", "inspiration")
+            match = re.search(r'/status/(\d+)', url)
+            if not match:
+                self.send_json(400, {"error": "no tweet ID in URL"})
+                return
+            tweet_id = match.group(1)
+            tweet_data = {"tweet_url": url, "tweet_id": tweet_id, "text": "", "author": "", "handle": ""}
+
+            # Fetch tweet content from twitterapi.io
+            if TWITTER_API_IO_KEY:
+                try:
+                    api_req = urllib.request.Request(
+                        f"https://api.twitterapi.io/twitter/tweets?tweet_ids={tweet_id}",
+                        headers={"X-API-Key": TWITTER_API_IO_KEY}
+                    )
+                    with urllib.request.urlopen(api_req, timeout=15) as r:
+                        api_data = json.loads(r.read())
+                    tweets = api_data.get("data", [])
+                    if tweets:
+                        t = tweets[0]
+                        author = t.get("author", {})
+                        tweet_data["text"] = t.get("text", "")
+                        tweet_data["author"] = author.get("name", "")
+                        tweet_data["handle"] = "@" + author.get("userName", "")
+                        tweet_data["likes"] = t.get("likeCount", 0)
+                        tweet_data["retweets"] = t.get("retweetCount", 0)
+                except Exception as e:
+                    print(f"Tweet fetch failed: {e}")
+
+            tweet_data["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            tweet_data["source"] = "ios_shortcut"
+            filename = "hq_inspiration.json" if tweet_type == "inspiration" else "hq_repurpose.json"
+            try:
+                get_req = urllib.request.Request(f"https://api.github.com/gists/{GIST_ID}",
+                    headers={"Authorization": f"Bearer {GITHUB_PAT}", "Accept": "application/vnd.github+json"})
+                with urllib.request.urlopen(get_req, timeout=10) as r:
+                    gist_data = json.loads(r.read())
+                items = []
+                if filename in gist_data.get("files", {}):
+                    try:
+                        items = json.loads(gist_data["files"][filename]["content"])
+                    except Exception:
+                        pass
+                items.append(tweet_data)
+                patch_data = json.dumps({"files": {filename: {"content": json.dumps(items, indent=2)}}}).encode()
+                patch_req = urllib.request.Request(f"https://api.github.com/gists/{GIST_ID}",
+                    data=patch_data, method="PATCH",
+                    headers={"Authorization": f"Bearer {GITHUB_PAT}", "Accept": "application/vnd.github+json",
+                             "Content-Type": "application/json"})
+                with urllib.request.urlopen(patch_req, timeout=10):
+                    pass
+                author_str = tweet_data.get("handle") or "tweet"
+                self.send_json(200, {"ok": True, "saved": author_str, "text": tweet_data["text"][:80]})
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
 
