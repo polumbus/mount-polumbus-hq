@@ -1315,11 +1315,12 @@ WRONG: "The Broncos have some interesting decisions to make this offseason and i
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
-        format_mod = f"""FORMAT: NORMAL TWEET (under 250 characters)
+        _nt_lo = max(_fp_range[0], 100)
+        _nt_hi = min(_fp_range[1], 250)
+        format_mod = f"""FORMAT: NORMAL TWEET (100-250 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
-- Average top tweet length: {_fp_avg} chars
-- Optimal range: {_fp_range[0]}-{_fp_range[1]} chars
+- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
 - Top performing hooks to model after:
@@ -1331,7 +1332,7 @@ STRUCTURE:
 [Punch line, trailing thought, or question]
 
 RULES:
-- Under 200 characters total
+- Between 100 and 250 characters total — don't be too brief
 - Use line break between hook and payoff
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
@@ -1339,10 +1340,9 @@ RULES:
 - Model the hook after one of Tyler's top hooks above
 
 IMAGE RECOMMENDATION:
-- Hot take / opinion → NO image (text-only gets higher engagement rate on short tweets)
+- Hot take / opinion → NO image (text-only gets higher engagement rate)
 - Stat or comparison → YES — simple stat graphic
-- Reaction to news → OPTIONAL — screenshot of the news article headline
-- If no image: that's fine, text-only short tweets outperform media posts by 30% on engagement rate"""
+- Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
         format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
