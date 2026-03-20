@@ -1102,11 +1102,9 @@ Draft: "{tweet_text}"
 {patterns_ctx}
 
 Rules:
-- Tonal Clarity (direct, passionate, not toxic)
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
 - Hook & Pattern Breakers (first line stops the scroll)
-- Tyler's voice: direct, former NFL player authority, uses ellipsis
 {"- Optimal character range: " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
 
 Return ONLY this JSON, no other text:
@@ -1284,7 +1282,7 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
 
         elif repurpose and tweet_text.strip():
             with st.spinner("Repurposing in your voice..."):
-                repurpose_prompt = f"""Someone else wrote this tweet. Tyler wants to make a NEW original tweet on the same subject in his own voice.
+                repurpose_prompt = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject — do NOT copy any original phrasing.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
@@ -1292,9 +1290,7 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 
 {format_mod}
 
-Write a completely NEW tweet about the same topic/subject. Do NOT copy any of the original phrasing. This must be 100% Tyler's voice and perspective as a former NFL player. Optimize for the X algorithm:
 - Strong hook in the first line
-- Under 280 characters
 - Invites engagement/replies
 - No hashtags, no emojis
 - 7th-9th grade reading level
