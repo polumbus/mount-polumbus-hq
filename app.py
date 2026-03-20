@@ -818,6 +818,23 @@ def page_compose_ideas():
 
     col_main, col_saved = st.columns([2, 1])
 
+    # Auto-repurpose from Inspiration Vault click
+    if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
+        seed = st.session_state.pop("ci_repurpose_seed")
+        st.session_state.pop("ci_auto_repurpose", None)
+        st.session_state["ci_text"] = seed
+        with st.spinner("Repurposing in your voice..."):
+            repurpose_prompt = f"""Repurpose this tweet in Tyler Polumbus's voice.
+
+Original tweet:
+\"{seed}\"
+
+Tyler's voice: direct, no hashtags, ellipsis signature, former-player authority, concise.
+Keep the core insight but make it sound like Tyler wrote it from scratch.
+
+Give the repurposed tweet, then show character count."""
+            st.session_state["ci_repurposed"] = call_claude(repurpose_prompt)
+
     with col_main:
         tweet_text = st.text_area("Write your tweet idea:", height=140, key="ci_text",
             placeholder="Start typing your idea here...")
@@ -1422,23 +1439,53 @@ Give the repurposed tweet, then show character count."""
 
     with col_saved:
         st.markdown("### Saved Ideas")
-        ideas = load_json("saved_ideas.json", [])
-        folder = st.selectbox("Folder", ["All Ideas", "Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_folder")
-        filtered = ideas if folder == "All Ideas" else [i for i in ideas if i.get("category") == folder]
-        if not filtered:
-            st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+        folder = st.selectbox("Folder", ["All Ideas", "Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas", "Inspiration Vault", "Repurpose Queue"], key="ci_folder")
+
+        if folder in ("Inspiration Vault", "Repurpose Queue"):
+            gist_file = "hq_inspiration.json" if folder == "Inspiration Vault" else "hq_repurpose.json"
+            try:
+                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+                gist_data = resp.json()
+                inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
+            except Exception:
+                inspo_items = []
+
+            if not inspo_items:
+                st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
+            else:
+                for ii, item in enumerate(reversed(inspo_items[-30:])):
+                    orig_text = item.get("repurposed_text") or item.get("text", "")
+                    author = item.get("author", "") or item.get("handle", "")
+                    ts = item.get("saved_at", "")[:10]
+                    st.markdown(f"""<div class="tweet-card">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span class="tweet-num">{author}</span>
+                            <span style="font-size:11px; color:#444466;">{ts}</span>
+                        </div>
+                        <div style="color:#d8d8e8; font-size:13px; line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text) > 200 else ''}</div>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button("Repurpose This", key=f"ci_inspo_{ii}", use_container_width=True):
+                        st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
+                        st.session_state["ci_auto_repurpose"] = True
+                        st.rerun()
         else:
-            for i, idea in enumerate(reversed(filtered[-30:])):
-                ts = idea.get("saved_at", "")[:10]
-                cat = idea.get("category", "")
-                st.markdown(f"""<div class="tweet-card">
-                    <div style="display:flex; justify-content:space-between;">
-                        <span class="tweet-num">{idea.get('format','')}</span>
-                        <span style="font-size:11px; color:#444466;">{ts}</span>
-                    </div>
-                    <div style="color:#d8d8e8; font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text','')) > 150 else ''}</div>
-                    <span class="tag">{cat}</span>
-                </div>""", unsafe_allow_html=True)
+            ideas = load_json("saved_ideas.json", [])
+            filtered = ideas if folder == "All Ideas" else [i for i in ideas if i.get("category") == folder]
+            if not filtered:
+                st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+            else:
+                for i, idea in enumerate(reversed(filtered[-30:])):
+                    ts = idea.get("saved_at", "")[:10]
+                    cat = idea.get("category", "")
+                    st.markdown(f"""<div class="tweet-card">
+                        <div style="display:flex; justify-content:space-between;">
+                            <span class="tweet-num">{idea.get('format','')}</span>
+                            <span style="font-size:11px; color:#444466;">{ts}</span>
+                        </div>
+                        <div style="color:#d8d8e8; font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text','')) > 150 else ''}</div>
+                        <span class="tag">{cat}</span>
+                    </div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
