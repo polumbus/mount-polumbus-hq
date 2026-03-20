@@ -2746,11 +2746,15 @@ def page_reply_guy():
                         )
                         if resp.status_code == 200:
                             data = resp.json()
-                            today = datetime.now().strftime("%Y-%m-%d")
+                            cutoff = datetime.utcnow() - timedelta(hours=48)
                             for t in data.get("tweets", []):
                                 created = t.get("createdAt", t.get("created_at", ""))
-                                if not created.startswith(today):
-                                    continue
+                                try:
+                                    tweet_dt = datetime.strptime(created[:19], "%Y-%m-%dT%H:%M:%S")
+                                    if tweet_dt < cutoff:
+                                        continue
+                                except Exception:
+                                    pass  # can't parse date, include it
                                 author = t.get("author", {})
                                 all_tweets.append({
                                     "id": t.get("id", t.get("tweet_id", "")),
@@ -2763,6 +2767,8 @@ def page_reply_guy():
                                     "_target_account": author.get("userName", author.get("username", "")),
                                     "author": author,
                                 })
+                            if not all_tweets:
+                                st.info("No tweets from this list in the last 48 hours.")
                         else:
                             st.error(f"List fetch error: HTTP {resp.status_code}")
                     except Exception as e:
