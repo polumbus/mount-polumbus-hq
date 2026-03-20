@@ -363,7 +363,7 @@ def _get_access_token():
 
 def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
     """Call Claude API directly using OAuth bearer token."""
-    import urllib.request
+    import urllib.request, urllib.error
     access_token = _get_access_token()
     if not access_token:
         err = st.session_state.get("_oauth_last_error", "unknown reason")
@@ -388,9 +388,13 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    return data["content"][0]["text"].strip()
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        return data["content"][0]["text"].strip()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise Exception(f"HTTP {e.code}: {body}")
 
 
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
