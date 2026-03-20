@@ -99,7 +99,7 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { tran
 .stat-label { font-size: 11px; color: #505070; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
 
 /* Inputs */
-.stTextArea textarea, .stTextInput input { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 12px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; transition: border-color 0.2s ease !important; }
+.stTextArea textarea, .stTextInput input { background: #0e0e1c !important; border: 1px solid rgba(255,255,255,0.09) !important; border-radius: 12px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; transition: border-color 0.2s ease !important; }
 .stTextArea textarea:focus, .stTextInput input:focus { border-color: rgba(255,107,0,0.5) !important; box-shadow: 0 0 0 3px rgba(255,107,0,0.07) !important; }
 .stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
 
@@ -2768,43 +2768,38 @@ def page_reply_guy():
                 lid = LISTS.get(list_source, "")
                 if lid:
                     try:
-                        # Step 1: get list members (real-time handles)
+                        # Get list members first (list/tweets API is stale/cached)
                         mem_resp = requests.get(
                             "https://api.twitterapi.io/twitter/list/members",
                             headers={"X-API-Key": TWITTER_API_IO_KEY},
-                            params={"listId": lid, "count": 30},
+                            params={"list_id": lid, "count": 30},
                             timeout=30,
                         )
-                        members = []
-                        if mem_resp.status_code == 200:
-                            mdata = mem_resp.json()
-                            members = mdata.get("members", mdata.get("data", []))
-                        handles = [
-                            m.get("userName") or m.get("username") or m.get("screen_name", "")
-                            for m in members
-                            if m.get("userName") or m.get("username") or m.get("screen_name")
-                        ]
-                        handles = [h for h in handles if h][:15]
-
-                        if handles:
-                            # Step 2: real-time search for recent tweets from these accounts
-                            query = " OR ".join([f"from:{h}" for h in handles])
-                            tweets = fetch_tweets(query, count=20)
-                            for t in tweets:
-                                author = t.get("author", {})
-                                all_tweets.append({
-                                    "id": t.get("id", ""),
-                                    "text": t.get("text", ""),
-                                    "createdAt": t.get("createdAt", t.get("created_at", "")),
-                                    "likeCount": t.get("likeCount", 0),
-                                    "retweetCount": t.get("retweetCount", 0),
-                                    "replyCount": t.get("replyCount", 0),
-                                    "viewCount": t.get("viewCount", 0),
-                                    "_target_account": author.get("userName", author.get("username", "")),
-                                    "author": author,
-                                })
+                        if mem_resp.status_code != 200:
+                            st.error(f"Could not load list members: HTTP {mem_resp.status_code}")
                         else:
-                            st.warning(f"Could not fetch members for list {list_source} (HTTP {mem_resp.status_code})")
+                            members = mem_resp.json().get("members", [])
+                            handles = [m.get("userName") or m.get("username", "") for m in members if m.get("userName") or m.get("username")]
+                            handles = [h for h in handles if h][:15]
+                            if handles:
+                                # Real-time search for recent tweets from list members
+                                query = " OR ".join([f"from:{h}" for h in handles])
+                                tweets = fetch_tweets(query, count=20)
+                                for t in tweets:
+                                    author = t.get("author", {})
+                                    all_tweets.append({
+                                        "id": t.get("id", ""),
+                                        "text": t.get("text", ""),
+                                        "createdAt": t.get("createdAt", t.get("created_at", "")),
+                                        "likeCount": t.get("likeCount", 0),
+                                        "retweetCount": t.get("retweetCount", 0),
+                                        "replyCount": t.get("replyCount", 0),
+                                        "viewCount": t.get("viewCount", 0),
+                                        "_target_account": author.get("userName", author.get("username", "")),
+                                        "author": author,
+                                    })
+                            else:
+                                st.warning("List has no members or couldn't be read")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
             st.session_state["rg_tweets"] = all_tweets
