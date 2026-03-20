@@ -2525,10 +2525,9 @@ def page_tweet_history():
         likes = t.get("likeCount", t.get("like_count", 0))
         rts   = t.get("retweetCount", t.get("retweet_count", 0))
         reps  = t.get("replyCount", t.get("reply_count", 0))
-        views = t.get("viewCount", t.get("view_count", 1))
-        raw   = likes + rts * 3 + reps * 2
-        rate  = (raw / max(views, 1)) * 10000
-        return raw * 0.7 + rate * 0.3
+        views = t.get("viewCount", t.get("view_count", 0))
+        # HOF = raw reach — views weighted lightly so viral posts dominate
+        return views * 0.001 + likes + rts * 3 + reps * 2
 
     originals = [t for t in tweets
         if not t.get("text", "").startswith("RT ")
