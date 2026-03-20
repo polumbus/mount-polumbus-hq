@@ -888,6 +888,7 @@ Keep the core insight but make it sound like Tyler wrote it from scratch.
 
 Give the repurposed tweet, then show character count."""
             st.session_state["ci_repurposed"] = call_claude(repurpose_prompt)
+            st.session_state.pop("ci_rp_edit", None)
 
     with col_main:
         tweet_text = st.text_area("Write your tweet idea:", height=auto_height(st.session_state.get("ci_text", ""), min_h=140), key="ci_text",
@@ -1184,6 +1185,7 @@ Return ONLY this JSON, no other text:
                         raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                     banger_data = json.loads(raw_clean)
                     st.session_state["ci_banger_data"] = banger_data
+                    for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
                     st.session_state["ci_last_action"] = {"type": "banger", "text": tweet_text, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                 except Exception:
@@ -1333,6 +1335,7 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                 st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+                st.session_state.pop("ci_result_edit", None)
                 st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1357,6 +1360,7 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 Give the repurposed tweet, then show character count."""
                 repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
                 st.session_state["ci_repurposed"] = repurposed
+                st.session_state.pop("ci_rp_edit", None)
                 st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_result", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1365,6 +1369,7 @@ Give the repurposed tweet, then show character count."""
 
         if result:
             st.session_state["ci_result"] = result
+            st.session_state.pop("ci_result_edit", None)
             st.session_state.pop("ci_viral_data", None)
             st.session_state.pop("ci_grades", None)
             st.session_state.pop("ci_preview", None)
@@ -1396,6 +1401,7 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                     st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+                    st.session_state.pop("ci_result_edit", None)
                     st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_banger_data", None)
                     st.session_state.pop("ci_repurposed", None)
@@ -1403,6 +1409,7 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
                 with st.spinner("Repurposing..."):
                     rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
                     st.session_state["ci_repurposed"] = call_claude(rp, system=get_system_for_voice(voice, voice_mod))
+                    st.session_state.pop("ci_rp_edit", None)
                     st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                     st.session_state.pop("ci_banger_data", None)
@@ -1436,10 +1443,12 @@ Return ONLY this JSON, no other text:
                         if raw_clean.startswith("```"):
                             raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                         st.session_state["ci_banger_data"] = json.loads(raw_clean)
+                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
                         st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
                         st.session_state.pop("ci_result", None)
                     except Exception:
                         st.session_state["ci_result"] = raw
+                        st.session_state.pop("ci_result_edit", None)
 
         # Render results based on which button was pressed
 
