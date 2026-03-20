@@ -494,9 +494,9 @@ def analyze_personal_patterns():
         return {"text": t.get("text", ""), "likes": _likes(t), "rts": _rts(t),
                 "replies": _reps(t), "score": round(t["_eng"])}
 
-    punchy_tops = [t for t in top_20pct if len(t.get("text", "")) <= 200]
-    normal_tops = [t for t in top_20pct if 150 < len(t.get("text", "")) <= 280]
-    long_tops   = [t for t in top_20pct if len(t.get("text", "")) > 280]
+    punchy_tops = [t for t in top_20pct if len(t.get("text", "")) <= 160]
+    normal_tops = [t for t in top_20pct if 160 < len(t.get("text", "")) <= 260]
+    long_tops   = [t for t in top_20pct if len(t.get("text", "")) > 260]
     patterns["top_examples"]        = [_ex(t) for t in top_20pct[:10]]
     patterns["top_examples_punchy"] = [_ex(t) for t in punchy_tops[:8]]
     patterns["top_examples_normal"] = [_ex(t) for t in normal_tops[:8]]
@@ -525,10 +525,10 @@ def build_patterns_context(patterns, fmt=""):
 
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
         top_pool = patterns["top_examples_punchy"]
-        pool_label = "Top Performing PUNCHY Tweets ≤200 chars (model these — 2 sentences max)"
+        pool_label = "Top Performing PUNCHY Tweets ≤160 chars (model these — 2 sentences max)"
     elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
         top_pool = patterns["top_examples_normal"]
-        pool_label = "Top Performing NORMAL Tweets 150-280 chars (model these)"
+        pool_label = "Top Performing NORMAL Tweets 161-260 chars (model these)"
     elif _long_fmt and patterns.get("top_examples_long"):
         top_pool = patterns["top_examples_long"]
         pool_label = "Top Performing LONG Tweets (model these)"
@@ -1307,7 +1307,7 @@ SENTENCE 2: The engagement hook. A direct question, forced choice, or bold state
 
 RULES:
 - Exactly 2 sentences. Not one. Not three. Two.
-- Under 200 characters total
+- Under 160 characters total
 - No hashtags, no emojis, no ellipsis
 - No "I think" / "maybe" / "honestly" — state it flat
 - Every word earns its place or gets cut
@@ -1320,9 +1320,9 @@ WRONG: "The Broncos have some interesting decisions to make this offseason and i
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
-        _nt_lo = max(_fp_range[0], 100)
-        _nt_hi = min(_fp_range[1], 250)
-        format_mod = f"""FORMAT: NORMAL TWEET (100-250 characters)
+        _nt_lo = max(_fp_range[0], 161)
+        _nt_hi = min(_fp_range[1], 260)
+        format_mod = f"""FORMAT: NORMAL TWEET (161-260 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
@@ -1337,7 +1337,7 @@ STRUCTURE:
 [Punch line, trailing thought, or question]
 
 RULES:
-- Between 100 and 250 characters total — don't be too brief
+- Between 161 and 260 characters total — don't be too brief
 - Use line break between hook and payoff
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
@@ -1493,7 +1493,7 @@ IMAGE RECOMMENDATION:
         with st.spinner("Perfecting your tweet..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
-            _char_limit = 200 if fmt == "Punchy Tweet" else (250 if fmt == "Normal Tweet" else None)
+            _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
             _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
             if _char_limit:
                 # Clamp the range so synced long-tweet examples don't override the hard limit
@@ -1739,7 +1739,7 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
-                _redo_char_limit = 200 if fmt == "Punchy Tweet" else (250 if fmt == "Normal Tweet" else None)
+                _redo_char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
                 _redo_char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_redo_char_limit} characters total — no exceptions." if _redo_char_limit else ""
                 banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
@@ -2427,9 +2427,9 @@ def classify_tweet(tweet):
     else:
         # Format classification — matches Creator Studio format options
         char_len = len(text)
-        if char_len <= 200 and not has_url:
+        if char_len <= 160 and not has_url:
             tags.append("Punchy Tweet")
-        elif char_len <= 420:
+        elif char_len <= 260:
             tags.append("Normal Tweet")
         else:
             tags.append("Long")
@@ -2526,8 +2526,8 @@ def page_tweet_history():
         rts   = t.get("retweetCount", t.get("retweet_count", 0))
         reps  = t.get("replyCount", t.get("reply_count", 0))
         views = t.get("viewCount", t.get("view_count", 0))
-        # HOF = raw reach — views weighted lightly so viral posts dominate
-        return views * 0.001 + likes + rts * 3 + reps * 2
+        # HOF = impressions first — views so dominant that engagement is just a tiebreaker
+        return views * 10 + likes * 100 + rts * 300 + reps * 200
 
     originals = [t for t in tweets
         if not t.get("text", "").startswith("RT ")
