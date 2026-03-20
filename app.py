@@ -849,7 +849,7 @@ Give the repurposed tweet, then show character count."""
             voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"], key="ci_voice",
                 help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
 
-        sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+        sc1, sc2, sc3, sc4, sc5, sc6 = st.columns(6)
         with sc1:
             banger = st.button("Make me a banger", key="ci_banger", use_container_width=True)
         with sc2:
@@ -860,6 +860,8 @@ Give the repurposed tweet, then show character count."""
             biz = st.button("Preview", key="ci_biz", use_container_width=True)
         with sc5:
             repurpose = st.button("Repurpose", key="ci_repurpose", use_container_width=True)
+        with sc6:
+            build_this = st.button("Build This", key="ci_build", use_container_width=True)
 
         # Voice modifier for prompts
         voice_mod = ""
@@ -1240,6 +1242,36 @@ Return ONLY this JSON:
             st.session_state["ci_preview"] = tweet_text
             st.session_state.pop("ci_result", None)
             st.session_state.pop("ci_repurposed", None)
+
+        elif build_this and tweet_text.strip():
+            with st.spinner("Building your tweet..."):
+                build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants to turn into a perfect algorithm tweet. He's described what he wants below — your job is to materialize it into the actual tweet.
+
+CONCEPT/ANGLE:
+\"{tweet_text}\"
+
+{voice_mod}
+
+{format_mod}
+
+Your job: Turn this CONCEPT into the actual tweet. This is not a rewrite or repurpose — you're taking a raw idea and crafting it into something that will perform.
+
+Rules:
+- The concept describes what Tyler WANTS to say. Extract the best version of that idea.
+- Use Tyler's voice: direct, former-player authority, no hedging, occasional ellipsis
+- Strong hook — the first line must stop the scroll
+- No hashtags, no emojis
+- Under 280 characters for Short Tweet, 500+ for Long Tweet
+- 7th-9th grade reading level
+- End with something that makes people want to reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
+
+Give ONLY the finished tweet. No explanation, no character count, no commentary."""
+                st.session_state["ci_result"] = call_claude(build_prompt)
+                st.session_state.pop("ci_repurposed", None)
+                st.session_state.pop("ci_viral_data", None)
+                st.session_state.pop("ci_grades", None)
+                st.session_state.pop("ci_preview", None)
 
         elif repurpose and tweet_text.strip():
             with st.spinner("Repurposing in your voice..."):
