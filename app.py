@@ -494,11 +494,13 @@ def analyze_personal_patterns():
         return {"text": t.get("text", ""), "likes": _likes(t), "rts": _rts(t),
                 "replies": _reps(t), "score": round(t["_eng"])}
 
-    short_tops = [t for t in top_20pct if len(t.get("text", "")) <= 220]
-    long_tops  = [t for t in top_20pct if len(t.get("text", "")) > 220]
-    patterns["top_examples"]       = [_ex(t) for t in top_20pct[:10]]
-    patterns["top_examples_short"] = [_ex(t) for t in short_tops[:8]]
-    patterns["top_examples_long"]  = [_ex(t) for t in long_tops[:8]]
+    punchy_tops = [t for t in top_20pct if len(t.get("text", "")) <= 200]
+    normal_tops = [t for t in top_20pct if 150 < len(t.get("text", "")) <= 280]
+    long_tops   = [t for t in top_20pct if len(t.get("text", "")) > 280]
+    patterns["top_examples"]        = [_ex(t) for t in top_20pct[:10]]
+    patterns["top_examples_punchy"] = [_ex(t) for t in punchy_tops[:8]]
+    patterns["top_examples_normal"] = [_ex(t) for t in normal_tops[:8]]
+    patterns["top_examples_long"]   = [_ex(t) for t in long_tops[:8]]
     patterns["bottom_examples"]    = [{"text": t.get("text", ""), "likes": _likes(t)} for t in bottom_20pct[:5]]
 
     patterns["top_first_words"] = [
@@ -519,12 +521,14 @@ def build_patterns_context(patterns, fmt=""):
     if not patterns:
         return ""
 
-    _short_fmt = fmt in ("Punchy Tweet", "Normal Tweet")
-    _long_fmt  = fmt in ("Long Tweet", "Thread", "Article")
+    _long_fmt = fmt in ("Long Tweet", "Thread", "Article")
 
-    if _short_fmt and patterns.get("top_examples_short"):
-        top_pool = patterns["top_examples_short"]
-        pool_label = "Top Performing SHORT Tweets (model these — do NOT copy long examples)"
+    if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
+        top_pool = patterns["top_examples_punchy"]
+        pool_label = "Top Performing PUNCHY Tweets ≤200 chars (model these — 2 sentences max)"
+    elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
+        top_pool = patterns["top_examples_normal"]
+        pool_label = "Top Performing NORMAL Tweets 150-280 chars (model these)"
     elif _long_fmt and patterns.get("top_examples_long"):
         top_pool = patterns["top_examples_long"]
         pool_label = "Top Performing LONG Tweets (model these)"
@@ -1285,7 +1289,8 @@ Tyler's natural voice — direct, confident, former-player authority. The output
     if _fp:
         # Use format-specific examples so short formats only see short hooks
         _hook_pool = (
-            _fp.get("top_examples_short", []) if fmt in ("Punchy Tweet", "Normal Tweet")
+            _fp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
+            else _fp.get("top_examples_normal", []) if fmt == "Normal Tweet"
             else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _fp.get("top_examples", [])
         )
@@ -2516,7 +2521,7 @@ def page_tweet_history():
             _has_like_count = sum(1 for t in _diag_tweets if "like_count" in t)
             st.markdown(f"**Field name check:** `likeCount` present in {_has_likeCount} tweets | `like_count` present in {_has_like_count} tweets")
             st.markdown(f"**Optimal char range (25th–75th pct):** {_pp.get('optimal_char_range')}")
-            st.markdown(f"**Top avg chars:** {_pp.get('top_avg_chars')} | **Short examples:** {len(_pp.get('top_examples_short',[]))} | **Long examples:** {len(_pp.get('top_examples_long',[]))}")
+            st.markdown(f"**Top avg chars:** {_pp.get('top_avg_chars')} | **Punchy examples:** {len(_pp.get('top_examples_punchy',[]))} | **Normal examples:** {len(_pp.get('top_examples_normal',[]))} | **Long examples:** {len(_pp.get('top_examples_long',[]))}")
             st.markdown("**Top performers used for pattern analysis:**")
             for ex in _pp.get("top_examples", []):
                 sc = ex.get("score", 0)
