@@ -1622,10 +1622,21 @@ def page_article_writer():
             if st.button("Select", key=f"aw_tw_{i}", use_container_width=True):
                 st.session_state.aw_sel_tweet = i
                 st.session_state.aw_sel_dump = None
+                st.session_state["aw_autogen"] = tw.get("text", "")
                 st.rerun()
 
         if not top_tweets:
             st.info("No tweet history yet. Sync tweets in Tweet History first.")
+
+        # Auto-generate when tweet is selected
+        if st.session_state.get("aw_autogen"):
+            seed_text = st.session_state.pop("aw_autogen")
+            with st.spinner("Writing article..."):
+                voice = get_voice_context()
+                pp = analyze_personal_patterns()
+                pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
+                prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
+                st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
@@ -1650,6 +1661,7 @@ def page_article_writer():
                 if st.button("Select", key=f"aw_bd_{j}", use_container_width=True):
                     st.session_state.aw_sel_dump = j
                     st.session_state.aw_sel_tweet = None
+                    st.session_state["aw_autogen"] = d.get("text", "")
                     st.rerun()
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
