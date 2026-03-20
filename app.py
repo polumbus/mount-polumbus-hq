@@ -328,7 +328,7 @@ def auto_height(text, min_h=80, chars_per_line=55, line_h=22):
         return min_h
     lines = text.count('\n') + 1
     char_lines = max(1, len(text) // chars_per_line)
-    total = max(lines, char_lines) + 2
+    total = max(lines, char_lines) + 4  # +4 lines of padding so text isn't flush with bottom
     return max(min_h, total * line_h)
 
 
