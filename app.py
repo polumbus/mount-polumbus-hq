@@ -2187,65 +2187,113 @@ def page_account_researcher():
     st.markdown('<div class="main-header">ACCOUNT <span>RESEARCHER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Research any X account. Understand their strategy.</div>', unsafe_allow_html=True)
 
-    col_main, col_recent = st.columns([2, 1])
+    col_left, col_right = st.columns([1, 1])
 
-    with col_main:
-        handle = st.text_input("Enter X handle:", placeholder="username (without @)", key="ar_handle_input")
-
+    with col_left:
+        handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input")
         if st.button("Research Account", use_container_width=True, key="ar_run"):
             if handle.strip():
                 handle_clean = handle.strip().lstrip("@")
                 with st.spinner(f"Researching @{handle_clean}..."):
                     tweets = fetch_tweets(f"from:{handle_clean}", count=30)
                     user_info = fetch_user_info(handle_clean)
-
-                    # Save to recent searches
                     recent = load_json("recent_searches.json", [])
                     if handle_clean not in [r.get("handle") for r in recent]:
                         recent.append({"handle": handle_clean, "searched_at": datetime.now().isoformat()})
                         save_json("recent_searches.json", recent[-20:])
-
                     if tweets:
                         st.session_state["ar_tweets"] = tweets
                         st.session_state["ar_user"] = user_info
                         st.session_state["ar_handle"] = handle_clean
+                        tweet_texts = "\n---\n".join([f"{t.get('text','')}\nLikes:{t.get('likeCount',0)} RTs:{t.get('retweetCount',0)} Views:{t.get('viewCount',0)}" for t in tweets[:20]])
+                        raw = call_claude(f"""Analyze @{handle_clean}'s X account. Return ONLY a JSON object, no markdown, no explanation.
 
-                        st.markdown(f"### @{handle_clean}")
-                        if user_info:
-                            fc = user_info.get("followersCount", 0)
-                            st.markdown(f'Followers: **{fc:,}** | Following: **{user_info.get("followingCount",0):,}**')
-
-                        for t in tweets[:10]:
-                            render_tweet_card(t)
-
-                        tweet_texts = "\n---\n".join([f"{t.get('text','')}\nLikes:{t.get('likeCount',0)} RTs:{t.get('retweetCount',0)} Views:{t.get('viewCount',0)}" for t in tweets[:15]])
-                        result = call_claude(f"""Analyze @{handle_clean}'s X strategy based on their recent tweets:
-
+Tweets:
 {tweet_texts}
 
-Provide:
-1. CONTENT STRATEGY - What are they doing? What topics, formats, posting style?
-2. WHAT'S WORKING - Their top performing content patterns
-3. HOOK FORMULAS - What opener types do they use?
-4. ENGAGEMENT TACTICS - How do they drive replies/RTs?
-5. TYLER'S EDGE - Where does Tyler's former-player credibility beat this account?
-6. STEAL-WORTHY - 2 tactics Tyler should borrow (structure, not content)
-7. VERDICT - Is this account worth watching? One sentence.""", max_tokens=1000)
-                        st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
+Return this exact JSON structure:
+{{
+  "summary": "2-3 sentence paragraph describing their overall content strategy and voice",
+  "content_themes": ["theme 1", "theme 2", "theme 3", "theme 4"],
+  "tone": "one sentence describing tone",
+  "voice": "one sentence describing voice",
+  "formatting": "one sentence describing formatting style",
+  "engagement_tactics": ["tactic 1", "tactic 2", "tactic 3", "tactic 4"],
+  "unique_characteristics": ["characteristic 1", "characteristic 2", "characteristic 3"],
+  "content_patterns": ["pattern 1", "pattern 2", "pattern 3"],
+  "tylers_edge": "one sentence on where Tyler's former-player credibility beats this account",
+  "steal_worthy": ["tactic to steal 1", "tactic to steal 2"]
+}}""", max_tokens=1200)
+                        try:
+                            raw_clean = raw.strip()
+                            if raw_clean.startswith("```"):
+                                raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                            st.session_state["ar_analysis"] = json.loads(raw_clean)
+                        except Exception:
+                            st.session_state["ar_analysis"] = {"summary": raw}
                     else:
                         st.warning(f"Could not fetch tweets for @{handle_clean}")
 
-    with col_recent:
-        st.markdown("### Recent Searches")
+        # Recent searches
+        st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+        st.markdown("**Recent Searches**")
         recent = load_json("recent_searches.json", [])
-        if not recent:
-            st.markdown('<div class="output-box">No recent searches.</div>', unsafe_allow_html=True)
+        for r in reversed(recent[-8:]):
+            if st.button(f"@{r.get('handle','')}  ·  {r.get('searched_at','')[:10]}", key=f"ar_recent_{r.get('handle')}", use_container_width=True):
+                st.session_state["ar_handle_prefill"] = r.get("handle", "")
+
+        # Top recent tweets
+        tweets = st.session_state.get("ar_tweets", [])
+        if tweets:
+            hdl = st.session_state.get("ar_handle", "")
+            ui = st.session_state.get("ar_user", {})
+            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+            st.markdown(f"**@{hdl}** — {ui.get('followersCount',0):,} followers")
+            for t in tweets[:8]:
+                render_tweet_card(t)
+
+    with col_right:
+        analysis = st.session_state.get("ar_analysis")
+        if not analysis:
+            st.markdown('<div class="output-box" style="color:#555577; text-align:center; padding:40px;">Enter a handle and click Research Account</div>', unsafe_allow_html=True)
         else:
-            for r in reversed(recent[-10:]):
-                st.markdown(f"""<div class="tweet-card">
-                    <div class="tweet-num">@{r.get('handle','')}</div>
-                    <div style="font-size:11px; color:#444466;">{r.get('searched_at','')[:10]}</div>
-                </div>""", unsafe_allow_html=True)
+            hdl = st.session_state.get("ar_handle", "")
+            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#ff6b00; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
+
+            def ar_section(title, content):
+                st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
+                if isinstance(content, list):
+                    items = "".join([f'<li style="color:#c0c0d8; font-size:13px; margin-bottom:4px;">{i}</li>' for i in content])
+                    st.markdown(f'<ul style="margin:0; padding-left:18px;">{items}</ul>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div style="color:#c0c0d8; font-size:13px; line-height:1.6;">{content}</div>', unsafe_allow_html=True)
+
+            if analysis.get("summary"):
+                ar_section("Content Strategy Summary", analysis["summary"])
+
+            if analysis.get("content_themes"):
+                ar_section("Content Themes", analysis["content_themes"])
+
+            if analysis.get("tone") or analysis.get("voice") or analysis.get("formatting"):
+                st.markdown('<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">Writing Style</div>', unsafe_allow_html=True)
+                for label, key in [("Tone", "tone"), ("Voice", "voice"), ("Formatting", "formatting")]:
+                    if analysis.get(key):
+                        st.markdown(f'<div style="color:#c0c0d8; font-size:13px; margin-bottom:6px;"><span style="color:#888899;">{label}:</span> {analysis[key]}</div>', unsafe_allow_html=True)
+
+            if analysis.get("engagement_tactics"):
+                ar_section("Engagement Tactics", analysis["engagement_tactics"])
+
+            if analysis.get("unique_characteristics"):
+                ar_section("Unique Characteristics", analysis["unique_characteristics"])
+
+            if analysis.get("content_patterns"):
+                ar_section("Content Patterns", analysis["content_patterns"])
+
+            if analysis.get("tylers_edge"):
+                ar_section("Tyler's Edge", analysis["tylers_edge"])
+
+            if analysis.get("steal_worthy"):
+                ar_section("Steal-Worthy Tactics", analysis["steal_worthy"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
