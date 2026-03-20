@@ -153,17 +153,17 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
   background: linear-gradient(135deg, #ff7a14, #e05500) !important;
   border: none !important; color: white !important;
 }
-/* SECONDARY/DEFAULT — translucent dark fill */
+/* SECONDARY/DEFAULT — ghost outlined */
 .stButton > button[kind="secondary"] {
-  background: rgba(255,107,0,0.07) !important;
-  border: 1px solid rgba(255,107,0,0.35) !important;
+  background: transparent !important;
+  border: 1px solid rgba(255,107,0,0.45) !important;
   color: #FF8C3A !important; box-shadow: none !important;
 }
 .stButton > button[kind="secondary"]:hover {
-  background: rgba(255,107,0,0.15) !important;
-  border-color: rgba(255,107,0,0.7) !important;
+  background: rgba(255,107,0,0.08) !important;
+  border-color: rgba(255,107,0,0.8) !important;
   color: #FF6B00 !important; transform: translateY(-1px) !important;
-  box-shadow: 0 4px 16px rgba(255,107,0,0.12) !important;
+  box-shadow: 0 4px 16px rgba(255,107,0,0.15) !important;
 }
 
 /* ── Output box ── */
