@@ -252,13 +252,44 @@ SARCASTIC VOICE RULES:
     }
 
     examples_for_mode = voice_examples.get(voice_name, "")
-    return TYLER_CONTEXT + f"""
+    if examples_for_mode:
+        return TYLER_CONTEXT + f"""
 
 {examples_for_mode}
 
 {voice_mod}
 
 IMPORTANT: Write ONLY in the voice mode above. Do NOT fall back to Tyler's typical default voice."""
+
+    # Custom account voice style
+    custom_styles = load_json("voice_styles.json", [])
+    for style in custom_styles:
+        if style.get("name") == voice_name:
+            handle = style.get("handle", "")
+            summary = style.get("summary", "")
+            tweets = style.get("tweets", [])
+            tweet_block = "\n".join([f'- "{t}"' for t in tweets[:10]])
+            return TYLER_CONTEXT + f"""
+
+You are writing AS TYLER POLUMBUS but in the STYLE of @{handle}.
+
+THEIR VOICE PROFILE:
+{summary}
+
+EXAMPLE TWEETS FROM @{handle} (match this energy, not Tyler's default voice):
+{tweet_block}
+
+STYLE RULES:
+- Adopt @{handle}'s tone, rhythm, and formatting approach
+- Keep Tyler's former-player credibility and sports authority
+- Write about Tyler's topics (Broncos, Nuggets, sports) in @{handle}'s voice
+- Do NOT copy their exact tweets — channel the style
+
+{voice_mod}
+
+IMPORTANT: Write in @{handle}'s STYLE as described above."""
+
+    return TYLER_CONTEXT
 
 
 def analyze_personal_patterns():
@@ -985,8 +1016,10 @@ Give the repurposed tweet, then show character count."""
         with fc1:
             fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
         with fc2:
-            voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"], key="ci_voice",
-                help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
+            _custom_voices = load_json("voice_styles.json", [])
+            _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+            voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
+                help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
 
         sc1, sc2, sc3, sc4, sc5 = st.columns(5)
         with sc1:
@@ -2668,6 +2701,31 @@ Return this exact JSON structure:
 
             if analysis.get("steal_worthy"):
                 ar_section("Steal-Worthy Tactics", analysis["steal_worthy"])
+
+            st.markdown("---")
+            hdl_for_save = st.session_state.get("ar_handle", "")
+            existing_styles = load_json("voice_styles.json", [])
+            already_saved = any(s.get("handle") == hdl_for_save for s in existing_styles)
+            if already_saved:
+                st.markdown(f'<div style="color:#4ade80;font-size:13px;">✓ @{hdl_for_save} voice saved — available in Compose Ideas</div>', unsafe_allow_html=True)
+                if st.button("✕ Remove Voice Style", key="ar_remove_voice"):
+                    existing_styles = [s for s in existing_styles if s.get("handle") != hdl_for_save]
+                    save_json("voice_styles.json", existing_styles)
+                    st.rerun()
+            else:
+                if st.button("➕ Save as Voice Style", key="ar_save_voice", use_container_width=True):
+                    tweets_sample = [t.get("text", "") for t in st.session_state.get("ar_tweets", [])[:15] if not t.get("text","").startswith("@") and len(t.get("text","")) > 30]
+                    style_entry = {
+                        "name": f"@{hdl_for_save}",
+                        "handle": hdl_for_save,
+                        "summary": analysis.get("summary", "") + " Tone: " + analysis.get("tone", "") + " Voice: " + analysis.get("voice", ""),
+                        "tweets": tweets_sample,
+                        "saved_at": datetime.now().isoformat(),
+                    }
+                    existing_styles.append(style_entry)
+                    save_json("voice_styles.json", existing_styles)
+                    st.success(f"@{hdl_for_save} voice style saved! Now available in Compose Ideas → Voice dropdown.")
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
