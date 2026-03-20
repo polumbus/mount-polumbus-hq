@@ -142,7 +142,7 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { tran
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 def get_voice_context():
-    """Build Tyler's voice context from his actual tweet history."""
+    """Build Tyler's voice context from his actual tweet history (default voice only)."""
     tweets = load_json("tweet_history.json", [])
     if not tweets:
         return TYLER_CONTEXT
@@ -159,6 +159,67 @@ TYLER'S ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
 Match this exact voice, tone, sentence structure, and style in everything you write.
 
 Note: Format-specific rules (character limits, structure, thread formatting, article layout) will be provided separately. Follow those format rules for structure while maintaining this voice."""
+
+
+def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
+    """Return the right system prompt for the selected voice mode.
+
+    For Default: uses Tyler's actual top-tweet examples (anchors to his natural style).
+    For Critical/Homer/Sarcastic: uses Tyler's background + mode-specific example tweets.
+    Passing top-tweet examples for non-default modes locks the model onto default voice —
+    that's the bug this function fixes.
+    """
+    if voice_name == "Default":
+        return get_voice_context()
+
+    # For non-default voices: Tyler's profile/background only (no top-tweet examples),
+    # plus concrete example tweets that show exactly what this voice sounds like.
+    voice_examples = {
+        "Critical": """EXAMPLES OF TYLER WRITING IN CRITICAL VOICE (copy this exact energy):
+- "We passed on 52% of third downs last year and went 8-9. Meanwhile, Kansas City ran on 3rd-and-short 74% of the time and won the Super Bowl. This isn't complicated."
+- "The Broncos have had 5 different offensive coordinators in 8 years. And we keep wondering why the offense looks confused. Connect the dots."
+- "Bo Nix threw for 3,000 yards last season. Good. But 18 of those touchdowns came against teams with bottom-10 defenses. Test him against real competition before crowning him."
+- "I played 8 years in this league. I know what accountability looks like. What I'm watching right now isn't it."
+
+CRITICAL VOICE RULES:
+- Always open with a SPECIFIC number, stat, or named failure — never a vague complaint
+- Call out exactly what isn't working and why it costs the team
+- End with a pointed question or hard truth that makes people think
+- Tone: disappointed former player, not an angry fan. Calm and credible, not emotional.""",
+
+        "Homer": """EXAMPLES OF TYLER WRITING IN HOMER VOICE (copy this exact energy):
+- "I've been in enough winning locker rooms to know what this feels like. This Broncos team has it. Watch the film. The energy is different this year."
+- "Sean Payton has been to this rodeo before. We have the right coach. The pieces are falling into place. We're not done building."
+- "Jokic dropped 30, 12, and 10 last night. On a Tuesday. For fun. We are watching the greatest basketball player alive right now. Appreciate it."
+- "Everyone's counting us out. Good. That's when this team plays its best ball. Trust the process. We're not done."
+
+HOMER VOICE RULES:
+- Always use "we" or "this team" — the reader is part of the belief
+- Ground optimism in something SPECIFIC (a player name, a stat, a moment) — not generic hype
+- End with forward momentum or something to look forward to
+- Tone: infectious, grounded confidence. Earned optimism, not blind cheerleading.""",
+
+        "Sarcastic": """EXAMPLES OF TYLER WRITING IN SARCASTIC VOICE (copy this exact energy):
+- "Oh interesting. The Broncos addressed the offensive line by signing a 32-year-old guard. That's definitely the move."
+- "Sure, let's rank the Broncos as a bottom-10 team again. Ignore the offseason. Ignore the draft. Same prediction as every year. Bold take."
+- "Cool, another week of people discovering the Nuggets are really good. Jokic casually averages a triple double and somehow everyone is shocked. Every. Single. Season."
+- "Oh great. Another hot take about how the Broncos need to rebuild. Very original. Never heard that one before."
+
+SARCASTIC VOICE RULES:
+- Open with flat, understated acknowledgment: 'Oh interesting.', 'Sure.', 'Cool.', 'Oh great.', 'Wild.' — pick the one that fits
+- State the obvious as if calmly explaining something absurd to someone who doesn't see it
+- The punchline lands through UNDERSTATEMENT, not anger. Deadpan, not mean.
+- End with one dry observation — don't explain the joke.""",
+    }
+
+    examples_for_mode = voice_examples.get(voice_name, "")
+    return TYLER_CONTEXT + f"""
+
+{examples_for_mode}
+
+{voice_mod}
+
+IMPORTANT: Write ONLY in the voice mode above. Do NOT fall back to Tyler's typical default voice."""
 
 
 def analyze_personal_patterns():
@@ -1105,8 +1166,6 @@ Rules:
 - Hook & Pattern Breakers (first line stops the scroll)
 {"- Optimal character range: " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
 
-ALL THREE OPTIONS MUST BE WRITTEN IN THIS VOICE — THIS OVERRIDES EVERYTHING ABOVE:
-{voice_mod}
 
 Return ONLY this JSON, no other text:
 {{
@@ -1118,7 +1177,7 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "which top tweet pattern this is modeled after",
   "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
 }}"""
-                raw = call_claude(banger_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
                 try:
                     raw_clean = raw.strip()
                     if raw_clean.startswith("```"):
@@ -1271,11 +1330,9 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
 
-WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
-{voice_mod}
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                st.session_state["ci_result"] = call_claude(build_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
                 st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1296,11 +1353,9 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 - No hashtags, no emojis
 - 7th-9th grade reading level
 
-WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
-{voice_mod}
 
 Give the repurposed tweet, then show character count."""
-                repurposed = call_claude(repurpose_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
                 st.session_state["ci_repurposed"] = repurposed
                 st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_result", None)
@@ -1338,18 +1393,16 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 
-WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
-{voice_mod}
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                    st.session_state["ci_result"] = call_claude(build_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                    st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
                     st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_banger_data", None)
                     st.session_state.pop("ci_repurposed", None)
             elif _rtype == "repurpose" and _rtext:
                 with st.spinner("Repurposing..."):
-                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nWRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:\n{voice_mod}\n\nGive the repurposed tweet, then character count."""
-                    st.session_state["ci_repurposed"] = call_claude(rp, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
+                    st.session_state["ci_repurposed"] = call_claude(rp, system=get_system_for_voice(voice, voice_mod))
                     st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                     st.session_state.pop("ci_banger_data", None)
@@ -1369,8 +1422,6 @@ Rules:
 - No Hashtags, Links, Tags, Emojis
 - Hook in the first line
 
-ALL THREE OPTIONS MUST BE WRITTEN IN THIS VOICE — THIS OVERRIDES EVERYTHING ABOVE:
-{voice_mod}
 
 Return ONLY this JSON, no other text:
 {{
@@ -1379,7 +1430,7 @@ Return ONLY this JSON, no other text:
   "option3": "tweet text", "option3_pattern": "pattern name",
   "recommendation": "which to post and why"
 }}"""
-                    raw = call_claude(banger_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
+                    raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
                     try:
                         raw_clean = raw.strip()
                         if raw_clean.startswith("```"):
