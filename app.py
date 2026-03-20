@@ -1118,6 +1118,10 @@ def page_compose_ideas():
     st.markdown('<div class="main-header">COMPOSE <span>IDEAS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and save your content ideas.</div>', unsafe_allow_html=True)
 
+    # Handle pending draft injection BEFORE widgets render (fixes "Use" button crash)
+    if "_ci_pending_draft" in st.session_state:
+        st.session_state["ci_text"] = st.session_state.pop("_ci_pending_draft")
+
     col_main, col_saved = st.columns([2, 1])
 
     # Auto-repurpose from Inspiration Vault click
@@ -1681,295 +1685,249 @@ Return ONLY this JSON, no other text:
                         st.session_state.pop("ci_banger_data", None)  # clear old 3-box view
                         st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
 
-        # Render results based on which button was pressed
-
-        # Banger — 3 separate boxes + recommendation at bottom
-        if st.session_state.get("ci_banger_data"):
-            bd = st.session_state["ci_banger_data"]
-            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
-            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
-            st.markdown(f'<div style="font-size:11px; color:#FF6B00; letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</div>', unsafe_allow_html=True)
-            for opt_key, pattern_key, idx in [("option1","option1_pattern",1),("option2","option2_pattern",2),("option3","option3_pattern",3)]:
-                opt_text = bd.get(opt_key, "")
-                pattern = bd.get(pattern_key, "")
-                if opt_text:
-                    if pattern:
-                        st.markdown(f'<div style="font-size:11px; color:#666688; letter-spacing:1px; margin-top:16px; margin-bottom:4px;">OPTION {idx} — {pattern}</div>', unsafe_allow_html=True)
-                    _banger_display = st.session_state.get(f"ci_banger_opt_{idx}", opt_text)
-                    edited_opt = st.text_area("", value=opt_text, height=auto_height(_banger_display, min_h=120), key=f"ci_banger_opt_{idx}")
-                    b1, b2 = st.columns(2)
-                    with b1:
-                        if st.button("↓ Save", key=f"ci_banger_save_{idx}", use_container_width=True):
-                            ideas = load_json("saved_ideas.json", [])
-                            ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                            save_json("saved_ideas.json", ideas)
-                            st.success("Saved.")
-                    with b2:
-                        if st.button("↗ Use", key=f"ci_banger_use_{idx}", use_container_width=True):
-                            st.session_state["ci_text"] = edited_opt
-                            st.session_state.pop("ci_banger_data", None)
-                            st.rerun()
-            if bd.get("recommendation"):
-                st.markdown(f'<div style="background:#0d0d18; border:1px solid #2a2a4a; border-radius:8px; padding:14px; margin-top:20px; font-size:13px; color:#c0c0d8; line-height:1.6;"><span style="color:#ff6b00; font-weight:700; font-size:11px; letter-spacing:1px;">RECOMMENDATION</span><br><br>{bd["recommendation"]}</div>', unsafe_allow_html=True)
-
-        # General result — editable text area
-        if st.session_state.get("ci_result"):
-            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
-            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
-            st.markdown(f'<div style="font-weight:700; margin:12px 0 8px;">Result: <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
-            _res_val = st.session_state["ci_result"]
-            _res_key = f"ci_result_edit_{hash(_res_val) & 0xFFFFFF}"
-            edited = st.text_area("Edit your result:", value=_res_val, height=auto_height(_res_val), key=_res_key)
-            rc1, rc2, rc3 = st.columns(3)
-            with rc1:
-                if st.button("↓ Save Idea", key="ci_save_result", use_container_width=True):
-                    ideas = load_json("saved_ideas.json", [])
-                    ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                    save_json("saved_ideas.json", ideas)
-                    st.success("Saved.")
-            with rc2:
-                if st.button("↗ To Draft", key="ci_copy_draft", use_container_width=True):
-                    st.session_state["ci_text"] = edited
-                    st.session_state.pop("ci_result", None)
-                    st.rerun()
-
-        # Repurposed content — editable
-        if st.session_state.get("ci_repurposed"):
-            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
-            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
-            st.markdown(f'<div style="font-weight:700; font-size:16px; margin:16px 0 8px;">Repurposed Content <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
-            _rp_val = st.session_state["ci_repurposed"]
-            _rp_key = f"ci_rp_edit_{hash(_rp_val) & 0xFFFFFF}"
-            edited_rp = st.text_area("Edit repurposed tweet:", value=_rp_val, height=auto_height(_rp_val), key=_rp_key)
-            rpc1, rpc2, rpc3 = st.columns(3)
-            with rpc1:
-                if st.button("↓ Save Idea", key="ci_save_rp", use_container_width=True):
-                    ideas = load_json("saved_ideas.json", [])
-                    ideas.append({"text": edited_rp, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                    save_json("saved_ideas.json", ideas)
-                    st.success("Saved.")
-            with rpc2:
-                if st.button("↗ To Draft", key="ci_copy_rp", use_container_width=True):
-                    st.session_state["ci_text"] = edited_rp
-                    st.session_state.pop("ci_repurposed", None)
-                    st.rerun()
-
-        # Viral Potential Analysis
-        if st.session_state.get("ci_viral_data"):
-            vd = st.session_state["ci_viral_data"]
-            total = vd.get("total_predicted_engagement", 0)
-            conf = vd.get("confidence", "Medium")
-            compared = vd.get("compared_to_average", "Average")
-            conf_color = "#22c55e" if conf == "High" else "#FF6B00" if conf == "Medium" else "#ef4444"
-            comp_color = "#22c55e" if "Above" in compared else "#FF6B00" if "Average" in compared else "#ef4444"
-
-            st.markdown(f"""<div class="output-box">
-                <div style="font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:1px; margin-bottom:16px;">Viral Potential Analysis</div>
-                <div style="font-size:13px; color:#8888aa; margin-bottom:16px;">Analyzing your tweet's potential performance based on your historical data.</div>
-                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:12px;">
-                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Likes:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_likes', 0):,}</span></div>
-                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Retweets:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_retweets', 0):,}</span></div>
-                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e35;"><span>Predicted Comments:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#e8e8f0;">{vd.get('predicted_comments', 0):,}</span></div>
-                    <div style="display:flex; justify-content:space-between; padding:8px 0;"><span>Total Predicted Engagement:</span><span style="font-family:'Bebas Neue',sans-serif; font-size:22px; color:#FF6B00;">{total:,}</span></div>
-                </div>
-                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:12px;">
-                    <div style="font-weight:700; margin-bottom:8px;">Analysis Details</div>
-                    <div style="margin-bottom:6px;">Confidence: <span style="background:{conf_color}; color:white; padding:2px 10px; border-radius:4px; font-size:12px;">{conf}</span></div>
-                    <div style="margin-bottom:6px; color:#8888aa;">Compared to your average:</div>
-                    <div style="color:{comp_color}; margin-bottom:12px;">{"↑" if "Above" in compared else "→" if "Average" in compared else "↓"} {compared}</div>
-                    <div style="color:#8888aa; font-size:12px; margin-bottom:4px;">Reasoning:</div>
-                    <div style="font-size:14px; line-height:1.6;">{vd.get('reasoning', '')}</div>
-                </div>
-                <div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px;">
-                    <div style="font-weight:700; margin-bottom:8px;">How to improve engagement</div>
-                    <ul style="margin:0; padding-left:20px;">{''.join([f'<li style="margin-bottom:8px; line-height:1.5;">{tip}</li>' for tip in vd.get('improvements', [])])}</ul>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-        # Algorithm Grades
-        if st.session_state.get("ci_grades"):
-            gd = st.session_state["ci_grades"]
-            algo_score = gd.get("algorithm_score", 0)
-            tyler_score = gd.get("tyler_score", 0)
-            algo_color = "#22c55e" if algo_score >= 75 else "#FF6B00" if algo_score >= 55 else "#ef4444"
-            tyler_color = "#22c55e" if tyler_score >= 75 else "#FF6B00" if tyler_score >= 55 else "#ef4444"
-
-            st.markdown(f"""<div style="display:flex; gap:20px; margin:16px 0;">
-                <div style="flex:1; background:#0d0d18; border:1px solid #1e1e35; border-radius:12px; padding:20px; text-align:center;">
-                    <div style="font-family:'Bebas Neue',sans-serif; font-size:52px; color:{algo_color}; line-height:1;">{algo_score}</div>
-                    <div style="font-size:11px; color:#666688; letter-spacing:2px; text-transform:uppercase; margin-top:4px;">Algorithm Score</div>
-                </div>
-                <div style="flex:1; background:#0d0d18; border:1px solid #1e1e35; border-radius:12px; padding:20px; text-align:center;">
-                    <div style="font-family:'Bebas Neue',sans-serif; font-size:52px; color:{tyler_color}; line-height:1;">{tyler_score}</div>
-                    <div style="font-size:11px; color:#666688; letter-spacing:2px; text-transform:uppercase; margin-top:4px;">Tyler Score</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-            # Personal insights
-            insights = gd.get("personal_insights", [])
-            if insights:
-                insights_html = "".join([f'<div style="background:#1a1a30; border-left:3px solid #FF6B00; border-radius:6px; padding:10px 14px; margin-bottom:8px; font-size:13px; color:#d8d8e8; line-height:1.5;">{ins}</div>' for ins in insights])
-                st.markdown(f"""<div style="margin-bottom:16px;">
-                    <div style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1px; color:#8888aa; margin-bottom:8px;">Personal Insights</div>
-                    {insights_html}
-                </div>""", unsafe_allow_html=True)
-
-            st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif; font-size:22px; letter-spacing:1px; margin:8px 0 8px;">Grade Breakdown</div>', unsafe_allow_html=True)
-            grades = gd.get("grades", [])
-            # Display in 2-column grid
-            for row_start in range(0, len(grades), 2):
-                cols = st.columns(2)
-                for col_idx in range(2):
-                    idx = row_start + col_idx
-                    if idx < len(grades):
-                        g = grades[idx]
-                        score = g.get("score", 0)
-                        score_color = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
-                        benchmark = g.get("benchmark", "")
-                        fix = g.get("fix", "")
-                        benchmark_html = f'<div style="font-size:11px; color:#FF6B00; margin-top:8px; font-style:italic;">{benchmark}</div>' if benchmark else ""
-                        fix_html = f'<div style="font-size:12px; color:#4ecdc4; margin-top:10px; background:#0a1a1a; border-left:2px solid #4ecdc4; padding:6px 10px; border-radius:0 4px 4px 0; line-height:1.4;"><span style="font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700;">Fix:</span> {fix}</div>' if fix else ""
-                        with cols[col_idx]:
-                            st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:10px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                    <span style="font-weight:700; font-size:14px;">{g.get('name','')}</span>
-                                    <span style="font-family:'JetBrains Mono',monospace; font-size:14px; background:{score_color}22; color:{score_color}; padding:2px 10px; border-radius:4px;">Score: {score}/10</span>
-                                </div>
-                                <div style="font-size:13px; color:#9999aa; line-height:1.5;">{g.get('detail','')}</div>
-                                {benchmark_html}
-                                {fix_html}
-                            </div>""", unsafe_allow_html=True)
-
-            suggestions = gd.get("suggestions", [])
-            if suggestions:
-                st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-top:8px;">
-                    <div style="font-weight:700; margin-bottom:10px;">Suggestions for Improvement</div>
-                    <ul style="margin:0; padding-left:20px; color:#9999aa;">{''.join([f'<li style="margin-bottom:8px; line-height:1.5;">{s}</li>' for s in suggestions])}</ul>
-                </div>""", unsafe_allow_html=True)
-
-        # Preview
-        if st.session_state.get("ci_preview"):
-            preview_text = st.session_state["ci_preview"]
-            truncated = preview_text[:280]
-            show_more = len(preview_text) > 280
-            now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
-            st.markdown(f"""<div class="output-box">
-                <div style="font-weight:700; font-size:16px; margin-bottom:16px;">Post Preview</div>
-                <div style="background:#0d0d18; border:1px solid #2e2e45; border-radius:16px; padding:20px;">
-                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                        <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, #FF6B00, #cc4a00); display:flex; align-items:center; justify-content:center; font-weight:700; color:white;">T</div>
-                        <div><span style="font-weight:700;">Tyler Polumbus</span> <span style="color:#666688;">@{TYLER_HANDLE}</span></div>
-                    </div>
-                    <div style="font-size:15px; line-height:1.6; white-space:pre-wrap;">{truncated}{'<br><span style="color:#1d9bf0; cursor:pointer;">Show more</span>' if show_more else ''}</div>
-                    <div style="color:#666688; font-size:13px; margin-top:12px;">{now_str} · X</div>
-                    <div style="display:flex; gap:40px; margin-top:12px; color:#666688; font-size:14px;">
-                        <span>💬</span><span>🔁</span><span>❤️</span><span>📊</span><span>—</span>
-                    </div>
-                </div>
-                <div style="color:#8888aa; font-size:13px; margin-top:12px;">This preview shows how your post will appear on X{', including where the "Show more" button will be placed (after 280 characters). It is critical you make the hook before the show more button make users want to click it.' if show_more else '.'}</div>
-            </div>""", unsafe_allow_html=True)
-
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # Save idea
+        # Save idea (stays in left panel)
         sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
         if st.button("↓ Save Idea", key="ci_save", use_container_width=True):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
-                ideas.append({
-                    "text": tweet_text,
-                    "format": fmt,
-                    "category": sc_cat,
-                    "saved_at": datetime.now().isoformat(),
-                })
+                ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
                 st.success("Idea saved.")
 
+    # ── Right panel: Results when active, Saved Ideas otherwise ──
+    _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview", "ci_viral_data"]
+    _show_results = any(st.session_state.get(k) for k in _RESULT_KEYS)
+
     with col_saved:
-        st.markdown("### Saved Ideas")
-
-        # All folders stored in JSON (editable), with defaults on first load
-        _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
-        _all_folders = load_json("saved_ideas_folders.json", _default_folders)
-        _folder_opts = ["All Ideas"] + _all_folders + ["Inspiration Vault", "Repurpose Queue"]
-
-        folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
-
-        # Folder management
-        with st.expander("Manage Folders"):
-            new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
-            if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
-                fname = new_folder_name.strip()
-                if fname not in _all_folders:
-                    _all_folders.append(fname)
-                    save_json("saved_ideas_folders.json", _all_folders)
-                    st.rerun()
-            # Delete any folder
-            for cf in list(_all_folders):
-                if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
-                    _all_folders = [f for f in _all_folders if f != cf]
-                    save_json("saved_ideas_folders.json", _all_folders)
+        if _show_results:
+            # Panel header + close
+            _la = st.session_state.get("ci_last_action", {})
+            _la_label = {"banger": "BANGER OPTIONS", "grades": "ALGORITHM GRADES",
+                         "repurpose": "REPURPOSED", "build_this": "BUILD RESULT",
+                         "preview": "POST PREVIEW"}.get(_la.get("type",""), "RESULT")
+            ph1, ph2 = st.columns([3, 1])
+            with ph1:
+                st.markdown(f'<div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin-bottom:4px;">{_la_label}</div>'
+                            f'<div style="font-size:11px;color:#444466;">{_la.get("fmt","")}{" · " + _la.get("voice","") if _la.get("voice") else ""}</div>',
+                            unsafe_allow_html=True)
+            with ph2:
+                if st.button("✕ Clear", key="ci_close_results"):
+                    for _k in _RESULT_KEYS:
+                        st.session_state.pop(_k, None)
                     st.rerun()
 
-        if folder in ("Inspiration Vault", "Repurpose Queue"):
-            gist_file = "hq_inspiration.json" if folder == "Inspiration Vault" else "hq_repurpose.json"
-            try:
-                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-                gist_data = resp.json()
-                inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
-            except Exception:
-                inspo_items = []
+            st.markdown('<hr style="margin:8px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
 
-            if not inspo_items:
-                st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
-            else:
-                for ii, item in enumerate(reversed(inspo_items[-30:])):
-                    orig_text = item.get("repurposed_text") or item.get("text", "")
-                    author = item.get("author", "") or item.get("handle", "")
-                    ts = item.get("saved_at", "")[:10]
-                    st.markdown(f"""<div class="tweet-card">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span class="tweet-num">{author}</span>
-                            <span style="font-size:11px; color:#444466;">{ts}</span>
-                        </div>
-                        <div style="color:#d8d8e8; font-size:13px; line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text) > 200 else ''}</div>
-                    </div>""", unsafe_allow_html=True)
-                    if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
-                        st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
-                        st.session_state["ci_auto_repurpose"] = True
+            # ── BANGER: 3 options in tabs ──
+            if st.session_state.get("ci_banger_data"):
+                bd = st.session_state["ci_banger_data"]
+                opts = [(bd.get(f"option{i}",""), bd.get(f"option{i}_pattern","")) for i in [1,2,3] if bd.get(f"option{i}")]
+                tab_labels = [f"Option {i+1}" for i in range(len(opts))]
+                has_rec = bool(bd.get("recommendation"))
+                if has_rec:
+                    tab_labels.append("Pick")
+                tabs = st.tabs(tab_labels)
+                for ti, (opt_text, pattern) in enumerate(opts):
+                    with tabs[ti]:
+                        if pattern:
+                            st.markdown(f'<div style="font-size:11px;color:#666688;letter-spacing:1px;margin-bottom:8px;">{pattern}</div>', unsafe_allow_html=True)
+                        edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=110), key=f"ci_banger_opt_{ti+1}", label_visibility="collapsed")
+                        b1, b2 = st.columns(2)
+                        with b1:
+                            if st.button("↓ Save", key=f"ci_banger_save_{ti+1}", use_container_width=True):
+                                ideas = load_json("saved_ideas.json", [])
+                                ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                                save_json("saved_ideas.json", ideas)
+                                st.success("Saved.")
+                        with b2:
+                            if st.button("↗ Use", key=f"ci_banger_use_{ti+1}", use_container_width=True, type="primary"):
+                                st.session_state["_ci_pending_draft"] = edited_opt
+                                for _k in _RESULT_KEYS:
+                                    st.session_state.pop(_k, None)
+                                st.rerun()
+                if has_rec:
+                    with tabs[-1]:
+                        st.markdown(f'<div style="font-size:13px;color:#c0c0d8;line-height:1.7;padding:4px 0;">{bd["recommendation"]}</div>', unsafe_allow_html=True)
+
+            # ── GRADES: scores + per-grade breakdown ──
+            elif st.session_state.get("ci_grades"):
+                gd = st.session_state["ci_grades"]
+                algo_score = gd.get("algorithm_score", 0)
+                tyler_score = gd.get("tyler_score", 0)
+                algo_color = "#22c55e" if algo_score >= 75 else "#FF6B00" if algo_score >= 55 else "#ef4444"
+                tyler_color = "#22c55e" if tyler_score >= 75 else "#FF6B00" if tyler_score >= 55 else "#ef4444"
+                st.markdown(f"""<div style="display:flex;gap:12px;margin-bottom:14px;">
+                    <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
+                        <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{algo_color};line-height:1;">{algo_score}</div>
+                        <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Algo Score</div>
+                    </div>
+                    <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
+                        <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{tyler_color};line-height:1;">{tyler_score}</div>
+                        <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Tyler Score</div>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+                insights = gd.get("personal_insights", [])
+                if insights:
+                    for ins in insights:
+                        st.markdown(f'<div style="background:#1a1a30;border-left:3px solid #FF6B00;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:#d8d8e8;line-height:1.5;">{ins}</div>', unsafe_allow_html=True)
+                grades = gd.get("grades", [])
+                if grades:
+                    st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Grade Breakdown</div>', unsafe_allow_html=True)
+                    for g in grades:
+                        score = g.get("score", 0)
+                        sc = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
+                        fix = g.get("fix", "")
+                        fix_html = f'<div style="font-size:11px;color:#4ecdc4;margin-top:6px;border-left:2px solid #4ecdc4;padding-left:8px;">Fix: {fix}</div>' if fix else ""
+                        st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:8px;padding:12px;margin-bottom:8px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-weight:600;font-size:13px;">{g.get('name','')}</span>
+                                <span style="font-size:13px;color:{sc};font-weight:700;">{score}/10</span>
+                            </div>
+                            <div style="font-size:12px;color:#9999aa;line-height:1.5;">{g.get('detail','')}</div>
+                            {fix_html}
+                        </div>""", unsafe_allow_html=True)
+                suggestions = gd.get("suggestions", [])
+                if suggestions:
+                    st.markdown('<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Improvements</div>', unsafe_allow_html=True)
+                    for s in suggestions:
+                        st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;line-height:1.5;">{s}</div>', unsafe_allow_html=True)
+
+            # ── SINGLE RESULT (Build, Repurpose, etc.) ──
+            elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
+                _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
+                _val = st.session_state[_rkey]
+                _edit_key = f"ci_right_edit_{hash(_val) & 0xFFFFFF}"
+                edited = st.text_area("", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
+                r1, r2 = st.columns(2)
+                with r1:
+                    if st.button("↓ Save", key="ci_right_save", use_container_width=True):
+                        ideas = load_json("saved_ideas.json", [])
+                        ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                        save_json("saved_ideas.json", ideas)
+                        st.success("Saved.")
+                with r2:
+                    if st.button("↗ Use", key="ci_right_use", use_container_width=True, type="primary"):
+                        st.session_state["_ci_pending_draft"] = edited
+                        for _k in _RESULT_KEYS:
+                            st.session_state.pop(_k, None)
                         st.rerun()
+
+            # ── PREVIEW ──
+            elif st.session_state.get("ci_preview"):
+                preview_text = st.session_state["ci_preview"]
+                truncated = preview_text[:280]
+                show_more = len(preview_text) > 280
+                now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
+                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #2e2e45;border-radius:16px;padding:18px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FF6B00,#cc4a00);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
+                        <div style="font-size:14px;"><span style="font-weight:700;">Tyler Polumbus</span><br><span style="color:#666688;font-size:12px;">@{TYLER_HANDLE}</span></div>
+                    </div>
+                    <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#e8e8f0;">{truncated}{'<span style="color:#1d9bf0;"> Show more</span>' if show_more else ''}</div>
+                    <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
+                </div>
+                {'<div style="font-size:11px;color:#555578;margin-top:8px;">Hook lands before "Show more" cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#FF6B00;margin-top:8px;">280 char cutoff above. Make sure the hook is before it.</div>'}""", unsafe_allow_html=True)
+
+            # ── VIRAL ──
+            elif st.session_state.get("ci_viral_data"):
+                vd = st.session_state["ci_viral_data"]
+                total = vd.get("total_predicted_engagement", 0)
+                conf = vd.get("confidence", "Medium")
+                compared = vd.get("compared_to_average", "Average")
+                conf_color = "#22c55e" if conf == "High" else "#FF6B00" if conf == "Medium" else "#ef4444"
+                comp_icon = "↑" if "Above" in compared else "→" if "Average" in compared else "↓"
+                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:16px;margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted Likes</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_likes',0):,}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e35;"><span style="font-size:13px;color:#8888aa;">Predicted RTs</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8f0;">{vd.get('predicted_retweets',0):,}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="font-size:13px;color:#8888aa;">Total Engagement</span><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#FF6B00;">{total:,}</span></div>
+                </div>
+                <div style="margin-bottom:10px;font-size:13px;">Confidence: <span style="background:{conf_color};color:white;padding:2px 8px;border-radius:4px;font-size:11px;">{conf}</span> &nbsp; {comp_icon} {compared}</div>
+                <div style="font-size:13px;color:#c0c0d8;line-height:1.6;">{vd.get('reasoning','')}</div>""", unsafe_allow_html=True)
+                for tip in vd.get("improvements", []):
+                    st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;">{tip}</div>', unsafe_allow_html=True)
+
         else:
-            ideas = load_json("saved_ideas.json", [])
-            # "All Ideas" merges saved ideas + inspiration vault items
-            if folder == "All Ideas":
-                inspo_as_ideas = []
+            # ── Saved Ideas panel (shown when no results) ──
+            st.markdown("### Saved Ideas")
+
+            _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
+            _all_folders = load_json("saved_ideas_folders.json", _default_folders)
+            _folder_opts = ["All Ideas"] + _all_folders + ["Inspiration Vault", "Repurpose Queue"]
+
+            folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
+
+            with st.expander("Manage Folders"):
+                new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
+                if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
+                    fname = new_folder_name.strip()
+                    if fname not in _all_folders:
+                        _all_folders.append(fname)
+                        save_json("saved_ideas_folders.json", _all_folders)
+                        st.rerun()
+                for cf in list(_all_folders):
+                    if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
+                        _all_folders = [f for f in _all_folders if f != cf]
+                        save_json("saved_ideas_folders.json", _all_folders)
+                        st.rerun()
+
+            if folder in ("Inspiration Vault", "Repurpose Queue"):
+                gist_file = "hq_inspiration.json" if folder == "Inspiration Vault" else "hq_repurpose.json"
                 try:
                     gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
                     resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
                     gist_data = resp.json()
-                    raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
-                    inspo_as_ideas = [{"text": i.get("text",""), "category": "Inspiration", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
+                    inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
                 except Exception:
-                    pass
-                filtered = ideas + inspo_as_ideas
-                filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
+                    inspo_items = []
+                if not inspo_items:
+                    st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
+                else:
+                    for ii, item in enumerate(reversed(inspo_items[-30:])):
+                        orig_text = item.get("repurposed_text") or item.get("text", "")
+                        author = item.get("author", "") or item.get("handle", "")
+                        ts = item.get("saved_at", "")[:10]
+                        st.markdown(f"""<div class="tweet-card">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span class="tweet-num">{author}</span>
+                                <span style="font-size:11px;color:#444466;">{ts}</span>
+                            </div>
+                            <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
+                        </div>""", unsafe_allow_html=True)
+                        if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
+                            st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
+                            st.session_state["ci_auto_repurpose"] = True
+                            st.rerun()
             else:
-                filtered = [i for i in ideas if i.get("category") == folder]
-
-            if not filtered:
-                st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
-            else:
-                for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
-                    ts = idea.get("saved_at", "")[:10]
-                    cat = idea.get("category", "")
-                    st.markdown(f"""<div class="tweet-card">
-                        <div style="display:flex; justify-content:space-between;">
-                            <span class="tweet-num">{idea.get('format','')}</span>
-                            <span style="font-size:11px; color:#444466;">{ts} <span class="tag">{cat}</span></span>
-                        </div>
-                        <div style="color:#d8d8e8; font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text','')) > 150 else ''}</div>
-                    </div>""", unsafe_allow_html=True)
+                ideas = load_json("saved_ideas.json", [])
+                if folder == "All Ideas":
+                    inspo_as_ideas = []
+                    try:
+                        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+                        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+                        gist_data = resp.json()
+                        raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
+                        inspo_as_ideas = [{"text": i.get("text",""), "category": "Inspiration", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
+                    except Exception:
+                        pass
+                    filtered = ideas + inspo_as_ideas
+                    filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
+                else:
+                    filtered = [i for i in ideas if i.get("category") == folder]
+                if not filtered:
+                    st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+                else:
+                    for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
+                        ts = idea.get("saved_at", "")[:10]
+                        cat = idea.get("category", "")
+                        st.markdown(f"""<div class="tweet-card">
+                            <div style="display:flex;justify-content:space-between;">
+                                <span class="tweet-num">{idea.get('format','')}</span>
+                                <span style="font-size:11px;color:#444466;">{ts} <span class="tag">{cat}</span></span>
+                            </div>
+                            <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
+                        </div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
