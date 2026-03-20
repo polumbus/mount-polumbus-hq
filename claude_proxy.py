@@ -242,49 +242,18 @@ class ProxyHandler(BaseHTTPRequestHandler):
         elif self.path == "/call":
             prompt = body.get("prompt", "")
             system = body.get("system", "")
-            max_tokens = body.get("max_tokens", 1500)
-            # Use fast haiku via OAuth for short tasks, sonnet CLI for long generation
-            use_sonnet = max_tokens > 1500
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
             try:
-                if use_sonnet:
-                    result = subprocess.run(
-                        [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
-                        input=full_prompt, capture_output=True, text=True, timeout=120,
-                    )
-                    if result.returncode == 0 and result.stdout.strip():
-                        self.send_json(200, {"text": result.stdout.strip()})
-                    else:
-                        self.send_json(500, {"error": result.stderr.strip() or "empty response"})
+                result = subprocess.run(
+                    [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
+                    input=full_prompt, capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    self.send_json(200, {"text": result.stdout.strip()})
                 else:
-                    creds_path = os.path.expanduser("~/.claude/.credentials.json")
-                    with open(creds_path) as f:
-                        access_token = json.load(f)["claudeAiOauth"]["accessToken"]
-                    api_payload = {
-                        "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": max_tokens,
-                        "messages": [{"role": "user", "content": full_prompt}],
-                    }
-                    api_body = json.dumps(api_payload).encode()
-                    api_req = urllib.request.Request(
-                        "https://api.anthropic.com/v1/messages",
-                        data=api_body,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {access_token}",
-                            "anthropic-version": "2023-06-01",
-                            "anthropic-beta": "oauth-2025-04-20",
-                            "User-Agent": "claude-code/2.1.78",
-                        },
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(api_req, timeout=60) as r:
-                        data = json.loads(r.read())
-                    self.send_json(200, {"text": data["content"][0]["text"].strip()})
+                    self.send_json(500, {"error": result.stderr.strip() or "empty response"})
             except subprocess.TimeoutExpired:
                 self.send_json(504, {"error": "timeout"})
-            except urllib.error.HTTPError as e:
-                self.send_json(500, {"error": f"API {e.code}: {e.read().decode()[:200]}"})
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
 

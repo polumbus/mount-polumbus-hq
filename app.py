@@ -849,19 +849,18 @@ Give the repurposed tweet, then show character count."""
             voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"], key="ci_voice",
                 help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
 
-        sc1, sc2, sc3, sc4, sc5, sc6 = st.columns(6)
+        sc1, sc2, sc3, sc4, sc5 = st.columns(5)
         with sc1:
-            banger = st.button("Make me a banger", key="ci_banger", use_container_width=True)
+            banger = st.button("MAKE ME A BANGER", key="ci_banger", use_container_width=True)
         with sc2:
-            viral = st.button("Will this go viral?", key="ci_viral", use_container_width=True)
-        with sc3:
-            engage = st.button("Algorithm Grades", key="ci_engage", use_container_width=True)
-        with sc4:
-            biz = st.button("Preview", key="ci_biz", use_container_width=True)
-        with sc5:
             repurpose = st.button("Repurpose", key="ci_repurpose", use_container_width=True)
-        with sc6:
+        with sc3:
             build_this = st.button("Build This", key="ci_build", use_container_width=True)
+        with sc4:
+            engage = st.button("Algorithm Grades", key="ci_engage", use_container_width=True)
+        with sc5:
+            biz = st.button("Preview", key="ci_biz", use_container_width=True)
+        viral = False  # removed from main buttons
 
         # Voice modifier for prompts
         voice_mod = ""
@@ -1093,7 +1092,7 @@ IMAGE RECOMMENDATION:
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp) if pp else ""
-                banger_prompt = f"""Tyler drafted this tweet. Your job: rewrite it to score 9+ on every X algorithm metric AND match his proven winning style.
+                banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric AND match his proven winning style.
 
 Draft: "{tweet_text}"
 
@@ -1102,23 +1101,34 @@ Draft: "{tweet_text}"
 {format_mod}
 {patterns_ctx}
 
-Optimize for ALL of these:
+Rules:
 - Tonal Clarity (direct, passionate, not toxic)
-- Reading Level (7th-9th grade, accessible)
-- No Harsh/Offensive Language
-- Engagement Potential (invites replies, quote tweets)
-- Formatting & Readability (varied line lengths, paragraph breaks)
-- Hook & Pattern Breakers (first line MUST stop the scroll — reference his top hooks above)
-- Grammar & Spelling (perfect)
-- No Hashtags, Links, or Tags
-{"- Character length should be in his optimal range of " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
-{"- " + str(pp.get("top_question_pct", 0)) + "% of his top tweets use a question — consider adding one" if pp and pp.get("top_question_pct", 0) > 40 else ""}
-{"- " + str(pp.get("top_ellipsis_pct", 0)) + "% of his top tweets use ellipsis — match that style" if pp and pp.get("top_ellipsis_pct", 0) > 30 else ""}
+- Reading Level (7th-9th grade)
+- No Hashtags, Links, Tags, Emojis
+- Hook & Pattern Breakers (first line stops the scroll)
+- Tyler's voice: direct, former NFL player authority, uses ellipsis
+{"- Optimal character range: " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
 
-{"Give exactly 3 rewrite options. Each under 200 characters. Number them 1-3. After each, show the character count." if fmt == "Short Tweet" else "Give exactly 2 rewrite options. Each 600-1200 characters with line breaks and paragraph structure. The first 280 characters must work as a standalone hook above the Show More fold." if fmt == "Long Tweet" else "Give exactly 1 complete thread of 5-8 tweets. Format as TWEET 1: ... TWEET 2: ... etc. Each tweet must stand alone. Last tweet must drive replies." if fmt == "Thread" else "Write a COMPLETE X Article (not an outline). Include: HEADLINE (bold, takes a position), INTRO (2-3 punchy paragraphs — the hook visible in feed preview), then 4 sections with subheadings. Each section: 2-3 short paragraphs. Use Tyler's voice throughout — direct, insider perspective, specific player/scheme references. Total: 1500-2500 words. End with a bold 1-sentence take and a question to drive comments." if fmt == "Article" else "Give exactly 3 rewrite options. Number them 1-3."}
-
-Tyler's voice: direct, former NFL player authority, uses ellipsis, no emojis. Reference which top tweet pattern each rewrite is modeled after."""
-                result = call_claude(banger_prompt)
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "which top tweet pattern this is modeled after",
+  "option2": "full tweet text here",
+  "option2_pattern": "which top tweet pattern this is modeled after",
+  "option3": "full tweet text here",
+  "option3_pattern": "which top tweet pattern this is modeled after",
+  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+}}"""
+                raw = call_claude(banger_prompt)
+                try:
+                    raw_clean = raw.strip()
+                    if raw_clean.startswith("```"):
+                        raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                    banger_data = json.loads(raw_clean)
+                    st.session_state["ci_banger_data"] = banger_data
+                    st.session_state.pop("ci_result", None)
+                except Exception:
+                    result = raw  # fallback to plain text
         elif viral and tweet_text.strip():
             with st.spinner("Analyzing viral potential against your history..."):
                 history = get_tweet_knowledge_base()
@@ -1261,17 +1271,18 @@ Rules:
 - Use Tyler's voice: direct, former-player authority, no hedging, occasional ellipsis
 - Strong hook — the first line must stop the scroll
 - No hashtags, no emojis
-- Under 280 characters for Short Tweet, 500+ for Long Tweet
 - 7th-9th grade reading level
 - End with something that makes people want to reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
+{"- Under 280 characters" if fmt == "Short Tweet" else "- Long form, 500-1200 characters with line breaks, hook in first 280 chars" if fmt == "Long Tweet" else "- Thread of 5-8 tweets, format as TWEET 1: ... TWEET 2: ... Last tweet drives replies" if fmt == "Thread" else "- Full X Article, 1500+ words with sections and subheadings"}
 
-Give ONLY the finished tweet. No explanation, no character count, no commentary."""
+Give ONLY the finished tweet/thread/article. No explanation, no character count, no commentary."""
                 st.session_state["ci_result"] = call_claude(build_prompt)
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
                 st.session_state.pop("ci_grades", None)
                 st.session_state.pop("ci_preview", None)
+                st.session_state.pop("ci_banger_data", None)
 
         elif repurpose and tweet_text.strip():
             with st.spinner("Repurposing in your voice..."):
@@ -1304,10 +1315,36 @@ Give the repurposed tweet, then show character count."""
             st.session_state.pop("ci_grades", None)
             st.session_state.pop("ci_preview", None)
             st.session_state.pop("ci_repurposed", None)
+            st.session_state.pop("ci_banger_data", None)
 
         # Render results based on which button was pressed
 
-        # Banger / general result — editable text area
+        # Banger — 3 separate boxes + recommendation at bottom
+        if st.session_state.get("ci_banger_data"):
+            bd = st.session_state["ci_banger_data"]
+            for opt_key, pattern_key, idx in [("option1","option1_pattern",1),("option2","option2_pattern",2),("option3","option3_pattern",3)]:
+                opt_text = bd.get(opt_key, "")
+                pattern = bd.get(pattern_key, "")
+                if opt_text:
+                    if pattern:
+                        st.markdown(f'<div style="font-size:11px; color:#666688; letter-spacing:1px; margin-top:16px; margin-bottom:4px;">OPTION {idx} — {pattern}</div>', unsafe_allow_html=True)
+                    edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text), key=f"ci_banger_opt_{idx}")
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("Save", key=f"ci_banger_save_{idx}", use_container_width=True):
+                            ideas = load_json("saved_ideas.json", [])
+                            ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                            save_json("saved_ideas.json", ideas)
+                            st.success("Saved.")
+                    with b2:
+                        if st.button("Use This", key=f"ci_banger_use_{idx}", use_container_width=True):
+                            st.session_state["ci_text"] = edited_opt
+                            st.session_state.pop("ci_banger_data", None)
+                            st.rerun()
+            if bd.get("recommendation"):
+                st.markdown(f'<div style="background:#0d0d18; border:1px solid #2a2a4a; border-radius:8px; padding:14px; margin-top:20px; font-size:13px; color:#c0c0d8; line-height:1.6;"><span style="color:#ff6b00; font-weight:700; font-size:11px; letter-spacing:1px;">RECOMMENDATION</span><br><br>{bd["recommendation"]}</div>', unsafe_allow_html=True)
+
+        # General result — editable text area
         if st.session_state.get("ci_result"):
             st.markdown('<div style="font-weight:700; margin:12px 0 8px;">Result:</div>', unsafe_allow_html=True)
             edited = st.text_area("Edit your result:", value=st.session_state["ci_result"], height=auto_height(st.session_state.get("ci_result","")), key="ci_result_edit")
