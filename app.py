@@ -2481,23 +2481,29 @@ def page_reply_guy():
                 lid = LISTS.get(list_source, "")
                 if lid:
                     try:
-                        res = subprocess.run(
-                            [XURL, f"/2/lists/{lid}/tweets?max_results=15&tweet.fields=created_at,public_metrics,author_id&expansions=author_id&user.fields=username,public_metrics"],
-                            capture_output=True, text=True, timeout=20)
-                        if res.returncode == 0:
-                            data = json.loads(res.stdout)
-                            users = {u["id"]: u for u in data.get("includes", {}).get("users", [])}
-                            for t in data.get("data", []):
-                                author = users.get(t.get("author_id", ""), {})
-                                metrics = t.get("public_metrics", {})
+                        resp = requests.get(
+                            "https://api.twitterapi.io/twitter/list/tweets",
+                            headers={"X-API-Key": TWITTER_API_IO_KEY},
+                            params={"listId": lid, "count": 20},
+                            timeout=30,
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            for t in data.get("tweets", []):
+                                author = t.get("author", {})
                                 all_tweets.append({
-                                    "id": t.get("id", ""), "text": t.get("text", ""),
-                                    "createdAt": t.get("created_at", ""),
-                                    "likeCount": metrics.get("like_count", 0), "retweetCount": metrics.get("retweet_count", 0),
-                                    "replyCount": metrics.get("reply_count", 0), "viewCount": metrics.get("impression_count", 0),
-                                    "_target_account": author.get("username", ""),
-                                    "author": {"userName": author.get("username", ""), "name": author.get("name", "")},
+                                    "id": t.get("id", t.get("tweet_id", "")),
+                                    "text": t.get("text", ""),
+                                    "createdAt": t.get("createdAt", t.get("created_at", "")),
+                                    "likeCount": t.get("likeCount", t.get("like_count", 0)),
+                                    "retweetCount": t.get("retweetCount", t.get("retweet_count", 0)),
+                                    "replyCount": t.get("replyCount", t.get("reply_count", 0)),
+                                    "viewCount": t.get("viewCount", t.get("view_count", 0)),
+                                    "_target_account": author.get("userName", author.get("username", "")),
+                                    "author": author,
                                 })
+                        else:
+                            st.error(f"List fetch error: HTTP {resp.status_code}")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
             st.session_state["rg_tweets"] = all_tweets
