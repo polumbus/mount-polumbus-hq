@@ -2147,12 +2147,16 @@ def page_article_writer():
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: TWEET HISTORY
 # ═══════════════════════════════════════════════════════════════════════════
-def sync_tweet_history():
-    """Fetch up to 500 tweets and save to local knowledge base."""
+def sync_tweet_history(quick=False):
+    """Fetch tweets and merge into local knowledge base.
+    quick=True: fetch 1 batch (50 tweets) for auto-sync on load.
+    quick=False: fetch up to 500 tweets for manual full sync.
+    """
     all_tweets = []
     cursor = ""
     batches = 0
-    while batches < 10:  # 10 batches x 50 = 500 max
+    max_batches = 1 if quick else 10
+    while batches < max_batches:  # quick=1 batch, full=10 batches x 50 = 500 max
         try:
             params = {"query": f"from:{TYLER_HANDLE}", "queryType": "Latest", "count": "50"}
             if cursor:
@@ -2176,14 +2180,17 @@ def sync_tweet_history():
             import time; time.sleep(0.5)
         except Exception:
             break
-    # Deduplicate by ID
+    # Merge with existing history (quick sync only adds new tweets)
+    existing = load_json("tweet_history.json", [])
+    combined = all_tweets + existing
     seen = set()
     unique = []
-    for t in all_tweets:
+    for t in combined:
         tid = t.get("id", "")
         if tid and tid not in seen:
             seen.add(tid)
             unique.append(t)
+    unique = unique[:500]  # cap at 500
     save_json("tweet_history.json", unique)
     return unique
 
@@ -3154,7 +3161,7 @@ page_map = {
 # Auto-sync tweets on every load (once per session to avoid hammering the API)
 if not st.session_state.get("_tweets_synced"):
     try:
-        sync_tweet_history()
+        sync_tweet_history(quick=True)  # 50 latest tweets merged in; manual sync button does full 500
     except Exception:
         pass
     st.session_state["_tweets_synced"] = True
