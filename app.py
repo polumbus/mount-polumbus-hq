@@ -420,17 +420,32 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
         raise Exception(f"HTTP {e.code}: {body}")
 
 
+def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
+    """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
+    import urllib.request, urllib.error
+    try:
+        proxy_url = st.secrets["CLAUDE_PROXY_URL"]
+        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+    except Exception:
+        raise Exception("No proxy configured")
+
+    body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens}).encode()
+    headers = {"Content-Type": "application/json"}
+    if proxy_key:
+        headers["X-Proxy-Key"] = proxy_key
+    req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=130) as resp:
+        data = json.loads(resp.read())
+    if "error" in data:
+        raise Exception(data["error"])
+    return data["text"]
+
+
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     if system is None:
         system = get_voice_context()
 
-    # Try OAuth direct API call first (works locally and on Streamlit Cloud)
-    try:
-        return _call_claude_oauth(prompt, system or "", max_tokens)
-    except Exception as e:
-        oauth_err = str(e)
-
-    # Fall back to CLI if available (local only)
+    # Try local CLI first (fastest when running locally)
     if os.path.exists(CLAUDE_CLI):
         try:
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
@@ -443,8 +458,19 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
         except Exception:
             pass
 
-    last_err = st.session_state.get("_oauth_last_error", "")
-    return f"Error: {oauth_err} | Token refresh error: {last_err}"
+    # Try proxy server (Streamlit Cloud path — calls Tyler's local machine)
+    try:
+        return _call_claude_proxy(prompt, system or "", max_tokens)
+    except Exception as proxy_err:
+        if "No proxy configured" not in str(proxy_err):
+            return f"Error calling Claude: {proxy_err}"
+
+    # Last resort: direct OAuth (only works with haiku scope, not sonnet)
+    try:
+        return _call_claude_oauth(prompt, system or "", max_tokens)
+    except Exception as e:
+        last_err = st.session_state.get("_oauth_last_error", "")
+        return f"Error: {e} | {last_err}"
 
 
 def load_json(filename: str, default=None):
