@@ -2540,22 +2540,29 @@ def page_inspiration():
         if not filtered:
             st.markdown('<div class="output-box">No inspiration saved yet. Start collecting posts that hit different.</div>', unsafe_allow_html=True)
         else:
-            for item in reversed(filtered[-20:]):
+            for idx, item in enumerate(reversed(filtered[-20:])):
                 tags_html = " ".join([f'<span class="tag">{t}</span>' for t in item.get("tags", [])])
                 metrics = ""
                 if item.get("likes"):
                     metrics += f"Likes: {item['likes']:,} "
                 if item.get("views"):
                     metrics += f"Views: {item['views']:,}"
-                st.markdown(f"""<div class="tweet-card">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                        <span class="tweet-num">{item.get('author','')}</span>
-                        <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
-                    </div>
-                    <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
-                    <div style="margin-bottom:4px;">{tags_html}</div>
-                    <div style="font-size:11px; color:#666688;">{metrics}</div>
-                </div>""", unsafe_allow_html=True)
+                col_card, col_del = st.columns([20, 1])
+                with col_card:
+                    st.markdown(f"""<div class="tweet-card">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span class="tweet-num">{item.get('author','')}</span>
+                            <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
+                        </div>
+                        <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
+                        <div style="margin-bottom:4px;">{tags_html}</div>
+                        <div style="font-size:11px; color:#666688;">{metrics}</div>
+                    </div>""", unsafe_allow_html=True)
+                with col_del:
+                    if st.button("✕", key=f"del_inspo_{idx}", help="Delete"):
+                        inspo = [i for i in inspo if i != item]
+                        save_inspiration_gist(inspo)
+                        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
