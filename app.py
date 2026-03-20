@@ -320,45 +320,68 @@ def _refresh_oauth_token(refresh_token):
     return data["access_token"], data.get("refresh_token", refresh_token), data["expires_in"]
 
 
+def _get_access_token_from_gist(gist_id: str, github_pat: str):
+    """Read access token from GitHub Gist (synced every 7h by local cron)."""
+    import urllib.request
+    req = urllib.request.Request(
+        f"https://api.github.com/gists/{gist_id}",
+        headers={
+            "Authorization": f"Bearer {github_pat}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read())
+    content = data["files"]["hq_token.json"]["content"]
+    token_data = json.loads(content)
+    return token_data["access_token"], token_data["expires_at"]
+
+
 def _get_access_token():
-    """Return a valid OAuth access token, refreshing if needed."""
+    """Return a valid OAuth access token."""
     # Check session cache first
     cached = st.session_state.get("_oauth_access_token")
     cached_exp = st.session_state.get("_oauth_expires_at", 0)
     if cached and time.time() < cached_exp - 300:
         return cached
 
-    # Try Streamlit secret (cloud deployment)
-    refresh_token = ""
+    # Try GitHub Gist (cloud deployment — synced every 7h by local cron)
     try:
-        refresh_token = st.secrets["CLAUDE_REFRESH_TOKEN"]
-    except Exception:
-        pass
-
-    # Fall back to local credentials file
-    if not refresh_token:
-        local_access, local_refresh, local_exp = _load_oauth_credentials()
-        # Use local access token if still fresh
-        if local_access and time.time() < (local_exp / 1000) - 300:
-            st.session_state["_oauth_access_token"] = local_access
-            st.session_state["_oauth_expires_at"] = local_exp / 1000
-            return local_access
-        refresh_token = local_refresh or ""
-
-    if not refresh_token:
-        st.session_state["_oauth_last_error"] = "No refresh token found in secrets or local credentials"
-        return None
-
-    try:
-        access_token, new_refresh, expires_in = _refresh_oauth_token(refresh_token)
-        expires_at = time.time() + expires_in
-        st.session_state["_oauth_access_token"] = access_token
-        st.session_state["_oauth_expires_at"] = expires_at
-        _save_oauth_credentials(access_token, new_refresh, int(expires_at * 1000))
-        return access_token
+        gist_id = st.secrets["GIST_ID"]
+        github_pat = st.secrets["GITHUB_PAT"]
+        access_token, expires_at = _get_access_token_from_gist(gist_id, github_pat)
+        if time.time() < expires_at - 300:
+            st.session_state["_oauth_access_token"] = access_token
+            st.session_state["_oauth_expires_at"] = expires_at
+            return access_token
+        else:
+            st.session_state["_oauth_last_error"] = "Gist token expired — local machine needs to sync"
+            return None
     except Exception as e:
-        st.session_state["_oauth_last_error"] = f"Refresh failed: {e}"
-        return None
+        pass  # Fall through to local credentials
+
+    # Fall back to local credentials file (when running locally)
+    local_access, local_refresh, local_exp = _load_oauth_credentials()
+    if local_access and time.time() < (local_exp / 1000) - 300:
+        st.session_state["_oauth_access_token"] = local_access
+        st.session_state["_oauth_expires_at"] = local_exp / 1000
+        return local_access
+
+    # Try refreshing with local refresh token
+    if local_refresh:
+        try:
+            access_token, new_refresh, expires_in = _refresh_oauth_token(local_refresh)
+            expires_at = time.time() + expires_in
+            st.session_state["_oauth_access_token"] = access_token
+            st.session_state["_oauth_expires_at"] = expires_at
+            _save_oauth_credentials(access_token, new_refresh, int(expires_at * 1000))
+            return access_token
+        except Exception as e:
+            st.session_state["_oauth_last_error"] = f"Refresh failed: {e}"
+
+    st.session_state["_oauth_last_error"] = "No valid token source found"
+    return None
 
 
 def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
