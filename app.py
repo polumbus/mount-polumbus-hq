@@ -3031,7 +3031,7 @@ def page_reply_guy():
                 # Action row — uniform 4-button row
                 ab1, ab2, ab3, ab4 = st.columns(4)
                 with ab1:
-                    if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options", type="primary"):
+                    if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options"):
                         with st.spinner(""):
                             raw = call_claude(
                                 f'Tyler originally tweeted: "{txt[:200]}"\n\n'
@@ -3050,7 +3050,7 @@ def page_reply_guy():
                     if already_liked:
                         st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                     else:
-                        if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True, help="Like on X", type="primary"):
+                        if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True, help="Like on X"):
                             _proxy_tweet_action("like", rid)
                             _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
                             _save_actions_gist(_rg_actions)
@@ -3241,7 +3241,7 @@ def page_reply_guy():
             # Action row — uniform pill buttons
             ab1, ab2, ab3, ab4 = st.columns(4)
             with ab1:
-                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options", type="primary"):
+                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options"):
                     with st.spinner(""):
                         raw = call_claude(
                             f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
@@ -3259,7 +3259,7 @@ def page_reply_guy():
                 if et_already_liked:
                     st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                 else:
-                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X", type="primary"):
+                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X"):
                         _proxy_tweet_action("like", tid)
                         _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
                         _save_actions_gist(_actions)
