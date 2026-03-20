@@ -73,24 +73,37 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.stApp { background: #0a0a0f; color: #e8e8f0; }
-section[data-testid="stSidebar"] { background: #0d0d18 !important; border-right: 1px solid #1e1e30; }
-section[data-testid="stSidebar"] .stButton > button { background: transparent !important; border: none !important; color: #aaaacc !important; text-align: left !important; padding: 6px 12px !important; font-size: 14px !important; font-weight: 400 !important; box-shadow: none !important; border-radius: 8px !important; }
-section[data-testid="stSidebar"] .stButton > button:hover { background: #151525 !important; color: #e8e8f0 !important; transform: none !important; box-shadow: none !important; }
-section[data-testid="stSidebar"] .stButton > button[kind="primary"] { background: #1a2a2a !important; color: #4ecdc4 !important; font-weight: 600 !important; border-left: 3px solid #4ecdc4 !important; border-radius: 0 8px 8px 0 !important; }
+.stApp { background: radial-gradient(ellipse at 25% 0%, #100818 0%, #07071a 45%, #090d12 100%); color: #e8e8f0; }
+
+/* Sidebar */
+section[data-testid="stSidebar"] { background: rgba(6, 6, 18, 0.97) !important; border-right: 1px solid rgba(255,255,255,0.05) !important; }
+section[data-testid="stSidebar"] .stButton > button { background: transparent !important; border: none !important; color: #888aaa !important; text-align: left !important; padding: 7px 14px !important; font-size: 13px !important; font-weight: 400 !important; box-shadow: none !important; border-radius: 10px !important; transition: all 0.15s ease !important; }
+section[data-testid="stSidebar"] .stButton > button:hover { background: rgba(255,255,255,0.06) !important; color: #e8e8f0 !important; transform: none !important; box-shadow: none !important; }
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] { background: rgba(255,107,0,0.1) !important; color: #FF6B00 !important; font-weight: 600 !important; border-left: 2px solid #FF6B00 !important; border-radius: 0 10px 10px 0 !important; }
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { transform: none !important; box-shadow: none !important; }
+
+/* Logo */
 .logo-block { padding: 8px 0 24px 0; text-align: center; }
 .logo-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; display: block; }
-.logo-sub { font-size: 10px; color: #555577; letter-spacing: 4px; text-transform: uppercase; margin-top: 4px; display: block; }
+.logo-sub { font-size: 10px; color: #3d3d55; letter-spacing: 4px; text-transform: uppercase; margin-top: 4px; display: block; }
+
+/* Headers */
 .main-header { font-family: 'Bebas Neue', sans-serif; font-size: 48px; letter-spacing: 2px; line-height: 1; margin-bottom: 4px; }
 .main-header span { background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.tool-desc { color: #8888aa; font-size: 14px; margin-bottom: 28px; }
-.stat-card { background: #111120; border: 1px solid #1e1e35; border-radius: 12px; padding: 20px; text-align: center; }
+.tool-desc { color: #666888; font-size: 14px; margin-bottom: 28px; }
+
+/* Stat cards */
+.stat-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 18px; padding: 20px; text-align: center; transition: border-color 0.2s ease; }
+.stat-card:hover { border-color: rgba(255,107,0,0.25); }
 .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #FF6B00; line-height: 1; }
-.stat-label { font-size: 11px; color: #666688; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
-.stTextArea textarea, .stTextInput input { background: #111120 !important; border: 1px solid #1e1e35 !important; border-radius: 10px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; }
-.stTextArea textarea:focus, .stTextInput input:focus { border-color: #FF6B00 !important; box-shadow: 0 0 0 2px rgba(255,107,0,0.15) !important; }
+.stat-label { font-size: 11px; color: #505070; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
+
+/* Inputs */
+.stTextArea textarea, .stTextInput input { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 12px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; transition: border-color 0.2s ease !important; }
+.stTextArea textarea:focus, .stTextInput input:focus { border-color: rgba(255,107,0,0.5) !important; box-shadow: 0 0 0 3px rgba(255,107,0,0.07) !important; }
 .stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
+
+/* Mobile */
 @media (max-width: 768px) {
     .main-header { font-size: 32px !important; }
     .tool-desc { font-size: 13px !important; }
@@ -101,41 +114,61 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { tran
     [data-testid="column"] { min-width: 100% !important; flex: 100% !important; }
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
     section[data-testid="stSidebar"] { min-width: 180px !important; max-width: 220px !important; }
-    .stButton > button { padding: 8px 14px !important; font-size: 13px !important; }
+    .stButton > button { padding: 7px 14px !important; font-size: 12px !important; }
     .nav-section { font-size: 9px !important; }
 }
-.stButton > button { background: linear-gradient(135deg, #FF6B00, #cc4a00) !important; color: white !important; border: none !important; border-radius: 10px !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 14px !important; padding: 10px 24px !important; transition: all 0.15s ease !important; letter-spacing: 0.3px; }
-.stButton > button:hover { transform: translateY(-1px) !important; box-shadow: 0 6px 20px rgba(255,107,0,0.35) !important; }
-.output-box { background: #111120; border: 1px solid #1e1e35; border-left: 3px solid #FF6B00; border-radius: 10px; padding: 20px 22px; margin: 12px 0; font-size: 14px; line-height: 1.7; color: #d8d8e8; white-space: pre-wrap; font-family: 'DM Sans', sans-serif; }
-.tweet-card { background: #111120; border: 1px solid #1e1e35; border-radius: 12px; padding: 18px 20px; margin: 10px 0; position: relative; }
-.tweet-card:hover { border-color: #FF6B00; transition: border-color 0.2s; }
+
+/* Buttons — pill shaped */
+.stButton > button { background: linear-gradient(135deg, #FF6B00, #d94f00) !important; color: white !important; border: none !important; border-radius: 100px !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 13px !important; padding: 8px 20px !important; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important; letter-spacing: 0.3px; box-shadow: 0 2px 12px rgba(255,107,0,0.18) !important; }
+.stButton > button:hover { transform: translateY(-2px) scale(1.02) !important; box-shadow: 0 10px 30px rgba(255,107,0,0.42) !important; background: linear-gradient(135deg, #ff7a14, #e05500) !important; }
+
+/* Output box */
+.output-box { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid #FF6B00; border-radius: 14px; padding: 20px 22px; margin: 12px 0; font-size: 14px; line-height: 1.7; color: #d8d8e8; white-space: pre-wrap; font-family: 'DM Sans', sans-serif; }
+
+/* Tweet cards */
+.tweet-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px 20px; margin: 10px 0; position: relative; transition: all 0.2s ease; }
+.tweet-card:hover { border-color: rgba(255,107,0,0.3); background: rgba(255,107,0,0.03); }
 .tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #FF6B00; letter-spacing: 1px; margin-bottom: 8px; }
-.tag { display: inline-block; background: #1e1e35; border-radius: 6px; padding: 3px 10px; font-size: 11px; color: #8888cc; margin: 2px; font-weight: 500; }
-.tag-hot { background: rgba(255,107,0,0.15); color: #FF6B00; border: 1px solid rgba(255,107,0,0.3); }
-.section-divider { border: none; border-top: 1px solid #1e1e35; margin: 24px 0; }
+
+/* Tags */
+.tag { display: inline-block; background: rgba(255,255,255,0.05); border-radius: 100px; padding: 3px 10px; font-size: 11px; color: #8888cc; margin: 2px; font-weight: 500; }
+.tag-hot { background: rgba(255,107,0,0.12); color: #FF6B00; border: 1px solid rgba(255,107,0,0.25); }
+
+.section-divider { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 24px 0; }
 .metric-label { font-size: 12px; color: #8888aa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .metric-score { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #FF6B00; }
-.score-bar-wrap { background: #1a1a2e; border-radius: 6px; height: 8px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
-.score-bar-fill { height: 100%; border-radius: 6px; transition: width 0.8s ease; }
-.stSelectbox > div > div { background: #111120 !important; border-color: #1e1e35 !important; color: #e8e8f0 !important; }
+.score-bar-wrap { background: rgba(255,255,255,0.04); border-radius: 100px; height: 6px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 100px; transition: width 0.8s ease; }
+
+/* Dropdowns & selects */
+.stSelectbox > div > div { background: rgba(255,255,255,0.03) !important; border-color: rgba(255,255,255,0.08) !important; color: #e8e8f0 !important; border-radius: 12px !important; }
 .stSlider .st-br { background: #FF6B00 !important; }
-.stTabs [data-baseweb="tab-list"] { background: #0d0d18 !important; border-radius: 10px; gap: 4px; padding: 4px; }
-.stTabs [data-baseweb="tab"] { background: transparent !important; color: #8888aa !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 13px !important; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; gap: 2px; padding: 4px; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: #666888 !important; border-radius: 10px !important; font-weight: 600 !important; font-size: 13px !important; transition: all 0.15s ease !important; }
 .stTabs [aria-selected="true"] { background: #FF6B00 !important; color: white !important; }
 .stSpinner > div > div { border-top-color: #FF6B00 !important; }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0a0f; }
-::-webkit-scrollbar-thumb { background: #1e1e35; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #FF6B00; }
-.nav-section { font-size: 10px; color: #555577; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; margin: 16px 0 6px 4px; }
-.char-count { font-size: 12px; color: #666688; text-align: right; margin-top: -10px; margin-bottom: 10px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,107,0,0.4); }
+
+.nav-section { font-size: 10px; color: #3d3d55; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; margin: 16px 0 6px 4px; }
+.char-count { font-size: 12px; color: #505070; text-align: right; margin-top: -10px; margin-bottom: 10px; }
 .char-over { color: #ef4444 !important; }
-.chat-msg { border-radius: 10px; padding: 16px 20px; margin: 10px 0; }
-.chat-user { background: #111120; border-left: 1px solid #1e1e35; }
-.chat-ai { background: #1a1a30; border-left: 3px solid #FF6B00; }
-.chat-role { font-size: 11px; color: #666688; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-.progress-bar-bg { background: #1a1a2e; border-radius: 8px; height: 14px; width: 100%; overflow: hidden; }
-.progress-bar-fill { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
+
+/* Chat */
+.chat-msg { border-radius: 14px; padding: 16px 20px; margin: 10px 0; }
+.chat-user { background: rgba(255,255,255,0.025); border-left: 1px solid rgba(255,255,255,0.06); }
+.chat-ai { background: rgba(255,107,0,0.05); border-left: 3px solid #FF6B00; }
+.chat-role { font-size: 11px; color: #505070; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+
+/* Progress */
+.progress-bar-bg { background: rgba(255,255,255,0.06); border-radius: 100px; height: 12px; width: 100%; overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -787,25 +820,25 @@ def page_brain_dump():
 
         bc1, bc2, bc3, bc4 = st.columns(4)
         with bc1:
-            if st.button("Give Me a Subject", use_container_width=True, key="bd_subject"):
+            if st.button("⚡ Subject", use_container_width=True, key="bd_subject"):
                 with st.spinner("Thinking..."):
                     result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
                     st.session_state["bd_subject_result"] = result
         with bc2:
-            if st.button("Generate Content Ideas", use_container_width=True, key="bd_ideas"):
+            if st.button("⚡ Ideas", use_container_width=True, key="bd_ideas"):
                 if dump_text.strip():
                     with st.spinner("Generating ideas..."):
                         result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
                         st.session_state["bd_ideas_result"] = result
         with bc3:
-            if st.button("Save Brain Dump", use_container_width=True, key="bd_save"):
+            if st.button("↓ Save", use_container_width=True, key="bd_save"):
                 if dump_text.strip():
                     dumps = load_json("brain_dumps.json", [])
                     dumps.append({"text": dump_text, "saved_at": datetime.now().isoformat(), "timer_mins": st.session_state.bd_timer_mins})
                     save_json("brain_dumps.json", dumps)
                     st.success("Saved.")
         with bc4:
-            if st.button("New Brain Dump", use_container_width=True, key="bd_new"):
+            if st.button("↺ New", use_container_width=True, key="bd_new"):
                 st.session_state.bd_timer_end = None
                 st.session_state.bd_timer_mins = 0
                 for k in ["bd_subject_result", "bd_ideas_result", "bd_tweets", "bd_longform", "bd_video"]:
@@ -821,7 +854,7 @@ def page_brain_dump():
 
         # Collapsible generation sections
         with st.expander("Tweet Ideas"):
-            if st.button("Generate Tweet Ideas", key="bd_gen_tweets"):
+            if st.button("⚡ Tweet Ideas", key="bd_gen_tweets"):
                 if dump_text.strip():
                     with st.spinner("Generating tweets..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
@@ -830,7 +863,7 @@ def page_brain_dump():
                 st.markdown(f'<div class="output-box">{st.session_state["bd_tweets"]}</div>', unsafe_allow_html=True)
 
         with st.expander("Long-form Post Idea"):
-            if st.button("Generate Long-form Idea", key="bd_gen_long"):
+            if st.button("⚡ Long-form", key="bd_gen_long"):
                 if dump_text.strip():
                     with st.spinner("Generating..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
@@ -839,7 +872,7 @@ def page_brain_dump():
                 st.markdown(f'<div class="output-box">{st.session_state["bd_longform"]}</div>', unsafe_allow_html=True)
 
         with st.expander("Video Script Outline"):
-            if st.button("Generate Video Outline", key="bd_gen_video"):
+            if st.button("⚡ Video Outline", key="bd_gen_video"):
                 if dump_text.strip():
                     with st.spinner("Generating..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
@@ -906,17 +939,17 @@ Give the repurposed tweet, then show character count."""
 
         sc1, sc2, sc3, sc4, sc5 = st.columns(5)
         with sc1:
-            banger = st.button("MAKE ME A BANGER", key="ci_banger", use_container_width=True)
+            banger = st.button("⚡ Banger", key="ci_banger", use_container_width=True)
         with sc2:
-            repurpose = st.button("Repurpose", key="ci_repurpose", use_container_width=True)
+            repurpose = st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True)
         with sc3:
-            build_this = st.button("Build This", key="ci_build", use_container_width=True)
+            build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
         with sc4:
-            engage = st.button("Algorithm Grades", key="ci_engage", use_container_width=True)
+            engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
         with sc5:
-            biz = st.button("Preview", key="ci_biz", use_container_width=True)
+            biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
         viral = False  # removed from main buttons
-        regenerate = st.button("↺  Regenerate with current format/voice", key="ci_regen_top", use_container_width=True)
+        regenerate = st.button("↺  Regenerate", key="ci_regen_top", use_container_width=True)
 
         # Voice modifier for prompts
         voice_mod = ""
@@ -1247,18 +1280,15 @@ Return ONLY this JSON format:
                     result = raw
         elif engage and tweet_text.strip():
             with st.spinner("Grading against the algorithm and your history..."):
-                pp = analyze_personal_patterns()
-                patterns_ctx = build_patterns_context(pp) if pp else ""
 
-                grade_prompt = f"""Grade this tweet for X algorithm performance and Tyler's personal patterns.
+                grade_prompt = f"""Grade this tweet for X algorithm performance.
 
 X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
 
 Tweet ({len(tweet_text)} chars): "{tweet_text}"
-{"Has question: " + str("?" in tweet_text) + " | Has ellipsis: " + str("..." in tweet_text) if pp else ""}
-{patterns_ctx}
+Has question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}
 
-Grade these 8 categories (score 1-10). For each: write a specific detail referencing the algorithm weight OR Tyler's data, and a concrete fix (exact words to change, not general advice).
+Grade these 8 categories (score 1-10). For each, give a specific detail referencing the algorithm weight and a concrete fix (exact words, not general advice).
 
 Return ONLY valid JSON:
 {{
@@ -1449,13 +1479,13 @@ Return ONLY this JSON, no other text:
                     edited_opt = st.text_area("", value=opt_text, height=auto_height(_banger_display, min_h=120), key=f"ci_banger_opt_{idx}")
                     b1, b2 = st.columns(2)
                     with b1:
-                        if st.button("Save", key=f"ci_banger_save_{idx}", use_container_width=True):
+                        if st.button("↓ Save", key=f"ci_banger_save_{idx}", use_container_width=True):
                             ideas = load_json("saved_ideas.json", [])
                             ideas.append({"text": edited_opt, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                             save_json("saved_ideas.json", ideas)
                             st.success("Saved.")
                     with b2:
-                        if st.button("Use This", key=f"ci_banger_use_{idx}", use_container_width=True):
+                        if st.button("↗ Use", key=f"ci_banger_use_{idx}", use_container_width=True):
                             st.session_state["ci_text"] = edited_opt
                             st.session_state.pop("ci_banger_data", None)
                             st.rerun()
@@ -1472,13 +1502,13 @@ Return ONLY this JSON, no other text:
             edited = st.text_area("Edit your result:", value=_res_val, height=auto_height(_res_val), key=_res_key)
             rc1, rc2, rc3 = st.columns(3)
             with rc1:
-                if st.button("Save As New Idea", key="ci_save_result", use_container_width=True):
+                if st.button("↓ Save Idea", key="ci_save_result", use_container_width=True):
                     ideas = load_json("saved_ideas.json", [])
                     ideas.append({"text": edited, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
             with rc2:
-                if st.button("Copy to Draft", key="ci_copy_draft", use_container_width=True):
+                if st.button("↗ To Draft", key="ci_copy_draft", use_container_width=True):
                     st.session_state["ci_text"] = edited
                     st.session_state.pop("ci_result", None)
                     st.rerun()
@@ -1493,13 +1523,13 @@ Return ONLY this JSON, no other text:
             edited_rp = st.text_area("Edit repurposed tweet:", value=_rp_val, height=auto_height(_rp_val), key=_rp_key)
             rpc1, rpc2, rpc3 = st.columns(3)
             with rpc1:
-                if st.button("Save As New Idea", key="ci_save_rp", use_container_width=True):
+                if st.button("↓ Save Idea", key="ci_save_rp", use_container_width=True):
                     ideas = load_json("saved_ideas.json", [])
                     ideas.append({"text": edited_rp, "format": fmt, "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
             with rpc2:
-                if st.button("Copy to Draft", key="ci_copy_rp", use_container_width=True):
+                if st.button("↗ To Draft", key="ci_copy_rp", use_container_width=True):
                     st.session_state["ci_text"] = edited_rp
                     st.session_state.pop("ci_repurposed", None)
                     st.rerun()
@@ -1623,7 +1653,7 @@ Return ONLY this JSON, no other text:
 
         # Save idea
         sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
-        if st.button("Save Idea", key="ci_save", use_container_width=True):
+        if st.button("↓ Save Idea", key="ci_save", use_container_width=True):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
                 ideas.append({
@@ -1663,7 +1693,7 @@ Return ONLY this JSON, no other text:
                         </div>
                         <div style="color:#d8d8e8; font-size:13px; line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text) > 200 else ''}</div>
                     </div>""", unsafe_allow_html=True)
-                    if st.button("Repurpose This", key=f"ci_inspo_{ii}", use_container_width=True):
+                    if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
                         st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
                         st.session_state["ci_auto_repurpose"] = True
                         st.rerun()
@@ -1768,7 +1798,7 @@ Your coaching style:
 
     with col_left:
         st.markdown("##### Conversations")
-        if st.button("+ New Conversation", use_container_width=True, key="coach_new"):
+        if st.button("+ New", use_container_width=True, key="coach_new"):
             st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
             st.rerun()
         for conv in reversed(st.session_state.coach_conversations[-20:]):
@@ -1778,7 +1808,7 @@ Your coaching style:
                 st.session_state.coach_current = json.loads(json.dumps(conv))
                 st.rerun()
         if st.session_state.coach_conversations:
-            if st.button("Clear All", key="coach_clear_all", use_container_width=True):
+            if st.button("⊘ Clear", key="coach_clear_all", use_container_width=True):
                 st.session_state.coach_conversations = []
                 st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
                 save_json("coach_conversations.json", [])
@@ -1792,7 +1822,7 @@ Your coaching style:
         save_text = st.text_area("Save to Compose Ideas:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("Save Idea", use_container_width=True, key="coach_save_idea") and save_text.strip():
+            if st.button("↓ Save Idea", use_container_width=True, key="coach_save_idea") and save_text.strip():
                 ideas = load_json("saved_ideas.json", [])
                 ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Coach", "created_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
@@ -1824,7 +1854,7 @@ Your coaching style:
 
         # Input
         user_input = st.text_area("Ask your coach:", height=80, key="coach_input", placeholder="What should I write about today?")
-        if st.button("Send", use_container_width=True, key="coach_send") and user_input.strip():
+        if st.button("↗ Send", use_container_width=True, key="coach_send") and user_input.strip():
             with st.spinner("Coach is thinking..."):
                 _send_message(user_input.strip(), include_history, coach_fmt)
             st.rerun()
@@ -1929,7 +1959,7 @@ def page_article_writer():
         # Section 3 — Generation buttons
         ac1, ac2 = st.columns(2)
         with ac1:
-            if st.button("Start from scratch", use_container_width=True, key="aw_scratch"):
+            if st.button("↺ Scratch", use_container_width=True, key="aw_scratch"):
                 if seed_text:
                     with st.spinner("Writing full article..."):
                         voice = get_voice_context()
@@ -1940,7 +1970,7 @@ def page_article_writer():
                         prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
                         st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
         with ac2:
-            if st.button("Generate Outline", use_container_width=True, key="aw_outline"):
+            if st.button("⚡ Outline", use_container_width=True, key="aw_outline"):
                 if seed_text:
                     with st.spinner("Generating outline..."):
                         voice = get_voice_context()
@@ -1953,17 +1983,17 @@ def page_article_writer():
             edited = st.text_area("Edit article:", value=st.session_state["aw_result"], height=300, key="aw_editor")
             bc1, bc2, bc3 = st.columns(3)
             with bc1:
-                if st.button("Save Article", use_container_width=True, key="aw_save"):
+                if st.button("↓ Save Article", use_container_width=True, key="aw_save"):
                     articles = load_json("saved_articles.json", [])
                     articles.append({"content": edited, "seed": seed_text[:200], "saved_at": datetime.now().isoformat()})
                     save_json("saved_articles.json", articles)
                     st.success("Article saved.")
             with bc2:
-                if st.button("Copy", use_container_width=True, key="aw_copy"):
+                if st.button("⎘ Copy", use_container_width=True, key="aw_copy"):
                     st.code(edited, language=None)
                     st.info("Text displayed above -- copy from there.")
             with bc3:
-                if st.button("New Article", use_container_width=True, key="aw_new"):
+                if st.button("↺ New", use_container_width=True, key="aw_new"):
                     for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
                         st.session_state.pop(k, None)
                     st.rerun()
@@ -1974,7 +2004,7 @@ def page_article_writer():
         with sc1:
             st.markdown("### Saved Articles")
         with sc2:
-            if st.button("New Article", key="aw_side_new", use_container_width=True):
+            if st.button("↺ New Article", key="aw_side_new", use_container_width=True):
                 for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
                     st.session_state.pop(k, None)
                 st.rerun()
@@ -2100,7 +2130,7 @@ def page_tweet_history():
                 last_sync = sorted(dates, reverse=True)[0][:10]
         st.markdown(f'<div class="stat-card"><div class="stat-num">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
     with hc4:
-        if st.button("Sync Tweets (pull last 500)", use_container_width=True, key="th_sync"):
+        if st.button("↻ Sync Tweets", use_container_width=True, key="th_sync"):
             with st.spinner("Syncing up to 500 tweets from X... this may take a minute."):
                 tweets = sync_tweet_history()
                 st.success(f"Synced {len(tweets)} tweets.")
@@ -2121,22 +2151,22 @@ def page_tweet_history():
     # AI filter buttons inline
     ac1, ac2, ac3, ac4 = st.columns(4)
     with ac1:
-        if st.button("Find my best hooks", key="th_ai_hooks", use_container_width=True):
+        if st.button("↑ Best Hooks", key="th_ai_hooks", use_container_width=True):
             top = sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
             hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
             st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
     with ac2:
-        if st.button("Find my worst performers", key="th_ai_worst", use_container_width=True):
+        if st.button("↓ Worst Performers", key="th_ai_worst", use_container_width=True):
             worst = sorted(tweets, key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
             st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
     with ac3:
-        if st.button("Analyze my voice patterns", key="th_ai_voice", use_container_width=True):
+        if st.button("⊙ Voice Patterns", key="th_ai_voice", use_container_width=True):
             sample = [t.get("text", "") for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
             with st.spinner("Analyzing your voice..."):
                 result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
                 st.session_state["th_ai_result"] = result
     with ac4:
-        if st.button("What topics perform best?", key="th_ai_topics", use_container_width=True):
+        if st.button("≋ Top Topics", key="th_ai_topics", use_container_width=True):
             sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
             with st.spinner("Analyzing topics..."):
                 result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
@@ -2228,7 +2258,7 @@ def page_algo_analyzer():
         cls = "char-over" if char_len > 280 else ""
         st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
 
-        if st.button("AI Algo Analyzer", use_container_width=True, key="aa_run"):
+        if st.button("⚡ Run Analysis", use_container_width=True, key="aa_run"):
             if content.strip():
                 with st.spinner("Analyzing against the algorithm..."):
                     prompt = f"""Analyze this content for X algorithm performance:
@@ -2296,7 +2326,7 @@ def page_health_check():
 
     st.markdown(f"**Account:** @{TYLER_HANDLE}")
 
-    if st.button("Run Health Check", use_container_width=True, key="hc_run"):
+    if st.button("⚡ Health Check", use_container_width=True, key="hc_run"):
         with st.spinner("Pulling tweets and analyzing..."):
             tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=30)
             if not tweets:
@@ -2363,7 +2393,7 @@ def page_account_pulse():
     st.markdown('<div class="main-header">ACCOUNT <span>PULSE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
 
-    if st.button("Load Account Data", use_container_width=True, key="ap_load"):
+    if st.button("↓ Load Data", use_container_width=True, key="ap_load"):
         with st.spinner("Fetching account data..."):
             user = fetch_user_info(TYLER_HANDLE)
             tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
@@ -2418,7 +2448,7 @@ def page_account_pulse():
             render_tweet_card(t)
 
         # AI analysis
-        if st.button("AI Pulse Analysis", key="ap_ai"):
+        if st.button("⚡ Pulse", key="ap_ai"):
             with st.spinner("Analyzing patterns..."):
                 tweet_summary = "\n".join([f"- {t.get('text','')[:100]} (Likes:{t.get('likeCount',0)}, Views:{t.get('viewCount',0)})" for t in tweets[:20]])
                 result = call_claude(f"""Analyze Tyler's recent posting patterns:
@@ -2448,7 +2478,7 @@ def page_account_researcher():
 
     with col_left:
         handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input")
-        if st.button("Research Account", use_container_width=True, key="ar_run"):
+        if st.button("⚡ Research", use_container_width=True, key="ar_run"):
             if handle.strip():
                 handle_clean = handle.strip().lstrip("@")
                 with st.spinner(f"Researching @{handle_clean}..."):
@@ -2623,9 +2653,9 @@ def page_reply_guy():
     st.markdown("### My Tweet Replies -- Conversation Depth")
     btn_c1, btn_c2 = st.columns(2)
     with btn_c1:
-        load_all = st.button("Load All Tweet Replies", key="rg_load_all", use_container_width=True)
+        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
     with btn_c2:
-        load_verified = st.button("Load Verified Follower Replies", key="rg_load_verified", use_container_width=True)
+        load_verified = st.button("↓ Verified Replies", key="rg_load_verified", use_container_width=True)
 
     if load_all or load_verified:
         with st.spinner("Fetching tweets and replies..."):
@@ -2715,7 +2745,7 @@ def page_reply_guy():
     with ctrl1:
         list_source = st.selectbox("List", ["My Custom List"] + list(LISTS.keys()), key="rg_source", label_visibility="collapsed")
     with ctrl2:
-        do_load = st.button("Load Posts", key="rg_load_posts", use_container_width=True)
+        do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True)
     with ctrl3:
         new_acc = st.text_input("Add account", key="rg_add_acc", placeholder="@handle", label_visibility="collapsed")
 
@@ -2738,33 +2768,43 @@ def page_reply_guy():
                 lid = LISTS.get(list_source, "")
                 if lid:
                     try:
-                        resp = requests.get(
-                            "https://api.twitterapi.io/twitter/list/tweets",
+                        # Step 1: get list members (real-time handles)
+                        mem_resp = requests.get(
+                            "https://api.twitterapi.io/twitter/list/members",
                             headers={"X-API-Key": TWITTER_API_IO_KEY},
-                            params={"listId": lid, "count": 20},
+                            params={"listId": lid, "count": 30},
                             timeout=30,
                         )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            raw_tweets = data.get("tweets", data.get("data", []))
-                            for t in raw_tweets:
-                                created = t.get("createdAt", t.get("created_at", ""))
+                        members = []
+                        if mem_resp.status_code == 200:
+                            mdata = mem_resp.json()
+                            members = mdata.get("members", mdata.get("data", []))
+                        handles = [
+                            m.get("userName") or m.get("username") or m.get("screen_name", "")
+                            for m in members
+                            if m.get("userName") or m.get("username") or m.get("screen_name")
+                        ]
+                        handles = [h for h in handles if h][:15]
+
+                        if handles:
+                            # Step 2: real-time search for recent tweets from these accounts
+                            query = " OR ".join([f"from:{h}" for h in handles])
+                            tweets = fetch_tweets(query, count=20)
+                            for t in tweets:
                                 author = t.get("author", {})
                                 all_tweets.append({
-                                    "id": t.get("id", t.get("tweet_id", "")),
+                                    "id": t.get("id", ""),
                                     "text": t.get("text", ""),
-                                    "createdAt": created,
-                                    "likeCount": t.get("likeCount", t.get("like_count", 0)),
-                                    "retweetCount": t.get("retweetCount", t.get("retweet_count", 0)),
-                                    "replyCount": t.get("replyCount", t.get("reply_count", 0)),
-                                    "viewCount": t.get("viewCount", t.get("view_count", 0)),
+                                    "createdAt": t.get("createdAt", t.get("created_at", "")),
+                                    "likeCount": t.get("likeCount", 0),
+                                    "retweetCount": t.get("retweetCount", 0),
+                                    "replyCount": t.get("replyCount", 0),
+                                    "viewCount": t.get("viewCount", 0),
                                     "_target_account": author.get("userName", author.get("username", "")),
                                     "author": author,
                                 })
-                            if not raw_tweets:
-                                st.warning(f"API returned 0 tweets. Response keys: {list(data.keys())}")
                         else:
-                            st.error(f"List fetch error: HTTP {resp.status_code}")
+                            st.warning(f"Could not fetch members for list {list_source} (HTTP {mem_resp.status_code})")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
             st.session_state["rg_tweets"] = all_tweets
@@ -2855,7 +2895,7 @@ def page_inspiration():
         inspo_likes = st.number_input("Likes (optional):", min_value=0, value=0, key="insp_likes")
         inspo_views = st.number_input("Views (optional):", min_value=0, value=0, key="insp_views")
 
-        if st.button("Save to Vault", use_container_width=True, key="insp_save"):
+        if st.button("↓ Save to Vault", use_container_width=True, key="insp_save"):
             if inspo_text.strip():
                 inspo.append({
                     "text": inspo_text,
