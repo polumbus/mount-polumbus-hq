@@ -1164,9 +1164,9 @@ Give the repurposed tweet, then show character count."""
         fmt = st.selectbox("Format", ["Short Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
     with fc2:
         _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _voice_opts = ["Default", "Punchy", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
         voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
-            help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
+            help="Default = natural | Punchy = 2 sentences, get in get out | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
 
     # Row 1: primary action + 2 supporting
     sr1, sr2, sr3 = st.columns([2, 1, 1])
@@ -1201,6 +1201,17 @@ The tone is: calm, pointed, credible. Former player who knows what winning looks
 WRONG: "The Broncos need to improve their running game."
 RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
 === END CRITICAL VOICE ==="""
+    elif voice == "Punchy":
+        voice_mod = """=== PUNCHY VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this in exactly TWO sentences. Not one. Not three. Two.
+
+SENTENCE 1: The take. Lead with the sharpest, most specific version of the point — no setup, no context, no "I think." Drop it cold.
+SENTENCE 2: The engagement hook. A direct question, a forced choice, or a provocative statement that makes someone feel they HAVE to respond. No trailing off. No ellipsis. Hit and exit.
+
+The tone is: confident, direct, zero fat. Every word earns its place or gets cut.
+WRONG: "This is an interesting situation. The Broncos have some decisions to make and fans are wondering what will happen next. What do you think?"
+RIGHT: "The 2026 WR room is better than 2015 and nobody wants to admit it. Prove me wrong."
+=== END PUNCHY VOICE ==="""
     elif voice == "Homer":
         voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
 YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
