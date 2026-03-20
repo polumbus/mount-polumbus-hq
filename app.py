@@ -582,7 +582,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
         proxy_key = ""
 
     body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens}).encode()
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
@@ -602,7 +602,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
     except Exception:
         proxy_key = ""
     body = json.dumps({"tweet_id": tweet_id, "text": text}).encode()
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     try:

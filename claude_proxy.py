@@ -110,6 +110,8 @@ def _twitter_graphql(operation, variables, features=None):
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, format, *args):
         print(f"[{time.strftime('%H:%M:%S')}] {format % args}")
 
