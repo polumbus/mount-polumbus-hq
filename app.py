@@ -1230,7 +1230,8 @@ Return ONLY this JSON:
 }}"""
                 raw = call_claude(grade_prompt)
                 try:
-                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                    clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
+                    json_match = re.search(r'\{.*\}', clean, re.DOTALL)
                     gdata = json.loads(json_match.group()) if json_match else None
                 except Exception:
                     gdata = None
@@ -2678,12 +2679,16 @@ def page_reply_guy():
                         )
                         if resp.status_code == 200:
                             data = resp.json()
+                            today = datetime.now().strftime("%Y-%m-%d")
                             for t in data.get("tweets", []):
+                                created = t.get("createdAt", t.get("created_at", ""))
+                                if not created.startswith(today):
+                                    continue
                                 author = t.get("author", {})
                                 all_tweets.append({
                                     "id": t.get("id", t.get("tweet_id", "")),
                                     "text": t.get("text", ""),
-                                    "createdAt": t.get("createdAt", t.get("created_at", "")),
+                                    "createdAt": created,
                                     "likeCount": t.get("likeCount", t.get("like_count", 0)),
                                     "retweetCount": t.get("retweetCount", t.get("retweet_count", 0)),
                                     "replyCount": t.get("replyCount", t.get("reply_count", 0)),
