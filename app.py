@@ -2368,11 +2368,11 @@ def sync_tweet_history(quick=False):
     if quick:
         all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:25]
     else:
-        # Slide backwards in 2-week windows for 6 months (13 windows × ~38 tweets/window ≈ 500)
+        # Slide backwards in 2-week windows for up to 2 years (52 windows) until 500 tweets collected
         all_tweets = []
         seen_ids = set()
         end_dt = datetime.now()
-        for _ in range(13):
+        for _ in range(52):
             start_dt = end_dt - timedelta(days=14)
             since_str = start_dt.strftime("%Y-%m-%d")
             until_str = end_dt.strftime("%Y-%m-%d")
