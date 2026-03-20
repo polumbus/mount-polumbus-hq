@@ -859,46 +859,52 @@ Give the repurposed tweet, then show character count."""
         # Voice modifier for prompts
         voice_mod = ""
         if voice == "Critical":
-            voice_mod = """Voice style: CRITICAL — Accountability mode. Tyler as the tough-love analyst.
+            voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as a hard accountability take. The output MUST:
+1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
+2. Call out exactly what isn't working and why it matters
+3. End with a pointed question or challenge that puts the responsibility on someone specific
+4. Sound like a disappointed former NFL player holding the team accountable — NOT an angry fan ranting
+5. DO NOT use generic phrases like "we need to be better" or "this has to change" — name the specific problem
 
-ALGORITHM-SAFE CRITICAL RULES:
-- ALWAYS pair criticism with a specific stat, fact, or film observation. "The O-line allowed pressure on 42% of dropbacks" is safe. "This team sucks" gets throttled.
-- Frame as accountability, never contempt. Energy: "I'm saying this because I believe this team can be better."
-- NEVER attack individual fans, players personally, or use all-caps rants. X penalizes combative tone with up to 80% reach reduction.
-- End with a constructive angle or question. This converts criticism into conversation (replies = 27x a like).
-- Think: disappointed parent who played in the NFL, not angry fan on a barstool.
-- Skeptical, direct, calls out what others won't say. But always backed by evidence or experience."""
+The tone is: calm, pointed, credible. Former player who knows what winning looks like and isn't seeing it.
+WRONG: "The Broncos need to improve their running game."
+RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
+=== END CRITICAL VOICE ==="""
         elif voice == "Homer":
-            voice_mod = """Voice style: HOMER — Rally mode. Tyler as the ultimate believer.
+            voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
+1. Use "we" or "this team" — make the reader feel included in the belief
+2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
+3. Convey real belief that comes from insider football knowledge — "I played 8 years in this league and I know what a winning culture looks like"
+4. End with forward momentum — something to look forward to or build on
+5. Make the reader feel GOOD about being a fan — positive sentiment, energy, shared belief
 
-ALGORITHM-BOOSTED HOMER RULES:
-- Positive sentiment is explicitly boosted by X's Grok sentiment analysis. Zero risk of negative signal penalties.
-- ALWAYS tie optimism to something specific. "I love what I'm seeing from Troy Franklin's route-running" beats "LET'S GOOOO."
-- Defend positions with data or insider perspective. "Everyone's writing off this team, but the underlying numbers tell a different story" is credible homer content.
-- Celebrate with substance. After wins: "Here's what went RIGHT" with specific plays/players.
-- Rally the fanbase by making them feel included. Use "we" language. Fans follow sports accounts to feel good about their fandom.
-- No blind cheerleading — genuine optimism grounded in real football knowledge from Tyler's 8 years in the league."""
+The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerleading — earned optimism.
+WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
+RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
+=== END HOMER VOICE ==="""
         elif voice == "Sarcastic":
-            voice_mod = """Voice style: SARCASTIC — Dry wit, deadpan delivery.
+            voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as dry, deadpan understatement. The output MUST:
+1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
+2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
+3. The punchline is the deadpan acceptance of something that SHOULD be outrageous
+4. End with one dry final observation that lands the joke without explaining it
+5. DO NOT be mean or attack people — punch at situations, decisions, outcomes
 
-ALGORITHM-SAFE SARCASTIC RULES:
-- Sarcasm through understatement, not mockery. "Oh cool, the Broncos did nothing again. Shocking." not "This franchise is a joke."
-- The humor comes from stating the obvious with fake surprise or calm acceptance of absurdity.
-- Dry, deadpan — like a former player who has seen everything and nothing surprises him anymore.
-- NEVER punch down at fans or individuals. Punch at situations, decisions, outcomes.
-- Sarcasm should make people laugh AND think. If it's just mean, it triggers blocks (-148x penalty).
-- End with a genuine point wrapped in wit — the sarcasm is the delivery method for real analysis.
-- Think: press conference energy where the player says something dry and the room cracks up.
-- Still Tyler's voice — former NFL authority, but with an eyebrow raised."""
+The tone is: former player press conference energy. Seen everything. Nothing surprises him. One eyebrow raised.
+WRONG: "This franchise is a disaster and everyone is incompetent."
+RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
+=== END SARCASTIC VOICE ==="""
         else:
-            voice_mod = """Voice style: DEFAULT — Tyler's natural voice. The balanced authority.
-
-This is the algorithm's sweet spot. Balanced content generates the most diverse engagement (bookmarks + retweets + replies) which maximizes algorithmic value.
-- Direct, confident, former-player authority
-- Mix of positive and critical in the same post when appropriate
-- Lead with insight, not just opinion
-- Sentence structure: short punchy lines, ellipsis as signature, questions to drive replies
-- 70% positive/neutral, 30% critical — the optimal content ratio for sustained growth"""
+            voice_mod = """=== DEFAULT VOICE MODE ===
+Tyler's natural voice — direct, confident, former-player authority. The output MUST:
+1. Lead with the insight or take — no throat-clearing
+2. Short punchy sentences. Ellipsis (...) as signature where appropriate
+3. State it flat. No hedging, no "maybe", no "I think" — just the take
+4. End with either a trailing thought (...) or a question that invites debate
+=== END DEFAULT VOICE ==="""
 
         # Pull live patterns for format templates (evolves with each sync)
         _fp = analyze_personal_patterns()
@@ -1389,6 +1395,9 @@ Return ONLY this JSON, no other text:
         # Banger — 3 separate boxes + recommendation at bottom
         if st.session_state.get("ci_banger_data"):
             bd = st.session_state["ci_banger_data"]
+            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
+            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
+            st.markdown(f'<div style="font-size:11px; color:#FF6B00; letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</div>', unsafe_allow_html=True)
             for opt_key, pattern_key, idx in [("option1","option1_pattern",1),("option2","option2_pattern",2),("option3","option3_pattern",3)]:
                 opt_text = bd.get(opt_key, "")
                 pattern = bd.get(pattern_key, "")
@@ -1413,7 +1422,9 @@ Return ONLY this JSON, no other text:
 
         # General result — editable text area
         if st.session_state.get("ci_result"):
-            st.markdown('<div style="font-weight:700; margin:12px 0 8px;">Result:</div>', unsafe_allow_html=True)
+            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
+            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
+            st.markdown(f'<div style="font-weight:700; margin:12px 0 8px;">Result: <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
             edited = st.text_area("Edit your result:", value=st.session_state["ci_result"], height=auto_height(st.session_state.get("ci_result","")), key="ci_result_edit")
             rc1, rc2, rc3 = st.columns(3)
             with rc1:
@@ -1430,7 +1441,9 @@ Return ONLY this JSON, no other text:
 
         # Repurposed content — editable
         if st.session_state.get("ci_repurposed"):
-            st.markdown('<div style="font-weight:700; font-size:16px; margin:16px 0 8px;">Repurposed Content</div>', unsafe_allow_html=True)
+            _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
+            _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
+            st.markdown(f'<div style="font-weight:700; font-size:16px; margin:16px 0 8px;">Repurposed Content <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
             edited_rp = st.text_area("Edit repurposed tweet:", value=st.session_state["ci_repurposed"], height=auto_height(st.session_state.get("ci_repurposed","")), key="ci_rp_edit")
             rpc1, rpc2, rpc3 = st.columns(3)
             with rpc1:
