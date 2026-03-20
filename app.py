@@ -3083,15 +3083,31 @@ def page_reply_guy():
                         st.error(f"List fetch error: {str(e)[:100]}")
             st.session_state["rg_tweets"] = all_tweets
 
-    # Table header
+    # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
+
     if tweets_data:
-        hc1, hc2, hc3, hc4 = st.columns([1, 3, 3, 1])
-        hc1.markdown("**Account**")
-        hc2.markdown("**Latest Post**")
-        hc3.markdown("**Reply**")
-        hc4.markdown("**Done?**")
-        st.markdown('<hr style="margin:4px 0;border-color:#1e1e35;">', unsafe_allow_html=True)
+        # Sort by engagement score (likes*2 + replies*3 + retweets)
+        tweets_data = sorted(tweets_data, key=lambda t: t.get("likeCount",0)*2 + t.get("replyCount",0)*3 + t.get("retweetCount",0), reverse=True)
+
+        _actions_header = _load_actions_gist()
+        done_count = sum(1 for t in tweets_data if t.get("id","") in _actions_header["replied"])
+        pending = [t for t in tweets_data if t.get("id","") not in _actions_header["replied"]]
+
+        st.markdown(f'<div style="font-size:13px;color:#666888;margin-bottom:12px;">{done_count} done · {len(pending)} remaining — sorted by engagement</div>', unsafe_allow_html=True)
+
+        # Batch AI Fill All
+        if st.button("⚡ AI Fill All", key="rg_ai_fill_all", type="secondary"):
+            with st.spinner(f"Generating replies for {len(pending[:10])} tweets..."):
+                for t in pending[:10]:
+                    acc_ = t.get("_target_account","")
+                    text_ = t.get("text","")
+                    tid_ = t.get("id","")
+                    key_ = f"rg_et_{tweets_data.index(t)}"
+                    if not st.session_state.get(key_,"").strip():
+                        sug = call_claude(f'Tyler wants to reply to @{acc_}\'s tweet: "{text_[:150]}". Write ONE reply under 150 chars. Tyler\'s voice: direct, ellipsis, former NFL player. No emojis.', max_tokens=80)
+                        st.session_state[key_] = sug
+            st.rerun()
 
     for i, t in enumerate(tweets_data):
         acc = t.get("_target_account", "")
@@ -3102,12 +3118,10 @@ def page_reply_guy():
         rpl = t.get("replyCount", t.get("reply_count", 0))
         views = t.get("viewCount", t.get("view_count", 0))
         created = t.get("createdAt", t.get("created_at", ""))[:16]
-        already = tid in replied_tweets
-        sug_key = f"rg_et_sug_{i}"
-
-        rc1, rc2, rc3 = st.columns([1, 3, 4])
+        eng_score = likes * 2 + rpl * 3 + rts
         tweet_url = t.get("url", t.get("twitterUrl", f"https://x.com/{acc}/status/{tid}"))
-        # Extract media image if available
+
+        # Extract media image
         media_list = t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else [])
         img_url = ""
         if media_list and isinstance(media_list, list):
@@ -3117,67 +3131,104 @@ def page_reply_guy():
                     if img_url:
                         break
 
+        _actions = _load_actions_gist()
+        et_is_replied = tid in _actions["replied"] or tid in replied_tweets
+        et_already_liked = tid in _actions["liked"]
+
+        # Done state — collapsed grey row
+        if et_is_replied:
+            st.markdown(
+                f'<div style="opacity:0.35;padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);margin:4px 0;display:flex;align-items:center;gap:12px;">'
+                f'<span style="color:#4ade80;font-size:16px;">✓</span>'
+                f'<span style="color:#666;font-size:13px;text-decoration:line-through;">@{acc} — {text[:80]}...</span>'
+                f'</div>',
+                unsafe_allow_html=True)
+            continue
+
+        et_input_key = f"rg_et_{i}"
+        options_key = f"rg_et_opts_{i}"
+
+        # Priority badge color
+        score_color = "#4ade80" if eng_score >= 20 else "#FF6B00" if eng_score >= 5 else "#555577"
+
+        rc1, rc2, rc3 = st.columns([1, 3, 4])
         with rc1:
-            st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:14px;padding-top:8px;">@{acc}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="padding-top:8px;">'
+                f'<div style="font-weight:700;color:#FF6B00;font-size:14px;">@{acc}</div>'
+                f'<div style="margin-top:6px;display:inline-block;background:rgba(255,255,255,0.04);border-radius:6px;padding:3px 8px;font-size:12px;color:{score_color};font-weight:600;">⚡ {eng_score}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
         with rc2:
-            img_html = f'<img src="{img_url}" style="width:100%;max-width:300px;border-radius:10px;margin-top:8px;display:block;" />' if img_url else ""
+            img_html = f'<img src="{img_url}" style="width:100%;max-width:280px;border-radius:10px;margin-top:8px;display:block;" />' if img_url else ""
             st.markdown(
                 f'<div style="font-size:15px;color:#d8d8e8;line-height:1.6;">{text[:220]}</div>'
                 f'{img_html}'
-                f'<div style="font-size:11px;color:#555577;margin-top:6px;">{created} · {likes} likes · {rpl} replies</div>'
+                f'<div style="font-size:11px;color:#555577;margin-top:6px;">{created} · {likes}♡ · {rpl}↩ · {rts}↺</div>'
                 f'<a href="{tweet_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                 unsafe_allow_html=True)
         with rc3:
-            et_input_key = f"rg_et_{i}"
             reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed",
                 placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key, "")))
-            # Action buttons as styled HTML — Streamlit buttons below
-            _actions = _load_actions_gist()
-            et_already_liked = tid in _actions["liked"]
-            et_is_replied = tid in _actions["replied"]
 
-            etb1, etb2, etb3 = st.columns(3)
-            with etb1:
-                if st.button("⚡ AI", key=f"rg_etg_{i}", use_container_width=True):
-                    sug = call_claude(f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". Write ONE short reply under 150 chars. Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis.', max_tokens=80)
-                    st.session_state[et_input_key] = sug
+            # AI options picker
+            if st.session_state.get(options_key):
+                opts = st.session_state[options_key]
+                st.markdown('<div style="font-size:11px;color:#666888;margin-bottom:4px;">Pick an option:</div>', unsafe_allow_html=True)
+                for oi, opt in enumerate(opts):
+                    if st.button(f"{opt[:80]}{'...' if len(opt)>80 else ''}", key=f"rg_opt_{i}_{oi}", use_container_width=True, type="secondary"):
+                        st.session_state[et_input_key] = opt
+                        del st.session_state[options_key]
+                        st.rerun()
+
+            # Action row — uniform pill buttons
+            ab1, ab2, ab3, ab4 = st.columns(4)
+            with ab1:
+                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options"):
+                    with st.spinner(""):
+                        raw = call_claude(
+                            f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
+                            f'Write exactly 3 different reply options, each under 150 chars. '
+                            f'Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis. '
+                            f'Format: one reply per line, no numbering, no labels.',
+                            max_tokens=250)
+                        opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
+                        if opts:
+                            st.session_state[options_key] = opts
+                            if not st.session_state.get(et_input_key,"").strip():
+                                st.session_state[et_input_key] = opts[0]
                     st.rerun()
-            with etb2:
+            with ab2:
                 if et_already_liked:
-                    st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
+                    st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                 else:
-                    bc1, bc2 = st.columns(2)
-                    with bc1:
-                        if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True):
-                            _proxy_tweet_action("like", tid)
-                            _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
-                            _save_actions_gist(_actions)
-                            st.rerun()
-                    with bc2:
-                        if st.button("✓ Done", key=f"rg_etld_{i}", use_container_width=True):
-                            _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
-                            _save_actions_gist(_actions)
-                            st.rerun()
-            with etb3:
-                if et_is_replied or already:
-                    st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
-                else:
-                    sb1, sb2 = st.columns(2)
-                    with sb1:
-                        if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True):
-                            if reply_text.strip() and tid:
-                                if _proxy_tweet_action("reply", tid, reply_text.strip()):
-                                    _bump_reply()
-                                    _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
-                                    _save_actions_gist(_actions)
-                                    st.rerun()
-                                else:
-                                    st.error("Reply failed — check proxy")
-                    with sb2:
-                        if st.button("✓ Done", key=f"rg_etrd_{i}", use_container_width=True):
+                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X"):
+                        _proxy_tweet_action("like", tid)
+                        _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
+                        _save_actions_gist(_actions)
+                        st.rerun()
+            with ab3:
+                if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True, help="Send reply via proxy"):
+                    if reply_text.strip() and tid:
+                        if _proxy_tweet_action("reply", tid, reply_text.strip()):
+                            _bump_reply()
+                            progress["count"] = progress.get("count", 0) + 1
+                            save_json("reply_progress.json", progress)
                             _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
                             _save_actions_gist(_actions)
                             st.rerun()
+                        else:
+                            st.error("Reply failed")
+            with ab4:
+                if st.button("✓ Done", key=f"rg_etrd_{i}", use_container_width=True, help="Mark done (replied on native X)", type="secondary"):
+                    _bump_reply()
+                    progress["count"] = progress.get("count", 0) + 1
+                    save_json("reply_progress.json", progress)
+                    _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
+                    _save_actions_gist(_actions)
+                    st.rerun()
+
+        st.markdown('<hr style="margin:6px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
