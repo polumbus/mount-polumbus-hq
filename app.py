@@ -1086,11 +1086,9 @@ IMAGE RECOMMENDATION:
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp) if pp else ""
-                banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric AND match his proven winning style.
+                banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
-
-{voice_mod}
 
 {format_mod}
 {patterns_ctx}
@@ -1100,6 +1098,9 @@ Rules:
 - No Hashtags, Links, Tags, Emojis
 - Hook & Pattern Breakers (first line stops the scroll)
 {"- Optimal character range: " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
+
+ALL THREE OPTIONS MUST BE WRITTEN IN THIS VOICE — THIS OVERRIDES EVERYTHING ABOVE:
+{voice_mod}
 
 Return ONLY this JSON, no other text:
 {{
@@ -1111,7 +1112,7 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "which top tweet pattern this is modeled after",
   "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
 }}"""
-                raw = call_claude(banger_prompt)
+                raw = call_claude(banger_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                 try:
                     raw_clean = raw.strip()
                     if raw_clean.startswith("```"):
@@ -1213,14 +1214,14 @@ Return ONLY this JSON:
     "algorithm_score": [0-100 for algorithm compliance],
     "tyler_score": [0-100 for matching Tyler's proven patterns],
     "grades": [
-        {{"name": "Hook Strength (Dwell Time)", "score": 8, "detail": "The algorithm measures dwell time — how long users pause on your post. A strong hook = longer dwell = algorithmic boost. Compare this first line to Tyler's top hooks.", "benchmark": "Top hook: '[his best first line]' ([X] likes)"}},
-        {{"name": "Conversation Catalyst", "score": 7, "detail": "Replies are 27x a like. Author replying to replies is 150x. Is this tweet structured so Tyler can meaningfully reply to responses? Open-ended? Invites debate? Compare to his top reply-getters.", "benchmark": "Top reply-getter: '[snippet]' ([X] replies)"}},
-        {{"name": "Bookmark Worthiness", "score": 6, "detail": "Bookmarks are 20x a like — the 'silent like.' Does this tweet have save-for-later value? Reference, insight, or take worth returning to?", "benchmark": "Reference-worthy content scores highest"}},
-        {{"name": "Share/Quote Potential", "score": 7, "detail": "Retweets are 20x a like. Would someone share this with THEIR audience? Hot takes, surprising stats, and strong opinions get shared most.", "benchmark": "Tyler's most shared: '[snippet]' ([X] RTs)"}},
-        {{"name": "Engagement Triggers", "score": 7, "detail": "Questions, ellipsis, line breaks, open-ended statements. Compare to Tyler's patterns.", "benchmark": "[X]% of his top tweets use questions, [X]% use ellipsis"}},
-        {{"name": "Algorithm Compliance", "score": 9, "detail": "External links get 30-50% penalty. 3+ hashtags get 40% penalty. Negative tone reduces reach. Check for all confirmed penalties.", "benchmark": "No links, 0-2 hashtags, constructive tone"}},
-        {{"name": "Dwell Time Potential", "score": 7, "detail": "Beyond the hook — does the FULL tweet reward reading? Posts viewed <3 seconds get negative quality signals. Posts with 2+ min dwell get 20x boost. Line breaks, story structure, and payoff increase dwell.", "benchmark": "Multi-paragraph tweets with payoff perform best"}},
-        {{"name": "Voice Match", "score": 8, "detail": "How closely does this match Tyler's proven winning patterns? Sentence length, punctuation style, authority level. Reference his actual style data.", "benchmark": "Tyler's voice: [key patterns]"}}
+        {{"name": "Hook Strength (Dwell Time)", "score": 8, "detail": "The algorithm measures dwell time — how long users pause on your post. A strong hook = longer dwell = algorithmic boost. Compare this first line to Tyler's top hooks.", "benchmark": "Top hook: '[his best first line]' ([X] likes)", "fix": "Specific rewrite: change the first line to '[exact suggested hook]'"}},
+        {{"name": "Conversation Catalyst", "score": 7, "detail": "Replies are 27x a like. Author replying to replies is 150x. Is this tweet structured so Tyler can meaningfully reply to responses? Open-ended? Invites debate? Compare to his top reply-getters.", "benchmark": "Top reply-getter: '[snippet]' ([X] replies)", "fix": "Specific change: [exact edit to end of tweet to invite replies, e.g. add a question or remove a declarative ending]"}},
+        {{"name": "Bookmark Worthiness", "score": 6, "detail": "Bookmarks are 20x a like — the 'silent like.' Does this tweet have save-for-later value? Reference, insight, or take worth returning to?", "benchmark": "Reference-worthy content scores highest", "fix": "Specific change: [exact addition or rewrite to add a stat, framework, or reference that makes people save it]"}},
+        {{"name": "Share/Quote Potential", "score": 7, "detail": "Retweets are 20x a like. Would someone share this with THEIR audience? Hot takes, surprising stats, and strong opinions get shared most.", "benchmark": "Tyler's most shared: '[snippet]' ([X] RTs)", "fix": "Specific change: [exact phrasing edit to make the take sharper or more quotable]"}},
+        {{"name": "Engagement Triggers", "score": 7, "detail": "Questions, ellipsis, line breaks, open-ended statements. Compare to Tyler's patterns.", "benchmark": "[X]% of his top tweets use questions, [X]% use ellipsis", "fix": "Specific change: [exact punctuation or structural edit — e.g. 'change period at end to a question' or 'add ... after line 2']"}},
+        {{"name": "Algorithm Compliance", "score": 9, "detail": "External links get 30-50% penalty. 3+ hashtags get 40% penalty. Negative tone reduces reach. Check for all confirmed penalties.", "benchmark": "No links, 0-2 hashtags, constructive tone", "fix": "Specific change: [what to remove or reframe if any penalty exists, or 'No changes needed' if compliant]"}},
+        {{"name": "Dwell Time Potential", "score": 7, "detail": "Beyond the hook — does the FULL tweet reward reading? Posts viewed <3 seconds get negative quality signals. Posts with 2+ min dwell get 20x boost. Line breaks, story structure, and payoff increase dwell.", "benchmark": "Multi-paragraph tweets with payoff perform best", "fix": "Specific change: [exact structural edit — e.g. 'break line 2 into two lines' or 'add a third line with the payoff stat']"}},
+        {{"name": "Voice Match", "score": 8, "detail": "How closely does this match Tyler's proven winning patterns? Sentence length, punctuation style, authority level. Reference his actual style data.", "benchmark": "Tyler's voice: [key patterns]", "fix": "Specific change: [exact word or phrase to change to better match Tyler's voice pattern]"}}
     ],
     "personal_insights": [
         "Data-driven insight comparing this draft to Tyler's actual patterns",
@@ -1254,8 +1255,6 @@ Return ONLY this JSON:
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
-{voice_mod}
-
 {format_mod}
 
 TASK: Extract the best version of this idea and write the finished tweet. This is NOT a rewrite — you are crafting the actual tweet from a raw concept description.
@@ -1266,8 +1265,11 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
 
+WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
+{voice_mod}
+
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                st.session_state["ci_result"] = call_claude(build_prompt)
+                st.session_state["ci_result"] = call_claude(build_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                 st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1281,8 +1283,6 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
-{voice_mod}
-
 {format_mod}
 
 - Strong hook in the first line
@@ -1290,8 +1290,11 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 - No hashtags, no emojis
 - 7th-9th grade reading level
 
+WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
+{voice_mod}
+
 Give the repurposed tweet, then show character count."""
-                repurposed = call_claude(repurpose_prompt)
+                repurposed = call_claude(repurpose_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                 st.session_state["ci_repurposed"] = repurposed
                 st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_result", None)
@@ -1320,8 +1323,6 @@ Give the repurposed tweet, then show character count."""
 CONCEPT/ANGLE:
 \"{_rtext}\"
 
-{voice_mod}
-
 {format_mod}
 
 TASK: Extract the best version of this idea and write the finished tweet. This is NOT a rewrite — you are crafting the actual tweet from a raw concept description.
@@ -1331,15 +1332,18 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 
+WRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:
+{voice_mod}
+
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-                    st.session_state["ci_result"] = call_claude(build_prompt)
+                    st.session_state["ci_result"] = call_claude(build_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                     st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_banger_data", None)
                     st.session_state.pop("ci_repurposed", None)
             elif _rtype == "repurpose" and _rtext:
                 with st.spinner("Repurposing..."):
-                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\n{voice_mod}\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
-                    st.session_state["ci_repurposed"] = call_claude(rp)
+                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nWRITE THIS IN THE FOLLOWING VOICE — THIS OVERRIDES EVERYTHING ABOVE:\n{voice_mod}\n\nGive the repurposed tweet, then character count."""
+                    st.session_state["ci_repurposed"] = call_claude(rp, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                     st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                     st.session_state.pop("ci_banger_data", None)
@@ -1351,8 +1355,6 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
 
 Draft: "{_rtext}"
 
-{voice_mod}
-
 {format_mod}
 {patterns_ctx}
 
@@ -1361,6 +1363,9 @@ Rules:
 - No Hashtags, Links, Tags, Emojis
 - Hook in the first line
 
+ALL THREE OPTIONS MUST BE WRITTEN IN THIS VOICE — THIS OVERRIDES EVERYTHING ABOVE:
+{voice_mod}
+
 Return ONLY this JSON, no other text:
 {{
   "option1": "tweet text", "option1_pattern": "pattern name",
@@ -1368,7 +1373,7 @@ Return ONLY this JSON, no other text:
   "option3": "tweet text", "option3_pattern": "pattern name",
   "recommendation": "which to post and why"
 }}"""
-                    raw = call_claude(banger_prompt)
+                    raw = call_claude(banger_prompt, system=get_voice_context() + f"\n\nACTIVE VOICE MODE:\n{voice_mod}")
                     try:
                         raw_clean = raw.strip()
                         if raw_clean.startswith("```"):
@@ -1512,15 +1517,18 @@ Return ONLY this JSON, no other text:
                         score = g.get("score", 0)
                         score_color = "#22c55e" if score >= 8 else "#FF6B00" if score >= 6 else "#ef4444"
                         benchmark = g.get("benchmark", "")
+                        fix = g.get("fix", "")
                         benchmark_html = f'<div style="font-size:11px; color:#FF6B00; margin-top:8px; font-style:italic;">{benchmark}</div>' if benchmark else ""
+                        fix_html = f'<div style="font-size:12px; color:#4ecdc4; margin-top:10px; background:#0a1a1a; border-left:2px solid #4ecdc4; padding:6px 10px; border-radius:0 4px 4px 0; line-height:1.4;"><span style="font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700;">Fix:</span> {fix}</div>' if fix else ""
                         with cols[col_idx]:
-                            st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:10px; min-height:160px;">
+                            st.markdown(f"""<div style="background:#0d0d18; border:1px solid #1e1e35; border-radius:10px; padding:16px; margin-bottom:10px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                                     <span style="font-weight:700; font-size:14px;">{g.get('name','')}</span>
                                     <span style="font-family:'JetBrains Mono',monospace; font-size:14px; background:{score_color}22; color:{score_color}; padding:2px 10px; border-radius:4px;">Score: {score}/10</span>
                                 </div>
                                 <div style="font-size:13px; color:#9999aa; line-height:1.5;">{g.get('detail','')}</div>
                                 {benchmark_html}
+                                {fix_html}
                             </div>""", unsafe_allow_html=True)
 
             suggestions = gd.get("suggestions", [])
