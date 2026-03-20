@@ -1719,10 +1719,9 @@ Return ONLY this JSON, no other text:
     with col_saved:
         st.markdown("### Saved Ideas")
 
-        # Custom folders — persisted in saved_ideas_folders.json
+        # All folders stored in JSON (editable), with defaults on first load
         _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
-        _custom_folders = load_json("saved_ideas_folders.json", [])
-        _all_folders = _default_folders + [f for f in _custom_folders if f not in _default_folders]
+        _all_folders = load_json("saved_ideas_folders.json", _default_folders)
         _folder_opts = ["All Ideas"] + _all_folders + ["Inspiration Vault", "Repurpose Queue"]
 
         folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
@@ -1733,14 +1732,14 @@ Return ONLY this JSON, no other text:
             if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
                 fname = new_folder_name.strip()
                 if fname not in _all_folders:
-                    _custom_folders.append(fname)
-                    save_json("saved_ideas_folders.json", _custom_folders)
+                    _all_folders.append(fname)
+                    save_json("saved_ideas_folders.json", _all_folders)
                     st.rerun()
-            # Delete custom folders
-            for cf in _custom_folders:
-                if st.button(f"✕ Delete '{cf}'", key=f"ci_del_{cf}"):
-                    _custom_folders = [f for f in _custom_folders if f != cf]
-                    save_json("saved_ideas_folders.json", _custom_folders)
+            # Delete any folder
+            for cf in list(_all_folders):
+                if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
+                    _all_folders = [f for f in _all_folders if f != cf]
+                    save_json("saved_ideas_folders.json", _all_folders)
                     st.rerun()
 
         if folder in ("Inspiration Vault", "Repurpose Queue"):
@@ -2699,7 +2698,9 @@ def page_reply_guy():
         save_json("reply_progress.json", progress)
     reply_count = progress.get("count", 0)
     streak = progress.get("streak", 0)
-    replied_tweets = load_json("replied_tweets.json", [])
+    _rg_actions = _load_actions_gist()
+    replied_tweets = _rg_actions["replied"]
+    liked_tweets_global = _rg_actions["liked"]
 
     def _bump_reply():
         progress["count"] = progress.get("count", 0) + 1
@@ -2708,7 +2709,8 @@ def page_reply_guy():
     def _mark_replied(tweet_id):
         if tweet_id not in replied_tweets:
             replied_tweets.append(tweet_id)
-            save_json("replied_tweets.json", replied_tweets[-500:])
+            _rg_actions["replied"] = replied_tweets[-500:]
+            _save_actions_gist(_rg_actions)
 
     # ── PART 1: Top Stats Bar ──
     c1, c2 = st.columns([3, 1])
@@ -2798,10 +2800,8 @@ def page_reply_guy():
             with rc3:
                 reply_val = st.text_area("r", key=input_key, label_visibility="collapsed",
                     placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
-                liked_tweets = load_json("liked_tweets.json", [])
-                already_liked = rid in liked_tweets
-                fresh_replied = load_json("replied_tweets.json", [])
-                is_replied_now = rid in fresh_replied
+                already_liked = rid in liked_tweets_global
+                is_replied_now = rid in replied_tweets
 
                 rb1, rb2, rb3 = st.columns(3)
                 with rb1:
@@ -2812,23 +2812,37 @@ def page_reply_guy():
                 with rb2:
                     if already_liked:
                         st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
-                    elif st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True):
-                        _proxy_tweet_action("like", rid)
-                        liked_tweets.append(rid)
-                        save_json("liked_tweets.json", liked_tweets[-500:])
-                        st.rerun()
+                    else:
+                        lbc1, lbc2 = st.columns(2)
+                        with lbc1:
+                            if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True):
+                                _proxy_tweet_action("like", rid)
+                                _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
+                                _save_actions_gist(_rg_actions)
+                                st.rerun()
+                        with lbc2:
+                            if st.button("✓ Done", key=f"rg_liked_done_{idx}_{ri}", use_container_width=True):
+                                _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
+                                _save_actions_gist(_rg_actions)
+                                st.rerun()
                 with rb3:
                     if is_replied_now:
                         st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
-                    elif st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True):
-                        if reply_val.strip():
-                            if _proxy_tweet_action("reply", rid, reply_val.strip()):
-                                _bump_reply()
-                                fresh_replied.append(rid)
-                                save_json("replied_tweets.json", fresh_replied[-500:])
+                    else:
+                        rbc1, rbc2 = st.columns(2)
+                        with rbc1:
+                            if st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True):
+                                if reply_val.strip():
+                                    if _proxy_tweet_action("reply", rid, reply_val.strip()):
+                                        _bump_reply()
+                                        _mark_replied(rid)
+                                        st.rerun()
+                                    else:
+                                        st.error("Reply failed — check proxy")
+                        with rbc2:
+                            if st.button("✓ Done", key=f"rg_replied_done_{idx}_{ri}", use_container_width=True):
+                                _mark_replied(rid)
                                 st.rerun()
-                            else:
-                                st.error("Reply failed — check proxy connection")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
