@@ -1250,53 +1250,34 @@ Return ONLY this JSON format:
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp) if pp else ""
 
-                grade_prompt = f"""Grade this tweet against X's CONFIRMED algorithm signals (from the open-sourced recommendation code) AND Tyler's personal tweet performance history.
+                grade_prompt = f"""Grade this tweet for X algorithm performance and Tyler's personal patterns.
 
-CONFIRMED X ALGORITHM SIGNAL WEIGHTS:
-- Author replies to replies on own tweet: 150x a like (THE #1 signal)
-- Replies from others: 27x a like
-- Profile clicks: 24x a like
-- Dwell time (2+ min): 20x a like
-- Bookmarks: 20x a like
-- Retweets: 2x a like
-- Likes: 1x (baseline)
-- External links: CONFIRMED 30-50% reach penalty
-- 3+ hashtags: CONFIRMED ~40% reach penalty
-- Negative/combative tone: reduces distribution since 2026 (Grok sentiment analysis)
-- First 30 minutes are critical — early engagement determines distribution
+X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
 
-Tweet: "{tweet_text}"
+Tweet ({len(tweet_text)} chars): "{tweet_text}"
+{"Has question: " + str("?" in tweet_text) + " | Has ellipsis: " + str("..." in tweet_text) if pp else ""}
 {patterns_ctx}
 
-{format_mod}
+Grade these 8 categories (score 1-10). For each: write a specific detail referencing the algorithm weight OR Tyler's data, and a concrete fix (exact words to change, not general advice).
 
-This draft is {len(tweet_text)} characters.
-{"It " + ("contains" if "?" in tweet_text else "does NOT contain") + " a question mark." if pp else ""}
-{"It " + ("uses" if "..." in tweet_text else "does NOT use") + " ellipsis." if pp else ""}
-
-Score each category 1-10. Each detail MUST reference Tyler's actual data or a specific confirmed algorithm signal.
-
-Return ONLY this JSON:
+Return ONLY valid JSON:
 {{
-    "algorithm_score": [0-100 for algorithm compliance],
-    "tyler_score": [0-100 for matching Tyler's proven patterns],
+    "algorithm_score": 0-100,
+    "tyler_score": 0-100,
     "grades": [
-        {{"name": "Hook Strength (Dwell Time)", "score": 8, "detail": "The algorithm measures dwell time — how long users pause on your post. A strong hook = longer dwell = algorithmic boost. Compare this first line to Tyler's top hooks.", "benchmark": "Top hook: '[his best first line]' ([X] likes)", "fix": "Specific rewrite: change the first line to '[exact suggested hook]'"}},
-        {{"name": "Conversation Catalyst", "score": 7, "detail": "Replies are 27x a like. Author replying to replies is 150x. Is this tweet structured so Tyler can meaningfully reply to responses? Open-ended? Invites debate? Compare to his top reply-getters.", "benchmark": "Top reply-getter: '[snippet]' ([X] replies)", "fix": "Specific change: [exact edit to end of tweet to invite replies, e.g. add a question or remove a declarative ending]"}},
-        {{"name": "Bookmark Worthiness", "score": 6, "detail": "Bookmarks are 20x a like — the 'silent like.' Does this tweet have save-for-later value? Reference, insight, or take worth returning to?", "benchmark": "Reference-worthy content scores highest", "fix": "Specific change: [exact addition or rewrite to add a stat, framework, or reference that makes people save it]"}},
-        {{"name": "Share/Quote Potential", "score": 7, "detail": "Retweets are 20x a like. Would someone share this with THEIR audience? Hot takes, surprising stats, and strong opinions get shared most.", "benchmark": "Tyler's most shared: '[snippet]' ([X] RTs)", "fix": "Specific change: [exact phrasing edit to make the take sharper or more quotable]"}},
-        {{"name": "Engagement Triggers", "score": 7, "detail": "Questions, ellipsis, line breaks, open-ended statements. Compare to Tyler's patterns.", "benchmark": "[X]% of his top tweets use questions, [X]% use ellipsis", "fix": "Specific change: [exact punctuation or structural edit — e.g. 'change period at end to a question' or 'add ... after line 2']"}},
-        {{"name": "Algorithm Compliance", "score": 9, "detail": "External links get 30-50% penalty. 3+ hashtags get 40% penalty. Negative tone reduces reach. Check for all confirmed penalties.", "benchmark": "No links, 0-2 hashtags, constructive tone", "fix": "Specific change: [what to remove or reframe if any penalty exists, or 'No changes needed' if compliant]"}},
-        {{"name": "Dwell Time Potential", "score": 7, "detail": "Beyond the hook — does the FULL tweet reward reading? Posts viewed <3 seconds get negative quality signals. Posts with 2+ min dwell get 20x boost. Line breaks, story structure, and payoff increase dwell.", "benchmark": "Multi-paragraph tweets with payoff perform best", "fix": "Specific change: [exact structural edit — e.g. 'break line 2 into two lines' or 'add a third line with the payoff stat']"}},
-        {{"name": "Voice Match", "score": 8, "detail": "How closely does this match Tyler's proven winning patterns? Sentence length, punctuation style, authority level. Reference his actual style data.", "benchmark": "Tyler's voice: [key patterns]", "fix": "Specific change: [exact word or phrase to change to better match Tyler's voice pattern]"}}
+        {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
+        {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
+        {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
+        {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
+        {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
+        {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
+        {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
+        {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
     ],
-    "personal_insights": [
-        "Data-driven insight comparing this draft to Tyler's actual patterns",
-        "Another data-driven insight with specific numbers from his history"
-    ],
-    "suggestions": ["specific improvement 1 referencing confirmed algorithm signals", "specific improvement 2", "specific improvement 3"]
+    "personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
+    "suggestions": ["improvement 1", "improvement 2", "improvement 3"]
 }}"""
-                raw = call_claude(grade_prompt)
+                raw = call_claude(grade_prompt, system=TYLER_CONTEXT)
                 try:
                     clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
                     json_match = re.search(r'\{.*\}', clean, re.DOTALL)
