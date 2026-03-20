@@ -946,32 +946,32 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
 NAV_ITEMS = {
     "CREATE": [
-        ("Compose Ideas", "bulb"),
-        ("Brain Dump", "pencil2"),
-        ("Content Coach", "speech_balloon"),
+        ("Creator Studio", "bulb"),
+        ("Raw Thoughts", "pencil2"),
+        ("Content Advisor", "speech_balloon"),
         ("Article Writer", "memo"),
     ],
-    "ENGAGE": [
-        ("Reply Guy", "left_speech_bubble"),
-        ("Inspiration", "sparkles"),
+    "INTERACT": [
+        ("Reply Mode", "left_speech_bubble"),
+        ("Idea Bank", "sparkles"),
     ],
-    "ANALYZE": [
-        ("Tweet History", "clock3"),
-        ("Algo Analyzer", "bar_chart"),
-        ("Health Check", "stethoscope"),
-        ("Account Pulse", "chart_with_upwards_trend"),
-        ("Account Researcher", "mag"),
+    "INSIGHTS": [
+        ("Post History", "clock3"),
+        ("Algorithm Score", "bar_chart"),
+        ("Account Audit", "stethoscope"),
+        ("My Stats", "chart_with_upwards_trend"),
+        ("Profile Analyzer", "mag"),
     ],
 }
 
 NAV_ICONS = {
-    "Brain Dump": "✏️", "Compose Ideas": "💡", "Content Coach": "💬", "Article Writer": "📝",
-    "Tweet History": "🕐", "Algo Analyzer": "📊", "Health Check": "🩺", "Account Pulse": "📈",
-    "Account Researcher": "🔍", "Reply Guy": "🗨️", "Inspiration": "✨",
+    "Raw Thoughts": "✏️", "Creator Studio": "💡", "Content Advisor": "💬", "Article Writer": "📝",
+    "Post History": "🕐", "Algorithm Score": "📊", "Account Audit": "🩺", "My Stats": "📈",
+    "Profile Analyzer": "🔍", "Reply Mode": "🗨️", "Idea Bank": "✨",
 }
 
 if "current_page" not in st.session_state:
-    st.session_state.current_page = st.query_params.get("page", "Compose Ideas")
+    st.session_state.current_page = st.query_params.get("page", "Creator Studio")
 
 with st.sidebar:
     st.markdown("""
@@ -1096,10 +1096,10 @@ def page_brain_dump():
                 st.markdown(f'<div class="output-box">{st.session_state["bd_video"]}</div>', unsafe_allow_html=True)
 
     with col_saved:
-        st.markdown("### Saved Brain Dumps")
+        st.markdown("### Saved Raw Thoughtss")
         dumps = load_json("brain_dumps.json", [])
         if not dumps:
-            st.markdown('<div class="output-box">No saved brain dumps yet.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="output-box">No Raw Thoughts</div>', unsafe_allow_html=True)
         else:
             for i, d in enumerate(reversed(dumps[-20:])):
                 ts = d.get("saved_at", "")[:16].replace("T", " ")
@@ -1124,13 +1124,13 @@ def page_compose_ideas():
 
     col_main, col_saved = st.columns([2, 1])
 
-    # Auto-repurpose from Inspiration Vault click
+    # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
         seed = st.session_state.pop("ci_repurpose_seed")
         st.session_state.pop("ci_auto_repurpose", None)
         st.session_state["ci_text"] = seed
         with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Repurpose this tweet in Tyler Polumbus's voice.
+            repurpose_prompt = f"""Rewrite this tweet in Tyler Polumbus's voice.
 
 Original tweet:
 \"{seed}\"
@@ -1161,9 +1161,9 @@ Give the repurposed tweet, then show character count."""
         # Row 1: primary action + 2 supporting
         sr1, sr2, sr3 = st.columns([2, 1, 1])
         with sr1:
-            banger = st.button("⚡ Banger", key="ci_banger", use_container_width=True, type="primary")
+            banger = st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary")
         with sr2:
-            repurpose = st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True)
+            repurpose = st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True)
         with sr3:
             build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
         # Row 2: utility actions
@@ -1692,14 +1692,14 @@ Return ONLY this JSON, no other text:
 
         # Save idea (stays in left panel)
         sc_cat = st.selectbox("Category", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"], key="ci_cat")
-        if st.button("↓ Save Idea", key="ci_save", use_container_width=True):
+        if st.button("↓ Save Post", key="ci_save", use_container_width=True):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
                 ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
                 st.success("Idea saved.")
 
-    # ── Right panel: Results when active, Saved Ideas otherwise ──
+    # ── Right panel: Results when active, Bank otherwise ──
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview", "ci_viral_data"]
     _show_results = any(st.session_state.get(k) for k in _RESULT_KEYS)
 
@@ -1797,7 +1797,7 @@ Return ONLY this JSON, no other text:
                     for s in suggestions:
                         st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;line-height:1.5;">{s}</div>', unsafe_allow_html=True)
 
-            # ── SINGLE RESULT (Build, Repurpose, etc.) ──
+            # ── SINGLE RESULT (Build, Rewrite, etc.) ──
             elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
                 _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
                 _val = st.session_state[_rkey]
@@ -1852,12 +1852,12 @@ Return ONLY this JSON, no other text:
                     st.markdown(f'<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(255,107,0,0.3);margin-bottom:6px;">{tip}</div>', unsafe_allow_html=True)
 
         else:
-            # ── Saved Ideas panel (shown when no results) ──
-            st.markdown("### Saved Ideas")
+            # ── Bank panel (shown when no results) ──
+            st.markdown("### Bank")
 
             _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
             _all_folders = load_json("saved_ideas_folders.json", _default_folders)
-            _folder_opts = ["All Ideas"] + _all_folders + ["Inspiration Vault", "Repurpose Queue"]
+            _folder_opts = ["All Ideas"] + _all_folders + ["Idea Bank Vault", "Rewrite Queue"]
 
             folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
 
@@ -1875,8 +1875,8 @@ Return ONLY this JSON, no other text:
                         save_json("saved_ideas_folders.json", _all_folders)
                         st.rerun()
 
-            if folder in ("Inspiration Vault", "Repurpose Queue"):
-                gist_file = "hq_inspiration.json" if folder == "Inspiration Vault" else "hq_repurpose.json"
+            if folder in ("Idea Bank Vault", "Rewrite Queue"):
+                gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
                 try:
                     gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
                     resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
@@ -1898,7 +1898,7 @@ Return ONLY this JSON, no other text:
                             </div>
                             <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
                         </div>""", unsafe_allow_html=True)
-                        if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
+                        if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
                             st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
                             st.session_state["ci_auto_repurpose"] = True
                             st.rerun()
@@ -1911,7 +1911,7 @@ Return ONLY this JSON, no other text:
                         resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
                         gist_data = resp.json()
                         raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
-                        inspo_as_ideas = [{"text": i.get("text",""), "category": "Inspiration", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
+                        inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
                     except Exception:
                         pass
                     filtered = ideas + inspo_as_ideas
@@ -2036,10 +2036,10 @@ Your coaching style:
         coach_fmt = st.selectbox("Format", ["General Advice", "Short Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed")
         st.markdown("---")
         st.markdown("##### Quick Save to Ideas")
-        save_text = st.text_area("Save to Compose Ideas:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
+        save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("↓ Save Idea", use_container_width=True, key="coach_save_idea") and save_text.strip():
+            if st.button("↓ Save Post", use_container_width=True, key="coach_save_idea") and save_text.strip():
                 ideas = load_json("saved_ideas.json", [])
                 ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Coach", "created_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
@@ -2047,13 +2047,13 @@ Your coaching style:
         with c2:
             if st.button("↩ Remix", use_container_width=True, key="coach_repurpose") and save_text.strip():
                 with st.spinner("Repurposing..."):
-                    repurposed = call_claude(f"Repurpose this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
+                    repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
                     st.session_state.coach_save_text_result = repurposed
         if "coach_save_text_result" in st.session_state:
-            st.markdown(f"**Repurposed:**\n\n{st.session_state.coach_save_text_result}")
+            st.markdown(f"**Rewrited:**\n\n{st.session_state.coach_save_text_result}")
 
     with col_center:
-        include_history = st.checkbox("Include Tweet History (check on first message per conversation)", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle")
+        include_history = st.checkbox("Include Post History (check on first message per conversation)", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle")
 
         # Demo questions dropdown
         if not st.session_state.coach_current["messages"]:
@@ -2086,7 +2086,7 @@ def page_article_writer():
 
     col_main, col_saved = st.columns([2, 1])
 
-    # ── Left 2/3: Tweet / Brain Dump selectors + generation ──────────────
+    # ── Left 2/3: Tweet / Raw Thoughts selectors + generation ──────────────
     with col_main:
         # Section 1 — Choose a Tweet
         st.markdown("#### Choose a Tweet to Expand")
@@ -2118,7 +2118,7 @@ def page_article_writer():
                 st.rerun()
 
         if not top_tweets:
-            st.info("No tweet history yet. Sync tweets in Tweet History first.")
+            st.info("No tweet history yet. Sync tweets in Post History first.")
 
         # Auto-generate when tweet is selected
         if st.session_state.get("aw_autogen"):
@@ -2132,14 +2132,14 @@ def page_article_writer():
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # Section 2 — Choose a Brain Dump
-        st.markdown("#### Or Choose a Brain Dump")
+        # Section 2 — Choose a Raw Thoughts
+        st.markdown("#### Or Choose a Raw Thoughts")
         dumps = load_json("brain_dumps.json", [])
         if "aw_sel_dump" not in st.session_state:
             st.session_state.aw_sel_dump = None
 
         if not dumps:
-            st.markdown('<div class="output-box">No brain dumps yet. Create one in Brain Dump tool first.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="output-box">No brain dumps yet. Create one in Raw Thoughts tool first.</div>', unsafe_allow_html=True)
         else:
             for j, d in enumerate(reversed(dumps[-6:])):
                 ts = d.get("saved_at", "")[:16].replace("T", " ")
@@ -2215,13 +2215,13 @@ def page_article_writer():
                         st.session_state.pop(k, None)
                     st.rerun()
 
-    # ── Right 1/3: Saved Articles ────────────────────────────────────────
+    # ── Right 1/3: My Articles ────────────────────────────────────────
     with col_saved:
         sc1, sc2 = st.columns([2, 1])
         with sc1:
-            st.markdown("### Saved Articles")
+            st.markdown("### My Articles")
         with sc2:
-            if st.button("↺ New Article", key="aw_side_new", use_container_width=True):
+            if st.button("↺ Create New", key="aw_side_new", use_container_width=True):
                 for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
                     st.session_state.pop(k, None)
                 st.rerun()
@@ -2358,14 +2358,14 @@ def page_tweet_history():
                 last_sync = sorted(dates, reverse=True)[0][:10]
         st.markdown(f'<div class="stat-card"><div class="stat-num">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
     with hc4:
-        if st.button("↻ Sync Tweets", use_container_width=True, key="th_sync", type="primary"):
+        if st.button("↻ Update Posts", use_container_width=True, key="th_sync", type="primary"):
             with st.spinner("Syncing up to 500 tweets from X... this may take a minute."):
                 tweets = sync_tweet_history()
                 st.success(f"Synced {len(tweets)} tweets.")
                 st.rerun()
 
     if not tweets:
-        st.warning("No tweets stored. Click 'Sync Tweets' to pull your history from X.")
+        st.warning("No tweets stored. Click 'Update Posts' to pull your history from X.")
         return
 
     # Search
@@ -2384,17 +2384,17 @@ def page_tweet_history():
             hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
             st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
     with ac2:
-        if st.button("↓ Worst Performers", key="th_ai_worst", use_container_width=True):
+        if st.button("↓ Missed Shots", key="th_ai_worst", use_container_width=True):
             worst = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
             st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
     with ac3:
-        if st.button("⊙ Voice Patterns", key="th_ai_voice", use_container_width=True):
+        if st.button("⊙ Style Report", key="th_ai_voice", use_container_width=True):
             sample = [t.get("text", "") for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
             with st.spinner("Analyzing your voice..."):
                 result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
                 st.session_state["th_ai_result"] = result
     with ac4:
-        if st.button("≋ Top Topics", key="th_ai_topics", use_container_width=True):
+        if st.button("≋ Top Subjects", key="th_ai_topics", use_container_width=True):
             sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
             with st.spinner("Analyzing topics..."):
                 result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
@@ -2460,19 +2460,19 @@ def page_tweet_history():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PAGE: ALGO ANALYZER
+# PAGE: ALGORITHM SCORE
 # ═══════════════════════════════════════════════════════════════════════════
 def page_algo_analyzer():
-    st.markdown('<div class="main-header">ALGO <span>ANALYZER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">ALGORITHM <span>SCORE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Run your content through the algorithm lens before you post.</div>', unsafe_allow_html=True)
 
     col_ideas, col_analyze = st.columns([1, 2])
 
     with col_ideas:
-        st.markdown("### Saved Ideas")
+        st.markdown("### Bank")
         ideas = load_json("saved_ideas.json", [])
         if not ideas:
-            st.markdown('<div class="output-box">No saved ideas. Use Compose Ideas to save some.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="output-box">No saved ideas. Use Creator Studio to save some.</div>', unsafe_allow_html=True)
         else:
             for i, idea in enumerate(reversed(ideas[-15:])):
                 if st.button(idea.get("text", "")[:60] + "...", key=f"aa_idea_{i}", use_container_width=True):
@@ -2486,7 +2486,7 @@ def page_algo_analyzer():
         cls = "char-over" if char_len > 280 else ""
         st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
 
-        if st.button("⚡ Run Analysis", use_container_width=True, key="aa_run"):
+        if st.button("⚡ Analyze", use_container_width=True, key="aa_run"):
             if content.strip():
                 with st.spinner("Analyzing against the algorithm..."):
                     prompt = f"""Analyze this content for X algorithm performance:
@@ -2573,7 +2573,7 @@ def page_health_check():
 
     hcb1, hcb2 = st.columns([2, 1])
     with hcb1:
-        run_check = st.button("⚡ Run Health Check", use_container_width=True, key="hc_run", type="primary")
+        run_check = st.button("⚡ Run Account Audit", use_container_width=True, key="hc_run", type="primary")
     with hcb2:
         if hc_cache.get("data") and st.button("Clear Results", use_container_width=True, key="hc_clear"):
             save_json("health_check_cache.json", {})
@@ -2858,7 +2858,7 @@ Return this exact JSON structure:
             existing_styles = load_json("voice_styles.json", [])
             already_saved = any(s.get("handle") == hdl_for_save for s in existing_styles)
             if already_saved:
-                st.markdown(f'<div style="color:#4ade80;font-size:13px;">✓ @{hdl_for_save} voice saved — available in Compose Ideas</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="color:#4ade80;font-size:13px;">✓ @{hdl_for_save} voice saved — available in Creator Studio</div>', unsafe_allow_html=True)
                 if st.button("✕ Remove Voice Style", key="ar_remove_voice"):
                     existing_styles = [s for s in existing_styles if s.get("handle") != hdl_for_save]
                     save_json("voice_styles.json", existing_styles)
@@ -2875,7 +2875,7 @@ Return this exact JSON structure:
                     }
                     existing_styles.append(style_entry)
                     save_json("voice_styles.json", existing_styles)
-                    st.success(f"@{hdl_for_save} voice style saved! Now available in Compose Ideas → Voice dropdown.")
+                    st.success(f"@{hdl_for_save} voice style saved! Now available in Creator Studio → Voice dropdown.")
                     st.rerun()
 
 
@@ -2926,10 +2926,10 @@ def page_reply_guy():
     with c1:
         pct = min(reply_count / 50 * 100, 100)
         st.markdown(f'<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-                    f'<span class="metric-label">Daily Reply Progress</span><span class="metric-score">{reply_count}/50</span></div>'
+                    f'<span class="metric-label">Today's Replies</span><span class="metric-score">{reply_count}/50</span></div>'
                     f'<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{pct}%;"></div></div></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Day Streak</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
     day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
     hist_map[today_str] = reply_count
@@ -3300,7 +3300,7 @@ def page_inspiration():
     col_add, col_view = st.columns([1, 1])
 
     with col_add:
-        st.markdown("### Save New Inspiration")
+        st.markdown("### Save New Idea Bank")
         inspo_text = st.text_area("Tweet text:", height=100, key="insp_text",
             placeholder="Paste the tweet that caught your eye...")
         inspo_author = st.text_input("Author:", placeholder="@username", key="insp_author")
@@ -3308,7 +3308,7 @@ def page_inspiration():
         inspo_likes = st.number_input("Likes (optional):", min_value=0, value=0, key="insp_likes")
         inspo_views = st.number_input("Views (optional):", min_value=0, value=0, key="insp_views")
 
-        if st.button("↓ Save to Vault", use_container_width=True, key="insp_save", type="primary"):
+        if st.button("↓ Bank It", use_container_width=True, key="insp_save", type="primary"):
             if inspo_text.strip():
                 inspo.append({
                     "text": inspo_text,
@@ -3357,7 +3357,7 @@ def page_inspiration():
                 if item.get("views"):
                     metrics += f"Views: {item['views']:,}"
                 st.markdown(f"""<div class="tweet-card" style="position:relative;">
-                    <a href="?page=Inspiration&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">✕</a>
+                    <a href="?page=Idea Bank&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">✕</a>
                     <div style="display:flex; justify-content:space-between; margin-bottom:6px; padding-right:20px;">
                         <span class="tweet-num">{item.get('author','')}</span>
                         <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
@@ -3372,17 +3372,17 @@ def page_inspiration():
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 page_map = {
-    "Brain Dump": page_brain_dump,
-    "Compose Ideas": page_compose_ideas,
-    "Content Coach": page_content_coach,
+    "Raw Thoughts": page_brain_dump,
+    "Creator Studio": page_compose_ideas,
+    "Content Advisor": page_content_coach,
     "Article Writer": page_article_writer,
-    "Tweet History": page_tweet_history,
-    "Algo Analyzer": page_algo_analyzer,
-    "Health Check": page_health_check,
-    "Account Pulse": page_account_pulse,
-    "Account Researcher": page_account_researcher,
-    "Reply Guy": page_reply_guy,
-    "Inspiration": page_inspiration,
+    "Post History": page_tweet_history,
+    "Algorithm Score": page_algo_analyzer,
+    "Account Audit": page_health_check,
+    "My Stats": page_account_pulse,
+    "Profile Analyzer": page_account_researcher,
+    "Reply Mode": page_reply_guy,
+    "Idea Bank": page_inspiration,
 }
 
 # Auto-sync tweets on every load (once per session to avoid hammering the API)
