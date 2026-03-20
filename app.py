@@ -888,7 +888,7 @@ Keep the core insight but make it sound like Tyler wrote it from scratch.
 
 Give the repurposed tweet, then show character count."""
             st.session_state["ci_repurposed"] = call_claude(repurpose_prompt)
-            st.session_state.pop("ci_rp_edit", None)
+            st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
 
     with col_main:
         tweet_text = st.text_area("Write your tweet idea:", height=auto_height(st.session_state.get("ci_text", ""), min_h=140), key="ci_text",
@@ -1185,7 +1185,7 @@ Return ONLY this JSON, no other text:
                         raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                     banger_data = json.loads(raw_clean)
                     st.session_state["ci_banger_data"] = banger_data
-                    for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                    for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)  # fresh widget per new generation
                     st.session_state["ci_last_action"] = {"type": "banger", "text": tweet_text, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                 except Exception:
@@ -1335,7 +1335,7 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                 st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
-                st.session_state.pop("ci_result_edit", None)
+                st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
                 st.session_state["ci_last_action"] = {"type": "build_this", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_repurposed", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1360,7 +1360,7 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 Give the repurposed tweet, then show character count."""
                 repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
                 st.session_state["ci_repurposed"] = repurposed
-                st.session_state.pop("ci_rp_edit", None)
+                st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
                 st.session_state["ci_last_action"] = {"type": "repurpose", "text": tweet_text, "fmt": fmt, "voice": voice}
                 st.session_state.pop("ci_result", None)
                 st.session_state.pop("ci_viral_data", None)
@@ -1369,7 +1369,7 @@ Give the repurposed tweet, then show character count."""
 
         if result:
             st.session_state["ci_result"] = result
-            st.session_state.pop("ci_result_edit", None)
+            st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
             st.session_state.pop("ci_viral_data", None)
             st.session_state.pop("ci_grades", None)
             st.session_state.pop("ci_preview", None)
@@ -1401,7 +1401,7 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                     st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
-                    st.session_state.pop("ci_result_edit", None)
+                    st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
                     st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_banger_data", None)
                     st.session_state.pop("ci_repurposed", None)
@@ -1409,7 +1409,7 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
                 with st.spinner("Repurposing..."):
                     rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
                     st.session_state["ci_repurposed"] = call_claude(rp, system=get_system_for_voice(voice, voice_mod))
-                    st.session_state.pop("ci_rp_edit", None)
+                    st.session_state["ci_rp_edit"] = st.session_state.get("ci_repurposed", "")
                     st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                     st.session_state.pop("ci_banger_data", None)
@@ -1443,12 +1443,12 @@ Return ONLY this JSON, no other text:
                         if raw_clean.startswith("```"):
                             raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                         st.session_state["ci_banger_data"] = json.loads(raw_clean)
-                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)  # fresh widget per new generation
                         st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
                         st.session_state.pop("ci_result", None)
                     except Exception:
                         st.session_state["ci_result"] = raw
-                        st.session_state.pop("ci_result_edit", None)
+                        st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
 
         # Render results based on which button was pressed
 
@@ -1486,7 +1486,9 @@ Return ONLY this JSON, no other text:
             _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
             _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
             st.markdown(f'<div style="font-weight:700; margin:12px 0 8px;">Result: <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
-            edited = st.text_area("Edit your result:", value=st.session_state["ci_result"], height=auto_height(st.session_state.get("ci_result","")), key="ci_result_edit")
+            _res_val = st.session_state["ci_result"]
+            _res_key = f"ci_result_edit_{hash(_res_val) & 0xFFFFFF}"
+            edited = st.text_area("Edit your result:", value=_res_val, height=auto_height(_res_val), key=_res_key)
             rc1, rc2, rc3 = st.columns(3)
             with rc1:
                 if st.button("Save As New Idea", key="ci_save_result", use_container_width=True):
@@ -1505,7 +1507,9 @@ Return ONLY this JSON, no other text:
             _last_voice = st.session_state.get("ci_last_action", {}).get("voice", voice)
             _last_fmt = st.session_state.get("ci_last_action", {}).get("fmt", fmt)
             st.markdown(f'<div style="font-weight:700; font-size:16px; margin:16px 0 8px;">Repurposed Content <span style="font-size:11px; font-weight:400; color:#FF6B00; letter-spacing:1px; text-transform:uppercase;">{_last_fmt} · {_last_voice} voice</span></div>', unsafe_allow_html=True)
-            edited_rp = st.text_area("Edit repurposed tweet:", value=st.session_state["ci_repurposed"], height=auto_height(st.session_state.get("ci_repurposed","")), key="ci_rp_edit")
+            _rp_val = st.session_state["ci_repurposed"]
+            _rp_key = f"ci_rp_edit_{hash(_rp_val) & 0xFFFFFF}"
+            edited_rp = st.text_area("Edit repurposed tweet:", value=_rp_val, height=auto_height(_rp_val), key=_rp_key)
             rpc1, rpc2, rpc3 = st.columns(3)
             with rpc1:
                 if st.button("Save As New Idea", key="ci_save_rp", use_container_width=True):
