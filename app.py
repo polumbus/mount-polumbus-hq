@@ -2520,6 +2520,45 @@ def page_tweet_history():
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
+    # ── Hall of Fame ──
+    def _eng_score(t):
+        likes = t.get("likeCount", t.get("like_count", 0))
+        rts   = t.get("retweetCount", t.get("retweet_count", 0))
+        reps  = t.get("replyCount", t.get("reply_count", 0))
+        views = t.get("viewCount", t.get("view_count", 1))
+        raw   = likes + rts * 3 + reps * 2
+        rate  = (raw / max(views, 1)) * 10000
+        return raw * 0.7 + rate * 0.3
+
+    originals = [t for t in tweets
+        if not t.get("text", "").startswith("RT ")
+        and not t.get("text", "").startswith("@")
+        and "http" not in t.get("text", "")]
+    hof_tweets = sorted(originals, key=_eng_score, reverse=True)[:20]
+
+    with st.expander(f"★ Hall of Fame — Top {len(hof_tweets)} Tweets", expanded=False):
+        for rank, t in enumerate(hof_tweets, 1):
+            text  = t.get("text", "")
+            likes = t.get("likeCount", t.get("like_count", 0))
+            rts   = t.get("retweetCount", t.get("retweet_count", 0))
+            reps  = t.get("replyCount", t.get("reply_count", 0))
+            views = t.get("viewCount", t.get("view_count", 0))
+            score = round(_eng_score(t))
+            date  = t.get("createdAt", "")[:10]
+            medal = "#FFD700" if rank == 1 else "#C0C0C0" if rank == 2 else "#CD7F32" if rank == 3 else "#FF6B00"
+            st.markdown(
+                f'<div style="background:#0d0d1a;border-left:3px solid {medal};border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+                f'<span style="color:{medal};font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:1px;">#{rank}</span>'
+                f'<div style="display:flex;gap:16px;font-size:11px;color:#666688;">'
+                f'<span>⚡ {score}</span><span>♡ {likes:,}</span><span>↩ {reps:,}</span><span>↺ {rts:,}</span><span>👁 {views:,}</span><span>{date}</span>'
+                f'</div></div>'
+                f'<div style="color:#e8e8f0;font-size:14px;line-height:1.6;">{text}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
     # Apply filters — replies excluded by default
     filtered = [t for t in tweets if not t.get("text", "").startswith("@")]
     if search:
