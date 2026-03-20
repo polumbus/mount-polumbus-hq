@@ -1158,18 +1158,21 @@ Give the repurposed tweet, then show character count."""
             voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
                 help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
 
-        sc1, sc2, sc3, sc4, sc5, sc6 = st.columns(6)
-        with sc1:
+        # Row 1: primary action + 2 supporting
+        sr1, sr2, sr3 = st.columns([2, 1, 1])
+        with sr1:
             banger = st.button("⚡ Banger", key="ci_banger", use_container_width=True, type="primary")
-        with sc2:
+        with sr2:
             repurpose = st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True)
-        with sc3:
+        with sr3:
             build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
-        with sc4:
+        # Row 2: utility actions
+        sr4, sr5, sr6 = st.columns(3)
+        with sr4:
             engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
-        with sc5:
+        with sr5:
             biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
-        with sc6:
+        with sr6:
             regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
         viral = False  # removed from main buttons
 
