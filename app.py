@@ -72,109 +72,215 @@ IMPORTANT: Never use emojis in your output. Write plain text only."""
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.stApp { background: radial-gradient(ellipse at 25% 0%, #100818 0%, #07071a 45%, #090d12 100%); color: #e8e8f0; }
 
-/* Sidebar */
-section[data-testid="stSidebar"] { background: rgba(6, 6, 18, 0.97) !important; border-right: 1px solid rgba(255,255,255,0.05) !important; }
-section[data-testid="stSidebar"] .stButton > button { background: transparent !important; border: none !important; color: #888aaa !important; text-align: left !important; padding: 7px 14px !important; font-size: 13px !important; font-weight: 400 !important; box-shadow: none !important; border-radius: 10px !important; transition: all 0.15s ease !important; }
-section[data-testid="stSidebar"] .stButton > button:hover { background: rgba(255,255,255,0.06) !important; color: #e8e8f0 !important; transform: none !important; box-shadow: none !important; }
-section[data-testid="stSidebar"] .stButton > button[kind="primary"] { background: rgba(255,107,0,0.1) !important; color: #FF6B00 !important; font-weight: 600 !important; border-left: 2px solid #FF6B00 !important; border-radius: 0 10px 10px 0 !important; }
-section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { transform: none !important; box-shadow: none !important; }
+/* ── Reset & base ── */
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; font-size: 15px; }
+#MainMenu { visibility: hidden; }
+header[data-testid="stHeader"] { display: none !important; }
+footer { visibility: hidden; }
+.stApp { background: radial-gradient(ellipse at 20% 0%, #0e0620 0%, #06061a 40%, #080c10 100%); color: #e8e8f0; }
+.block-container { max-width: 1280px !important; padding-top: 1.5rem !important; }
 
-/* Logo */
-.logo-block { padding: 8px 0 24px 0; text-align: center; }
-.logo-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; display: block; }
-.logo-sub { font-size: 10px; color: #3d3d55; letter-spacing: 4px; text-transform: uppercase; margin-top: 4px; display: block; }
-
-/* Headers */
-.main-header { font-family: 'Bebas Neue', sans-serif; font-size: 48px; letter-spacing: 2px; line-height: 1; margin-bottom: 4px; }
-.main-header span { background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.tool-desc { color: #666888; font-size: 14px; margin-bottom: 28px; }
-
-/* Stat cards */
-.stat-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 18px; padding: 20px; text-align: center; transition: border-color 0.2s ease; }
-.stat-card:hover { border-color: rgba(255,107,0,0.25); }
-.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #FF6B00; line-height: 1; }
-.stat-label { font-size: 11px; color: #505070; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
-
-/* Inputs */
-.stTextArea textarea, .stTextInput input { background: #0e0e1c !important; border: 1px solid rgba(255,255,255,0.09) !important; border-radius: 12px !important; color: #e8e8f0 !important; font-family: 'DM Sans', sans-serif !important; font-size: 14px !important; transition: border-color 0.2s ease !important; }
-.stTextArea textarea:focus, .stTextInput input:focus { border-color: rgba(255,107,0,0.5) !important; box-shadow: 0 0 0 3px rgba(255,107,0,0.07) !important; }
-.stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
-
-/* Mobile */
-@media (max-width: 768px) {
-    .main-header { font-size: 32px !important; }
-    .tool-desc { font-size: 13px !important; }
-    .stat-card { padding: 12px !important; }
-    .stat-num { font-size: 28px !important; }
-    .tweet-card { padding: 12px 14px !important; }
-    .output-box { padding: 14px !important; font-size: 13px !important; }
-    [data-testid="column"] { min-width: 100% !important; flex: 100% !important; }
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
-    section[data-testid="stSidebar"] { min-width: 180px !important; max-width: 220px !important; }
-    .stButton > button { padding: 7px 14px !important; font-size: 12px !important; }
-    .nav-section { font-size: 9px !important; }
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #07071e 0%, #06060f 60%, #050508 100%) !important;
+  border-right: 1px solid rgba(255,183,0,0.12) !important;
+}
+section[data-testid="stSidebar"] .stButton > button {
+  background: transparent !important; border: none !important; color: #7878a0 !important;
+  text-align: left !important; padding: 7px 14px !important; font-size: 13px !important;
+  font-weight: 400 !important; box-shadow: none !important; border-radius: 10px !important;
+  transition: all 0.15s ease !important;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+  background: rgba(255,255,255,0.05) !important; color: #e8e8f0 !important;
+  transform: none !important; box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+  background: rgba(255,107,0,0.1) !important; color: #FF6B00 !important;
+  font-weight: 600 !important; border-left: 2px solid #FF6B00 !important;
+  border-radius: 0 10px 10px 0 !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+  transform: none !important; box-shadow: none !important;
 }
 
-/* Buttons — pill shaped */
-.stButton > button { background: linear-gradient(135deg, #FF6B00, #d94f00) !important; color: white !important; border: none !important; border-radius: 100px !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 13px !important; padding: 8px 20px !important; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important; letter-spacing: 0.3px; box-shadow: 0 2px 12px rgba(255,107,0,0.18) !important; }
-.stButton > button:hover { transform: translateY(-2px) scale(1.02) !important; box-shadow: 0 10px 30px rgba(255,107,0,0.42) !important; background: linear-gradient(135deg, #ff7a14, #e05500) !important; }
+/* ── Logo ── */
+.logo-block { padding: 8px 0 20px 0; text-align: center; }
+.logo-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, #FF6B00, #FFB347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; display: block; }
+.logo-sub { font-size: 10px; color: #2d2d44; letter-spacing: 4px; text-transform: uppercase; margin-top: 4px; display: block; }
 
-/* Output box */
-.output-box { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid #FF6B00; border-radius: 14px; padding: 20px 22px; margin: 12px 0; font-size: 14px; line-height: 1.7; color: #d8d8e8; white-space: pre-wrap; font-family: 'DM Sans', sans-serif; }
+/* ── Sidebar nav section labels ── */
+.nav-section {
+  font-size: 9px; color: #FF6B00; letter-spacing: 3px; text-transform: uppercase;
+  font-weight: 700; margin: 20px 0 6px 4px; padding-top: 14px;
+  border-top: 1px solid rgba(255,183,0,0.15);
+  opacity: 0.7;
+}
 
-/* Tweet cards */
-.tweet-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px 20px; margin: 10px 0; position: relative; transition: all 0.2s ease; }
-.tweet-card:hover { border-color: rgba(255,107,0,0.3); background: rgba(255,107,0,0.03); }
+/* ── Page headers ── */
+.main-header {
+  font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 3px;
+  line-height: 1; margin-bottom: 2px; font-weight: 400;
+}
+.main-header span {
+  background: linear-gradient(135deg, #FF6B00 0%, #FFB347 60%, #ffcc70 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  text-shadow: none; filter: drop-shadow(0 0 18px rgba(255,107,0,0.35));
+}
+.tool-desc { color: #555778; font-size: 13px; margin-bottom: 28px; letter-spacing: 0.3px; }
+
+/* ── Buttons — 3-tier hierarchy ── */
+/* PRIMARY: filled orange — main CTAs */
+.stButton > button {
+  background: linear-gradient(135deg, #FF6B00, #d94f00) !important;
+  color: white !important; border: none !important; border-radius: 100px !important;
+  font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important;
+  font-size: 13px !important; padding: 9px 22px !important;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  letter-spacing: 0.3px; box-shadow: 0 2px 16px rgba(255,107,0,0.2) !important;
+}
+.stButton > button:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 8px 28px rgba(255,107,0,0.45) !important;
+  background: linear-gradient(135deg, #ff7a14, #e05500) !important;
+}
+/* SECONDARY: ghost outlined — supporting actions */
+.stButton > button[kind="secondary"] {
+  background: transparent !important;
+  border: 1px solid rgba(255,107,0,0.45) !important;
+  color: #FF8C3A !important;
+  box-shadow: none !important;
+}
+.stButton > button[kind="secondary"]:hover {
+  background: rgba(255,107,0,0.08) !important;
+  border-color: rgba(255,107,0,0.8) !important;
+  color: #FF6B00 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 16px rgba(255,107,0,0.15) !important;
+}
+
+/* ── Output box ── */
+.output-box {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid #FF6B00; border-radius: 14px; padding: 20px 22px;
+  margin: 12px 0; font-size: 14px; line-height: 1.75; color: #d0d0e8;
+  white-space: pre-wrap; font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Tweet / idea cards ── */
+.tweet-card {
+  background: rgba(255,255,255,0.018); border: 1px solid rgba(255,255,255,0.055);
+  border-left: 3px solid rgba(255,183,0,0.25); border-radius: 14px;
+  padding: 16px 20px; margin: 8px 0; position: relative;
+  transition: all 0.2s ease;
+}
+.tweet-card:hover {
+  border-color: rgba(255,107,0,0.35); border-left-color: #FF6B00;
+  background: rgba(255,107,0,0.025);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
 .tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #FF6B00; letter-spacing: 1px; margin-bottom: 8px; }
 
-/* Tags */
-.tag { display: inline-block; background: rgba(255,255,255,0.05); border-radius: 100px; padding: 3px 10px; font-size: 11px; color: #8888cc; margin: 2px; font-weight: 500; }
-.tag-hot { background: rgba(255,107,0,0.12); color: #FF6B00; border: 1px solid rgba(255,107,0,0.25); }
+/* ── Stat cards ── */
+.stat-card {
+  background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px; padding: 20px; text-align: center; transition: all 0.2s ease;
+}
+.stat-card:hover { border-color: rgba(255,183,0,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #FF6B00; line-height: 1; }
+.stat-label { font-size: 11px; color: #404060; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
 
-.section-divider { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 24px 0; }
+/* ── Tags ── */
+.tag { display: inline-block; background: rgba(255,183,0,0.07); border: 1px solid rgba(255,183,0,0.2); border-radius: 100px; padding: 2px 10px; font-size: 10px; color: #aa9966; margin: 2px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+.tag-hot { background: rgba(255,107,0,0.12); color: #FF6B00; border-color: rgba(255,107,0,0.3); }
+
+/* ── Inputs ── */
+.stTextArea textarea, .stTextInput input {
+  background: #0a0a18 !important; border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 12px !important; color: #e8e8f0 !important;
+  font-family: 'DM Sans', sans-serif !important; font-size: 14px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  padding-bottom: 10px !important;
+}
+.stTextArea textarea:focus, .stTextInput input:focus {
+  border-color: rgba(255,183,0,0.5) !important;
+  box-shadow: 0 0 0 3px rgba(255,183,0,0.07), 0 0 20px rgba(255,107,0,0.06) !important;
+  outline: none !important;
+}
+.stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
+
+/* ── Selectbox ── */
+.stSelectbox > div > div { background: #0a0a18 !important; border-color: rgba(255,255,255,0.08) !important; color: #e8e8f0 !important; border-radius: 12px !important; }
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] { background: rgba(255,255,255,0.025) !important; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; gap: 2px; padding: 4px; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: #555778 !important; border-radius: 10px !important; font-weight: 600 !important; font-size: 13px !important; transition: all 0.15s ease !important; }
+.stTabs [aria-selected="true"] { background: #FF6B00 !important; color: white !important; }
+.stSpinner > div > div { border-top-color: #FF6B00 !important; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,107,0,0.35); }
+
+/* ── Misc ── */
+.section-divider { border: none; border-top: 1px solid rgba(255,255,255,0.04); margin: 28px 0; }
 .metric-label { font-size: 12px; color: #8888aa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .metric-score { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #FF6B00; }
 .score-bar-wrap { background: rgba(255,255,255,0.04); border-radius: 100px; height: 6px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
 .score-bar-fill { height: 100%; border-radius: 100px; transition: width 0.8s ease; }
-
-/* Dropdowns & selects */
-.stSelectbox > div > div { background: rgba(255,255,255,0.03) !important; border-color: rgba(255,255,255,0.08) !important; color: #e8e8f0 !important; border-radius: 12px !important; }
-.stSlider .st-br { background: #FF6B00 !important; }
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; gap: 2px; padding: 4px; }
-.stTabs [data-baseweb="tab"] { background: transparent !important; color: #666888 !important; border-radius: 10px !important; font-weight: 600 !important; font-size: 13px !important; transition: all 0.15s ease !important; }
-.stTabs [aria-selected="true"] { background: #FF6B00 !important; color: white !important; }
-.stSpinner > div > div { border-top-color: #FF6B00 !important; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,107,0,0.4); }
-
-.nav-section { font-size: 10px; color: #3d3d55; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; margin: 16px 0 6px 4px; }
-.char-count { font-size: 12px; color: #505070; text-align: right; margin-top: -10px; margin-bottom: 10px; }
+.char-count { font-size: 12px; color: #404060; text-align: right; margin-top: -10px; margin-bottom: 10px; }
 .char-over { color: #ef4444 !important; }
-
-/* Chat */
-.chat-msg { border-radius: 14px; padding: 20px 24px; margin: 12px 0; }
-.chat-user { background: rgba(255,255,255,0.025); border-left: 1px solid rgba(255,255,255,0.06); }
-.chat-ai { background: rgba(255,107,0,0.05); border-left: 3px solid #FF6B00; }
-.chat-role { font-size: 11px; color: #505070; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-
-/* Progress */
-.progress-bar-bg { background: rgba(255,255,255,0.06); border-radius: 100px; height: 12px; width: 100%; overflow: hidden; }
-.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
-
-/* Reply Guy action buttons — scoped via sentinel div class .rg-actions */
-.rg-actions + div [data-testid="column"]:nth-child(1) .stButton > button,
-div:has(+ .rg-actions-end) [data-testid="column"]:nth-child(1) .stButton > button { background: rgba(255,107,0,0.1) !important; border: 1px solid rgba(255,107,0,0.4) !important; color: #FF8C3A !important; box-shadow: none !important; }
 .tweet-link { font-size: 11px; color: #4ecdc4; text-decoration: none; letter-spacing: 0.5px; opacity: 0.8; }
 .tweet-link:hover { opacity: 1; }
+
+/* ── Chat ── */
+.chat-msg { border-radius: 14px; padding: 20px 24px; margin: 12px 0; }
+.chat-user { background: rgba(255,255,255,0.02); border-left: 2px solid rgba(255,255,255,0.08); }
+.chat-ai { background: rgba(255,107,0,0.04); border-left: 3px solid #FF6B00; }
+.chat-role { font-size: 10px; color: #404060; font-weight: 700; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 10px; }
+
+/* ── Progress ── */
+.progress-bar-bg { background: rgba(255,255,255,0.05); border-radius: 100px; height: 10px; width: 100%; overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
+
+/* ── Watermark ── */
+.main-watermark {
+  position: fixed; bottom: 60px; right: 40px; z-index: 0; pointer-events: none;
+  font-family: 'Bebas Neue', sans-serif; font-size: 120px; letter-spacing: 8px;
+  color: rgba(255,107,0,0.03); line-height: 1; user-select: none;
+  background: linear-gradient(135deg, rgba(255,107,0,0.05), rgba(255,183,0,0.02));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+/* ── Branded footer ── */
+.hq-footer {
+  text-align: center; padding: 24px 0 8px 0; margin-top: 40px;
+  border-top: 1px solid rgba(255,183,0,0.1);
+}
+.hq-footer a { color: #FF6B00; text-decoration: none; font-size: 12px; letter-spacing: 1.5px; font-weight: 600; text-transform: uppercase; opacity: 0.7; margin: 0 12px; }
+.hq-footer a:hover { opacity: 1; }
+
+/* ── Reply Guy action buttons ── */
+.rg-actions + div [data-testid="column"]:nth-child(1) .stButton > button,
+div:has(+ .rg-actions-end) [data-testid="column"]:nth-child(1) .stButton > button {
+  background: rgba(255,107,0,0.08) !important; border: 1px solid rgba(255,107,0,0.35) !important;
+  color: #FF8C3A !important; box-shadow: none !important;
+}
+
+/* ── Slider ── */
+.stSlider .st-br { background: #FF6B00 !important; }
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .main-header { font-size: 34px !important; }
+  .stat-num { font-size: 28px !important; }
+  .main-watermark { display: none; }
+  .stButton > button { padding: 7px 14px !important; font-size: 12px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2969,6 +3075,7 @@ def page_reply_guy():
                                         "viewCount": t.get("viewCount", 0),
                                         "_target_account": author.get("userName", author.get("username", "")),
                                         "author": author,
+                                        "media": t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else []),
                                     })
                             else:
                                 st.warning("List has no members or couldn't be read")
@@ -3000,12 +3107,24 @@ def page_reply_guy():
 
         rc1, rc2, rc3 = st.columns([1, 3, 4])
         tweet_url = t.get("url", t.get("twitterUrl", f"https://x.com/{acc}/status/{tid}"))
+        # Extract media image if available
+        media_list = t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else [])
+        img_url = ""
+        if media_list and isinstance(media_list, list):
+            for m in media_list:
+                if isinstance(m, dict):
+                    img_url = m.get("mediaUrl", m.get("url", m.get("media_url_https", "")))
+                    if img_url:
+                        break
+
         with rc1:
-            st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{acc}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:14px;padding-top:8px;">@{acc}</div>', unsafe_allow_html=True)
         with rc2:
+            img_html = f'<img src="{img_url}" style="width:100%;max-width:300px;border-radius:10px;margin-top:8px;display:block;" />' if img_url else ""
             st.markdown(
-                f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{text[:180]}</div>'
-                f'<div style="font-size:11px;color:#555577;margin-top:5px;">{created} · {likes} likes · {rpl} replies</div>'
+                f'<div style="font-size:15px;color:#d8d8e8;line-height:1.6;">{text[:220]}</div>'
+                f'{img_html}'
+                f'<div style="font-size:11px;color:#555577;margin-top:6px;">{created} · {likes} likes · {rpl} replies</div>'
                 f'<a href="{tweet_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                 unsafe_allow_html=True)
         with rc3:
@@ -3166,6 +3285,16 @@ if not st.session_state.get("_tweets_synced"):
         pass
     st.session_state["_tweets_synced"] = True
 
+st.markdown('<div class="main-watermark">MP</div>', unsafe_allow_html=True)
+
 page_fn = page_map.get(page)
 if page_fn:
     page_fn()
+
+st.markdown("""
+<div class="hq-footer">
+  <a href="https://x.com/tyler_polumbus" target="_blank">@tyler_polumbus</a>
+  <a href="#" target="_blank">PhD Show</a>
+  <a href="#" target="_blank">Altitude 92.5</a>
+</div>
+""", unsafe_allow_html=True)
