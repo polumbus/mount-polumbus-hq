@@ -2941,79 +2941,93 @@ def page_reply_guy():
                     f'<div style="color:#e8e8f0;font-size:14px;line-height:1.5;margin-bottom:8px;">{txt}</div>'
                     f'<div style="font-size:11px;color:#666688;">{likes:,} likes | {rts:,} RTs | {rpl:,} replies | {views:,} views</div></div>', unsafe_allow_html=True)
 
-        # Table header for replies
-        if st.session_state.get(f"rg_replies_{idx}"):
-            rhc1, rhc2, rhc3, rhc4 = st.columns([1, 3, 3, 1])
-            rhc1.markdown("**Account**")
-            rhc2.markdown("**Reply**")
-            rhc3.markdown("**Your Response**")
-            rhc4.markdown("**Done?**")
-            st.markdown('<hr style="margin:2px 0;border-color:#1e1e35;">', unsafe_allow_html=True)
-
         for ri, rp in enumerate(st.session_state.get(f"rg_replies_{idx}", [])):
             rauthor = rp.get("author", {}).get("userName", rp.get("user", {}).get("screen_name", ""))
             rid = rp.get("id", "")
             rtext = rp.get("text", "")
             r_likes = rp.get("likeCount", rp.get("like_count", 0))
-            already_replied = rid in replied_tweets
             input_key = f"rg_ri_{idx}_{ri}"
+            opts_key = f"rg_ri_opts_{idx}_{ri}"
+            reply_url = rp.get("url", rp.get("twitterUrl", f"https://x.com/{rauthor}/status/{rid}"))
+            already_liked = rid in liked_tweets_global
+            is_replied_now = rid in replied_tweets
+
+            # Done state — collapsed grey row
+            if is_replied_now:
+                st.markdown(
+                    f'<div style="opacity:0.35;padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);margin:4px 0;display:flex;align-items:center;gap:12px;">'
+                    f'<span style="color:#4ade80;font-size:16px;">✓</span>'
+                    f'<span style="color:#666;font-size:13px;text-decoration:line-through;">@{rauthor} — {rtext[:80]}...</span>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+                continue
 
             rc1, rc2, rc3 = st.columns([1, 3, 4])
-            reply_url = rp.get("url", rp.get("twitterUrl", f"https://x.com/{rauthor}/status/{rid}"))
             with rc1:
-                st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{rauthor}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{rauthor}</div>'
+                            f'<div style="font-size:11px;color:#555577;">{r_likes} likes</div>', unsafe_allow_html=True)
             with rc2:
                 st.markdown(
                     f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{rtext[:250]}</div>'
-                    f'<div style="font-size:11px;color:#555577;margin-top:4px;">{r_likes} likes</div>'
                     f'<a href="{reply_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                     unsafe_allow_html=True)
             with rc3:
                 reply_val = st.text_area("r", key=input_key, label_visibility="collapsed",
                     placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
-                already_liked = rid in liked_tweets_global
-                is_replied_now = rid in replied_tweets
 
-                rb1, rb2, rb3 = st.columns(3)
-                with rb1:
-                    if st.button("⚡ AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True):
-                        sug = call_claude(f'Tyler originally tweeted: "{txt[:200]}"\n\nSomeone replied to Tyler\'s tweet. Tyler wants to reply back.\n\n@{rauthor} replied: "{rtext[:200]}"\n\nWrite Tyler\'s reply. Under 150 chars. Conversational, uses ellipsis, former NFL player perspective. No emojis. Just the reply text, nothing else.', max_tokens=80)
-                        st.session_state[input_key] = sug
+                # AI options picker
+                if st.session_state.get(opts_key):
+                    opts = st.session_state[opts_key]
+                    st.markdown('<div style="font-size:11px;color:#666888;margin-bottom:4px;">Pick an option:</div>', unsafe_allow_html=True)
+                    for oi, opt in enumerate(opts):
+                        if st.button(f"{opt[:80]}{'...' if len(opt)>80 else ''}", key=f"rg_ri_opt_{idx}_{ri}_{oi}", use_container_width=True, type="secondary"):
+                            st.session_state[input_key] = opt
+                            del st.session_state[opts_key]
+                            st.rerun()
+
+                # Action row — uniform 4-button row
+                ab1, ab2, ab3, ab4 = st.columns(4)
+                with ab1:
+                    if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options"):
+                        with st.spinner(""):
+                            raw = call_claude(
+                                f'Tyler originally tweeted: "{txt[:200]}"\n\n'
+                                f'@{rauthor} replied: "{rtext[:200]}"\n\n'
+                                f'Write exactly 3 different reply options from Tyler. Under 150 chars each. '
+                                f'Direct, ellipsis style, former NFL player. No emojis. '
+                                f'One reply per line, no numbering.',
+                                max_tokens=250)
+                            opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
+                            if opts:
+                                st.session_state[opts_key] = opts
+                                if not st.session_state.get(input_key, "").strip():
+                                    st.session_state[input_key] = opts[0]
                         st.rerun()
-                with rb2:
+                with ab2:
                     if already_liked:
-                        st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
+                        st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                     else:
-                        lbc1, lbc2 = st.columns(2)
-                        with lbc1:
-                            if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True):
-                                _proxy_tweet_action("like", rid)
-                                _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
-                                _save_actions_gist(_rg_actions)
-                                st.rerun()
-                        with lbc2:
-                            if st.button("✓ Done", key=f"rg_liked_done_{idx}_{ri}", use_container_width=True):
-                                _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
-                                _save_actions_gist(_rg_actions)
-                                st.rerun()
-                with rb3:
-                    if is_replied_now:
-                        st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
-                    else:
-                        rbc1, rbc2 = st.columns(2)
-                        with rbc1:
-                            if st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True):
-                                if reply_val.strip():
-                                    if _proxy_tweet_action("reply", rid, reply_val.strip()):
-                                        _bump_reply()
-                                        _mark_replied(rid)
-                                        st.rerun()
-                                    else:
-                                        st.error("Reply failed — check proxy")
-                        with rbc2:
-                            if st.button("✓ Done", key=f"rg_replied_done_{idx}_{ri}", use_container_width=True):
+                        if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True, help="Like on X"):
+                            _proxy_tweet_action("like", rid)
+                            _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
+                            _save_actions_gist(_rg_actions)
+                            st.rerun()
+                with ab3:
+                    if st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True, help="Send reply via proxy"):
+                        if reply_val.strip():
+                            if _proxy_tweet_action("reply", rid, reply_val.strip()):
+                                _bump_reply()
                                 _mark_replied(rid)
                                 st.rerun()
+                            else:
+                                st.error("Reply failed — check proxy")
+                with ab4:
+                    if st.button("✓ Done", key=f"rg_replied_done_{idx}_{ri}", use_container_width=True, help="Mark done (replied on native X)", type="secondary"):
+                        _bump_reply()
+                        _mark_replied(rid)
+                        st.rerun()
+
+            st.markdown('<hr style="margin:6px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
