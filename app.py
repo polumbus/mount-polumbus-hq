@@ -854,6 +854,7 @@ Give the repurposed tweet, then show character count."""
         with sc5:
             biz = st.button("Preview", key="ci_biz", use_container_width=True)
         viral = False  # removed from main buttons
+        regenerate = st.button("↺  Regenerate with current format/voice", key="ci_regen_top", use_container_width=True)
 
         # Voice modifier for prompts
         voice_mod = ""
@@ -1305,32 +1306,13 @@ Give the repurposed tweet, then show character count."""
             st.session_state.pop("ci_repurposed", None)
             st.session_state.pop("ci_banger_data", None)
 
-        # Render results based on which button was pressed
-
-        # Refresh button — re-runs last action with current format/voice
-        last = st.session_state.get("ci_last_action")
-        has_result = st.session_state.get("ci_result") or st.session_state.get("ci_banger_data") or st.session_state.get("ci_repurposed")
-        if last and has_result:
-            if st.button("↺  Regenerate with current format/voice", key="ci_refresh", use_container_width=True):
-                st.session_state["ci_refresh_trigger"] = True
-                st.rerun()
-
-        if st.session_state.pop("ci_refresh_trigger", False):
+        # Regenerate — re-runs last action with current format/voice
+        # (button is declared above voice_mod so it fires in the same render cycle)
+        if regenerate:
             last = st.session_state.get("ci_last_action", {})
             _rtype = last.get("type")
             _rtext = last.get("text", tweet_text)
-            _rfmt = last.get("fmt", fmt)
-            _rvoice = last.get("voice", voice)
-            if _rtype in ("build_this", "repurpose", "banger"):
-                st.session_state["ci_refresh_pending"] = {"type": _rtype, "text": _rtext}
-                st.session_state["ci_last_action"] = {"type": _rtype, "text": _rtext, "fmt": fmt, "voice": voice}
-
-        # Handle refresh pending
-        _pending = st.session_state.pop("ci_refresh_pending", None)
-        if _pending:
-            _rtype = _pending["type"]
-            _rtext = _pending["text"]
-            if _rtype == "build_this":
+            if _rtype == "build_this" and _rtext:
                 with st.spinner("Rebuilding..."):
                     build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
 
@@ -1350,14 +1332,53 @@ TASK: Extract the best version of this idea and write the finished tweet. This i
 
 Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
                     st.session_state["ci_result"] = call_claude(build_prompt)
+                    st.session_state["ci_last_action"] = {"type": "build_this", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_banger_data", None)
                     st.session_state.pop("ci_repurposed", None)
-            elif _rtype == "repurpose":
+            elif _rtype == "repurpose" and _rtext:
                 with st.spinner("Repurposing..."):
-                    rp = f"""Someone else wrote this tweet. Rewrite it in Tyler Polumbus's voice.\n\n{voice_mod}\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
+                    rp = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject.\n\n{voice_mod}\n\nOriginal: \"{_rtext}\"\n\n{format_mod}\n\nGive the repurposed tweet, then character count."""
                     st.session_state["ci_repurposed"] = call_claude(rp)
+                    st.session_state["ci_last_action"] = {"type": "repurpose", "text": _rtext, "fmt": fmt, "voice": voice}
                     st.session_state.pop("ci_result", None)
                     st.session_state.pop("ci_banger_data", None)
+            elif _rtype == "banger" and _rtext:
+                with st.spinner("Perfecting your tweet..."):
+                    pp = analyze_personal_patterns()
+                    patterns_ctx = build_patterns_context(pp) if pp else ""
+                    banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+
+Draft: "{_rtext}"
+
+{voice_mod}
+
+{format_mod}
+{patterns_ctx}
+
+Rules:
+- Reading Level (7th-9th grade)
+- No Hashtags, Links, Tags, Emojis
+- Hook in the first line
+
+Return ONLY this JSON, no other text:
+{{
+  "option1": "tweet text", "option1_pattern": "pattern name",
+  "option2": "tweet text", "option2_pattern": "pattern name",
+  "option3": "tweet text", "option3_pattern": "pattern name",
+  "recommendation": "which to post and why"
+}}"""
+                    raw = call_claude(banger_prompt)
+                    try:
+                        raw_clean = raw.strip()
+                        if raw_clean.startswith("```"):
+                            raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                        st.session_state["ci_banger_data"] = json.loads(raw_clean)
+                        st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
+                        st.session_state.pop("ci_result", None)
+                    except Exception:
+                        st.session_state["ci_result"] = raw
+
+        # Render results based on which button was pressed
 
         # Banger — 3 separate boxes + recommendation at bottom
         if st.session_state.get("ci_banger_data"):
