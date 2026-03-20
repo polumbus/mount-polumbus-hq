@@ -2190,7 +2190,7 @@ def page_account_researcher():
     col_main, col_recent = st.columns([2, 1])
 
     with col_main:
-        handle = st.text_input("Enter X handle:", placeholder="username (without @)", key="ar_handle")
+        handle = st.text_input("Enter X handle:", placeholder="username (without @)", key="ar_handle_input")
 
         if st.button("Research Account", use_container_width=True, key="ar_run"):
             if handle.strip():
