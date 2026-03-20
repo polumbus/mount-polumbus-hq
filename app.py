@@ -505,6 +505,31 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
         return f"Error: {e} | {last_err}"
 
 
+def _gist_headers():
+    pat = st.secrets.get("GITHUB_PAT", "") or os.environ.get("HQ_GITHUB_PAT", "")
+    return {"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
+
+def load_inspiration_gist() -> list:
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        data = resp.json()
+        if "hq_inspiration.json" in data.get("files", {}):
+            return json.loads(data["files"]["hq_inspiration.json"]["content"])
+    except Exception:
+        pass
+    return []
+
+def save_inspiration_gist(items: list):
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        payload = json.dumps({"files": {"hq_inspiration.json": {"content": json.dumps(items, indent=2, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=10)
+    except Exception:
+        pass
+
+
 def load_json(filename: str, default=None):
     path = DATA_DIR / filename
     if path.exists():
@@ -2474,7 +2499,7 @@ def page_inspiration():
     st.markdown('<div class="main-header">INSPIRATION <span>VAULT</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Save tweets that inspire you. Reference them when you need ideas.</div>', unsafe_allow_html=True)
 
-    inspo = load_json("inspiration.json", [])
+    inspo = load_inspiration_gist()
 
     col_add, col_view = st.columns([1, 1])
 
@@ -2497,7 +2522,7 @@ def page_inspiration():
                     "views": inspo_views,
                     "saved_at": datetime.now().isoformat(),
                 })
-                save_json("inspiration.json", inspo)
+                save_inspiration_gist(inspo)
                 st.success("Saved to vault.")
                 st.rerun()
 
