@@ -325,24 +325,28 @@ def _get_access_token():
     # Check session cache first
     cached = st.session_state.get("_oauth_access_token")
     cached_exp = st.session_state.get("_oauth_expires_at", 0)
-    if cached and time.time() < cached_exp - 300:  # 5-min buffer
+    if cached and time.time() < cached_exp - 300:
         return cached
 
-    # Try Streamlit secret (cloud deployment) — store only the refresh token
-    refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
+    # Try Streamlit secret (cloud deployment)
+    refresh_token = ""
+    try:
+        refresh_token = st.secrets["CLAUDE_REFRESH_TOKEN"]
+    except Exception:
+        pass
 
     # Fall back to local credentials file
     if not refresh_token:
-        _, refresh_token, _ = _load_oauth_credentials()
-
-    # Check if local access token is still fresh enough
-    local_access, _, local_exp = _load_oauth_credentials()
-    if local_access and time.time() < (local_exp / 1000) - 300:
-        st.session_state["_oauth_access_token"] = local_access
-        st.session_state["_oauth_expires_at"] = local_exp / 1000
-        return local_access
+        local_access, local_refresh, local_exp = _load_oauth_credentials()
+        # Use local access token if still fresh
+        if local_access and time.time() < (local_exp / 1000) - 300:
+            st.session_state["_oauth_access_token"] = local_access
+            st.session_state["_oauth_expires_at"] = local_exp / 1000
+            return local_access
+        refresh_token = local_refresh or ""
 
     if not refresh_token:
+        st.session_state["_oauth_last_error"] = "No refresh token found in secrets or local credentials"
         return None
 
     try:
@@ -353,7 +357,7 @@ def _get_access_token():
         _save_oauth_credentials(access_token, new_refresh, int(expires_at * 1000))
         return access_token
     except Exception as e:
-        st.session_state["_oauth_last_error"] = str(e)
+        st.session_state["_oauth_last_error"] = f"Refresh failed: {e}"
         return None
 
 
@@ -362,7 +366,8 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
     import urllib.request
     access_token = _get_access_token()
     if not access_token:
-        return "Error: No OAuth token available"
+        err = st.session_state.get("_oauth_last_error", "unknown reason")
+        return f"Error: No OAuth token — {err}"
 
     messages = [{"role": "user", "content": prompt}]
     body = json.dumps({
