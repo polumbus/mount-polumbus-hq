@@ -3071,7 +3071,10 @@ def page_reply_guy():
             filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
             st.session_state["rg_my_tweets"] = filtered
             for idx, tw in enumerate(filtered):
-                replies = fetch_tweets(f"conversation_id:{tw.get('id', '')} to:{TYLER_HANDLE}", count=15)
+                tw_id = tw.get("id", "")
+                replies = fetch_tweets(f"conversation_id:{tw_id}", count=25)
+                # Exclude Tyler's own tweets from the conversation
+                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != TYLER_HANDLE.lower() and r.get("id", "") != tw_id]
                 if load_verified:
                     replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
                 replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
