@@ -145,6 +145,113 @@ function openRepurposeModal(tweetData) {
   });
 }
 
+// ── Reply Modal ───────────────────────────────────────────────────────────────
+
+async function openReplyModal(tweetElement) {
+  const tweetData = extractTweetData(tweetElement);
+
+  // Remove any existing HQ reply modal
+  const existing = document.getElementById("hq-reply-modal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "hq-reply-modal";
+  modal.innerHTML = `
+    <div class="hq-modal-backdrop"></div>
+    <div class="hq-modal-box">
+      <div class="hq-modal-header">
+        <span class="hq-modal-title">AI REPLY</span>
+        <button class="hq-modal-close">✕</button>
+      </div>
+      <div class="hq-modal-original">
+        <div class="hq-modal-label">REPLYING TO — ${tweetData.author} ${tweetData.handle}</div>
+        <div class="hq-modal-source-text">${tweetData.text}</div>
+      </div>
+      <div class="hq-modal-label" style="margin-top:14px;">YOUR REPLY</div>
+      <textarea class="hq-modal-textarea" placeholder="Generating reply..." rows="4"></textarea>
+      <div class="hq-modal-actions">
+        <button class="hq-modal-btn hq-modal-ai" id="hq-reply-regen-btn">⚡ Regenerate</button>
+        <button class="hq-modal-btn hq-modal-save" id="hq-reply-post-btn">↗ Post Reply</button>
+      </div>
+      <div class="hq-modal-status" id="hq-reply-status"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const backdrop = modal.querySelector(".hq-modal-backdrop");
+  const closeBtn = modal.querySelector(".hq-modal-close");
+  const textarea = modal.querySelector(".hq-modal-textarea");
+  const regenBtn = modal.querySelector("#hq-reply-regen-btn");
+  const postBtn = modal.querySelector("#hq-reply-post-btn");
+  const status = modal.querySelector("#hq-reply-status");
+
+  function close() { modal.remove(); }
+  backdrop.addEventListener("click", close);
+  closeBtn.addEventListener("click", close);
+
+  async function generateReply() {
+    regenBtn.disabled = true;
+    regenBtn.textContent = "Generating...";
+    textarea.placeholder = "Generating...";
+    status.textContent = "";
+    try {
+      const result = await callProxy("/call", {
+        prompt: `You are Tyler Polumbus — former NFL player turned sports media personality. Write a short reply to this tweet in your voice: direct, conversational, no hashtags, former-player authority, occasionally uses ellipsis. Keep it under 220 characters. Give ONLY the reply text, nothing else.\n\nTweet by ${tweetData.author} (${tweetData.handle}):\n"${tweetData.text}"`
+      });
+      if (result.text) {
+        textarea.value = result.text;
+        textarea.placeholder = "";
+      } else {
+        status.textContent = "AI failed — write it yourself";
+        status.style.color = "#ff4444";
+        textarea.placeholder = "Write your reply...";
+      }
+    } catch (e) {
+      status.textContent = "Proxy unreachable";
+      status.style.color = "#ff4444";
+      textarea.placeholder = "Write your reply...";
+    }
+    regenBtn.disabled = false;
+    regenBtn.textContent = "⚡ Regenerate";
+  }
+
+  // Auto-generate on open
+  generateReply();
+  regenBtn.addEventListener("click", generateReply);
+
+  postBtn.addEventListener("click", async () => {
+    const replyText = textarea.value.trim();
+    if (!replyText) return;
+
+    // Click X's native reply button to open compose box
+    const nativeReplyBtn = tweetElement.querySelector('[data-testid="reply"]');
+    if (nativeReplyBtn) {
+      nativeReplyBtn.click();
+      // Wait for X's compose box to appear, then inject text
+      let attempts = 0;
+      const inject = setInterval(() => {
+        attempts++;
+        const composeBox = document.querySelector('[data-testid="tweetTextarea_0"]');
+        if (composeBox) {
+          clearInterval(inject);
+          composeBox.focus();
+          // Use execCommand to properly trigger React's onChange
+          document.execCommand("selectAll", false, null);
+          document.execCommand("insertText", false, replyText);
+          close();
+        } else if (attempts > 30) {
+          clearInterval(inject);
+          status.textContent = "Could not find X's compose box";
+          status.style.color = "#ff4444";
+        }
+      }, 100);
+    } else {
+      status.textContent = "Could not find reply button on tweet";
+      status.style.color = "#ff4444";
+    }
+  });
+}
+
 // ── Buttons ──────────────────────────────────────────────────────────────────
 
 function createHQButtons(tweetElement) {
@@ -184,8 +291,19 @@ function createHQButtons(tweetElement) {
     openRepurposeModal(extractTweetData(tweetElement));
   };
 
+  const replyBtn = document.createElement("button");
+  replyBtn.className = "hq-btn hq-reply";
+  replyBtn.textContent = "Reply";
+  replyBtn.title = "Generate AI reply";
+  replyBtn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    openReplyModal(tweetElement);
+  };
+
   container.appendChild(saveBtn);
   container.appendChild(repurposeBtn);
+  container.appendChild(replyBtn);
   metricsGroup.parentElement.appendChild(container);
 }
 

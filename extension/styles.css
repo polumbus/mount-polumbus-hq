@@ -27,13 +27,18 @@
   border-color: #ff6b00;
   color: #ff6b00;
 }
+.hq-reply:hover {
+  border-color: #a78bfa;
+  color: #a78bfa;
+}
 .hq-saved {
   border-color: #22c55e !important;
   color: #22c55e !important;
 }
 
-/* ── Repurpose Modal ── */
-#hq-repurpose-modal {
+/* ── Modals ── */
+#hq-repurpose-modal,
+#hq-reply-modal {
   position: fixed;
   inset: 0;
   z-index: 99999;
