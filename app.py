@@ -1422,6 +1422,12 @@ IMAGE RECOMMENDATION:
         with st.spinner("Perfecting your tweet..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp) if pp else ""
+            _char_limit = 250 if fmt == "Short Tweet" else None
+            _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
+            if _char_limit:
+                # Clamp the range so synced long-tweet examples don't override the hard limit
+                _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
+            _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
             banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
@@ -1433,8 +1439,7 @@ Rules:
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
 - Hook & Pattern Breakers (first line stops the scroll)
-{"- Optimal character range: " + str(pp.get("optimal_char_range", (0, 280))[0]) + "-" + str(pp.get("optimal_char_range", (0, 280))[1]) + " characters" if pp else ""}
-
+{_char_rule}
 
 Return ONLY this JSON, no other text:
 {{
@@ -1663,6 +1668,8 @@ Give ONLY the finished tweet/thread/article. No explanation. No character count.
             with st.spinner("Perfecting your tweet..."):
                 pp = analyze_personal_patterns()
                 patterns_ctx = build_patterns_context(pp) if pp else ""
+                _redo_char_limit = 250 if fmt == "Short Tweet" else None
+                _redo_char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_redo_char_limit} characters total — no exceptions." if _redo_char_limit else ""
                 banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{_rtext}"
@@ -1674,7 +1681,7 @@ Rules:
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
 - Hook in the first line
-
+{_redo_char_rule}
 
 Return ONLY this JSON, no other text:
 {{
@@ -3390,7 +3397,7 @@ page_map = {
 # Auto-sync tweets on every load (once per session to avoid hammering the API)
 if not st.session_state.get("_tweets_synced"):
     try:
-        sync_tweet_history(quick=True)  # 50 latest tweets merged in; manual sync button does full 500
+        sync_tweet_history(quick=False)  # full 500-tweet sync on load so live data is always current
     except Exception:
         pass
     st.session_state["_tweets_synced"] = True
