@@ -352,7 +352,8 @@ def _get_access_token():
         st.session_state["_oauth_expires_at"] = expires_at
         _save_oauth_credentials(access_token, new_refresh, int(expires_at * 1000))
         return access_token
-    except Exception:
+    except Exception as e:
+        st.session_state["_oauth_last_error"] = str(e)
         return None
 
 
@@ -394,8 +395,8 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     # Try OAuth direct API call first (works locally and on Streamlit Cloud)
     try:
         return _call_claude_oauth(prompt, system or "", max_tokens)
-    except Exception:
-        pass
+    except Exception as e:
+        oauth_err = str(e)
 
     # Fall back to CLI if available (local only)
     if os.path.exists(CLAUDE_CLI):
@@ -410,7 +411,8 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
         except Exception:
             pass
 
-    return "Error: Unable to reach Claude. Check OAuth credentials."
+    last_err = st.session_state.get("_oauth_last_error", "")
+    return f"Error: {oauth_err} | Token refresh error: {last_err}"
 
 
 def load_json(filename: str, default=None):
