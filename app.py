@@ -524,14 +524,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens)
     except Exception:
-        pass  # Proxy down or unreachable — fall through to OAuth
-
-    # Fallback: direct OAuth
-    try:
-        return _call_claude_oauth(prompt, system or "", max_tokens)
-    except Exception as e:
-        last_err = st.session_state.get("_oauth_last_error", "")
-        return f"Error: {e} | {last_err}"
+        return "Proxy offline — try again in a moment."
 
 
 def _gist_headers():
