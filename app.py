@@ -99,10 +99,13 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
   background: rgba(255,107,0,0.1) !important; color: #FF6B00 !important;
   font-weight: 600 !important; border-left: 2px solid #FF6B00 !important;
-  border-radius: 0 10px 10px 0 !important;
+  border-radius: 0 10px 10px 0 !important; border-top: none !important;
+  border-right: none !important; border-bottom: none !important;
+  box-shadow: none !important;
 }
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
   transform: none !important; box-shadow: none !important;
+  background: rgba(255,107,0,0.15) !important;
 }
 
 /* ── Logo ── */
@@ -130,33 +133,36 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
 }
 .tool-desc { color: #555778; font-size: 13px; margin-bottom: 28px; letter-spacing: 0.3px; }
 
-/* ── Buttons — 3-tier hierarchy ── */
-/* PRIMARY: filled orange — main CTAs */
+/* ── Buttons — base ── */
 .stButton > button {
-  background: linear-gradient(135deg, #FF6B00, #d94f00) !important;
-  color: white !important; border: none !important; border-radius: 100px !important;
+  border-radius: 100px !important;
   font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important;
   font-size: 13px !important; padding: 9px 22px !important;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-  letter-spacing: 0.3px; box-shadow: 0 2px 16px rgba(255,107,0,0.2) !important;
+  letter-spacing: 0.3px; white-space: nowrap !important;
 }
-.stButton > button:hover {
+/* PRIMARY (type="primary") — filled orange */
+.stButton > button[kind="primary"] {
+  background: linear-gradient(135deg, #FF6B00, #d94f00) !important;
+  color: white !important; border: none !important;
+  box-shadow: 0 2px 16px rgba(255,107,0,0.2) !important;
+}
+.stButton > button[kind="primary"]:hover {
   transform: translateY(-2px) scale(1.02) !important;
   box-shadow: 0 8px 28px rgba(255,107,0,0.45) !important;
   background: linear-gradient(135deg, #ff7a14, #e05500) !important;
+  border: none !important; color: white !important;
 }
-/* SECONDARY: ghost outlined — supporting actions */
+/* SECONDARY/DEFAULT — ghost outlined */
 .stButton > button[kind="secondary"] {
   background: transparent !important;
   border: 1px solid rgba(255,107,0,0.45) !important;
-  color: #FF8C3A !important;
-  box-shadow: none !important;
+  color: #FF8C3A !important; box-shadow: none !important;
 }
 .stButton > button[kind="secondary"]:hover {
   background: rgba(255,107,0,0.08) !important;
   border-color: rgba(255,107,0,0.8) !important;
-  color: #FF6B00 !important;
-  transform: translateY(-1px) !important;
+  color: #FF6B00 !important; transform: translateY(-1px) !important;
   box-shadow: 0 4px 16px rgba(255,107,0,0.15) !important;
 }
 
@@ -264,12 +270,37 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
 .hq-footer a { color: #FF6B00; text-decoration: none; font-size: 12px; letter-spacing: 1.5px; font-weight: 600; text-transform: uppercase; opacity: 0.7; margin: 0 12px; }
 .hq-footer a:hover { opacity: 1; }
 
-/* ── Reply Guy action buttons ── */
-.rg-actions + div [data-testid="column"]:nth-child(1) .stButton > button,
-div:has(+ .rg-actions-end) [data-testid="column"]:nth-child(1) .stButton > button {
-  background: rgba(255,107,0,0.08) !important; border: 1px solid rgba(255,107,0,0.35) !important;
-  color: #FF8C3A !important; box-shadow: none !important;
+/* ── Number inputs — dark theme ── */
+input[type="number"] {
+  background: #0a0a18 !important; border: 1px solid rgba(255,255,255,0.08) !important;
+  color: #e8e8f0 !important; border-radius: 8px !important;
 }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
+
+/* ── Stat card — no wrapping ── */
+.stat-num { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 32px !important; }
+
+/* ── Progress bar ── */
+.progress-bar-bg { background: rgba(255,255,255,0.1) !important; height: 14px !important; }
+
+/* ── Day card (weekly grid) ── */
+.day-card {
+  background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px; padding: 10px 4px; text-align: center;
+}
+.day-card-label { color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.day-card-num { color: #fff; font-size: 22px; font-weight: 700; font-family: 'Bebas Neue', sans-serif; line-height: 1.2; }
+.day-card-active .day-card-num { color: #FF6B00; }
+
+/* ── Manage app button ── */
+[data-testid="manage-app-button"] { display: none !important; }
+[data-testid="stToolbarActions"] { display: none !important; }
+.stDeployButton { display: none !important; }
+
+/* ── Reduce bottom dead space ── */
+.block-container { padding-bottom: 2rem !important; }
+.main > div { padding-bottom: 0 !important; }
 
 /* ── Slider ── */
 .stSlider .st-br { background: #FF6B00 !important; }
@@ -962,10 +993,6 @@ with st.sidebar:
                 st.query_params["page"] = name
                 st.rerun()
 
-    st.markdown("---")
-    st.markdown("""<div style="font-size: 11px; color: #333355; text-align: center;">
-    @tyler_polumbus | PhD Show | Altitude 92.5
-    </div>""", unsafe_allow_html=True)
 
 page = st.session_state.current_page
 
@@ -1008,12 +1035,12 @@ def page_brain_dump():
 
         bc1, bc2, bc3, bc4 = st.columns(4)
         with bc1:
-            if st.button("⚡ Subject", use_container_width=True, key="bd_subject"):
+            if st.button("⚡ Subject", use_container_width=True, key="bd_subject", type="primary"):
                 with st.spinner("Thinking..."):
                     result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
                     st.session_state["bd_subject_result"] = result
         with bc2:
-            if st.button("⚡ Ideas", use_container_width=True, key="bd_ideas"):
+            if st.button("⚡ Ideas", use_container_width=True, key="bd_ideas", type="primary"):
                 if dump_text.strip():
                     with st.spinner("Generating ideas..."):
                         result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
@@ -1040,9 +1067,9 @@ def page_brain_dump():
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-        # Collapsible generation sections
-        with st.expander("Tweet Ideas"):
-            if st.button("⚡ Tweet Ideas", key="bd_gen_tweets"):
+        # Generation sections — open by default so they're discoverable
+        with st.expander("Tweet Ideas", expanded=True):
+            if st.button("⚡ Generate Tweets", key="bd_gen_tweets", type="primary"):
                 if dump_text.strip():
                     with st.spinner("Generating tweets..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
@@ -1050,8 +1077,8 @@ def page_brain_dump():
             if st.session_state.get("bd_tweets"):
                 st.markdown(f'<div class="output-box">{st.session_state["bd_tweets"]}</div>', unsafe_allow_html=True)
 
-        with st.expander("Long-form Post Idea"):
-            if st.button("⚡ Long-form", key="bd_gen_long"):
+        with st.expander("Long-form Post Idea", expanded=True):
+            if st.button("⚡ Generate Long-form", key="bd_gen_long", type="primary"):
                 if dump_text.strip():
                     with st.spinner("Generating..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
@@ -1059,8 +1086,8 @@ def page_brain_dump():
             if st.session_state.get("bd_longform"):
                 st.markdown(f'<div class="output-box">{st.session_state["bd_longform"]}</div>', unsafe_allow_html=True)
 
-        with st.expander("Video Script Outline"):
-            if st.button("⚡ Video Outline", key="bd_gen_video"):
+        with st.expander("Video Script Outline", expanded=True):
+            if st.button("⚡ Generate Outline", key="bd_gen_video", type="primary"):
                 if dump_text.strip():
                     with st.spinner("Generating..."):
                         result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
@@ -1127,9 +1154,9 @@ Give the repurposed tweet, then show character count."""
             voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
                 help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit | @handle = their style")
 
-        sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+        sc1, sc2, sc3, sc4, sc5, sc6 = st.columns(6)
         with sc1:
-            banger = st.button("⚡ Banger", key="ci_banger", use_container_width=True)
+            banger = st.button("⚡ Banger", key="ci_banger", use_container_width=True, type="primary")
         with sc2:
             repurpose = st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True)
         with sc3:
@@ -1138,8 +1165,9 @@ Give the repurposed tweet, then show character count."""
             engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
         with sc5:
             biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
+        with sc6:
+            regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
         viral = False  # removed from main buttons
-        regenerate = st.button("↺  Regenerate", key="ci_regen_top", use_container_width=True)
 
         # Voice modifier for prompts
         voice_mod = ""
@@ -1644,12 +1672,14 @@ Return ONLY this JSON, no other text:
                         if raw_clean.startswith("```"):
                             raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                         st.session_state["ci_banger_data"] = json.loads(raw_clean)
-                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)  # fresh widget per new generation
+                        for _i in [1,2,3]: st.session_state.pop(f"ci_banger_opt_{_i}", None)
                         st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
                         st.session_state.pop("ci_result", None)
                     except Exception:
                         st.session_state["ci_result"] = raw
-                        st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
+                        st.session_state["ci_result_edit"] = raw
+                        st.session_state.pop("ci_banger_data", None)  # clear old 3-box view
+                        st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
 
         # Render results based on which button was pressed
 
@@ -2054,7 +2084,7 @@ Your coaching style:
                 save_json("saved_ideas.json", ideas)
                 st.success("Saved!")
         with c2:
-            if st.button("Repurpose", use_container_width=True, key="coach_repurpose") and save_text.strip():
+            if st.button("↩ Remix", use_container_width=True, key="coach_repurpose") and save_text.strip():
                 with st.spinner("Repurposing..."):
                     repurposed = call_claude(f"Repurpose this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
                     st.session_state.coach_save_text_result = repurposed
@@ -2120,7 +2150,7 @@ def page_article_writer():
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
                 <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
             </div>""", unsafe_allow_html=True)
-            if st.button("Select", key=f"aw_tw_{i}", use_container_width=True):
+            if st.button("→ Select", key=f"aw_tw_{i}", use_container_width=True, type="primary"):
                 st.session_state.aw_sel_tweet = i
                 st.session_state.aw_sel_dump = None
                 st.session_state["aw_autogen"] = tw.get("text", "")
@@ -2159,7 +2189,7 @@ def page_article_writer():
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
                 </div>""", unsafe_allow_html=True)
-                if st.button("Select", key=f"aw_bd_{j}", use_container_width=True):
+                if st.button("→ Select", key=f"aw_bd_{j}", use_container_width=True, type="primary"):
                     st.session_state.aw_sel_dump = j
                     st.session_state.aw_sel_tweet = None
                     st.session_state["aw_autogen"] = d.get("text", "")
@@ -2185,7 +2215,7 @@ def page_article_writer():
         # Section 3 — Generation buttons
         ac1, ac2 = st.columns(2)
         with ac1:
-            if st.button("↺ Scratch", use_container_width=True, key="aw_scratch"):
+            if st.button("↺ Scratch", use_container_width=True, key="aw_scratch", type="primary"):
                 if seed_text:
                     with st.spinner("Writing full article..."):
                         voice = get_voice_context()
@@ -2196,7 +2226,7 @@ def page_article_writer():
                         prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
                         st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
         with ac2:
-            if st.button("⚡ Outline", use_container_width=True, key="aw_outline"):
+            if st.button("⚡ Outline", use_container_width=True, key="aw_outline", type="primary"):
                 if seed_text:
                     with st.spinner("Generating outline..."):
                         voice = get_voice_context()
@@ -2236,7 +2266,11 @@ def page_article_writer():
                 st.rerun()
         articles = load_json("saved_articles.json", [])
         if not articles:
-            st.markdown('<div class="output-box">No saved articles yet.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="output-box" style="text-align:center;padding:28px 16px;">'
+                        '<div style="font-size:28px;margin-bottom:10px;opacity:0.4;">📄</div>'
+                        '<div style="color:#555778;font-size:13px;line-height:1.6;">No saved articles yet.<br>'
+                        '<span style="color:#404060;font-size:12px;">Select a tweet above, generate an article,<br>then click Save Article.</span></div>'
+                        '</div>', unsafe_allow_html=True)
         else:
             for idx, a in enumerate(reversed(articles[-10:])):
                 ts = a.get("saved_at", "")[:10]
@@ -2354,7 +2388,7 @@ def page_tweet_history():
     with hc1:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{len(tweets)}</div><div class="stat-label">Total Tweets</div></div>', unsafe_allow_html=True)
     with hc2:
-        st.markdown(f'<div class="stat-card"><div class="stat-num">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div class="stat-num" style="font-size:18px!important;letter-spacing:0;">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
     with hc3:
         last_sync = ""
         if tweets:
@@ -2363,7 +2397,7 @@ def page_tweet_history():
                 last_sync = sorted(dates, reverse=True)[0][:10]
         st.markdown(f'<div class="stat-card"><div class="stat-num">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
     with hc4:
-        if st.button("↻ Sync Tweets", use_container_width=True, key="th_sync"):
+        if st.button("↻ Sync Tweets", use_container_width=True, key="th_sync", type="primary"):
             with st.spinner("Syncing up to 500 tweets from X... this may take a minute."):
                 tweets = sync_tweet_history()
                 st.success(f"Synced {len(tweets)} tweets.")
@@ -2555,11 +2589,36 @@ Return as JSON:
 # ═══════════════════════════════════════════════════════════════════════════
 def page_health_check():
     st.markdown('<div class="main-header">HEALTH <span>CHECK</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Audit your X account against best practices.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Full audit of your X account — posting cadence, engagement rate, hook quality, content mix, and actionable fixes.</div>', unsafe_allow_html=True)
 
-    st.markdown(f"**Account:** @{TYLER_HANDLE}")
+    # What it checks
+    st.markdown("""<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:18px 22px;margin-bottom:20px;">
+    <div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin-bottom:12px;">WHAT THIS AUDITS</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="color:#8888aa;font-size:13px;">&#9632; Posting frequency &amp; consistency</div>
+      <div style="color:#8888aa;font-size:13px;">&#9632; Hook quality (first-line scroll-stop rate)</div>
+      <div style="color:#8888aa;font-size:13px;">&#9632; Engagement rate vs views</div>
+      <div style="color:#8888aa;font-size:13px;">&#9632; Content mix (takes / analysis / humor)</div>
+      <div style="color:#8888aa;font-size:13px;">&#9632; Underperforming tweets flagged</div>
+      <div style="color:#8888aa;font-size:13px;">&#9632; Top 3 specific, actionable improvements</div>
+    </div>
+    </div>""", unsafe_allow_html=True)
 
-    if st.button("⚡ Health Check", use_container_width=True, key="hc_run"):
+    # Last run timestamp
+    hc_cache = load_json("health_check_cache.json", {})
+    last_run = hc_cache.get("last_run", "")
+    if last_run:
+        st.markdown(f'<div style="font-size:12px;color:#404060;margin-bottom:16px;">Last run: {last_run}</div>', unsafe_allow_html=True)
+
+    hcb1, hcb2 = st.columns([2, 1])
+    with hcb1:
+        run_check = st.button("⚡ Run Health Check", use_container_width=True, key="hc_run", type="primary")
+    with hcb2:
+        if hc_cache.get("data") and st.button("Clear Results", use_container_width=True, key="hc_clear"):
+            save_json("health_check_cache.json", {})
+            st.rerun()
+
+    if run_check:
         with st.spinner("Pulling tweets and analyzing..."):
             tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=30)
             if not tweets:
@@ -2595,28 +2654,37 @@ Return as JSON:
                 data = None
 
             if data and "health_score" in data:
-                score = data["health_score"]
-                color = "#22c55e" if score >= 75 else "#FF6B00" if score >= 55 else "#ef4444"
-                st.markdown(f"""<div style="text-align:center; padding:20px 0;">
-                    <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{score}</div>
-                    <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Health Score / 100</div>
-                </div>""", unsafe_allow_html=True)
-
-                for section in data.get("sections", []):
-                    with st.expander(f"{section.get('title', '')} — {section.get('grade', '')}"):
-                        st.markdown(f'<div class="output-box">{section.get("detail", "")}</div>', unsafe_allow_html=True)
-
-                if data.get("flagged"):
-                    st.markdown("### Flagged Tweets")
-                    for f in data["flagged"]:
-                        st.markdown(f'<div class="output-box" style="border-left-color:#ef4444;">{f}</div>', unsafe_allow_html=True)
-
-                if data.get("recommendations"):
-                    st.markdown("### Recommendations")
-                    for r in data["recommendations"]:
-                        st.markdown(f"- {r}")
+                save_json("health_check_cache.json", {
+                    "data": data,
+                    "last_run": datetime.now().strftime("%Y-%m-%d %H:%M MST")
+                })
+                hc_cache = load_json("health_check_cache.json", {})
             else:
                 st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+
+    # Render cached results (persists across sessions)
+    data = hc_cache.get("data")
+    if data and "health_score" in data:
+        score = data["health_score"]
+        color = "#22c55e" if score >= 75 else "#FF6B00" if score >= 55 else "#ef4444"
+        st.markdown(f"""<div style="text-align:center; padding:20px 0;">
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{score}</div>
+            <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Health Score / 100</div>
+        </div>""", unsafe_allow_html=True)
+
+        for section in data.get("sections", []):
+            with st.expander(f"{section.get('title', '')} — {section.get('grade', '')}"):
+                st.markdown(f'<div class="output-box">{section.get("detail", "")}</div>', unsafe_allow_html=True)
+
+        if data.get("flagged"):
+            st.markdown("### Flagged Tweets")
+            for f in data["flagged"]:
+                st.markdown(f'<div class="output-box" style="border-left-color:#ef4444;">{f}</div>', unsafe_allow_html=True)
+
+        if data.get("recommendations"):
+            st.markdown("### Recommendations")
+            for r in data["recommendations"]:
+                st.markdown(f"- {r}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2626,18 +2694,27 @@ def page_account_pulse():
     st.markdown('<div class="main-header">ACCOUNT <span>PULSE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
 
-    if st.button("↓ Load Data", use_container_width=True, key="ap_load"):
-        with st.spinner("Fetching account data..."):
+    # Auto-load on first visit this session
+    if "ap_user" not in st.session_state:
+        with st.spinner("Loading account data..."):
             user = fetch_user_info(TYLER_HANDLE)
             tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
 
+    if st.button("↺ Refresh", use_container_width=True, key="ap_load", type="primary"):
+        with st.spinner("Refreshing..."):
+            user = fetch_user_info(TYLER_HANDLE)
+            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
+            st.session_state["ap_user"] = user
+            st.session_state["ap_tweets"] = tweets
+            st.rerun()
+
     user = st.session_state.get("ap_user", {})
     tweets = st.session_state.get("ap_tweets", [])
 
     if not user:
-        st.info("Click 'Load Account Data' to pull your stats.")
+        st.markdown('<div style="color:#555778;font-size:13px;padding:12px 0;">Could not load account data — check your API key.</div>', unsafe_allow_html=True)
         return
 
     followers = user.get("followersCount", 0)
@@ -2711,7 +2788,7 @@ def page_account_researcher():
 
     with col_left:
         handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input")
-        if st.button("⚡ Research", use_container_width=True, key="ar_run"):
+        if st.button("⚡ Research", use_container_width=True, key="ar_run", type="primary"):
             if handle.strip():
                 handle_clean = handle.strip().lstrip("@")
                 with st.spinner(f"Researching @{handle_clean}..."):
@@ -2901,8 +2978,13 @@ def page_reply_guy():
         ds = dt.strftime("%Y-%m-%d")
         label = day_labels[dt.weekday()]
         cnt = hist_map.get(ds, 0)
-        cols[6 - d].markdown(f'<div style="text-align:center;"><div style="color:#aaa;font-size:11px;">{label}</div>'
-                             f'<div style="color:#fff;font-size:18px;font-weight:700;">{cnt}</div></div>', unsafe_allow_html=True)
+        active_cls = "day-card day-card-active" if cnt > 0 else "day-card"
+        cols[6 - d].markdown(
+            f'<div class="{active_cls}">'
+            f'<div class="day-card-label">{label}</div>'
+            f'<div class="day-card-num">{cnt}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
@@ -2914,9 +2996,9 @@ def page_reply_guy():
     st.markdown("### My Tweet Replies -- Conversation Depth")
     btn_c1, btn_c2 = st.columns(2)
     with btn_c1:
-        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
+        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True, type="primary")
     with btn_c2:
-        load_verified = st.button("↓ Verified Replies", key="rg_load_verified", use_container_width=True)
+        load_verified = st.button("↓ Verified Replies", key="rg_load_verified", use_container_width=True, type="primary")
 
     if load_all or load_verified:
         with st.spinner("Fetching tweets and replies..."):
@@ -2988,7 +3070,7 @@ def page_reply_guy():
                 # Action row — uniform 4-button row
                 ab1, ab2, ab3, ab4 = st.columns(4)
                 with ab1:
-                    if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options"):
+                    if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options", type="primary"):
                         with st.spinner(""):
                             raw = call_claude(
                                 f'Tyler originally tweeted: "{txt[:200]}"\n\n'
@@ -3007,13 +3089,13 @@ def page_reply_guy():
                     if already_liked:
                         st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                     else:
-                        if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True, help="Like on X"):
+                        if st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True, help="Like on X", type="primary"):
                             _proxy_tweet_action("like", rid)
                             _rg_actions["liked"] = list(set(liked_tweets_global + [rid]))[-500:]
                             _save_actions_gist(_rg_actions)
                             st.rerun()
                 with ab3:
-                    if st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True, help="Send reply via proxy"):
+                    if st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True, help="Send reply via proxy", type="primary"):
                         if reply_val.strip():
                             if _proxy_tweet_action("reply", rid, reply_val.strip()):
                                 _bump_reply()
@@ -3037,7 +3119,7 @@ def page_reply_guy():
     with ctrl1:
         list_source = st.selectbox("List", ["My Custom List"] + list(LISTS.keys()), key="rg_source", label_visibility="collapsed")
     with ctrl2:
-        do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True)
+        do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True, type="primary")
     with ctrl3:
         new_acc = st.text_input("Add account", key="rg_add_acc", placeholder="@handle", label_visibility="collapsed")
 
@@ -3198,7 +3280,7 @@ def page_reply_guy():
             # Action row — uniform pill buttons
             ab1, ab2, ab3, ab4 = st.columns(4)
             with ab1:
-                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options"):
+                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options", type="primary"):
                     with st.spinner(""):
                         raw = call_claude(
                             f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
@@ -3216,13 +3298,13 @@ def page_reply_guy():
                 if et_already_liked:
                     st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
                 else:
-                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X"):
+                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X", type="primary"):
                         _proxy_tweet_action("like", tid)
                         _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
                         _save_actions_gist(_actions)
                         st.rerun()
             with ab3:
-                if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True, help="Send reply via proxy"):
+                if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True, help="Send reply via proxy", type="primary"):
                     if reply_text.strip() and tid:
                         if _proxy_tweet_action("reply", tid, reply_text.strip()):
                             _bump_reply()
@@ -3265,7 +3347,7 @@ def page_inspiration():
         inspo_likes = st.number_input("Likes (optional):", min_value=0, value=0, key="insp_likes")
         inspo_views = st.number_input("Views (optional):", min_value=0, value=0, key="insp_views")
 
-        if st.button("↓ Save to Vault", use_container_width=True, key="insp_save"):
+        if st.button("↓ Save to Vault", use_container_width=True, key="insp_save", type="primary"):
             if inspo_text.strip():
                 inspo.append({
                     "text": inspo_text,
