@@ -2289,7 +2289,7 @@ def sync_tweet_history(quick=False):
     max_batches = 1 if quick else 10
     while batches < max_batches:  # quick=1 batch, full=10 batches x 50 = 500 max
         try:
-            params = {"query": f"from:{TYLER_HANDLE}", "queryType": "Latest", "count": "50"}
+            params = {"query": f"from:{TYLER_HANDLE}", "queryType": "Latest", "count": "25" if quick else "50"}
             if cursor:
                 params["cursor"] = cursor
             resp = requests.get(
@@ -3415,10 +3415,16 @@ page_map = {
     "Idea Bank": page_inspiration,
 }
 
-# Auto-sync tweets on every load (once per session to avoid hammering the API)
+# Sync strategy:
+# - If tweet_history.json is empty or missing → full 500-tweet sync (one time, slow, builds the base)
+# - If history exists → quick sync of last 25 only (fast, every load)
 if not st.session_state.get("_tweets_synced"):
     try:
-        sync_tweet_history(quick=False)  # full 500-tweet sync on load so live data is always current
+        _existing_history = load_json("tweet_history.json", [])
+        if len(_existing_history) < 50:
+            sync_tweet_history(quick=False)  # first-ever load: build full history
+        else:
+            sync_tweet_history(quick=True)   # history exists: just grab latest 25
     except Exception:
         pass
     st.session_state["_tweets_synced"] = True
