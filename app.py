@@ -2167,29 +2167,29 @@ def page_tweet_history():
 
     # Filter buttons as columns
     filters = ["All Posts", "Short Posts", "Long Posts", "High Engagement", "Viral Posts",
-               "Conversation Starters", "Evergreen", "Hot", "Original", "Replies"]
+               "Conversation Starters", "Evergreen", "Hot", "Original"]
     filter_type = st.selectbox("Filter", filters, key="th_filter")
 
     # AI filter buttons inline
     ac1, ac2, ac3, ac4 = st.columns(4)
     with ac1:
         if st.button("↑ Best Hooks", key="th_ai_hooks", use_container_width=True):
-            top = sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
+            top = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
             hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
             st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
     with ac2:
         if st.button("↓ Worst Performers", key="th_ai_worst", use_container_width=True):
-            worst = sorted(tweets, key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
+            worst = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
             st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
     with ac3:
         if st.button("⊙ Voice Patterns", key="th_ai_voice", use_container_width=True):
-            sample = [t.get("text", "") for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
+            sample = [t.get("text", "") for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
             with st.spinner("Analyzing your voice..."):
                 result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
                 st.session_state["th_ai_result"] = result
     with ac4:
         if st.button("≋ Top Topics", key="th_ai_topics", use_container_width=True):
-            sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
+            sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
             with st.spinner("Analyzing topics..."):
                 result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
                 st.session_state["th_ai_result"] = result
@@ -2199,8 +2199,8 @@ def page_tweet_history():
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-    # Apply filters
-    filtered = tweets
+    # Apply filters — replies excluded by default
+    filtered = [t for t in tweets if not t.get("text", "").startswith("@")]
     if search:
         filtered = [t for t in filtered if search.lower() in t.get("text", "").lower()]
 
@@ -2208,7 +2208,7 @@ def page_tweet_history():
         tag_map = {
             "Short Posts": "Short", "Long Posts": "Long", "High Engagement": "High Engagement",
             "Viral Posts": "Viral", "Conversation Starters": "Conversation Starter",
-            "Evergreen": "Evergreen", "Hot": "Hot", "Original": "Original", "Replies": "Reply",
+            "Evergreen": "Evergreen", "Hot": "Hot", "Original": "Original",
         }
         target_tag = tag_map.get(filter_type, "")
         filtered = [t for t in filtered if target_tag in classify_tweet(t)]
