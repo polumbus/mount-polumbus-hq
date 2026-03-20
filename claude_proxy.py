@@ -11,6 +11,7 @@ import json, os, subprocess, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
+XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 PROXY_API_KEY = os.environ.get("HQ_PROXY_KEY", "")
 PORT = 7821
 
@@ -27,40 +28,65 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self):
-        if self.path != "/call":
-            self.send_json(404, {"error": "not found"})
-            return
-
-        # Auth check
+    def _check_auth(self):
         auth = self.headers.get("X-Proxy-Key", "")
         if PROXY_API_KEY and auth != PROXY_API_KEY:
             self.send_json(403, {"error": "forbidden"})
+            return False
+        return True
+
+    def do_POST(self):
+        if not self._check_auth():
             return
 
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
-        prompt = body.get("prompt", "")
-        system = body.get("system", "")
-        max_tokens = body.get("max_tokens", 1500)
 
-        full_prompt = f"{system}\n\n{prompt}" if system else prompt
-        try:
-            result = subprocess.run(
-                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
-                input=full_prompt,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                self.send_json(200, {"text": result.stdout.strip()})
-            else:
-                self.send_json(500, {"error": result.stderr.strip() or "empty response"})
-        except subprocess.TimeoutExpired:
-            self.send_json(504, {"error": "timeout"})
-        except Exception as e:
-            self.send_json(500, {"error": str(e)})
+        if self.path == "/tweet/reply":
+            tweet_id = body.get("tweet_id", "")
+            text = body.get("text", "")
+            try:
+                result = subprocess.run([XURL, "reply", tweet_id, text],
+                    capture_output=True, text=True, timeout=15)
+                if result.returncode == 0:
+                    self.send_json(200, {"ok": True})
+                else:
+                    self.send_json(500, {"error": result.stderr.strip()})
+            except Exception as e:
+                self.send_json(500, {"error": str(e)})
+
+        elif self.path == "/tweet/like":
+            tweet_id = body.get("tweet_id", "")
+            try:
+                result = subprocess.run([XURL, "like", tweet_id],
+                    capture_output=True, text=True, timeout=15)
+                if result.returncode == 0:
+                    self.send_json(200, {"ok": True})
+                else:
+                    self.send_json(500, {"error": result.stderr.strip()})
+            except Exception as e:
+                self.send_json(500, {"error": str(e)})
+
+        elif self.path == "/call":
+            prompt = body.get("prompt", "")
+            system = body.get("system", "")
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            try:
+                result = subprocess.run(
+                    [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
+                    input=full_prompt, capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    self.send_json(200, {"text": result.stdout.strip()})
+                else:
+                    self.send_json(500, {"error": result.stderr.strip() or "empty response"})
+            except subprocess.TimeoutExpired:
+                self.send_json(504, {"error": "timeout"})
+            except Exception as e:
+                self.send_json(500, {"error": str(e)})
+
+        else:
+            self.send_json(404, {"error": "not found"})
 
     def do_GET(self):
         if self.path == "/health":

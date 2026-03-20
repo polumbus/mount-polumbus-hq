@@ -20,6 +20,7 @@ st.set_page_config(
 
 # ─── Constants ──────────────────────────────────────────────────────────────
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
+XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -474,6 +475,32 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     if "error" in data:
         raise Exception(data["error"])
     return data["text"]
+
+
+def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
+    """Route like/reply through local proxy. Returns True on success."""
+    import urllib.request, urllib.error
+    proxy_url = _get_proxy_url()
+    try:
+        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+    except Exception:
+        proxy_key = ""
+    body = json.dumps({"tweet_id": tweet_id, "text": text}).encode()
+    headers = {"Content-Type": "application/json"}
+    if proxy_key:
+        headers["X-Proxy-Key"] = proxy_key
+    try:
+        req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/{action}", data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read())
+        return data.get("ok", False)
+    except Exception:
+        # Fall back to local xurl if available
+        if os.path.exists(XURL):
+            cmd = [XURL, action, tweet_id] + ([text] if text else [])
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            return result.returncode == 0
+        return False
 
 
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
@@ -2356,7 +2383,7 @@ def page_reply_guy():
                     if already_liked:
                         st.button("💚", key=f"rg_like_{idx}_{ri}", use_container_width=True, disabled=True)
                     elif st.button("❤️", key=f"rg_like_{idx}_{ri}", use_container_width=True):
-                        subprocess.run([XURL, "like", rid], capture_output=True, text=True, timeout=10)
+                        _proxy_tweet_action("like", rid)
                         liked_tweets.append(rid)
                         save_json("liked_tweets.json", liked_tweets[-500:])
                         st.rerun()
@@ -2368,14 +2395,13 @@ def page_reply_guy():
                         st.button("✅", key=f"rg_send_{idx}_{ri}", use_container_width=True, disabled=True)
                     elif st.button("➡️", key=f"rg_send_{idx}_{ri}", use_container_width=True):
                         if reply_val.strip():
-                            res = subprocess.run([XURL, "reply", rid, reply_val.strip()], capture_output=True, text=True, timeout=15)
-                            if res.returncode == 0:
+                            if _proxy_tweet_action("reply", rid, reply_val.strip()):
                                 _bump_reply()
                                 fresh_replied.append(rid)
                                 save_json("replied_tweets.json", fresh_replied[-500:])
                                 st.rerun()
                             else:
-                                st.error(res.stderr[:100])
+                                st.error("Reply failed — check proxy connection")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
@@ -2472,7 +2498,7 @@ def page_reply_guy():
                 if et_already_liked:
                     st.button("💚", key=f"rg_etl_{i}", use_container_width=True, disabled=True)
                 elif st.button("❤️", key=f"rg_etl_{i}", use_container_width=True):
-                    subprocess.run([XURL, "like", tid], capture_output=True, text=True, timeout=10)
+                    _proxy_tweet_action("like", tid)
                     et_liked.append(tid)
                     save_json("liked_tweets.json", et_liked[-500:])
                     st.rerun()
@@ -2483,14 +2509,13 @@ def page_reply_guy():
                     st.button("✅", key=f"rg_ets_{i}", use_container_width=True, disabled=True)
                 elif st.button("➡️", key=f"rg_ets_{i}", use_container_width=True):
                     if reply_text.strip() and tid:
-                        res = subprocess.run([XURL, "reply", tid, reply_text.strip()], capture_output=True, text=True, timeout=15)
-                        if res.returncode == 0:
+                        if _proxy_tweet_action("reply", tid, reply_text.strip()):
                             _bump_reply()
                             fresh_et_replied.append(tid)
                             save_json("replied_tweets.json", fresh_et_replied[-500:])
                             st.rerun()
                         else:
-                            st.error(res.stderr[:100])
+                            st.error("Reply failed — check proxy connection")
         with rc4:
             if already:
                 st.markdown('<div style="text-align:center;padding-top:8px;color:#22c55e;font-size:18px;">&#10003;</div>', unsafe_allow_html=True)
