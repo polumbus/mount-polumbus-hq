@@ -169,6 +169,12 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover { tran
 /* Progress */
 .progress-bar-bg { background: rgba(255,255,255,0.06); border-radius: 100px; height: 12px; width: 100%; overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
+
+/* Reply Guy action buttons — scoped via sentinel div class .rg-actions */
+.rg-actions + div [data-testid="column"]:nth-child(1) .stButton > button,
+div:has(+ .rg-actions-end) [data-testid="column"]:nth-child(1) .stButton > button { background: rgba(255,107,0,0.1) !important; border: 1px solid rgba(255,107,0,0.4) !important; color: #FF8C3A !important; box-shadow: none !important; }
+.tweet-link { font-size: 11px; color: #4ecdc4; text-decoration: none; letter-spacing: 0.5px; opacity: 0.8; }
+.tweet-link:hover { opacity: 1; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -478,6 +484,22 @@ def _get_access_token():
         except Exception as e:
             st.session_state["_oauth_last_error"] = f"Refresh failed: {e}"
 
+    # Last resort: use CLAUDE_REFRESH_TOKEN from Streamlit secrets (Streamlit Cloud deployment)
+    secrets_refresh = ""
+    try:
+        secrets_refresh = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
+    except Exception:
+        pass
+    if secrets_refresh:
+        try:
+            access_token, new_refresh, expires_in = _refresh_oauth_token(secrets_refresh)
+            expires_at = time.time() + expires_in
+            st.session_state["_oauth_access_token"] = access_token
+            st.session_state["_oauth_expires_at"] = expires_at
+            return access_token
+        except Exception as e:
+            st.session_state["_oauth_last_error"] = f"Token refresh failed: {e}"
+
     st.session_state["_oauth_last_error"] = "No valid token source found"
     return None
 
@@ -614,11 +636,11 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
         except Exception:
             pass
 
-    # Try proxy server (Streamlit Cloud path — calls Tyler's local machine)
+    # Try proxy server (Streamlit Cloud path — calls Tyler's local machine via ngrok)
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens)
-    except Exception:
-        return "Proxy offline — try again in a moment."
+    except Exception as e:
+        return f"Proxy error: {str(e)[:150]}"
 
 
 def _gist_headers():
@@ -2697,37 +2719,42 @@ def page_reply_guy():
             already_replied = rid in replied_tweets
             input_key = f"rg_ri_{idx}_{ri}"
 
-            rc1, rc2, rc3, rc4 = st.columns([1, 3, 3, 1])
+            rc1, rc2, rc3 = st.columns([1, 3, 4])
+            reply_url = rp.get("url", rp.get("twitterUrl", f"https://x.com/{rauthor}/status/{rid}"))
             with rc1:
                 st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{rauthor}</div>', unsafe_allow_html=True)
             with rc2:
-                st.markdown(f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{rtext[:250]}</div>'
-                            f'<div style="font-size:11px;color:#888;margin-top:4px;">{r_likes} likes</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{rtext[:250]}</div>'
+                    f'<div style="font-size:11px;color:#555577;margin-top:4px;">{r_likes} likes</div>'
+                    f'<a href="{reply_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
+                    unsafe_allow_html=True)
             with rc3:
-                ic1, ic2, ic3, ic4 = st.columns([6, 1, 1, 1])
-                with ic2:
-                    if st.button("✨", key=f"rg_gen_{idx}_{ri}", use_container_width=True):
+                reply_val = st.text_area("r", key=input_key, label_visibility="collapsed",
+                    placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
+                liked_tweets = load_json("liked_tweets.json", [])
+                already_liked = rid in liked_tweets
+                fresh_replied = load_json("replied_tweets.json", [])
+                is_replied_now = rid in fresh_replied
+
+                rb1, rb2, rb3 = st.columns(3)
+                with rb1:
+                    if st.button("⚡ AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True):
                         sug = call_claude(f'Tyler originally tweeted: "{txt[:200]}"\n\nSomeone replied to Tyler\'s tweet. Tyler wants to reply back.\n\n@{rauthor} replied: "{rtext[:200]}"\n\nWrite Tyler\'s reply. Under 150 chars. Conversational, uses ellipsis, former NFL player perspective. No emojis. Just the reply text, nothing else.', max_tokens=80)
                         st.session_state[input_key] = sug
-                with ic1:
-                    reply_val = st.text_area("r", key=input_key, label_visibility="collapsed", placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
-                with ic3:
-                    liked_tweets = load_json("liked_tweets.json", [])
-                    already_liked = rid in liked_tweets
+                        st.rerun()
+                with rb2:
                     if already_liked:
-                        st.button("💚", key=f"rg_like_{idx}_{ri}", use_container_width=True, disabled=True)
-                    elif st.button("❤️", key=f"rg_like_{idx}_{ri}", use_container_width=True):
+                        st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
+                    elif st.button("♡ Like", key=f"rg_like_{idx}_{ri}", use_container_width=True):
                         _proxy_tweet_action("like", rid)
                         liked_tweets.append(rid)
                         save_json("liked_tweets.json", liked_tweets[-500:])
                         st.rerun()
-                with ic4:
-                    # Check replied status fresh (same pattern as likes)
-                    fresh_replied = load_json("replied_tweets.json", [])
-                    is_replied_now = rid in fresh_replied
+                with rb3:
                     if is_replied_now:
-                        st.button("✅", key=f"rg_send_{idx}_{ri}", use_container_width=True, disabled=True)
-                    elif st.button("➡️", key=f"rg_send_{idx}_{ri}", use_container_width=True):
+                        st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
+                    elif st.button("↗ Send", key=f"rg_send_{idx}_{ri}", use_container_width=True):
                         if reply_val.strip():
                             if _proxy_tweet_action("reply", rid, reply_val.strip()):
                                 _bump_reply()
@@ -2826,37 +2853,44 @@ def page_reply_guy():
         already = tid in replied_tweets
         sug_key = f"rg_et_sug_{i}"
 
-        rc1, rc2, rc3, rc4 = st.columns([1, 3, 3, 1])
+        rc1, rc2, rc3 = st.columns([1, 3, 4])
+        tweet_url = t.get("url", t.get("twitterUrl", f"https://x.com/{acc}/status/{tid}"))
         with rc1:
             st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{acc}</div>', unsafe_allow_html=True)
         with rc2:
-            st.markdown(f'<div style="font-size:15px;color:#d8d8e8;line-height:1.5;">{text[:150]}</div>'
-                        f'<div style="font-size:12px;color:#888;margin-top:4px;">{created} | {likes} likes | {rpl} replies | {rts} RTs | {views} views</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{text[:180]}</div>'
+                f'<div style="font-size:11px;color:#555577;margin-top:5px;">{created} · {likes} likes · {rpl} replies</div>'
+                f'<a href="{tweet_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
+                unsafe_allow_html=True)
         with rc3:
             et_input_key = f"rg_et_{i}"
-            ic1, ic2, ic3, ic4 = st.columns([6, 1, 1, 1])
-            with ic2:
-                if st.button("✨", key=f"rg_etg_{i}", use_container_width=True):
+            reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed",
+                placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key, "")))
+            # Action buttons as styled HTML — Streamlit buttons below
+            et_liked = load_json("liked_tweets.json", [])
+            et_already_liked = tid in et_liked
+            fresh_et_replied = load_json("replied_tweets.json", [])
+            et_is_replied = tid in fresh_et_replied
+
+            etb1, etb2, etb3 = st.columns(3)
+            with etb1:
+                if st.button("⚡ AI", key=f"rg_etg_{i}", use_container_width=True):
                     sug = call_claude(f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". Write ONE short reply under 150 chars. Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis.', max_tokens=80)
                     st.session_state[et_input_key] = sug
-            with ic1:
-                reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed", placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key,"")))
-            with ic3:
-                et_liked = load_json("liked_tweets.json", [])
-                et_already_liked = tid in et_liked
+                    st.rerun()
+            with etb2:
                 if et_already_liked:
-                    st.button("💚", key=f"rg_etl_{i}", use_container_width=True, disabled=True)
-                elif st.button("❤️", key=f"rg_etl_{i}", use_container_width=True):
+                    st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">♥</div>', unsafe_allow_html=True)
+                elif st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True):
                     _proxy_tweet_action("like", tid)
                     et_liked.append(tid)
                     save_json("liked_tweets.json", et_liked[-500:])
                     st.rerun()
-            with ic4:
-                fresh_et_replied = load_json("replied_tweets.json", [])
-                et_is_replied = tid in fresh_et_replied
-                if et_is_replied:
-                    st.button("✅", key=f"rg_ets_{i}", use_container_width=True, disabled=True)
-                elif st.button("➡️", key=f"rg_ets_{i}", use_container_width=True):
+            with etb3:
+                if et_is_replied or already:
+                    st.markdown('<div style="text-align:center;padding:8px 0;font-size:18px;color:#4ade80;">✓</div>', unsafe_allow_html=True)
+                elif st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True):
                     if reply_text.strip() and tid:
                         if _proxy_tweet_action("reply", tid, reply_text.strip()):
                             _bump_reply()
@@ -2865,9 +2899,6 @@ def page_reply_guy():
                             st.rerun()
                         else:
                             st.error("Reply failed — check proxy connection")
-        with rc4:
-            if already:
-                st.markdown('<div style="text-align:center;padding-top:8px;color:#22c55e;font-size:18px;">&#10003;</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
