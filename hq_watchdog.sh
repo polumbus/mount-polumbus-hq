@@ -13,24 +13,21 @@ if ! /usr/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://
     echo "[$(date)] Proxy down — restarting..."
     pkill -f "claude_proxy.py" 2>/dev/null
     sleep 1
-    nohup bash -c "HQ_PROXY_KEY=$HQ_PROXY_KEY /usr/bin/python3 /home/polfam/mount_polumbus_hq/claude_proxy.py" > /tmp/hq_proxy.log 2>&1 &
+    nohup bash -c "HQ_PROXY_KEY=$HQ_PROXY_KEY HQ_GITHUB_PAT=$HQ_GITHUB_PAT /usr/bin/python3 /home/polfam/mount_polumbus_hq/claude_proxy.py" > /tmp/hq_proxy.log 2>&1 &
     sleep 3
 fi
 
 # --- 2. Keep tunnel alive ---
-if ! pgrep -f "nokey@localhost.run" > /dev/null 2>&1; then
-    echo "[$(date)] Tunnel down — restarting..."
-    rm -f "$TUNNEL_LOG"
-    nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 \
-        -R 80:localhost:$PROXY_PORT nokey@localhost.run > "$TUNNEL_LOG" 2>&1 &
-    sleep 10
+NGROK="/home/polfam/.local/bin/ngrok"
+NGROK_DOMAIN="gertrude-spectroscopic-nominally.ngrok-free.dev"
+if ! pgrep -f "ngrok" > /dev/null 2>&1; then
+    echo "[$(date)] Tunnel down — restarting ngrok..."
+    nohup "$NGROK" http "$PROXY_PORT" --url="$NGROK_DOMAIN" > "$TUNNEL_LOG" 2>&1 &
+    sleep 5
 fi
 
-# --- 3. Extract current tunnel URL ---
-CURRENT_URL=$(grep -oP 'https://[a-z0-9]+\.lhr\.life' "$TUNNEL_LOG" 2>/dev/null | tail -1)
-if [ -z "$CURRENT_URL" ]; then
-    exit 0
-fi
+# --- 3. ngrok domain is static, no URL detection needed ---
+CURRENT_URL="https://$NGROK_DOMAIN"
 
 # --- 4. Update Gist if URL changed ---
 STORED_URL=$(cat "$URL_FILE" 2>/dev/null)

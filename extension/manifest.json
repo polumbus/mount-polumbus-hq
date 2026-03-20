@@ -3,8 +3,9 @@
   "name": "Mount Polumbus HQ",
   "version": "1.0",
   "description": "Save tweets to your HQ Inspiration Vault or Repurpose queue",
-  "permissions": ["activeTab"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "permissions": ["activeTab", "storage", "cookies", "alarms"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://api.github.com/*", "https://gertrude-spectroscopic-nominally.ngrok-free.dev/*"],
+  "background": {"service_worker": "background.js"},
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],

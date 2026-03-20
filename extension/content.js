@@ -1,12 +1,21 @@
 // Mount Polumbus HQ - Chrome Extension
 // Adds "Save" and "Repurpose" buttons to tweets on X
 
-const API_BASE = "http://localhost:8505"; // Change to tunnel URL for remote
+const PROXY_URL = "https://gertrude-spectroscopic-nominally.ngrok-free.dev";
+const PROXY_KEY = "polumbus_hq_proxy_2026";
+
+async function saveToProxy(type, tweet) {
+  await fetch(`${PROXY_URL}/save-tweet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Proxy-Key": PROXY_KEY },
+    body: JSON.stringify({ type, tweet })
+  });
+}
 
 function extractTweetData(tweetElement) {
   const textEl = tweetElement.querySelector('[data-testid="tweetText"]');
   const text = textEl ? textEl.innerText : "";
-  
+
   const userEl = tweetElement.querySelector('[data-testid="User-Name"]');
   let author = "", handle = "";
   if (userEl) {
@@ -20,9 +29,8 @@ function extractTweetData(tweetElement) {
     }
   }
 
-  // Try to get metrics
   const metricsGroup = tweetElement.querySelector('[role="group"]');
-  let likes = 0, retweets = 0, views = 0;
+  let likes = 0, retweets = 0;
   if (metricsGroup) {
     const buttons = metricsGroup.querySelectorAll('[data-testid]');
     for (const btn of buttons) {
@@ -33,15 +41,14 @@ function extractTweetData(tweetElement) {
     }
   }
 
-  // Get tweet URL
   const timeEl = tweetElement.querySelector("time");
   let tweetUrl = "";
-  if (timeEl && timeEl.parentElement) {
+  if (timeEl) {
     const link = timeEl.closest("a");
     if (link) tweetUrl = link.href;
   }
 
-  return { text, author, handle, likes, retweets, views, tweet_url: tweetUrl };
+  return { text, author, handle, likes, retweets, tweet_url: tweetUrl, tags: [] };
 }
 
 function createHQButtons(tweetElement) {
@@ -60,23 +67,15 @@ function createHQButtons(tweetElement) {
   saveBtn.onclick = async (e) => {
     e.stopPropagation();
     e.preventDefault();
-    const data = extractTweetData(tweetElement);
+    saveBtn.textContent = "Saving...";
     try {
-      const resp = await fetch(API_BASE + "/api/save-tweet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const result = await resp.json();
-      if (result.ok) {
-        saveBtn.textContent = "Saved!";
-        saveBtn.classList.add("hq-saved");
-        setTimeout(() => { saveBtn.textContent = "Save"; saveBtn.classList.remove("hq-saved"); }, 2000);
-      }
-    } catch (err) {
+      await saveToProxy("inspiration", extractTweetData(tweetElement));
+      saveBtn.textContent = "Saved!";
+      saveBtn.classList.add("hq-saved");
+    } catch {
       saveBtn.textContent = "Error";
-      setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
     }
+    setTimeout(() => { saveBtn.textContent = "Save"; saveBtn.classList.remove("hq-saved"); }, 2000);
   };
 
   const repurposeBtn = document.createElement("button");
@@ -86,23 +85,15 @@ function createHQButtons(tweetElement) {
   repurposeBtn.onclick = async (e) => {
     e.stopPropagation();
     e.preventDefault();
-    const data = extractTweetData(tweetElement);
+    repurposeBtn.textContent = "Saving...";
     try {
-      const resp = await fetch(API_BASE + "/api/save-repurpose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const result = await resp.json();
-      if (result.ok) {
-        repurposeBtn.textContent = "Queued!";
-        repurposeBtn.classList.add("hq-saved");
-        setTimeout(() => { repurposeBtn.textContent = "Repurpose"; repurposeBtn.classList.remove("hq-saved"); }, 2000);
-      }
-    } catch (err) {
+      await saveToProxy("repurpose", extractTweetData(tweetElement));
+      repurposeBtn.textContent = "Queued!";
+      repurposeBtn.classList.add("hq-saved");
+    } catch {
       repurposeBtn.textContent = "Error";
-      setTimeout(() => { repurposeBtn.textContent = "Repurpose"; }, 2000);
     }
+    setTimeout(() => { repurposeBtn.textContent = "Repurpose"; repurposeBtn.classList.remove("hq-saved"); }, 2000);
   };
 
   container.appendChild(saveBtn);
@@ -115,7 +106,6 @@ function scanTweets() {
   tweets.forEach(createHQButtons);
 }
 
-// Run on load and on scroll/navigation
 const observer = new MutationObserver(scanTweets);
 observer.observe(document.body, { childList: true, subtree: true });
 setInterval(scanTweets, 2000);
