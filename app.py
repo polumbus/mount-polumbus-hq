@@ -135,9 +135,9 @@ button[kind="header"],
   line-height: 1; margin-bottom: 2px; font-weight: 400; color: #8B949E;
 }
 .main-header span {
-  background: linear-gradient(135deg, #00F5FF 0%, #7DF9FF 60%, #b2fcff 100%);
+  background: linear-gradient(135deg, #C49E3C 0%, #E8C547 55%, #F5D870 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(0,245,255,0.35));
+  filter: drop-shadow(0 0 20px rgba(196,158,60,0.4));
 }
 .tool-desc { color: #4a5160; font-size: 13px; margin-bottom: 28px; letter-spacing: 0.3px; }
 
@@ -151,16 +151,16 @@ button[kind="header"],
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   letter-spacing: 0.3px; white-space: nowrap !important;
 }
-/* PRIMARY — solid cyan, glow on hover only */
+/* PRIMARY — gradient teal, glow on hover only */
 .stButton > button[kind="primary"] {
-  background: #00F5FF !important;
+  background: linear-gradient(135deg, #00C8E8 0%, #00F5FF 55%, #7DFAFF 100%) !important;
   color: #0B0E14 !important; border: none !important; font-weight: 700 !important;
   box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
   transform: translateY(-2px) scale(1.02) !important;
   box-shadow: 0 0 20px rgba(0,245,255,0.4), 0 8px 24px rgba(0,245,255,0.2) !important;
-  background: #1af6ff !important;
+  background: linear-gradient(135deg, #00D8F5 0%, #1af6ff 55%, #8FFCFF 100%) !important;
   border: none !important; color: #0B0E14 !important;
 }
 /* SECONDARY — ghost cyan outlined */
@@ -217,7 +217,7 @@ button[kind="header"],
   box-shadow: 0 4px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,245,255,0.1);
   transform: translateY(-1px);
 }
-.tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #00F5FF; letter-spacing: 1px; margin-bottom: 8px; }
+.tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #C49E3C; letter-spacing: 1px; margin-bottom: 8px; }
 /* Stat cards */
 .stat-card {
   background: #161B22; border: 1px solid rgba(0,245,255,0.1);
@@ -323,8 +323,8 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 .day-card { background: #161B22; border: 1px solid rgba(0,245,255,0.08); border-radius: 10px; padding: 10px 4px; text-align: center; }
 .day-card-label { color: #6E7681; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .day-card-num { color: #E6EDF3; font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
-.day-card-active .day-card-num { color: #00F5FF; }
-.day-card-active { border-color: rgba(0,245,255,0.25); border-top: 2px solid #00F5FF; }
+.day-card-active .day-card-num { color: #C49E3C; }
+.day-card-active { border-color: rgba(196,158,60,0.25); border-top: 2px solid #C49E3C; }
 
 /* Hide Streamlit chrome */
 [data-testid="manage-app-button"] { display: none !important; }
@@ -341,9 +341,9 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 
 /* Creator Studio 3-col grid */
 .cs-panel-label {
-  font-size: 9px; color: #4a5160; font-weight: 700; letter-spacing: 2.5px;
+  font-size: 9px; color: #C49E3C; font-weight: 700; letter-spacing: 2.5px;
   text-transform: uppercase; margin-bottom: 14px; padding-bottom: 10px;
-  border-bottom: 1px solid rgba(0,245,255,0.06);
+  border-bottom: 1px solid rgba(196,158,60,0.15); opacity: 0.7;
 }
 .cs-params-wrap {
   background: #131920; border-radius: 12px;
@@ -351,11 +351,11 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
   padding: 16px; height: 100%;
 }
 .format-guide {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.1);
-  border-top: 2px solid #00F5FF; border-radius: 10px;
+  background: #161B22; border: 1px solid rgba(196,158,60,0.12);
+  border-top: 2px solid #C49E3C; border-radius: 10px;
   padding: 14px 16px; margin-bottom: 12px;
 }
-.fg-format { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #00F5FF; letter-spacing: 1.5px; margin-bottom: 4px; }
+.fg-format { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #C49E3C; letter-spacing: 1.5px; margin-bottom: 4px; }
 .fg-chars { font-size: 11px; color: #6E7681; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
 .fg-rule { font-size: 12px; color: #8B949E; padding: 3px 0 3px 10px; border-left: 2px solid rgba(0,245,255,0.2); margin-bottom: 4px; }
 .cs-nav-link { display: block; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #6E7681; text-decoration: none; cursor: pointer; transition: all 0.15s; margin-bottom: 4px; border: 1px solid transparent; }
@@ -1427,7 +1427,7 @@ _stc.html("""<script>
 
 # ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
 _lnk = "display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;"
-_sec = "font-size:9px;letter-spacing:2px;color:#445;font-weight:700;margin:24px 0 10px;"
+_sec = "font-size:9px;letter-spacing:2px;color:#C49E3C;font-weight:700;margin:24px 0 10px;opacity:0.7;"
 st.markdown(f"""
 <style>
 #_mob_chk{{display:none;}}
@@ -2061,7 +2061,7 @@ Give the repurposed tweet, then show character count."""
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            st.markdown(f'''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="font-size:11px;color:#C49E3C;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
@@ -2075,7 +2075,7 @@ Give the repurposed tweet, then show character count."""
             with b2:
                 st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary", on_click=_use_option, args=(opt_key,))
         if bd.get("recommendation"):
-            st.markdown('''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
+            st.markdown('''<div style="font-size:11px;color:#C49E3C;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(0,245,255,0.04);border:1px solid rgba(0,245,255,0.15);border-left:3px solid #00F5FF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
@@ -2172,7 +2172,7 @@ def page_compose_ideas():
         _fg = _FORMAT_GUIDES.get(_fmt_display, _FORMAT_GUIDES["Normal Tweet"])
         st.markdown('<div class="cs-panel-label">FORMAT GUIDE</div>', unsafe_allow_html=True)
         st.markdown(
-            f'''<div style="font-size:13px;color:#00F5FF;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
+            f'''<div style="font-size:13px;color:#C49E3C;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
             f''' &nbsp;<span style="font-size:11px;color:#666888;font-weight:400;">{_fg["chars"]}</span></div>''',
             unsafe_allow_html=True)
         with st.expander("📋 Format Tips", expanded=False):
@@ -3433,7 +3433,7 @@ Return this exact JSON structure:
             st.markdown('<div style="color:#555577; text-align:center; padding:60px 20px; font-size:14px;">Enter a handle and click Research Account</div>', unsafe_allow_html=True)
         else:
             hdl = st.session_state.get("ar_handle", "")
-            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#00F5FF; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#C49E3C; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
 
             def ar_section(title, content):
                 st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
@@ -3546,9 +3546,9 @@ def page_reply_guy():
     # ── Top Controls: Engagement Targets + My Tweet Replies (merged) ──
     st.markdown(
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">ENGAGEMENT TARGETS</span>'
+        '<span style="font-size:10px;letter-spacing:2px;color:#C49E3C;font-weight:700;opacity:0.85;">ENGAGEMENT TARGETS</span>'
         '<span style="color:#1E3050;font-size:14px;">|</span>'
-        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">MY TWEET REPLIES</span>'
+        '<span style="font-size:10px;letter-spacing:2px;color:#C49E3C;font-weight:700;opacity:0.85;">MY TWEET REPLIES</span>'
         '</div>', unsafe_allow_html=True)
     ctrl1, ctrl2, ctrl3, ctrl4, ctrl5 = st.columns([2.5, 0.8, 0.8, 1, 1])
     with ctrl1:
@@ -3688,7 +3688,7 @@ def page_reply_guy():
     col_feed, col_insp = st.columns([3, 1])
 
     with col_insp:
-        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#445;font-weight:700;margin-bottom:8px;">INSPIRATION ENGINE</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#C49E3C;font-weight:700;margin-bottom:8px;opacity:0.8;">INSPIRATION ENGINE</div>', unsafe_allow_html=True)
         _insp_disabled = not bool(tweets_data)
         if st.button("⚡ Generate Ideas", use_container_width=True, type="primary", key="btn_inspiration", disabled=_insp_disabled):
             _lines = [f"@{t.get('_target_account','?')}: {t.get('text','')[:120]}" for t in tweets_data[:15]]
@@ -3969,8 +3969,8 @@ def page_reply_guy():
         rts = tw.get("retweetCount", tw.get("retweet_count", 0))
         rpl = tw.get("replyCount", tw.get("reply_count", 0))
         views = tw.get("viewCount", tw.get("view_count", 0))
-        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #00F5FF;">'
-                    f'<div style="color:#00F5FF;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
+        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #C49E3C;">'
+                    f'<div style="color:#C49E3C;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
                     f'<div style="color:#e8e8f0;font-size:14px;line-height:1.5;margin-bottom:8px;">{txt}</div>'
                     f'<div style="font-size:11px;color:#666688;">{likes:,} likes | {rts:,} RTs | {rpl:,} replies | {views:,} views</div></div>', unsafe_allow_html=True)
 
