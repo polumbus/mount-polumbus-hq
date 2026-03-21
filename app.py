@@ -1716,6 +1716,10 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
     """Run AI action and display output in a dialog modal."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
+    # Use button sets this flag — early return closes the dialog without re-running AI
+    if st.session_state.pop("ci_close_modal", False):
+        return
+
     def _use_option(opt_key):
         val = st.session_state.get(opt_key, "")
         if val:
@@ -2187,8 +2191,7 @@ Give the repurposed tweet, then show character count."""
                     val = st.session_state.get(opt_key, opt_text)
                     if val:
                         st.session_state["ci_text"] = val
-                    for _k in _RESULT_KEYS:
-                        st.session_state.pop(_k, None)
+                    st.session_state["ci_close_modal"] = True
                     st.rerun()
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
@@ -2289,8 +2292,7 @@ Give the repurposed tweet, then show character count."""
                 val = st.session_state.get(_edit_key, edited)
                 if val:
                     st.session_state["ci_text"] = val
-                for _k in _RESULT_KEYS:
-                    st.session_state.pop(_k, None)
+                st.session_state["ci_close_modal"] = True
                 st.rerun()
 
     # ── Bottom action bar ──
