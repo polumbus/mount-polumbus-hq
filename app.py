@@ -3588,36 +3588,42 @@ def page_reply_guy():
     new_acc = ""
 
     if do_load:
-        with st.spinner("Fetching posts (last 3 hours)..."):
+        with st.spinner("Fetching posts..."):
             all_tweets = []
+            _debug_steps = []
+            _debug_steps.append(f"key={'SET' if TWITTER_API_IO_KEY else 'MISSING'} | list={list_source!r} | is_twitter_list={_is_twitter_list}")
             if not _is_twitter_list:
                 accs = [a.strip().lstrip("@") for a in custom_accounts.replace(",", "\n").split("\n") if a.strip()]
+                _debug_steps.append(f"custom path: {len(accs)} accounts: {accs[:5]}")
                 for acc in accs[:12]:
                     tweets = fetch_tweets(f"from:{acc}", count=20)
+                    _debug_steps.append(f"  from:{acc} → {len(tweets)} tweets")
                     for t in tweets:
                         t["_target_account"] = acc
                     all_tweets.extend(tweets)
             else:
                 lid = LISTS.get(list_source, "")
+                _debug_steps.append(f"twitter list path: lid={lid!r}")
                 if lid:
                     try:
-                        # Get list members first (list/tweets API is stale/cached)
                         mem_resp = requests.get(
                             "https://api.twitterapi.io/twitter/list/members",
                             headers={"X-API-Key": TWITTER_API_IO_KEY},
                             params={"list_id": lid, "count": 30},
                             timeout=30,
                         )
+                        _debug_steps.append(f"members HTTP {mem_resp.status_code}")
                         if mem_resp.status_code != 200:
                             st.error(f"Could not load list members: HTTP {mem_resp.status_code}")
                         else:
                             members = mem_resp.json().get("members", [])
                             handles = [m.get("userName") or m.get("username", "") for m in members if m.get("userName") or m.get("username")]
                             handles = [h for h in handles if h][:15]
+                            _debug_steps.append(f"{len(handles)} handles: {handles[:5]}")
                             if handles:
-                                # Real-time search for recent tweets from list members
                                 query = " OR ".join([f"from:{h}" for h in handles])
                                 tweets = fetch_tweets(query, count=100)
+                                _debug_steps.append(f"OR query → {len(tweets)} tweets")
                                 for t in tweets:
                                     author = t.get("author", {})
                                     all_tweets.append({
@@ -3636,6 +3642,7 @@ def page_reply_guy():
                                 st.warning("List has no members or couldn't be read")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
+                        _debug_steps.append(f"EXCEPTION: {e}")
             from datetime import timezone as _tz, timedelta as _td
             from dateutil import parser as _dtparser
             _now_utc = datetime.now(_tz.utc)
@@ -3660,7 +3667,10 @@ def page_reply_guy():
             all_tweets = [t for t in all_tweets if _fresh(t)]
             st.session_state["rg_tweets"] = all_tweets
             st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
-            st.session_state["rg_debug"] = f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff={_cutoff.isoformat()}"
+            st.session_state["rg_debug"] = (
+                f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff={_cutoff.isoformat()}\n"
+                + " | ".join(_debug_steps)
+            )
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
