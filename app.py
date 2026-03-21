@@ -1467,8 +1467,7 @@ body{background:transparent;overflow:hidden;}
 
   /* Resize iframe to small fixed button at top-left */
   function shrink(){
-    if(iframe) iframe.style.cssText='position:fixed;top:0;left:0;width:50px;height:50px;border:none;z-index:9999;background:transparent;pointer-events:none;';
-    burger.style.pointerEvents='all';
+    if(iframe) iframe.style.cssText='position:fixed;top:0;left:0;width:50px;height:50px;border:none;z-index:9999;background:transparent;';
     overlay.style.display='none';
     burger.style.display='flex';
   }
