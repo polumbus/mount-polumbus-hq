@@ -1518,8 +1518,29 @@ _stc.html("""<script>
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
       if(zone._mpReady) return;
       zone._mpReady = true;
-      var panel = zone.querySelector('.mp-panel');
-      if(!panel) return;
+      var srcPanel = zone.querySelector('.mp-panel');
+      if(!srcPanel) return;
+
+      /* Move panel to document.body — escapes sidebar transform/overflow entirely */
+      var panel = srcPanel;
+      doc.body.appendChild(panel);
+      panel.style.position = 'fixed';
+      panel.style.zIndex   = '999999';
+      panel.style.opacity  = '0';
+      panel.style.pointerEvents = 'none';
+      panel.style.transform = 'translateX(-4px)';
+      panel.style.transition = 'opacity 0.12s, transform 0.12s';
+
+      /* Fix links — Streamlit adds target=_blank; force same-tab navigation */
+      panel.querySelectorAll('a').forEach(function(a){
+        a.removeAttribute('target');
+        a.addEventListener('click', function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          window.parent.location.href = a.getAttribute('href');
+        });
+      });
+
       var timer = null;
       function show(){
         clearTimeout(timer);
@@ -1535,22 +1556,18 @@ _stc.html("""<script>
           panel.style.opacity = '0';
           panel.style.transform = 'translateX(-4px)';
           panel.style.pointerEvents = 'none';
-        }, 200);
+        }, 300);
       }
       zone.addEventListener('mouseenter', show);
       zone.addEventListener('mouseleave', hide);
       panel.addEventListener('mouseenter', function(){ clearTimeout(timer); });
       panel.addEventListener('mouseleave', hide);
-      panel.querySelectorAll('a').forEach(function(a){
-        a.addEventListener('click', function(e){
-          e.preventDefault();
-          window.parent.location.href = a.getAttribute('href');
-        });
-      });
     });
   }
+  /* Run at 600ms, 1500ms, and again at 3s in case Streamlit re-renders */
   setTimeout(init, 600);
   setTimeout(init, 1500);
+  setTimeout(init, 3000);
 })();
 </script>""", height=0)
 
