@@ -250,8 +250,8 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
 .chat-role { font-size: 10px; color: #404060; font-weight: 700; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 10px; }
 
 /* ── Progress ── */
-.progress-bar-bg { background: rgba(255,255,255,0.05); border-radius: 100px; height: 10px; width: 100%; overflow: hidden; }
-.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #FF6B00, #FFB347); transition: width 0.5s; }
+.progress-bar-bg { background: rgba(255,255,255,0.05); border-radius: 100px; height: 12px; width: 100%; overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #C49E3C, #E8C84A); transition: width 0.5s; }
 
 /* ── Watermark ── */
 .main-watermark {
@@ -1044,7 +1044,7 @@ page = st.session_state.current_page
 # PAGE: BRAIN DUMP
 # ═══════════════════════════════════════════════════════════════════════════
 def page_brain_dump():
-    st.markdown('<div class="main-header">BRAIN <span>DUMP</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">RAW <span>THOUGHTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Set a timer, dump your thoughts, turn them into content.</div>', unsafe_allow_html=True)
 
     # Timer
@@ -1139,7 +1139,7 @@ def page_brain_dump():
                 st.markdown(f'<div class="output-box">{st.session_state["bd_video"]}</div>', unsafe_allow_html=True)
 
     with col_saved:
-        st.markdown("### Saved Raw Thoughtss")
+        st.markdown("### Saved Thoughts")
         dumps = load_json("brain_dumps.json", [])
         if not dumps:
             st.markdown('<div class="output-box">No Raw Thoughts</div>', unsafe_allow_html=True)
@@ -1777,8 +1777,6 @@ Return ONLY this JSON, no other text:
                     st.session_state["ci_last_action"] = {"type": "banger", "text": _rtext, "fmt": fmt, "voice": voice}
 
 
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
     # ── RESULTS (full width, below buttons) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
@@ -1934,7 +1932,6 @@ Return ONLY this JSON, no other text:
 
     # ── Bank ──
     with st.expander("Bank", expanded=False):
-        st.markdown("### Bank")
 
         _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
         _all_folders = load_json("saved_ideas_folders.json", _default_folders)
@@ -2017,7 +2014,7 @@ Return ONLY this JSON, no other text:
 # PAGE: CONTENT COACH
 # ═══════════════════════════════════════════════════════════════════════════
 def page_content_coach():
-    st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">CONTENT <span>ADVISOR</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
 
     # --- Initialize session state ---
@@ -2191,7 +2188,7 @@ def page_article_writer():
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
                 <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
             </div>""", unsafe_allow_html=True)
-            if st.button("→ Select", key=f"aw_tw_{i}", use_container_width=True, type="primary"):
+            if st.button("→ Select", key=f"aw_tw_{i}", use_container_width=True):
                 st.session_state.aw_sel_tweet = i
                 st.session_state.aw_sel_dump = None
                 st.session_state["aw_autogen"] = tw.get("text", "")
@@ -2230,7 +2227,7 @@ def page_article_writer():
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
                 </div>""", unsafe_allow_html=True)
-                if st.button("→ Select", key=f"aw_bd_{j}", use_container_width=True, type="primary"):
+                if st.button("→ Select", key=f"aw_bd_{j}", use_container_width=True):
                     st.session_state.aw_sel_dump = j
                     st.session_state.aw_sel_tweet = None
                     st.session_state["aw_autogen"] = d.get("text", "")
@@ -2504,7 +2501,7 @@ def classify_tweet(tweet):
 
 
 def page_tweet_history():
-    st.markdown('<div class="main-header">YOUR CONTENT <span>HISTORY</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">YOUR POST <span>HISTORY</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your knowledge base. Every AI feature in this app learns from these tweets.</div>', unsafe_allow_html=True)
 
     # Load stored tweets
@@ -2651,25 +2648,29 @@ def page_tweet_history():
 
     st.markdown(f"**Showing {len(filtered)} of {len(tweets)} tweets**")
 
-    # Debug panel — shows exactly which tweets are treated as top performers
-    with st.expander("Debug: Pattern Analysis", expanded=False):
-        _pp = analyze_personal_patterns()
-        if not _pp:
-            st.warning("Not enough data to compute patterns (need 20+ tweets with no URLs).")
-        else:
-            _diag_tweets = load_json("tweet_history.json", [])
-            _has_likeCount = sum(1 for t in _diag_tweets if "likeCount" in t)
-            _has_like_count = sum(1 for t in _diag_tweets if "like_count" in t)
-            st.markdown(f"**Field name check:** `likeCount` present in {_has_likeCount} tweets | `like_count` present in {_has_like_count} tweets")
-            st.markdown(f"**Optimal char range (25th–75th pct):** {_pp.get('optimal_char_range')}")
-            st.markdown(f"**Top avg chars:** {_pp.get('top_avg_chars')} | **Punchy examples:** {len(_pp.get('top_examples_punchy',[]))} | **Normal examples:** {len(_pp.get('top_examples_normal',[]))} | **Long examples:** {len(_pp.get('top_examples_long',[]))}")
-            st.markdown("**Top performers used for pattern analysis:**")
-            for ex in _pp.get("top_examples", []):
-                sc = ex.get("score", 0)
-                sc_color = "#22c55e" if sc > 50 else "#FF6B00"
-                st.markdown(
-                    f'<div style="background:#0d0d18;border-left:3px solid {sc_color};border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;">'                    f'<span style="color:{sc_color};font-weight:700;">Score {sc}</span> · '                    f'<span style="color:#888;">{len(ex.get("text",""))} chars · {ex.get("likes",0)} likes · {ex.get("replies",0)} replies</span><br>'                    f'<span style="color:#d8d8e8;">{ex.get("text","")[:150]}</span></div>',
-                    unsafe_allow_html=True)
+    # Debug panel — only shown when debug_mode is active
+    if st.session_state.get("debug_mode", False):
+        with st.expander("Debug: Pattern Analysis", expanded=False):
+            _pp = analyze_personal_patterns()
+            if not _pp:
+                st.warning("Not enough data to compute patterns (need 20+ tweets with no URLs).")
+            else:
+                _diag_tweets = _load_tweet_history_gist()
+                _has_likeCount = sum(1 for t in _diag_tweets if "likeCount" in t)
+                _has_like_count = sum(1 for t in _diag_tweets if "like_count" in t)
+                st.markdown(f"**Field name check:** `likeCount` present in {_has_likeCount} tweets | `like_count` present in {_has_like_count} tweets")
+                st.markdown(f"**Optimal char range (25th–75th pct):** {_pp.get('optimal_char_range')}")
+                st.markdown(f"**Top avg chars:** {_pp.get('top_avg_chars')} | **Punchy examples:** {len(_pp.get('top_examples_punchy',[]))} | **Normal examples:** {len(_pp.get('top_examples_normal',[]))} | **Long examples:** {len(_pp.get('top_examples_long',[]))}")
+                st.markdown("**Top performers used for pattern analysis:**")
+                for ex in _pp.get("top_examples", []):
+                    sc = ex.get("score", 0)
+                    sc_color = "#22c55e" if sc > 50 else "#FF6B00"
+                    st.markdown(
+                        f'<div style="background:#0d0d18;border-left:3px solid {sc_color};border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;">'
+                        f'<span style="color:{sc_color};font-weight:700;">Score {sc}</span> · '
+                        f'<span style="color:#888;">{len(ex.get("text",""))} chars · {ex.get("likes",0)} likes · {ex.get("replies",0)} replies</span><br>'
+                        f'<span style="color:#d8d8e8;">{ex.get("text","")[:150]}</span></div>',
+                        unsafe_allow_html=True)
 
     # Display tweets with classification tags and engagement scores
     for i, t in enumerate(filtered[:100]):
@@ -3137,7 +3138,7 @@ def page_reply_guy():
     LISTS = {"Broncos Reporters": "1294328608417177604", "Nuggets": "1755985316752642285",
              "Morning Engagement": "2011987998699897046", "Work": "1182699241329721344"}
 
-    st.markdown('<div class="main-header">REPLY <span>GUY</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
 
     # --- Load & roll-over progress ---
