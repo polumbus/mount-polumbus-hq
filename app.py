@@ -2402,33 +2402,49 @@ def sync_tweet_history(quick=False):
 
 
 def _load_tweet_history_gist() -> list:
-    """Load tweet history from Gist (persistent across Streamlit redeploys)."""
+    """Load tweet history from Gist (persistent across Streamlit redeploys).
+    Gist API truncates large files — always fetch via raw_url."""
     if "_tweet_history_cache" in st.session_state:
         return st.session_state["_tweet_history_cache"]
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=15)
-        data = resp.json()
-        content = data.get("files", {}).get("hq_tweet_history.json", {}).get("content", "")
-        if content:
-            tweets = json.loads(content)
-            st.session_state["_tweet_history_cache"] = tweets
-            return tweets
+        file_meta = resp.json().get("files", {}).get("hq_tweet_history.json", {})
+        if file_meta:
+            # Always use raw_url — Gist API truncates files over ~1MB in content field
+            raw_url = file_meta.get("raw_url", "")
+            if raw_url:
+                raw_resp = requests.get(raw_url, timeout=30)
+                tweets = json.loads(raw_resp.text)
+                st.session_state["_tweet_history_cache"] = tweets
+                return tweets
     except Exception:
         pass
     # Fallback to local file
     return load_json("tweet_history.json", [])
 
 
+def _slim_tweet(t: dict) -> dict:
+    """Strip tweet to only fields the app uses — keeps Gist file small."""
+    return {
+        "id": t.get("id", ""),
+        "text": t.get("text", ""),
+        "likeCount": t.get("likeCount", t.get("like_count", 0)),
+        "retweetCount": t.get("retweetCount", t.get("retweet_count", 0)),
+        "replyCount": t.get("replyCount", t.get("reply_count", 0)),
+        "viewCount": t.get("viewCount", t.get("view_count", 0)),
+        "createdAt": t.get("createdAt", t.get("created_at", "")),
+    }
+
+
 def _save_tweet_history_gist(tweets: list):
-    """Save tweet history to Gist and local file."""
-    st.session_state["_tweet_history_cache"] = tweets
-    # Save locally as backup
-    save_json("tweet_history.json", tweets)
-    # Save to Gist
+    """Save tweet history to Gist and local file. Slims tweets first to avoid truncation."""
+    slimmed = [_slim_tweet(t) for t in tweets]
+    st.session_state["_tweet_history_cache"] = slimmed
+    save_json("tweet_history.json", slimmed)
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(tweets, default=str)}}})
+        payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(slimmed)}}})
         requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=15)
     except Exception:
         pass
