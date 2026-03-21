@@ -1122,26 +1122,50 @@ def save_json(filename: str, data):
 ENGAGEMENT_LISTS_PATH = DATA_DIR / 'engagement_lists.json'
 
 _ENGAGEMENT_DEFAULTS = {
-    'Broncos Reporters': '@MikeKlis, @TroyRenck, @RyanOHalloran, @NickKosmider',
-    'NBA / Avs': '@PeterBaugh, @EvanSidery',
-    'My Custom List': '',
+    'Broncos Reporters': {'list_id': '1294328608417177604'},
+    'Nuggets':           {'list_id': '1755985316752642285'},
+    'Morning Engagement':{'list_id': '2011987998699897046'},
+    'Work':              {'list_id': '1182699241329721344'},
 }
 
 def load_engagement_lists() -> dict:
     if ENGAGEMENT_LISTS_PATH.exists():
         try:
             loaded = json.loads(ENGAGEMENT_LISTS_PATH.read_text())
-            # Restore defaults for any key stored with empty value
+            migrated = {}
+            for k, v in loaded.items():
+                if isinstance(v, str):
+                    migrated[k] = {'list_id': '', 'legacy_handles': v}
+                else:
+                    migrated[k] = v
             for k, v in _ENGAGEMENT_DEFAULTS.items():
-                if k not in loaded or not loaded[k]:
-                    loaded[k] = v
-            return loaded
+                if k not in migrated:
+                    migrated[k] = v
+            return migrated
         except Exception:
             pass
     return dict(_ENGAGEMENT_DEFAULTS)
 
 def save_engagement_lists(lists: dict):
     ENGAGEMENT_LISTS_PATH.write_text(json.dumps(lists, indent=2))
+
+
+def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
+    """Fetch recent tweets from a Twitter List via twitterapi.io."""
+    if not TWITTER_API_IO_KEY or not list_id:
+        return []
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/list/tweets",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"listId": list_id, "count": min(count, 100)},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("tweets", [])
+    except Exception:
+        pass
+    return []
 
 
 def fetch_tweets(query: str, count: int = 50) -> list:
@@ -3514,10 +3538,8 @@ Return this exact JSON structure:
 # ═══════════════════════════════════════════════════════════════════════════
 def page_reply_guy():
     XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
-    LISTS = {"Broncos Reporters": "1294328608417177604", "Nuggets": "1755985316752642285",
-             "Morning Engagement": "2011987998699897046", "Work": "1182699241329721344"}
-    if "custom_eng_lists" not in st.session_state:
-        st.session_state.custom_eng_lists = load_engagement_lists()
+    if "custom_lists" not in st.session_state:
+        st.session_state.custom_lists = load_engagement_lists()
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
@@ -3553,12 +3575,12 @@ def page_reply_guy():
             _rg_actions["replied"] = replied_tweets[-500:]
             _save_actions_gist(_rg_actions)
 
-    # ── PART 3: Engagement Targets — Table Layout ──
+    # ── PART 3: Engagement Targets ──
     st.markdown("### Engagement Targets")
-    _all_list_names = list(st.session_state.custom_eng_lists.keys()) + [k for k in LISTS if k not in st.session_state.custom_eng_lists]
     ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
     with ctrl1:
-        list_source = st.selectbox("List", _all_list_names, key="rg_source", label_visibility="collapsed")
+        list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
+                                   key="rg_source", label_visibility="collapsed")
     with ctrl2:
         do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True, type="primary")
     with ctrl3:
@@ -3566,123 +3588,79 @@ def page_reply_guy():
             st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
 
     if st.session_state.get("rg_show_new_list"):
+        st.markdown("**Add X List**")
         _nl_name = st.text_input("List name", placeholder="e.g. NFL Insiders", key="rg_nl_name")
-        _nl_handles = st.text_input("Handles", placeholder="@handle1, @handle2", key="rg_nl_handles")
+        _nl_lid  = st.text_input("X List ID", placeholder="e.g. 1234567890  (from x.com/i/lists/...)", key="rg_nl_lid")
+        st.caption("Find your List ID: open the list on X, copy the number from the URL")
         _s1, _s2 = st.columns(2)
         with _s1:
-            if st.button("Save List", use_container_width=True, type="primary", key="rg_nl_save"):
-                if _nl_name.strip() and _nl_handles.strip():
-                    st.session_state.custom_eng_lists[_nl_name.strip()] = _nl_handles.strip()
-                    save_engagement_lists(st.session_state.custom_eng_lists)
+            if st.button("Save", use_container_width=True, type="primary", key="rg_nl_save"):
+                if _nl_name.strip() and _nl_lid.strip():
+                    st.session_state.custom_lists[_nl_name.strip()] = {"list_id": _nl_lid.strip()}
+                    save_engagement_lists(st.session_state.custom_lists)
                     st.session_state["rg_show_new_list"] = False
-                    st.success(f"List '{_nl_name.strip()}' saved!")
+                    st.success(f"List '{_nl_name.strip()}' saved.")
                     st.rerun()
         with _s2:
             if st.button("Cancel", use_container_width=True, key="rg_nl_cancel"):
                 st.session_state["rg_show_new_list"] = False
                 st.rerun()
 
-    _is_twitter_list = list_source in LISTS and list_source not in st.session_state.custom_eng_lists
-    _list_handles_str = st.session_state.custom_eng_lists.get(list_source, "")
-    # Reset widget when list_source changes so value= param takes effect
-    if st.session_state.get("rg_last_list") != list_source:
-        st.session_state["rg_last_list"] = list_source
-        st.session_state.pop("rg_accounts", None)
-    if not _is_twitter_list:
-        custom_accounts = st.text_input("Accounts (comma-separated):", value=_list_handles_str, key="rg_accounts", placeholder="@MikeKlis, @TroyRenck")
-        if custom_accounts != _list_handles_str:
-            st.session_state.custom_eng_lists[list_source] = custom_accounts
-            save_engagement_lists(st.session_state.custom_eng_lists)
+    _list_data = st.session_state.custom_lists.get(list_source, {})
+    _list_id   = _list_data.get("list_id", "") if isinstance(_list_data, dict) else ""
+    if _list_id:
+        st.caption(f"X List ID: {_list_id}")
     else:
-        custom_accounts = ""
-    new_acc = ""
+        st.caption("No List ID — click + New List to add one")
 
     if do_load:
-        with st.spinner("Fetching posts..."):
-            all_tweets = []
-            _debug_steps = []
-            # Read handles from dict directly — widget value unreliable due to Streamlit key persistence
-            _fetch_handles_str = st.session_state.custom_eng_lists.get(list_source, "") if not _is_twitter_list else ""
-            _debug_steps.append(f"key={'SET' if TWITTER_API_IO_KEY else 'MISSING'} | list={list_source!r} | is_twitter_list={_is_twitter_list}")
-            if not _is_twitter_list:
-                accs = [a.strip().lstrip("@") for a in _fetch_handles_str.replace(",", "\n").split("\n") if a.strip()]
-                _debug_steps.append(f"custom path: {len(accs)} accounts: {accs[:5]}")
-                for acc in accs[:12]:
-                    tweets = fetch_tweets(f"from:{acc}", count=20)
-                    _debug_steps.append(f"  from:{acc} → {len(tweets)} tweets")
-                    for t in tweets:
-                        t["_target_account"] = acc
-                    all_tweets.extend(tweets)
-            else:
-                lid = LISTS.get(list_source, "")
-                _debug_steps.append(f"twitter list path: lid={lid!r}")
-                if lid:
+        if not _list_id:
+            st.error("No X List ID for this list. Use + New List to set one.")
+        else:
+            with st.spinner("Fetching posts..."):
+                from datetime import timezone as _tz, timedelta as _td
+                from dateutil import parser as _dtparser
+                raw_tweets = fetch_tweets_from_list(_list_id, count=100)
+                _now_utc = datetime.now(_tz.utc)
+                _cutoff  = _now_utc - _td(hours=6)
+                def _fresh(t):
+                    ts = t.get("createdAt", t.get("created_at", ""))
+                    if not ts: return False
                     try:
-                        mem_resp = requests.get(
-                            "https://api.twitterapi.io/twitter/list/members",
-                            headers={"X-API-Key": TWITTER_API_IO_KEY},
-                            params={"list_id": lid, "count": 30},
-                            timeout=30,
-                        )
-                        _debug_steps.append(f"members HTTP {mem_resp.status_code}")
-                        if mem_resp.status_code != 200:
-                            st.error(f"Could not load list members: HTTP {mem_resp.status_code}")
-                        else:
-                            members = mem_resp.json().get("members", [])
-                            handles = [m.get("userName") or m.get("username", "") for m in members if m.get("userName") or m.get("username")]
-                            handles = [h for h in handles if h][:15]
-                            _debug_steps.append(f"{len(handles)} handles: {handles[:5]}")
-                            if handles:
-                                query = " OR ".join([f"from:{h}" for h in handles])
-                                tweets = fetch_tweets(query, count=100)
-                                _debug_steps.append(f"OR query → {len(tweets)} tweets")
-                                for t in tweets:
-                                    author = t.get("author", {})
-                                    all_tweets.append({
-                                        "id": t.get("id", ""),
-                                        "text": t.get("text", ""),
-                                        "createdAt": t.get("createdAt", t.get("created_at", "")),
-                                        "likeCount": t.get("likeCount", 0),
-                                        "retweetCount": t.get("retweetCount", 0),
-                                        "replyCount": t.get("replyCount", 0),
-                                        "viewCount": t.get("viewCount", 0),
-                                        "_target_account": author.get("userName", author.get("username", "")),
-                                        "author": author,
-                                        "media": t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else []),
-                                    })
-                            else:
-                                st.warning("List has no members or couldn't be read")
-                    except Exception as e:
-                        st.error(f"List fetch error: {str(e)[:100]}")
-                        _debug_steps.append(f"EXCEPTION: {e}")
-            from datetime import timezone as _tz, timedelta as _td
-            from dateutil import parser as _dtparser
-            _now_utc = datetime.now(_tz.utc)
-            _cutoff = _now_utc - _td(hours=6)
-            def _fresh(t):
-                ts = t.get("createdAt", t.get("created_at", ""))
-                if not ts: return False
-                try:
-                    td = _dtparser.parse(ts)
-                    if td.tzinfo is None:
-                        td = td.replace(tzinfo=_tz.utc)
-                    return td >= _cutoff
-                except Exception:
-                    try:
-                        import re as _re
-                        tc = _re.sub(r"\+\d{2}:\d{2}$", "Z", str(ts))
-                        td = datetime.fromisoformat(tc.replace("Z", "+00:00"))
+                        td = _dtparser.parse(ts)
+                        if td.tzinfo is None:
+                            td = td.replace(tzinfo=_tz.utc)
                         return td >= _cutoff
                     except Exception:
-                        return False
-            raw_count = len(all_tweets)
-            all_tweets = [t for t in all_tweets if _fresh(t)]
-            st.session_state["rg_tweets"] = all_tweets
-            st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
-            st.session_state["rg_debug"] = (
-                f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff={_cutoff.isoformat()}\n"
-                + " | ".join(_debug_steps)
-            )
+                        try:
+                            import re as _re
+                            tc = _re.sub(r"\+\d{2}:\d{2}$", "Z", str(ts))
+                            td = datetime.fromisoformat(tc.replace("Z", "+00:00"))
+                            return td >= _cutoff
+                        except Exception:
+                            return False
+                all_tweets = []
+                for t in raw_tweets:
+                    if _fresh(t):
+                        author = t.get("author", {})
+                        all_tweets.append({
+                            "id": t.get("id", ""),
+                            "text": t.get("text", ""),
+                            "createdAt": t.get("createdAt", t.get("created_at", "")),
+                            "likeCount": t.get("likeCount", 0),
+                            "retweetCount": t.get("retweetCount", 0),
+                            "replyCount": t.get("replyCount", 0),
+                            "viewCount": t.get("viewCount", 0),
+                            "_target_account": author.get("userName", author.get("username", "")),
+                            "author": author,
+                            "media": t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else []),
+                        })
+                st.session_state["rg_tweets"] = all_tweets
+                st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
+                st.session_state["rg_debug"] = (
+                    f"DEBUG: fetched {len(raw_tweets)} from list, {len(all_tweets)} passed 6hr filter, "
+                    f"list_id={_list_id}, cutoff={_cutoff.isoformat()}"
+                )
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
