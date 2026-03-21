@@ -360,36 +360,147 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .canvas-title { font-size: 9px; color: #4a5160; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; }
 
 /* Mobile */
-@media (max-width: 768px) {
-  .main-header { font-size: 34px !important; }
-  .stat-num { font-size: 28px !important; }
-  .main-watermark { display: none; }
-  .stButton > button { padding: 7px 14px !important; font-size: 12px !important; }
-  .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
-  .output-box { padding: 14px 16px !important; font-size: 13px !important; }
-  .format-guide { display: none; }
-  section[data-testid="stSidebar"] {
-    min-width: 100vw !important; max-width: 100vw !important;
-    height: 64px !important; position: fixed !important;
-    bottom: 0 !important; top: auto !important; left: 0 !important; z-index: 9999 !important;
-  }
-  [data-testid="stAppViewContainer"] > .main {
-    margin-left: 0 !important; margin-bottom: 64px !important; padding: 12px !important;
-  }
-  .mp-rail {
-    flex-direction: row !important; width: 100vw !important; height: 64px !important;
-    padding: 8px 12px !important; justify-content: space-around !important;
-    align-items: center !important; border-top: 1px solid #14203A !important;
-    border-radius: 0 !important; gap: 0 !important;
-  }
-  .mp-logo { display: none !important; }
-  .mp-pro { display: none !important; }
-  .mp-zone { width: auto !important; flex-direction: row !important;
-    background: transparent !important; border: none !important; padding: 0 !important; gap: 0 !important; }
-  .mp-zone-label { display: none !important; }
-  .mp-panel { bottom: 70px !important; top: auto !important; left: 0 !important;
-    width: 100vw !important; border-radius: 12px 12px 0 0 !important; }
-  .mp-ico { width: 52px !important; height: 52px !important; }
+@media screen and (max-width: 768px) {
+
+    /* Hide Streamlit's own deploy/menu buttons on mobile — they bleed over our nav */
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stAppDeployButton"],
+    [data-testid="stMainMenu"],
+    [data-testid="stMainMenuButton"],
+    .st-emotion-cache-1dp5vir,
+    .st-emotion-cache-15zrgzn,
+    iframe[title="streamlit_analytics"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Sidebar becomes a bottom bar */
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarContent"],
+    [data-testid="stSidebarUserContent"] {
+        position: fixed !important;
+        bottom: 0 !important;
+        top: auto !important;
+        left: 0 !important;
+        width: 100vw !important;
+        min-width: 100vw !important;
+        max-width: 100vw !important;
+        height: 72px !important;
+        min-height: 72px !important;
+        max-height: 72px !important;
+        border-top: 1px solid #1E3050 !important;
+        border-right: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+        z-index: 99999 !important;
+        background: #080E1E !important;
+        padding: 0 !important;
+    }
+
+    /* Main content — add bottom padding so nav doesn't cover it */
+    [data-testid="stAppViewContainer"] > section.main,
+    [data-testid="stMain"] {
+        margin-left: 0 !important;
+        padding-bottom: 90px !important;
+        padding-top: 16px !important;
+    }
+
+    /* The rail becomes a horizontal tab bar */
+    .mp-rail {
+        flex-direction: row !important;
+        width: 100vw !important;
+        height: 72px !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        justify-content: space-around !important;
+        align-items: stretch !important;
+        background: #080E1E !important;
+    }
+
+    /* Hide logo and PRO on mobile */
+    .mp-logo,
+    .mp-pro {
+        display: none !important;
+    }
+
+    /* Each zone becomes a tab button taking equal width */
+    .mp-zone {
+        flex: 1 !important;
+        width: auto !important;
+        min-width: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 8px 4px 4px !important;
+        gap: 2px !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: static !important;
+        cursor: pointer !important;
+        border-top: 2px solid transparent !important;
+        transition: border-color 0.15s !important;
+    }
+
+    /* Show ONLY the first icon from each zone on mobile (the zone representative) */
+    .mp-zone .mp-ico:not(:first-of-type) {
+        display: none !important;
+    }
+
+    /* Zone icons in mobile tab bar */
+    .mp-ico {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 8px !important;
+    }
+
+    /* Zone labels visible on mobile as tab labels */
+    .mp-zone-label {
+        display: block !important;
+        font-size: 8px !important;
+        letter-spacing: 1px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+    .mp-zone-create .mp-zone-label  { color: #00E5CC99 !important; }
+    .mp-zone-interact .mp-zone-label { color: #C49E3C99 !important; }
+    .mp-zone-insights .mp-zone-label { color: #91A2B299 !important; }
+
+    /* Flyout panel becomes a bottom sheet rising from the nav */
+    .mp-panel {
+        position: fixed !important;
+        bottom: 72px !important;
+        left: 4px !important;
+        right: 4px !important;
+        top: auto !important;
+        width: auto !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 16px 0 8px !important;
+        min-width: 0 !important;
+        transform: none !important;
+        box-shadow: 0 -8px 40px rgba(0,0,0,0.8) !important;
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+    }
+
+    /* Panel items bigger on mobile for touch targets */
+    .mp-panel-item {
+        padding: 14px 20px !important;
+        font-size: 14px !important;
+    }
+
+    .mp-panel-header {
+        font-size: 9px !important;
+        padding: 2px 20px 12px !important;
+    }
+
+    /* Active zone gets top border accent */
+    .mp-zone-create:hover  { border-top-color: #00E5CC !important; }
+    .mp-zone-interact:hover { border-top-color: #C49E3C !important; }
+    .mp-zone-insights:hover { border-top-color: #91A2B2 !important; }
 }
 /* ─── Global color tokens ──────────────────────────────────────────── */
 :root { --mp-cyan: #00E5CC; --mp-gold: #C49E3C; --mp-navy: #080E1E; --mp-steel: #91A2B2; }
@@ -1124,7 +1235,7 @@ _sidebar_html = f"""
     width: 64px; background: #0A1628; border-radius: 11px; border: 1px solid #14203A;
     display: flex; flex-direction: column; align-items: center;
     padding: 8px 6px 10px; gap: 4px; flex-shrink: 0;
-    position: relative; cursor: default; transition: border-color 0.2s;
+    position: relative; cursor: default; transition: border-color 0.2s; overflow: visible;
 }}
 .mp-zone-create:hover  {{ border-color: #00E5CC33; }}
 .mp-zone-interact:hover {{ border-color: #C49E3C33; }}
@@ -1156,12 +1267,20 @@ _sidebar_html = f"""
     width: 3px; height: 16px; border-radius: 0 3px 3px 0; background: #00E5CC; opacity: 0;
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
+.mp-zone::after {{
+    content: ''; position: absolute; left: 100%; top: 0; width: 10px; height: 100%;
+}}
 .mp-panel {{
-    position: fixed; background: #0D1929;
+    position: absolute; left: calc(100% + 6px); top: 0;
+    background: #0D1929;
     border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 180px;
-    pointer-events: none; opacity: 0; transform: translateX(-6px);
-    transition: opacity 0.15s, transform 0.15s; z-index: 99999;
+    pointer-events: none; opacity: 0; transform: translateX(-4px);
+    transition: opacity 0.12s 0.15s, transform 0.12s 0.15s; z-index: 100;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+}}
+.mp-zone:hover .mp-panel {{
+    opacity: 1; transform: translateX(0); pointer-events: all;
+    transition: opacity 0.12s 0s, transform 0.12s 0s;
 }}
 .mp-panel-header {{
     font-size: 8px; letter-spacing: 2px; font-weight: 700;
@@ -1358,80 +1477,6 @@ _sidebar_html = f"""
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
 
-st.components.v1.html("""<script>
-(function() {
-  'use strict';
-  var doc = window.parent.document;
-  var timers = new Map();
-
-  function cleanOrphanPanels() {
-    doc.querySelectorAll('body > .mp-panel').forEach(function(p) {
-      if (!p._mpZone || !doc.contains(p._mpZone)) { p.remove(); }
-    });
-  }
-
-  function setupZone(zone) {
-    if (zone._mpDone) return;
-    zone._mpDone = true;
-
-    var panel = zone.querySelector('.mp-panel');
-    if (!panel) return;
-
-    doc.body.appendChild(panel);
-    panel._mpZone = zone;
-
-    function getLeft() { return zone.getBoundingClientRect().right + 6; }
-    function getTop()  { return zone.getBoundingClientRect().top; }
-
-    function show() {
-      var t = timers.get(zone);
-      if (t) { clearTimeout(t); timers.delete(zone); }
-      panel.style.left  = getLeft() + 'px';
-      panel.style.top   = getTop()  + 'px';
-      panel.style.opacity = '1';
-      panel.style.transform = 'translateX(0)';
-      panel.style.pointerEvents = 'all';
-    }
-
-    function scheduleHide(delay) {
-      var t = setTimeout(function() {
-        panel.style.opacity = '0';
-        panel.style.transform = 'translateX(-6px)';
-        panel.style.pointerEvents = 'none';
-        timers.delete(zone);
-      }, delay == null ? 250 : delay);
-      timers.set(zone, t);
-    }
-
-    zone.addEventListener('mouseenter', show);
-    zone.addEventListener('mouseleave', function() { scheduleHide(250); });
-    panel.addEventListener('mouseenter', function() {
-      var t = timers.get(zone); if (t) { clearTimeout(t); timers.delete(zone); }
-    });
-    panel.addEventListener('mouseleave', function() { scheduleHide(150); });
-  }
-
-  function init() {
-    cleanOrphanPanels();
-    doc.querySelectorAll('.mp-zone').forEach(setupZone);
-  }
-
-  setTimeout(init, 300);
-  setTimeout(init, 800);
-
-  new MutationObserver(function(mutations) {
-    var relevant = mutations.some(function(m) {
-      return Array.from(m.addedNodes).some(function(n) {
-        return n.nodeType === 1 && (
-          (n.classList && n.classList.contains('mp-zone')) ||
-          (n.querySelector && n.querySelector('.mp-zone'))
-        );
-      });
-    });
-    if (relevant) { setTimeout(init, 50); }
-  }).observe(doc.body, { childList: true, subtree: true });
-})();
-</script>""", height=0)
 
 
 page = st.session_state.current_page
