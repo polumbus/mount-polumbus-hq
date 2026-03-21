@@ -3701,17 +3701,25 @@ def page_reply_guy():
         if not tweets_data:
             st.caption("Load a feed first")
         if st.session_state.get("rg_inspiration_ideas"):
-            st.markdown(st.session_state["rg_inspiration_ideas"])
-            _ic1, _ic2 = st.columns(2)
-            with _ic1:
-                if st.button("↺ Regen", use_container_width=True, key="btn_regen_insp"):
-                    del st.session_state["rg_inspiration_ideas"]
+            # Parse numbered list into individual ideas
+            import re as _re_insp
+            _raw_ideas = st.session_state["rg_inspiration_ideas"]
+            _idea_parts = _re_insp.split(r'\n?\d+[\.\)]\s+', _raw_ideas)
+            _ideas = [p.strip() for p in _idea_parts if p.strip()]
+            for _ii, _idea in enumerate(_ideas):
+                st.markdown(
+                    f'<div style="font-size:12px;color:#c0c8d8;line-height:1.5;margin:8px 0 4px;">'
+                    f'<span style="color:#445;font-size:10px;">{_ii+1}.</span> {_idea}</div>',
+                    unsafe_allow_html=True)
+                if st.button("⚡ Go Viral", key=f"rg_viral_{_ii}", use_container_width=True, type="primary"):
+                    st.session_state["rg_viral_idea"] = _idea
+                    st.session_state["rg_viral_fmt"] = "Normal Tweet"
+                    st.session_state["rg_viral_voice"] = "Default"
                     st.rerun()
-            with _ic2:
-                if st.button("→ Studio", use_container_width=True, key="btn_insp_to_studio"):
-                    st.session_state.current_page = "Creator Studio"
-                    st.query_params["page"] = "Creator Studio"
-                    st.rerun()
+            if st.button("↺ Regen", use_container_width=True, key="btn_regen_insp"):
+                del st.session_state["rg_inspiration_ideas"]
+                st.session_state.pop("rg_viral_idea", None)
+                st.rerun()
         # JS — makes this column position:fixed so it floats as user scrolls
         import streamlit.components.v1 as _stc_insp
         _stc_insp.html("""<script>
@@ -3922,6 +3930,32 @@ def page_reply_guy():
     # Force rerun if flagged (workaround for st.rerun inside nested columns)
     if st.session_state.pop("rg_force_rerun", False):
         st.rerun()
+
+    # ── Go Viral modal (from Inspiration Engine) ──
+    if st.session_state.get("rg_viral_idea"):
+        _viral_idea = st.session_state["rg_viral_idea"]
+        _viral_fmt = st.session_state.get("rg_viral_fmt", "Normal Tweet")
+        _viral_voice = st.session_state.get("rg_viral_voice", "Default")
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+        _vf1, _vf2, _vclose = st.columns([2, 2, 1])
+        with _vf1:
+            _viral_fmt = st.selectbox("Format", ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"],
+                index=["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"].index(_viral_fmt),
+                key="rg_viral_fmt_sel", label_visibility="collapsed")
+        with _vf2:
+            _viral_voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"],
+                index=["Default", "Critical", "Homer", "Sarcastic"].index(_viral_voice),
+                key="rg_viral_voice_sel", label_visibility="collapsed")
+        with _vclose:
+            if st.button("✕ Close", key="rg_viral_close", use_container_width=True):
+                st.session_state.pop("rg_viral_idea", None)
+                for _k in ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+        st.session_state["rg_viral_fmt"] = _viral_fmt
+        st.session_state["rg_viral_voice"] = _viral_voice
+        _ci_output_modal("banger", _viral_idea, _viral_fmt, _viral_voice)
+        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # ── PART 2: My Tweet Replies — Conversation Depth ──
     st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#445;font-weight:700;margin-bottom:10px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
