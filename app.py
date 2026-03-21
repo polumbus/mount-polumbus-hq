@@ -2089,36 +2089,46 @@ Give the repurposed tweet, then show character count."""
         tyler_score = gd.get("tyler_score", 0)
         algo_color = "#22c55e" if algo_score >= 75 else "#00F5FF" if algo_score >= 55 else "#ef4444"
         tyler_color = "#22c55e" if tyler_score >= 75 else "#00F5FF" if tyler_score >= 55 else "#ef4444"
-        st.markdown(f"""<div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{algo_color};line-height:1;">{algo_score}</div>
-                <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Algo Score</div>
+        # ── Score header ──
+        st.markdown(f"""<div style="display:flex;gap:10px;margin-bottom:16px;">
+            <div style="flex:1;background:#09111e;border-radius:12px;padding:18px 16px;display:flex;align-items:center;gap:14px;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:{algo_color};line-height:1;letter-spacing:1px;">{algo_score}</div>
+                <div><div style="font-size:13px;font-weight:700;color:#e8e8f0;margin-bottom:2px;">Algo Score</div><div style="font-size:11px;color:#3a5070;">X algorithm performance</div></div>
             </div>
-            <div style="flex:1;background:#0d0d18;border:1px solid #1e1e35;border-radius:10px;padding:14px;text-align:center;">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:{tyler_color};line-height:1;">{tyler_score}</div>
-                <div style="font-size:10px;color:#666688;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Tyler Score</div>
+            <div style="flex:1;background:#09111e;border-radius:12px;padding:18px 16px;display:flex;align-items:center;gap:14px;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:{tyler_color};line-height:1;letter-spacing:1px;">{tyler_score}</div>
+                <div><div style="font-size:13px;font-weight:700;color:#e8e8f0;margin-bottom:2px;">Tyler Score</div><div style="font-size:11px;color:#3a5070;">Your voice + patterns</div></div>
             </div>
         </div>""", unsafe_allow_html=True)
-        for ins in gd.get("personal_insights", []):
-            st.markdown(f'''<div style="background:#1a1a30;border-left:3px solid #00F5FF;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:#d8d8e8;line-height:1.5;">{ins}</div>''', unsafe_allow_html=True)
+        # ── Personal insights ──
+        insights = gd.get("personal_insights", [])
+        if insights:
+            _ins_html = "".join([f'<div style="font-size:12px;color:#7a9ab8;line-height:1.55;padding:6px 0;border-bottom:1px solid #0f1e30;">{ins}</div>' for ins in insights])
+            st.markdown(f'<div style="background:#06101a;border-radius:10px;padding:12px 16px;margin-bottom:16px;">{_ins_html}</div>', unsafe_allow_html=True)
+        # ── Grade cards — 2-col grid ──
         grades = gd.get("grades", [])
         if grades:
-            st.markdown('''<div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">Grade Breakdown</div>''', unsafe_allow_html=True)
+            _grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
             for g in grades:
                 score = g.get("score", 0)
                 sc = "#22c55e" if score >= 8 else "#00F5FF" if score >= 6 else "#ef4444"
                 fix = g.get("fix", "")
-                fix_html = f'''<div style="font-size:11px;color:#4ecdc4;margin-top:6px;border-left:2px solid #4ecdc4;padding-left:8px;">Fix: {fix}</div>''' if fix else ""
-                st.markdown(f"""<div style="background:#0d0d18;border:1px solid #1e1e35;border-radius:8px;padding:12px;margin-bottom:8px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-weight:600;font-size:13px;">{g.get('name','')}</span>
-                        <span style="font-size:13px;color:{sc};font-weight:700;">{score}/10</span>
+                fix_html = f'<div style="font-size:11px;color:#00C8C0;margin-top:10px;padding-top:10px;border-top:1px solid #0f1e30;line-height:1.4;">→ {fix}</div>' if fix else ""
+                _grid += f'''<div style="background:#09111e;border-top:2px solid {sc};border-radius:10px;padding:14px 15px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                        <span style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;line-height:1.3;">{g.get('name','')}</span>
+                        <span style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:{sc};line-height:1;">{score}</span>
                     </div>
-                    <div style="font-size:12px;color:#9999aa;line-height:1.5;">{g.get('detail','')}</div>
+                    <div style="font-size:12px;color:#6a8098;line-height:1.55;">{g.get('detail','')}</div>
                     {fix_html}
-                </div>""", unsafe_allow_html=True)
-        for s in gd.get("suggestions", []):
-            st.markdown(f'''<div style="font-size:12px;color:#9999aa;padding:4px 0 4px 10px;border-left:2px solid rgba(0,245,255,0.2);margin-bottom:6px;line-height:1.5;">{s}</div>''', unsafe_allow_html=True)
+                </div>'''
+            _grid += '</div>'
+            st.markdown(_grid, unsafe_allow_html=True)
+        # ── Suggestions ──
+        suggestions = gd.get("suggestions", [])
+        if suggestions:
+            _sug_html = "".join([f'<div style="font-size:12px;color:#6a8098;line-height:1.55;padding:5px 0;border-bottom:1px solid #0f1e30;">· {s}</div>' for s in suggestions])
+            st.markdown(f'<div style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Suggestions</div><div style="background:#06101a;border-radius:10px;padding:12px 16px;">{_sug_html}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
