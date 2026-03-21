@@ -2315,7 +2315,7 @@ def page_article_writer():
             reps = tw.get("replyCount", 0)
             views = tw.get("viewCount", 0)
             selected = st.session_state.aw_sel_tweet == i
-            border = "border-left:3px solid #FF6B00;" if selected else ""
+            border = "border-left:3px solid #00F5FF;" if selected else ""
             st.markdown(f"""<div class="tweet-card" style="{border}">
                 <div class="tweet-num">{dt}</div>
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
@@ -2355,7 +2355,7 @@ def page_article_writer():
                 ts = d.get("saved_at", "")[:16].replace("T", " ")
                 preview = d.get("text", "")[:160]
                 selected = st.session_state.aw_sel_dump == j
-                border = "border-left:3px solid #FF6B00;" if selected else ""
+                border = "border-left:3px solid #00F5FF;" if selected else ""
                 st.markdown(f"""<div class="tweet-card" style="{border}">
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
@@ -2785,7 +2785,7 @@ def page_tweet_history():
             views = t.get("viewCount", t.get("view_count", 0))
             score = round(_eng_score(t))
             date  = t.get("createdAt", "")[:10]
-            medal = "#FFD700" if rank == 1 else "#C0C0C0" if rank == 2 else "#CD7F32" if rank == 3 else "#FF6B00"
+            medal = "#FFD700" if rank == 1 else "#C0C0C0" if rank == 2 else "#CD7F32" if rank == 3 else "#6E7681"
             st.markdown(
                 f'<div style="background:#0d0d1a;border-left:3px solid {medal};border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
@@ -2973,7 +2973,7 @@ def page_health_check():
 
     # What it checks
     st.markdown("""<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:18px 22px;margin-bottom:20px;">
-    <div style="font-size:11px;color:#FF6B00;font-weight:700;letter-spacing:2px;margin-bottom:12px;">WHAT THIS AUDITS</div>
+    <div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin-bottom:12px;">WHAT THIS AUDITS</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div style="color:#8888aa;font-size:13px;">&#9632; Posting frequency &amp; consistency</div>
       <div style="color:#8888aa;font-size:13px;">&#9632; Hook quality (first-line scroll-stop rate)</div>
@@ -3401,8 +3401,8 @@ def page_reply_guy():
         rts = tw.get("retweetCount", tw.get("retweet_count", 0))
         rpl = tw.get("replyCount", tw.get("reply_count", 0))
         views = tw.get("viewCount", tw.get("view_count", 0))
-        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #FF6B00;">'
-                    f'<div style="color:#FF6B00;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
+        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #00F5FF;">'
+                    f'<div style="color:#00F5FF;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
                     f'<div style="color:#e8e8f0;font-size:14px;line-height:1.5;margin-bottom:8px;">{txt}</div>'
                     f'<div style="font-size:11px;color:#666688;">{likes:,} likes | {rts:,} RTs | {rpl:,} replies | {views:,} views</div></div>', unsafe_allow_html=True)
 
@@ -3429,7 +3429,7 @@ def page_reply_guy():
 
             rc1, rc2, rc3 = st.columns([1, 3, 4])
             with rc1:
-                st.markdown(f'<div style="font-weight:700;color:#FF6B00;font-size:13px;padding-top:8px;">@{rauthor}</div>'
+                st.markdown(f'<div style="font-weight:700;color:#00F5FF;font-size:13px;padding-top:8px;">@{rauthor}</div>'
                             f'<div style="font-size:11px;color:#555577;">{r_likes} likes</div>', unsafe_allow_html=True)
             with rc2:
                 st.markdown(
@@ -3634,7 +3634,7 @@ def page_reply_guy():
         with rc1:
             st.markdown(
                 f'<div style="padding-top:8px;">'
-                f'<div style="font-weight:700;color:#FF6B00;font-size:14px;">@{acc}</div>'
+                f'<div style="font-weight:700;color:#00F5FF;font-size:14px;">@{acc}</div>'
                 f'<div style="margin-top:6px;display:inline-block;background:rgba(255,255,255,0.04);border-radius:6px;padding:3px 8px;font-size:12px;color:{score_color};font-weight:600;">⚡ {eng_score}</div>'
                 f'</div>',
                 unsafe_allow_html=True)
