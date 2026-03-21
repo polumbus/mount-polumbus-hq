@@ -1487,12 +1487,16 @@ body{background:transparent;overflow:hidden;}
       if(!links.length) return;
       html+='<div class="sec-label">'+(hdr?hdr.textContent.trim():'')+'</div>';
       links.forEach(function(a){
-        html+='<a class="nav-lnk" href="'+a.getAttribute('href')+'" target="_parent">'+a.textContent.trim()+'</a>';
+        html+='<a class="nav-lnk" data-href="'+a.getAttribute('href')+'">'+a.textContent.trim()+'</a>';
       });
     });
     navEl.innerHTML=html;
     navEl.querySelectorAll('.nav-lnk').forEach(function(a){
-      a.addEventListener('click',shrink);
+      a.addEventListener('click',function(e){
+        e.preventDefault();
+        shrink();
+        window.parent.location.href=a.getAttribute('data-href');
+      });
     });
   }
 
