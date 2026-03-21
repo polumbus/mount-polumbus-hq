@@ -2302,11 +2302,11 @@ Return ONLY this JSON, no other text:
                 _expanded = _gscore < 7  # Low scores open by default — they need attention
                 with st.expander(f"{_gname}  ·  {_gscore}/10", expanded=_expanded):
                     if _gdetail:
-                        st.markdown(f'<div style="font-size:12px;color:#6a8098;line-height:1.55;margin-bottom:10px;">{_gdetail}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="font-size:14px;color:#8a9ab8;line-height:1.6;margin-bottom:10px;">{_gdetail}</div>', unsafe_allow_html=True)
                     if _gfix:
                         _fc, _bc = st.columns([11, 1])
                         with _fc:
-                            st.markdown(f'<div style="font-size:12px;color:#e0e0f0;font-weight:600;line-height:1.45;padding:8px 12px;background:#06101a;border-left:2px solid {_gsc};border-radius:0 6px 6px 0;">→ {_gfix}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="font-size:14px;color:#e0e0f0;font-weight:600;line-height:1.5;padding:9px 14px;background:#06101a;border-left:2px solid {_gsc};border-radius:0 6px 6px 0;">→ {_gfix}</div>', unsafe_allow_html=True)
                         with _bc:
                             if st.button("✎", key=f"ci_fix_ico_{_gname[:8]}", help="Apply this fix"):
                                 with st.spinner("Applying..."):
