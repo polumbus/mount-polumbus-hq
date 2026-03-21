@@ -537,6 +537,7 @@ IMPORTANT: Write in @{handle}'s STYLE as described above."""
     return TYLER_CONTEXT
 
 
+@st.cache_data(ttl=3600)
 def analyze_personal_patterns():
     """Analyze Tyler's tweet history to build personal scoring benchmarks."""
     tweets = load_json("tweet_history.json", [])
@@ -1742,6 +1743,9 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
     """Run AI action and display output in a dialog modal."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
+    # Use button sets this — prevents AI re-run on fragment rerun, forces dialog to clear
+    if st.session_state.pop("ci_close_modal", False):
+        st.rerun(scope="app")
 
     def _use_option(opt_key):
         val = st.session_state.get(opt_key, "")
@@ -2085,7 +2089,7 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "which top tweet pattern this is modeled after",
   "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod))
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2127,7 +2131,7 @@ Return ONLY valid JSON:
 "personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
 "suggestions": ["improvement 1", "improvement 2", "improvement 3"]
 }}"""
-            raw = call_claude(grade_prompt, system=TYLER_CONTEXT)
+            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=1000)
             try:
                 clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
                 json_match = re.search(r'\{.*\}', clean, re.DOTALL)
@@ -2169,7 +2173,7 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "angle/structure this version takes",
   "recommendation": "Which option to post and exactly why"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2208,7 +2212,7 @@ Return ONLY this JSON, no other text:
   "option3_pattern": "angle this version takes",
   "recommendation": "Which option to post and why"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2252,9 +2256,8 @@ Return ONLY this JSON, no other text:
                     val = st.session_state.get(opt_key, opt_text)
                     if val:
                         st.session_state["ci_text"] = val
-                    for _k in _RESULT_KEYS:
-                        st.session_state.pop(_k, None)
-                    st.rerun(scope="app")
+                    st.session_state["ci_close_modal"] = True
+                    st.rerun()
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
@@ -2338,9 +2341,8 @@ Return ONLY this JSON, no other text:
                 val = st.session_state.get(_edit_key, edited)
                 if val:
                     st.session_state["ci_text"] = val
-                for _k in _RESULT_KEYS:
-                    st.session_state.pop(_k, None)
-                st.rerun(scope="app")
+                st.session_state["ci_close_modal"] = True
+                st.rerun()
 
     # ── Bottom action bar ──
     st.divider()
@@ -2377,6 +2379,8 @@ def page_compose_ideas():
 
     # Redo pending from modal "↺ Redo" button
     _pending_redo = st.session_state.pop("ci_dialog_pending", None)
+    # Clear any stale close flag so it never blocks a fresh modal open
+    st.session_state.pop("ci_close_modal", None)
 
     # ── 2-COLUMN LAYOUT ──
     col_left, col_right = st.columns([1, 2.5])
