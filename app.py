@@ -1067,8 +1067,12 @@ _sidebar_html = f"""
 .mp-logo {{
     width: 52px; height: 52px; background: #0D1E36; border-radius: 10px;
     border: 1px solid #1E3050; display: flex; align-items: center; justify-content: center;
-    margin-bottom: 8px; flex-shrink: 0; text-decoration: none;
+    margin-bottom: 8px; flex-shrink: 0; text-decoration: none !important;
 }}
+.mp-logo:link,
+.mp-logo:visited,
+.mp-logo:hover,
+.mp-logo:active {{ text-decoration: none !important; }}
 .mp-zone {{
     width: 64px; background: #0A1628; border-radius: 11px; border: 1px solid #14203A;
     display: flex; flex-direction: column; align-items: center;
@@ -1122,17 +1126,17 @@ _sidebar_html = f"""
 .mp-zone-interact .mp-panel-header  {{ color: #C49E3C66; }}
 .mp-zone-insights .mp-panel-header  {{ color: #6B8AAA66; }}
 .mp-panel-item {{
-    padding: 8px 16px; font-size: 12px; color: #4A6888;
+    padding: 8px 16px; font-size: 12px; color: #4A6888 !important;
     display: flex; align-items: center; gap: 10px; cursor: pointer;
     transition: background 0.12s, color 0.12s; text-decoration: none !important;
     -webkit-text-decoration: none !important; font-family: sans-serif;
 }}
 .mp-panel-item:link,
-.mp-panel-item:visited,
+.mp-panel-item:visited {{ color: #4A6888 !important; text-decoration: none !important; }}
 .mp-panel-item:hover,
 .mp-panel-item:active {{ text-decoration: none !important; }}
-.mp-panel-item:hover {{ background: #142038; color: #8AAAC8; }}
-.mp-panel-item.active {{ color: #00E5CC; }}
+.mp-panel-item:hover {{ background: #142038; color: #8AAAC8 !important; }}
+.mp-panel-item.active {{ color: #00E5CC !important; }}
 .mp-panel-item.active svg * {{ stroke: #00E5CC !important; }}
 .mp-panel-item svg {{ flex-shrink: 0; opacity: 0.7; }}
 .mp-panel-item:hover svg {{ opacity: 1; }}
