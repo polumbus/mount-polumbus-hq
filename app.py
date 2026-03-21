@@ -1457,7 +1457,7 @@ _stc.html("""<script>
       navHtml += '<div style="margin-bottom:28px;">';
       navHtml += '<div style="font-size:9px;letter-spacing:2px;color:#556;font-weight:700;margin-bottom:12px;">' + sec.label + '</div>';
       sec.items.forEach(function(item){
-        navHtml += '<a data-href="' + item.href + '" style="display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;">' + item.text + '</a>';
+        navHtml += '<a href="' + item.href + '" style="display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;">' + item.text + '</a>';
       });
       navHtml += '</div>';
     });
@@ -1482,12 +1482,8 @@ _stc.html("""<script>
     doc.body.appendChild(burger);
     burger.addEventListener('click', function(){ overlay.style.display = 'block'; });
     doc.getElementById('mp-mob-close').addEventListener('click', function(){ overlay.style.display = 'none'; });
-    overlay.querySelectorAll('a[data-href]').forEach(function(a){
-      a.addEventListener('click', function(e){
-        e.preventDefault();
-        overlay.style.display = 'none';
-        window.parent.location.href = a.getAttribute('data-href');
-      });
+    overlay.querySelectorAll('a').forEach(function(a){
+      a.addEventListener('click', function(){ overlay.style.display = 'none'; });
     });
   }
 
