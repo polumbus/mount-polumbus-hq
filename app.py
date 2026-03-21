@@ -1353,82 +1353,85 @@ _sidebar_html = f"""
   <div class="mp-pro">PRO</div>
 </div>
 
-<script>
-(function() {{
+"""
+
+with st.sidebar:
+    st.markdown(_sidebar_html, unsafe_allow_html=True)
+
+st.components.v1.html("""<script>
+(function() {
   'use strict';
+  var doc = window.parent.document;
   var timers = new Map();
 
-  function cleanOrphanPanels() {{
-    document.querySelectorAll('body > .mp-panel').forEach(function(p) {{
-      if (!p._mpZone || !document.contains(p._mpZone)) {{ p.remove(); }}
-    }});
-  }}
+  function cleanOrphanPanels() {
+    doc.querySelectorAll('body > .mp-panel').forEach(function(p) {
+      if (!p._mpZone || !doc.contains(p._mpZone)) { p.remove(); }
+    });
+  }
 
-  function setupZone(zone) {{
+  function setupZone(zone) {
     if (zone._mpDone) return;
     zone._mpDone = true;
 
     var panel = zone.querySelector('.mp-panel');
     if (!panel) return;
 
-    document.body.appendChild(panel);
+    doc.body.appendChild(panel);
     panel._mpZone = zone;
 
-    function getLeft() {{ return zone.getBoundingClientRect().right + 6; }}
-    function getTop()  {{ return zone.getBoundingClientRect().top; }}
+    function getLeft() { return zone.getBoundingClientRect().right + 6; }
+    function getTop()  { return zone.getBoundingClientRect().top; }
 
-    function show() {{
+    function show() {
       var t = timers.get(zone);
-      if (t) {{ clearTimeout(t); timers.delete(zone); }}
+      if (t) { clearTimeout(t); timers.delete(zone); }
       panel.style.left  = getLeft() + 'px';
       panel.style.top   = getTop()  + 'px';
       panel.style.opacity = '1';
       panel.style.transform = 'translateX(0)';
       panel.style.pointerEvents = 'all';
-    }}
+    }
 
-    function scheduleHide(delay) {{
-      var t = setTimeout(function() {{
+    function scheduleHide(delay) {
+      var t = setTimeout(function() {
         panel.style.opacity = '0';
         panel.style.transform = 'translateX(-6px)';
         panel.style.pointerEvents = 'none';
         timers.delete(zone);
-      }}, delay == null ? 250 : delay);
+      }, delay == null ? 250 : delay);
       timers.set(zone, t);
-    }}
+    }
 
     zone.addEventListener('mouseenter', show);
-    zone.addEventListener('mouseleave', function() {{ scheduleHide(250); }});
-    panel.addEventListener('mouseenter', function() {{
-      var t = timers.get(zone); if (t) {{ clearTimeout(t); timers.delete(zone); }}
-    }});
-    panel.addEventListener('mouseleave', function() {{ scheduleHide(150); }});
-  }}
+    zone.addEventListener('mouseleave', function() { scheduleHide(250); });
+    panel.addEventListener('mouseenter', function() {
+      var t = timers.get(zone); if (t) { clearTimeout(t); timers.delete(zone); }
+    });
+    panel.addEventListener('mouseleave', function() { scheduleHide(150); });
+  }
 
-  function init() {{
+  function init() {
     cleanOrphanPanels();
-    document.querySelectorAll('.mp-zone').forEach(setupZone);
-  }}
+    doc.querySelectorAll('.mp-zone').forEach(setupZone);
+  }
 
-  setTimeout(init, 150);
+  setTimeout(init, 300);
+  setTimeout(init, 800);
 
-  new MutationObserver(function(mutations) {{
-    var relevant = mutations.some(function(m) {{
-      return Array.from(m.addedNodes).some(function(n) {{
+  new MutationObserver(function(mutations) {
+    var relevant = mutations.some(function(m) {
+      return Array.from(m.addedNodes).some(function(n) {
         return n.nodeType === 1 && (
           (n.classList && n.classList.contains('mp-zone')) ||
           (n.querySelector && n.querySelector('.mp-zone'))
         );
-      }});
-    }});
-    if (relevant) {{ setTimeout(init, 50); }}
-  }}).observe(document.body, {{ childList: true, subtree: true }});
-}})();
-</script>
-"""
-
-with st.sidebar:
-    st.markdown(_sidebar_html, unsafe_allow_html=True)
+      });
+    });
+    if (relevant) { setTimeout(init, 50); }
+  }).observe(doc.body, { childList: true, subtree: true });
+})();
+</script>""", height=0)
 
 
 page = st.session_state.current_page
