@@ -1396,9 +1396,30 @@ with st.sidebar:
 import streamlit.components.v1 as _stc
 _stc.html("""<script>
 (function(){
-  if(window.parent.innerWidth<=768) return; /* mobile handled by CSS below */
+  var doc=window.parent.document;
+  var win=window.parent;
+
+  /* ── SPA navigation: intercept all nav link clicks, no full page reload ── */
+  function spaNav(e){
+    var a=e.target.closest('a[href]');
+    if(!a) return;
+    var href=a.getAttribute('href')||'';
+    /* Only intercept internal page links (/?page=...) */
+    if(!href.match(/^\/\?page=/)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var search=href.startsWith('/?') ? href : '/?'+href.split('?')[1];
+    win.history.pushState({},'',search);
+    win.dispatchEvent(new PopStateEvent('popstate',{state:{}}));
+  }
+  if(!doc._mpSpaReady){
+    doc._mpSpaReady=true;
+    doc.addEventListener('click',spaNav,true);
+  }
+
+  /* ── Desktop flyout panels ── */
+  if(win.innerWidth<=768) return;
   function init(){
-    var doc=window.parent.document;
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
       if(zone._mpReady) return;
       zone._mpReady=true;
