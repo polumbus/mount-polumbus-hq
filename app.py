@@ -2193,18 +2193,11 @@ def page_compose_ideas():
     with col_right:
         st.markdown('<div class="cs-panel-label">PARAMETER SUITE</div>', unsafe_allow_html=True)
 
-        tweet_text = st.text_area("Your concept:", height=auto_height(st.session_state.get("ci_text", ""), min_h=130), key="ci_text",
+        tweet_text = st.text_area("Your concept", height=220, key="ci_text",
             placeholder="Drop the raw concept, angle, or draft here...")
         char_len = len(tweet_text)
         cls = "char-over" if char_len > 280 else ""
         st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
-        st.components.v1.html(
-            '<script>'
-            '(function(){'
-            'function ar(){document.querySelectorAll("[data-testid=\'stTextArea\'] textarea").forEach(function(e){if(e._ar)return;e._ar=1;e.addEventListener("input",function(){this.style.height="auto";this.style.height=Math.max(130,this.scrollHeight)+"px";});});}'  
-            'new MutationObserver(ar).observe(document.body,{childList:1,subtree:1});ar();})()</script>',
-            height=0
-        )
 
         fc1, fc2 = st.columns(2)
         with fc1:
@@ -3665,14 +3658,16 @@ def page_reply_guy():
                         return False
             raw_count = len(all_tweets)
             all_tweets = [t for t in all_tweets if _fresh(t)]
-            st.caption(f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff was {_cutoff.isoformat()}")
             st.session_state["rg_tweets"] = all_tweets
             st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
+            st.session_state["rg_debug"] = f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff={_cutoff.isoformat()}"
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
     if st.session_state.get("rg_loaded_at"):
         st.caption(f"Tweets from the last 6 hours · Loaded {st.session_state['rg_loaded_at']}")
+    if st.session_state.get("rg_debug"):
+        st.caption(st.session_state["rg_debug"])
 
     if tweets_data:
         # Sort by engagement score (likes*2 + replies*3 + retweets)
