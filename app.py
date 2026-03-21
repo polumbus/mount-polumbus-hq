@@ -80,7 +80,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; font-size: 15px; 
 #MainMenu { visibility: hidden; }
 header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden; }
-.stApp { background: #0B0E14; color: #E6EDF3; }
+.stApp { background: radial-gradient(ellipse at 50% 35%, #0F2244 0%, #080E1E 45%, #030508 100%) !important; color: #E6EDF3; }
 .block-container { max-width: 1280px !important; padding-top: 1.5rem !important; }
 
 /* ═══════════════════════════════════════════════
@@ -395,6 +395,7 @@ hr { border-color: #14203A !important; }
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=3600)
 def get_voice_context():
     """Build Tyler's voice context from his actual tweet history (default voice only)."""
     tweets = load_json("tweet_history.json", [])
@@ -859,6 +860,74 @@ def _get_proxy_url() -> str:
     return st.secrets.get("CLAUDE_PROXY_URL", "")
 
 
+def _get_oauth_token() -> str:
+    """Get valid OAuth access token from ~/.claude/.credentials.json, refreshing if expired."""
+    import urllib.request
+    creds_path = os.path.expanduser("~/.claude/.credentials.json")
+    if not os.path.exists(creds_path):
+        return ""
+    try:
+        with open(creds_path) as f:
+            creds = json.load(f)
+        access_token = creds.get("accessToken", "")
+        expires_at = creds.get("expiresAt", 0)
+        # Refresh if expiring within 5 minutes
+        if time.time() * 1000 > expires_at - 300000:
+            refresh_token = creds.get("refreshToken", "")
+            if not refresh_token:
+                return access_token
+            body = json.dumps({
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+            }).encode()
+            req = urllib.request.Request(
+                "https://platform.claude.com/v1/oauth/token",
+                data=body,
+                headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                new_creds = json.loads(resp.read())
+            access_token = new_creds.get("access_token") or new_creds.get("accessToken", access_token)
+            creds.update(new_creds)
+            with open(creds_path, "w") as f:
+                json.dump(creds, f, indent=2)
+        return access_token
+    except Exception:
+        return ""
+
+
+def _call_claude_direct(prompt: str, system: str, max_tokens: int) -> str:
+    """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
+    import urllib.request
+    token = _get_oauth_token()
+    if not token:
+        raise Exception("No OAuth token available")
+    body = json.dumps({
+        "model": "claude-sonnet-4-6",
+        "max_tokens": max_tokens,
+        "system": system or "",
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "oauth-2025-04-20",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        data = json.loads(resp.read())
+    if "content" in data and data["content"]:
+        return data["content"][0].get("text", "")
+    raise Exception(f"API error: {data.get('error', data)}")
+
+
 def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
@@ -938,7 +1007,19 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     if system is None:
         system = get_voice_context()
 
-    # Try local CLI first (fastest when running locally)
+    # 1. Direct OAuth API — fastest, no subprocess startup overhead
+    try:
+        return _call_claude_direct(prompt, system or "", max_tokens)
+    except Exception:
+        pass
+
+    # 2. Proxy server (Streamlit Cloud path — calls Tyler's local machine via ngrok)
+    try:
+        return _call_claude_proxy(prompt, system or "", max_tokens)
+    except Exception:
+        pass
+
+    # 3. Local CLI subprocess — last resort fallback
     if os.path.exists(CLAUDE_CLI):
         try:
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
@@ -951,11 +1032,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
         except Exception:
             pass
 
-    # Try proxy server (Streamlit Cloud path — calls Tyler's local machine via ngrok)
-    try:
-        return _call_claude_proxy(prompt, system or "", max_tokens)
-    except Exception as e:
-        return f"Proxy error: {str(e)[:150]}"
+    return "AI unavailable — check proxy or credentials."
 
 
 def _gist_headers():
@@ -2106,7 +2183,13 @@ Give the repurposed tweet, then show character count."""
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
             with b2:
-                st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary", on_click=_use_option, args=(opt_key,))
+                if st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary"):
+                    val = st.session_state.get(opt_key, opt_text)
+                    if val:
+                        st.session_state["ci_text"] = val
+                    for _k in _RESULT_KEYS:
+                        st.session_state.pop(_k, None)
+                    st.rerun()
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(0,245,255,0.04);border:1px solid rgba(0,245,255,0.15);border-left:3px solid #00F5FF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
@@ -2202,7 +2285,13 @@ Give the repurposed tweet, then show character count."""
                 save_json("saved_ideas.json", ideas)
                 st.success("Saved.")
         with r2:
-            st.button("↗ Use", key="modal_result_use", use_container_width=True, type="primary", on_click=_use_result, args=(_edit_key,))
+            if st.button("↗ Use", key="modal_result_use", use_container_width=True, type="primary"):
+                val = st.session_state.get(_edit_key, edited)
+                if val:
+                    st.session_state["ci_text"] = val
+                for _k in _RESULT_KEYS:
+                    st.session_state.pop(_k, None)
+                st.rerun()
 
     # ── Bottom action bar ──
     st.divider()
