@@ -2053,7 +2053,7 @@ IMAGE RECOMMENDATION:
         </div>
         {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#2DD4BF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
 
-    elif action == "banger" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
+    elif action == "banger" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
@@ -2099,7 +2099,7 @@ Return ONLY this JSON, no other text:
             except Exception:
                 result = raw
 
-    elif action == "grades" and tweet_text.strip() and not st.session_state.get("ci_grades"):
+    elif action == "grades" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             grade_prompt = f"""Grade this tweet for X algorithm performance.
 
@@ -2141,7 +2141,7 @@ Return ONLY valid JSON:
             else:
                 result = raw
 
-    elif action == "build" and tweet_text.strip() and not st.session_state.get("ci_result"):
+    elif action == "build" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
@@ -2185,7 +2185,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
-    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
+    elif action == "rewrite" and tweet_text.strip():
         with st.spinner("Repurposing in your voice..."):
             repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
