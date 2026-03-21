@@ -3643,34 +3643,36 @@ def page_reply_guy():
                                 st.warning("List has no members or couldn't be read")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
-            from datetime import timezone as _tz
+            from datetime import timezone as _tz, timedelta as _td
+            from dateutil import parser as _dtparser
             _now_utc = datetime.now(_tz.utc)
+            _cutoff = _now_utc - _td(hours=6)
             def _fresh(t):
                 ts = t.get("createdAt", t.get("created_at", ""))
                 if not ts: return False
                 try:
-                    # twitterapi.io uses Twitter-style: "Fri Mar 21 14:33:00 +0000 2026"
-                    from email.utils import parsedate_to_datetime
-                    td = parsedate_to_datetime(ts)
-                    return (_now_utc - td).total_seconds() < 10800
+                    td = _dtparser.parse(ts)
+                    if td.tzinfo is None:
+                        td = td.replace(tzinfo=_tz.utc)
+                    return td >= _cutoff
                 except Exception:
                     try:
                         import re as _re
-                        tc = _re.sub(r"\+\d{2}:\d{2}$", "Z", ts)
+                        tc = _re.sub(r"\+\d{2}:\d{2}$", "Z", str(ts))
                         td = datetime.fromisoformat(tc.replace("Z", "+00:00"))
-                        return (_now_utc - td).total_seconds() < 10800
+                        return td >= _cutoff
                     except Exception:
                         return False
+            raw_count = len(all_tweets)
             all_tweets = [t for t in all_tweets if _fresh(t)]
-            if not all_tweets:
-                st.info("No tweets from the last 3 hours found. Try loading again shortly.")
+            st.caption(f"DEBUG: fetched {raw_count} tweets, {len(all_tweets)} passed 6hr filter, cutoff was {_cutoff.isoformat()}")
             st.session_state["rg_tweets"] = all_tweets
             st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
     if st.session_state.get("rg_loaded_at"):
-        st.caption(f"Tweets from the last 3 hours · Loaded {st.session_state['rg_loaded_at']}")
+        st.caption(f"Tweets from the last 6 hours · Loaded {st.session_state['rg_loaded_at']}")
 
     if tweets_data:
         # Sort by engagement score (likes*2 + replies*3 + retweets)
