@@ -1399,24 +1399,6 @@ _stc.html("""<script>
   var doc=window.parent.document;
   var win=window.parent;
 
-  /* ── SPA navigation: intercept all nav link clicks, no full page reload ── */
-  function spaNav(e){
-    var a=e.target.closest('a[href]');
-    if(!a) return;
-    var href=a.getAttribute('href')||'';
-    /* Only intercept internal page links (/?page=...) */
-    if(href.indexOf('/?page=')!==0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var search=href.startsWith('/?') ? href : '/?'+href.split('?')[1];
-    win.history.pushState({},'',search);
-    win.dispatchEvent(new PopStateEvent('popstate',{state:{}}));
-  }
-  if(!doc._mpSpaReady){
-    doc._mpSpaReady=true;
-    doc.addEventListener('click',spaNav,true);
-  }
-
   /* ── Desktop flyout panels ── */
   if(win.innerWidth<=768) return;
   function init(){
