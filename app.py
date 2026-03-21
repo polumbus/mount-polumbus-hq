@@ -1110,13 +1110,16 @@ _sidebar_html = f"""
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
 .mp-panel {{
-    position: absolute; left: 72px; top: 0; background: #0D1929;
+    position: absolute; left: 60px; top: 0; background: #0D1929;
     border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 172px;
     pointer-events: none; opacity: 0; transform: translateX(-8px);
-    transition: opacity 0.18s, transform 0.18s; z-index: 9999;
+    transition: opacity 0.18s 0.12s, transform 0.18s 0.12s; z-index: 9999;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7);
 }}
-.mp-zone:hover .mp-panel {{ opacity: 1; transform: translateX(0); pointer-events: all; }}
+.mp-zone:hover .mp-panel {{
+    opacity: 1; transform: translateX(0); pointer-events: all;
+    transition: opacity 0.18s 0s, transform 0.18s 0s;
+}}
 .mp-panel-header {{
     font-size: 8px; letter-spacing: 2px; font-weight: 700;
     padding: 2px 16px 9px; border-bottom: 1px solid #14203A;
