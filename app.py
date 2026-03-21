@@ -2529,11 +2529,10 @@ def page_tweet_history():
         # HOF = impressions first — views so dominant that engagement is just a tiebreaker
         return views * 10 + likes * 100 + rts * 300 + reps * 200
 
-    originals = [t for t in tweets
+    hof_candidates = [t for t in tweets
         if not t.get("text", "").startswith("RT ")
-        and not t.get("text", "").startswith("@")
-        and "http" not in t.get("text", "")]
-    hof_tweets = sorted(originals, key=_eng_score, reverse=True)[:20]
+        and not t.get("text", "").startswith("@")]
+    hof_tweets = sorted(hof_candidates, key=_eng_score, reverse=True)[:20]
 
     with st.expander(f"★ Hall of Fame — Top {len(hof_tweets)} Tweets", expanded=False):
         for rank, t in enumerate(hof_tweets, 1):
