@@ -96,6 +96,17 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] > div:first-child {
   padding: 0 !important;
   overflow: visible !important;
+  height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+[data-testid="stSidebarContent"] {
+  height: 100vh !important;
+  padding: 0 !important;
+}
+[data-testid="stSidebarUserContent"] {
+  padding: 0 !important;
+  height: 100% !important;
 }
 [data-testid="collapsedControl"] { display: none !important; }
 button[kind="header"] { display: none !important; }
