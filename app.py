@@ -1501,7 +1501,10 @@ def page_brain_dump():
             m, s = divmod(int(remaining), 60)
             if remaining > 0:
                 st.markdown(f'<div class="stat-card"><div class="stat-num">{m:02d}:{s:02d}</div><div class="stat-label">Remaining</div></div>', unsafe_allow_html=True)
+                time.sleep(1)
+                st.rerun()
             else:
+                st.session_state.bd_timer_end = None
                 st.markdown('<div class="stat-card"><div class="stat-num" style="color:#22c55e;">DONE</div><div class="stat-label">Time\'s up</div></div>', unsafe_allow_html=True)
 
     col_main, col_saved = st.columns([2, 1])
@@ -1577,7 +1580,7 @@ def page_brain_dump():
         st.markdown("### Saved Thoughts")
         dumps = load_json("brain_dumps.json", [])
         if not dumps:
-            st.markdown('<div class="output-box">No Raw Thoughts</div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding:16px;border-radius:8px;background:#0d1929;border:1px solid #1a2540;color:#3a5070;font-style:italic;text-align:center;">No saved thoughts yet.</div>', unsafe_allow_html=True)
         else:
             for i, d in enumerate(reversed(dumps[-20:])):
                 ts = d.get("saved_at", "")[:16].replace("T", " ")
@@ -2132,7 +2135,7 @@ Give the repurposed tweet, then show character count."""
 
     # ── Bottom action bar ──
     st.divider()
-    _b1, _b2 = st.columns(2)
+    _b1, _b2, _b3 = st.columns(3)
     with _b1:
         if st.button("↺ Redo", use_container_width=True, key="modal_redo"):
             st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": fmt, "voice": voice}
@@ -2140,6 +2143,11 @@ Give the repurposed tweet, then show character count."""
                 st.session_state.pop(_k, None)
             st.rerun()
     with _b2:
+        import urllib.parse as _urlparse
+        _post_text = (st.session_state.get("ci_result") or st.session_state.get("ci_repurposed") or tweet_text or "")[:280]
+        _enc = _urlparse.quote(_post_text)
+        st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc}" target="_blank" style="display:block;text-align:center;padding:9px 0;background:transparent;border:1px solid #1a3050;border-radius:50px;color:#5a8090;font-size:13px;font-weight:600;text-decoration:none;">𝕏 Post to X</a>', unsafe_allow_html=True)
+    with _b3:
         if st.button("✕ Close", use_container_width=True, key="modal_close"):
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
@@ -2189,8 +2197,8 @@ def page_compose_ideas():
         tweet_text = st.text_area("Your concept", height=220, key="ci_text",
             placeholder="Drop the raw concept, angle, or draft here...")
         char_len = len(tweet_text)
-        cls = "char-over" if char_len > 280 else ""
-        st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+        _cc = "#E8441A" if char_len >= 280 else "#C49E3C" if char_len >= 250 else "#3a5070"
+        st.markdown(f'<div style="text-align:right;font-size:11px;color:{_cc};margin-top:-8px;margin-bottom:8px;">{char_len}/280</div>', unsafe_allow_html=True)
 
         fc1, fc2 = st.columns(2)
         with fc1:
@@ -2435,9 +2443,9 @@ Your coaching style:
 
     with col_right:
         st.markdown("##### Output Format")
-        coach_fmt = st.selectbox("Format", ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed")
+        coach_fmt = st.selectbox("Format", ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed", help="General Advice = strategy tips. Tweet Ideas = ready-to-post content. Thread = multi-part breakdown.")
         st.markdown("---")
-        st.markdown("##### Quick Save to Ideas")
+        st.markdown("##### Send to Creator Studio")
         save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
         c1, c2 = st.columns(2)
         with c1:
@@ -2455,7 +2463,7 @@ Your coaching style:
             st.markdown(f"**Rewrited:**\n\n{st.session_state.coach_save_text_result}")
 
     with col_center:
-        include_history = st.checkbox("Include Post History (check on first message per conversation)", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle")
+        include_history = st.toggle("Include Post History", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle", help="Feed recent tweet history to the advisor for personalized advice")
 
         # Demo questions dropdown
         if not st.session_state.coach_current["messages"]:
@@ -2629,11 +2637,7 @@ def page_article_writer():
                 st.rerun()
         articles = load_json("saved_articles.json", [])
         if not articles:
-            st.markdown('<div class="output-box" style="text-align:center;padding:28px 16px;">'
-                        '<div style="font-size:28px;margin-bottom:10px;opacity:0.4;">📄</div>'
-                        '<div style="color:#555778;font-size:13px;line-height:1.6;">No saved articles yet.<br>'
-                        '<span style="color:#404060;font-size:12px;">Select a tweet above, generate an article,<br>then click Save Article.</span></div>'
-                        '</div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding:20px;border-radius:10px;background:#0d1929;border:1px solid rgba(0,229,204,0.13);color:#3a5070;text-align:center;font-style:italic;line-height:1.6;">No saved articles yet.<br>Select a tweet above, generate an article, then click Save Article.</div>', unsafe_allow_html=True)
         else:
             for idx, a in enumerate(reversed(articles[-10:])):
                 ts = a.get("saved_at", "")[:10]
@@ -2872,14 +2876,14 @@ def page_tweet_history():
     with hc1:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{len(tweets)}</div><div class="stat-label">Total Tweets</div></div>', unsafe_allow_html=True)
     with hc2:
-        st.markdown(f'<div class="stat-card"><div class="stat-num" style="font-size:14px!important;letter-spacing:0;word-break:break-all;">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div style="font-size:13px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;word-break:break-all;">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
     with hc3:
         last_sync = ""
         if tweets:
             dates = [t.get("createdAt", "") for t in tweets if t.get("createdAt")]
             if dates:
                 last_sync = sorted(dates, reverse=True)[0][:10]
-        st.markdown(f'<div class="stat-card"><div class="stat-num" style="font-size:14px!important;">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div style="font-size:12px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;">{last_sync or "Never"}</div><div class="stat-label">Last Synced</div></div>', unsafe_allow_html=True)
     with hc4:
         if st.button("↻ Update Posts", use_container_width=True, key="th_sync", type="primary"):
             with st.spinner("Syncing up to 500 tweets from X... this may take a minute."):
@@ -3077,20 +3081,19 @@ def page_algo_analyzer():
     st.markdown('<div class="main-header">ALGORITHM <span>SCORE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Run your content through the algorithm lens before you post.</div>', unsafe_allow_html=True)
 
-    col_ideas, col_analyze = st.columns([1, 2])
-
-    with col_ideas:
-        st.markdown("### 💡 Saved Ideas")
-        ideas = load_json("saved_ideas.json", [])
-        if not ideas:
-            st.markdown("*No saved ideas yet. Run Creator Studio and save a post to see it here.*", unsafe_allow_html=True)
-        else:
+    ideas = load_json("saved_ideas.json", [])
+    if ideas:
+        col_ideas, col_analyze = st.columns([1, 2])
+        with col_ideas:
+            st.markdown('<div style="font-size:9px;color:#3a5070;letter-spacing:2px;font-weight:700;margin-bottom:8px;">SAVED IDEAS</div>', unsafe_allow_html=True)
             for i, idea in enumerate(reversed(ideas[-15:])):
                 if st.button(idea.get("text", "")[:60] + "...", key=f"aa_idea_{i}", use_container_width=True):
                     st.session_state["aa_text"] = idea.get("text", "")
+    else:
+        col_analyze = st.container()
 
     with col_analyze:
-        st.info("**Example output:** Score 72/100 — Strong hook, weak payoff. Opens with a bold claim but the final line doesn't land. Suggestion: End with a question to drive replies.")
+        st.markdown('<div style="background:#0d1929;border-left:3px solid #00E5CC;border-radius:8px;padding:14px 16px;font-size:12px;color:#5a8090;margin-bottom:16px;"><strong style="color:#00E5CC;">Example output:</strong> Score 72/100 — Strong hook, weak payoff. Opens with a bold claim but the final line doesn\'t land. Suggestion: End with a question to drive replies.</div>', unsafe_allow_html=True)
         content = st.text_area("Content to Analyze:", height=160, key="aa_input",
             value=st.session_state.get("aa_text", ""),
             placeholder="Paste or type content to analyze against the algorithm...")
@@ -3181,7 +3184,15 @@ def page_health_check():
     hc_cache = load_json("health_check_cache.json", {})
     last_run = hc_cache.get("last_run", "")
     if last_run:
-        st.markdown(f'<div style="font-size:12px;color:#404060;margin-bottom:16px;">Last run: {last_run}</div>', unsafe_allow_html=True)
+        try:
+            _lr_dt = datetime.strptime(last_run[:10], "%Y-%m-%d")
+            _days_ago = (datetime.now() - _lr_dt).days
+            _ago_str = "today" if _days_ago == 0 else f"{_days_ago}d ago"
+        except Exception:
+            _ago_str = ""
+        st.caption(f"Last run: {last_run}{' — ' + _ago_str if _ago_str else ''}")
+    else:
+        st.caption("Never run — click below to get your health score.")
 
     hcb1, hcb2 = st.columns([2, 1])
     with hcb1:
@@ -3330,8 +3341,13 @@ def page_account_pulse():
             st.markdown(f'<div class="stat-card"><div class="stat-num">{eng_rate}%</div><div class="stat-label">Engagement Rate</div></div>', unsafe_allow_html=True)
 
         # Top 5 tweets
-        st.markdown("### Top 5 Tweets (by likes)")
-        top5 = sorted(tweets, key=lambda t: t.get("likeCount", 0), reverse=True)[:5]
+        _ts1, _ts2 = st.columns([3, 1])
+        with _ts1:
+            st.markdown("### Top Tweets")
+        with _ts2:
+            _sort_by = st.selectbox("Sort", ["Likes", "Views", "Replies", "RTs"], label_visibility="collapsed", key="stats_sort")
+        _sort_map = {"Likes": "likeCount", "Views": "viewCount", "Replies": "replyCount", "RTs": "retweetCount"}
+        top5 = sorted(tweets, key=lambda t: t.get(_sort_map[_sort_by], 0), reverse=True)[:5]
         for t in top5:
             render_tweet_card(t)
 
@@ -4076,13 +4092,13 @@ def page_inspiration():
     col_add, col_view = st.columns([1, 1])
 
     with col_add:
-        st.markdown("### Save New Idea Bank")
+        st.markdown("### Save to Vault")
         inspo_text = st.text_area("Tweet text:", height=100, key="insp_text",
             placeholder="Paste the tweet that caught your eye...")
         inspo_author = st.text_input("Author:", placeholder="@username", key="insp_author")
         inspo_tags = st.text_input("Tags (comma-separated):", placeholder="hook, thread, broncos", key="insp_tags")
-        inspo_likes = st.number_input("Likes (optional):", min_value=0, value=0, key="insp_likes")
-        inspo_views = st.number_input("Views (optional):", min_value=0, value=0, key="insp_views")
+        inspo_likes = st.text_input("Likes (optional):", value="", placeholder="e.g. 1200", key="insp_likes")
+        inspo_views = st.text_input("Views (optional):", value="", placeholder="e.g. 45000", key="insp_views")
 
         if st.button("↓ Bank It", use_container_width=True, key="insp_save", type="primary"):
             if inspo_text.strip():
@@ -4090,8 +4106,8 @@ def page_inspiration():
                     "text": inspo_text,
                     "author": inspo_author,
                     "tags": [t.strip() for t in inspo_tags.split(",") if t.strip()],
-                    "likes": inspo_likes,
-                    "views": inspo_views,
+                    "likes": int(inspo_likes) if str(inspo_likes).strip().isdigit() else 0,
+                    "views": int(inspo_views) if str(inspo_views).strip().isdigit() else 0,
                     "saved_at": datetime.now().isoformat(),
                 })
                 save_inspiration_gist(inspo)
@@ -4142,6 +4158,10 @@ def page_inspiration():
                     <div style="margin-bottom:4px;">{tags_html}</div>
                     <div style="font-size:11px; color:#666688;">{metrics}</div>
                 </div>""", unsafe_allow_html=True)
+                if st.button("→ Use in Creator Studio", key=f"ib_use_{real_idx}", use_container_width=True):
+                    st.session_state["ci_text"] = item.get("text", "")
+                    st.query_params["page"] = "Creator Studio"
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
