@@ -3560,25 +3560,25 @@ def page_reply_guy():
             _save_actions_gist(_rg_actions)
 
     # ── Top Controls: Engagement Targets + My Tweet Replies (merged) ──
-    st.markdown(
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">ENGAGEMENT TARGETS</span>'
-        '<span style="color:#1E3050;font-size:14px;">|</span>'
-        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">MY TWEET REPLIES</span>'
-        '</div>', unsafe_allow_html=True)
-    ctrl1, ctrl2, ctrl3, ctrl4, ctrl5 = st.columns([2.5, 0.8, 0.8, 1, 1])
-    with ctrl1:
-        list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
-                                   key="rg_source", label_visibility="collapsed")
-    with ctrl2:
-        do_load = st.button("↓ Load Feed", key="rg_load_posts", use_container_width=True, type="primary")
-    with ctrl3:
-        if st.button("+ New", key="rg_new_list_btn", use_container_width=True):
-            st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
-    with ctrl4:
-        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
-    with ctrl5:
-        load_verified = st.button("↓ Verified Only", key="rg_load_verified", use_container_width=True, type="primary")
+    _rg_col_left, _rg_col_right = st.columns([3, 2])
+    with _rg_col_left:
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;margin-bottom:6px;">ENGAGEMENT TARGETS</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([3, 1.2, 0.9])
+        with c1:
+            list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
+                                       key="rg_source", label_visibility="collapsed")
+        with c2:
+            do_load = st.button("↓ Load Feed", key="rg_load_posts", use_container_width=True, type="primary")
+        with c3:
+            if st.button("+ New", key="rg_new_list_btn", use_container_width=True):
+                st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
+    with _rg_col_right:
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;margin-bottom:6px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
+        c4, c5 = st.columns(2)
+        with c4:
+            load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
+        with c5:
+            load_verified = st.button("↓ Verified Only", key="rg_load_verified", use_container_width=True, type="primary")
 
     if st.session_state.get("rg_show_new_list"):
         st.markdown("**Add X List**")
