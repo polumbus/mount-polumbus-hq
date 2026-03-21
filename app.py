@@ -1145,7 +1145,7 @@ def fetch_tweets(query: str, count: int = 50) -> list:
         resp = requests.get(
             "https://api.twitterapi.io/twitter/tweet/advanced_search",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"query": query, "queryType": "Latest", "cursor": ""},
+            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
             timeout=30,
         )
         if resp.status_code == 200:
@@ -3593,7 +3593,7 @@ def page_reply_guy():
             if not _is_twitter_list:
                 accs = [a.strip().lstrip("@") for a in custom_accounts.replace(",", "\n").split("\n") if a.strip()]
                 for acc in accs[:12]:
-                    tweets = fetch_tweets(f"from:{acc}", count=1)
+                    tweets = fetch_tweets(f"from:{acc}", count=20)
                     for t in tweets:
                         t["_target_account"] = acc
                     all_tweets.extend(tweets)
@@ -3617,7 +3617,7 @@ def page_reply_guy():
                             if handles:
                                 # Real-time search for recent tweets from list members
                                 query = " OR ".join([f"from:{h}" for h in handles])
-                                tweets = fetch_tweets(query, count=20)
+                                tweets = fetch_tweets(query, count=100)
                                 for t in tweets:
                                     author = t.get("author", {})
                                     all_tweets.append({
