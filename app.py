@@ -1049,7 +1049,7 @@ _sidebar_html = f"""
 <style>
 .mp-rail {{
     display: flex; flex-direction: column; align-items: center;
-    padding: 14px 8px 16px; gap: 0; justify-content: space-between;
+    padding: 14px 8px 16px; gap: 10px; justify-content: flex-start;
     height: 100vh; position: fixed; top: 0; left: 0; width: 80px;
     background: #080E1E; z-index: 999; overflow: visible;
 }}
@@ -1121,7 +1121,7 @@ _sidebar_html = f"""
 .mp-pro {{
     font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: #C49E3C;
     background: #C49E3C14; border: 1px solid #C49E3C33; border-radius: 6px;
-    padding: 4px 8px; font-family: sans-serif;
+    padding: 4px 8px; font-family: sans-serif; margin-top: auto;
 }}
 </style>
 
