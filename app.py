@@ -1391,109 +1391,123 @@ with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
 
 import streamlit.components.v1 as _stc
-_stc.html("""<script>
+_stc.html("""
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,sans-serif;}
+body{background:transparent;overflow:hidden;}
+#burger{position:fixed;top:8px;left:8px;width:40px;height:40px;background:#0A1628;border:1px solid #1E3050;border-radius:8px;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:10;}
+#overlay{display:none;position:fixed;inset:0;background:#080E1E;overflow-y:auto;padding:24px 28px;z-index:9;}
+.sec-label{font-size:9px;letter-spacing:2px;color:#445;font-weight:700;margin:24px 0 10px;}
+.nav-lnk{display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;}
+#hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
+#logo{font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;}
+#close{background:none;border:none;color:#667;font-size:32px;cursor:pointer;line-height:1;padding:0;}
+</style>
+<button id="burger">
+  <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+    <line x1="0" y1="1" x2="18" y2="1" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
+    <line x1="0" y1="7" x2="18" y2="7" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
+    <line x1="0" y1="13" x2="18" y2="13" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</button>
+<div id="overlay">
+  <div id="hdr">
+    <div id="logo">MOUNT<br>POLUMBUS</div>
+    <button id="close">&#215;</button>
+  </div>
+  <div id="nav"></div>
+</div>
+<script>
 (function(){
-  function isMobile(){ return window.parent.innerWidth <= 768; }
+  var isMob = window.parent.innerWidth <= 768;
 
-  function initDesktop(doc){
-    doc.querySelectorAll('.mp-zone').forEach(function(zone){
-      if(zone._mpReady) return;
-      zone._mpReady = true;
-      var panel = zone.querySelector('.mp-panel');
-      if(!panel) return;
-      doc.body.appendChild(panel);
-      panel.style.position = 'fixed';
-      panel.style.zIndex = '999999';
-      panel.style.opacity = '0';
-      panel.style.pointerEvents = 'none';
-      panel.style.transform = 'translateX(-4px)';
-      panel.style.transition = 'opacity 0.12s, transform 0.12s';
-      panel.querySelectorAll('a').forEach(function(a){
-        a.removeAttribute('target');
-        a.addEventListener('click', function(e){
-          e.preventDefault(); e.stopPropagation();
-          window.parent.location.href = a.getAttribute('href');
+  if(!isMob){
+    /* ── DESKTOP: move panels to parent body, hover to show ── */
+    function initDesktop(){
+      var doc = window.parent.document;
+      doc.querySelectorAll('.mp-zone').forEach(function(zone){
+        if(zone._mpReady) return;
+        zone._mpReady = true;
+        var panel = zone.querySelector('.mp-panel');
+        if(!panel) return;
+        doc.body.appendChild(panel);
+        panel.style.position='fixed';panel.style.zIndex='999999';
+        panel.style.opacity='0';panel.style.pointerEvents='none';
+        panel.style.transform='translateX(-4px)';
+        panel.style.transition='opacity 0.12s,transform 0.12s';
+        panel.querySelectorAll('a').forEach(function(a){
+          a.removeAttribute('target');
+          a.addEventListener('click',function(e){
+            e.preventDefault();e.stopPropagation();
+            window.parent.location.href=a.getAttribute('href');
+          });
         });
+        var t=null;
+        function show(){
+          clearTimeout(t);
+          var r=zone.getBoundingClientRect();
+          panel.style.top=r.top+'px';panel.style.left=(r.right+8)+'px';
+          panel.style.opacity='1';panel.style.transform='translateX(0)';
+          panel.style.pointerEvents='all';
+        }
+        function hide(){t=setTimeout(function(){panel.style.opacity='0';panel.style.transform='translateX(-4px)';panel.style.pointerEvents='none';},300);}
+        zone.addEventListener('mouseenter',show);
+        zone.addEventListener('mouseleave',hide);
+        panel.addEventListener('mouseenter',function(){clearTimeout(t);});
+        panel.addEventListener('mouseleave',hide);
       });
-      var timer = null;
-      function show(){
-        clearTimeout(timer);
-        var r = zone.getBoundingClientRect();
-        panel.style.top  = r.top + 'px';
-        panel.style.left = (r.right + 8) + 'px';
-        panel.style.opacity = '1';
-        panel.style.transform = 'translateX(0)';
-        panel.style.pointerEvents = 'all';
-      }
-      function hide(){
-        timer = setTimeout(function(){
-          panel.style.opacity = '0';
-          panel.style.transform = 'translateX(-4px)';
-          panel.style.pointerEvents = 'none';
-        }, 300);
-      }
-      zone.addEventListener('mouseenter', show);
-      zone.addEventListener('mouseleave', hide);
-      panel.addEventListener('mouseenter', function(){ clearTimeout(timer); });
-      panel.addEventListener('mouseleave', hide);
-    });
+    }
+    setTimeout(initDesktop,600);
+    setTimeout(initDesktop,1500);
+    setTimeout(initDesktop,3000);
+    return;
   }
 
-  function initMobile(doc){
-    if(doc.getElementById('mp-hamburger')) return;
-    /* Collect nav links from zones */
-    var sections = [];
+  /* ── MOBILE: iframe-based hamburger menu ── */
+  var iframe = window.frameElement;
+  var burger = document.getElementById('burger');
+  var overlay = document.getElementById('overlay');
+  var navEl = document.getElementById('nav');
+
+  /* Resize iframe to small fixed button at top-left */
+  function shrink(){
+    if(iframe) iframe.style.cssText='position:fixed;top:0;left:0;width:50px;height:50px;border:none;z-index:9999;background:transparent;pointer-events:none;';
+    burger.style.pointerEvents='all';
+    overlay.style.display='none';
+    burger.style.display='flex';
+  }
+  function expand(){
+    if(iframe) iframe.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;border:none;z-index:9999;background:#080E1E;pointer-events:all;';
+    burger.style.display='none';
+    overlay.style.display='block';
+  }
+
+  /* Build nav from parent zones */
+  function buildNav(){
+    var doc=window.parent.document;
+    var html='';
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
-      var hdr = zone.querySelector('.mp-panel-header');
-      var items = [];
-      zone.querySelectorAll('.mp-panel a').forEach(function(a){
-        items.push({href: a.getAttribute('href'), text: a.textContent.trim()});
+      var hdr=zone.querySelector('.mp-panel-header');
+      var links=zone.querySelectorAll('.mp-panel a');
+      if(!links.length) return;
+      html+='<div class="sec-label">'+(hdr?hdr.textContent.trim():'')+'</div>';
+      links.forEach(function(a){
+        html+='<a class="nav-lnk" data-url="'+a.getAttribute('href')+'">'+a.textContent.trim()+'</a>';
       });
-      if(items.length) sections.push({label: hdr ? hdr.textContent.trim() : '', items: items});
     });
-    /* Build overlay */
-    var navHtml = '';
-    sections.forEach(function(sec){
-      navHtml += '<div style="margin-bottom:28px;">';
-      navHtml += '<div style="font-size:9px;letter-spacing:2px;color:#556;font-weight:700;margin-bottom:12px;">' + sec.label + '</div>';
-      sec.items.forEach(function(item){
-        navHtml += '<a href="' + item.href + '" style="display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;">' + item.text + '</a>';
+    navEl.innerHTML=html;
+    navEl.querySelectorAll('.nav-lnk').forEach(function(a){
+      a.addEventListener('click',function(){
+        shrink();
+        window.parent.location.href=a.getAttribute('data-url');
       });
-      navHtml += '</div>';
-    });
-    var overlay = doc.createElement('div');
-    overlay.id = 'mp-mobile-overlay';
-    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:#080E1E;z-index:99999;padding:24px 28px;overflow-y:auto;font-family:sans-serif;';
-    overlay.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;">' +
-        '<div style="font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>' +
-        '<button id="mp-mob-close" style="background:none;border:none;color:#667;font-size:30px;cursor:pointer;padding:0;line-height:1;">×</button>' +
-      '</div>' + navHtml;
-    doc.body.appendChild(overlay);
-    /* Hamburger */
-    var burger = doc.createElement('button');
-    burger.id = 'mp-hamburger';
-    burger.innerHTML = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none">' +
-      '<line x1="0" y1="1" x2="18" y2="1" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
-      '<line x1="0" y1="7" x2="18" y2="7" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
-      '<line x1="0" y1="13" x2="18" y2="13" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
-      '</svg>';
-    burger.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9998;background:#0A1628;border:1px solid #1E3050;border-radius:8px;width:40px;height:40px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
-    doc.body.appendChild(burger);
-    burger.addEventListener('click', function(){ overlay.style.display = 'block'; });
-    doc.getElementById('mp-mob-close').addEventListener('click', function(){ overlay.style.display = 'none'; });
-    overlay.querySelectorAll('a').forEach(function(a){
-      a.addEventListener('click', function(){ overlay.style.display = 'none'; });
     });
   }
 
-  function init(){
-    var doc = window.parent.document;
-    if(isMobile()){ initMobile(doc); } else { initDesktop(doc); }
-  }
-  setTimeout(init, 600);
-  setTimeout(init, 1500);
-  setTimeout(init, 3000);
+  shrink();
+  setTimeout(buildNav,600);
+  burger.addEventListener('click',expand);
+  document.getElementById('close').addEventListener('click',shrink);
 })();
 </script>""", height=0)
 
