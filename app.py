@@ -1435,13 +1435,9 @@ body{background:transparent;overflow:hidden;}
         panel.style.opacity='0';panel.style.pointerEvents='none';
         panel.style.transform='translateX(-4px)';
         panel.style.transition='opacity 0.12s,transform 0.12s';
-        panel.querySelectorAll('a').forEach(function(a){
-          a.removeAttribute('target');
-          a.addEventListener('click',function(e){
-            e.preventDefault();e.stopPropagation();
-            window.parent.location.href=a.getAttribute('href');
-          });
-        });
+        /* Force same-tab on all panel links and zone icon links */
+        panel.querySelectorAll('a').forEach(function(a){ a.setAttribute('target','_self'); });
+        zone.querySelectorAll('a.mp-ico').forEach(function(a){ a.setAttribute('target','_self'); });
         var t=null;
         function show(){
           clearTimeout(t);
