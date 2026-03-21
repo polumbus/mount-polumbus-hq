@@ -1405,7 +1405,7 @@ _stc.html("""<script>
     if(!a) return;
     var href=a.getAttribute('href')||'';
     /* Only intercept internal page links (/?page=...) */
-    if(!href.match(/^\/\?page=/)) return;
+    if(href.indexOf('/?page=')!==0) return;
     e.preventDefault();
     e.stopPropagation();
     var search=href.startsWith('/?') ? href : '/?'+href.split('?')[1];
