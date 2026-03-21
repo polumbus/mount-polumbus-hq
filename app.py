@@ -1541,6 +1541,12 @@ _stc.html("""<script>
       zone.addEventListener('mouseleave', hide);
       panel.addEventListener('mouseenter', function(){ clearTimeout(timer); });
       panel.addEventListener('mouseleave', hide);
+      panel.querySelectorAll('a').forEach(function(a){
+        a.addEventListener('click', function(e){
+          e.preventDefault();
+          window.parent.location.href = a.getAttribute('href');
+        });
+      });
     });
   }
   setTimeout(init, 600);
