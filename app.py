@@ -278,6 +278,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
    MISC
 ═══════════════════════════════════════════════ */
 .section-divider { border: none; border-top: 1px solid rgba(0,245,255,0.06); margin: 28px 0; }
+/* Reserve right space for the floating Inspiration Engine panel (added by JS on Reply Mode) */
+body.rg-insp-active .block-container { padding-right: 270px !important; }
 .metric-label { font-size: 12px; color: #6E7681; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .metric-score { font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00F5FF; }
 .score-bar-wrap { background: #21262d; border-radius: 100px; height: 6px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
@@ -3538,17 +3540,26 @@ def page_reply_guy():
             _rg_actions["replied"] = replied_tweets[-500:]
             _save_actions_gist(_rg_actions)
 
-    # ── PART 3: Engagement Targets ──
-    st.markdown("### Engagement Targets")
-    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
+    # ── Top Controls: Engagement Targets + My Tweet Replies (merged) ──
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">ENGAGEMENT TARGETS</span>'
+        '<span style="color:#1E3050;font-size:14px;">|</span>'
+        '<span style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;">MY TWEET REPLIES</span>'
+        '</div>', unsafe_allow_html=True)
+    ctrl1, ctrl2, ctrl3, ctrl4, ctrl5 = st.columns([2.5, 0.8, 0.8, 1, 1])
     with ctrl1:
         list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
                                    key="rg_source", label_visibility="collapsed")
     with ctrl2:
-        do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True, type="primary")
+        do_load = st.button("↓ Load Feed", key="rg_load_posts", use_container_width=True, type="primary")
     with ctrl3:
-        if st.button("+ New List", key="rg_new_list_btn", use_container_width=True):
+        if st.button("+ New", key="rg_new_list_btn", use_container_width=True):
             st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
+    with ctrl4:
+        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
+    with ctrl5:
+        load_verified = st.button("↓ Verified Only", key="rg_load_verified", use_container_width=True, type="primary")
 
     if st.session_state.get("rg_show_new_list"):
         st.markdown("**Add X List**")
@@ -3651,18 +3662,94 @@ def page_reply_guy():
                     f"oldest={_oldest}, cutoff={_cutoff.isoformat()}"
                 )
 
-    # ── Engagement Targets header + controls ──
+    # ── My Tweet Replies data fetch (buttons now in merged top bar above) ──
+    if load_all or load_verified:
+        with st.spinner("Fetching tweets and replies..."):
+            my_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=15)
+            filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
+            st.session_state["rg_my_tweets"] = filtered
+            for idx, tw in enumerate(filtered):
+                tw_id = tw.get("id", "")
+                replies = fetch_tweets(f"conversation_id:{tw_id}", count=25)
+                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != TYLER_HANDLE.lower() and r.get("id", "") != tw_id]
+                if load_verified:
+                    replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
+                replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
+                st.session_state[f"rg_replies_{idx}"] = replies[:8]
+
+    # ── Main layout: tweet feed (left) + sticky Inspiration Engine (right) ──
     tweets_data = st.session_state.get("rg_tweets", [])
     if st.session_state.get("rg_loaded_at"):
         st.caption(f"Tweets from the last 24 hours · Loaded {st.session_state['rg_loaded_at']}")
-    if st.session_state.get("rg_debug"):
-        st.caption(st.session_state["rg_debug"])
+
+    col_feed, col_insp = st.columns([3, 1])
+
+    with col_insp:
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#445;font-weight:700;margin-bottom:8px;">INSPIRATION ENGINE</div>', unsafe_allow_html=True)
+        _insp_disabled = not bool(tweets_data)
+        if st.button("⚡ Generate Ideas", use_container_width=True, type="primary", key="btn_inspiration", disabled=_insp_disabled):
+            _lines = [f"@{t.get('_target_account','?')}: {t.get('text','')[:120]}" for t in tweets_data[:15]]
+            _prompt = (
+                "Based on these tweets from sports journalists and analysts:\n\n"
+                + "\n".join(f"- {l}" for l in _lines)
+                + "\n\nGenerate 5 fresh, punchy tweet ideas for @tyler_polumbus — former NFL OL, Super Bowl 50 champion, Denver sports host. "
+                "Each should react to something in the feed, sound like an NFL insider, be under 280 chars. "
+                "Numbered list. No hashtags. No emojis."
+            )
+            with st.spinner("Reading the feed..."):
+                st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=TYLER_CONTEXT, max_tokens=1000)
+        if not tweets_data:
+            st.caption("Load a feed first")
+        if st.session_state.get("rg_inspiration_ideas"):
+            st.markdown(st.session_state["rg_inspiration_ideas"])
+            _ic1, _ic2 = st.columns(2)
+            with _ic1:
+                if st.button("↺ Regen", use_container_width=True, key="btn_regen_insp"):
+                    del st.session_state["rg_inspiration_ideas"]
+                    st.rerun()
+            with _ic2:
+                if st.button("→ Studio", use_container_width=True, key="btn_insp_to_studio"):
+                    st.session_state.current_page = "Creator Studio"
+                    st.query_params["page"] = "Creator Studio"
+                    st.rerun()
+        # JS — makes this column position:fixed so it floats as user scrolls
+        import streamlit.components.v1 as _stc_insp
+        _stc_insp.html("""<script>
+(function(){
+  function floatInsp(){
+    var doc=window.parent.document;
+    var anchor=doc.getElementById('rg-insp-anchor');
+    if(!anchor) return;
+    var col=anchor;
+    while(col && col.getAttribute && col.getAttribute('data-testid')!=='column'){col=col.parentElement;}
+    if(!col || col._rgFloated) return;
+    col._rgFloated=true;
+    col.style.position='fixed';
+    col.style.right='16px';
+    col.style.top='70px';
+    col.style.width='240px';
+    col.style.maxHeight='calc(100vh - 90px)';
+    col.style.overflowY='auto';
+    col.style.zIndex='900';
+    col.style.background='#0D1929';
+    col.style.borderRadius='10px';
+    col.style.border='1px solid #1E3050';
+    col.style.padding='12px 14px';
+    col.style.boxShadow='0 8px 32px rgba(0,0,0,0.6)';
+    var hb=col.parentElement;
+    if(hb){hb.style.height='0';hb.style.minHeight='0';hb.style.overflow='visible';}
+    doc.body.classList.add('rg-insp-active');
+  }
+  setTimeout(floatInsp,400); setTimeout(floatInsp,1000); setTimeout(floatInsp,2500);
+})();
+</script>""", height=0)
+        st.markdown('<span id="rg-insp-anchor"></span>', unsafe_allow_html=True)
 
     if tweets_data:
         # Sort by engagement score (likes*2 + replies*3 + retweets)
         tweets_data = sorted(tweets_data, key=lambda t: t.get("likeCount",0)*2 + t.get("replyCount",0)*3 + t.get("retweetCount",0), reverse=True)
 
-        _actions_header = _load_actions_gist()
+        _actions_header = _rg_actions
         done_count = sum(1 for t in tweets_data if t.get("id","") in _actions_header["replied"])
         pending = [t for t in tweets_data if t.get("id","") not in _actions_header["replied"]]
 
@@ -3703,7 +3790,7 @@ def page_reply_guy():
                     if img_url:
                         break
 
-        _actions = _load_actions_gist()
+        _actions = _rg_actions
         et_is_replied = tid in _actions["replied"] or tid in replied_tweets
         et_already_liked = tid in _actions["liked"]
 
@@ -3802,34 +3889,6 @@ def page_reply_guy():
 
         st.markdown('<hr style="margin:6px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
 
-    # ── Inspiration Engine ──────────────────────────────────────────────────
-    if tweets_data:
-        st.divider()
-        st.markdown('<div class="cs-panel-label">INSPIRATION ENGINE</div>', unsafe_allow_html=True)
-        if st.button("⚡ Generate Ideas From This Feed", use_container_width=True, type="primary", key="btn_inspiration"):
-            _lines = [f"@{t.get('_target_account','?')}: {t.get('text','')[:120]}" for t in tweets_data[:15]]
-            _prompt = (
-                "Based on these tweets from sports journalists and analysts:\n\n"
-                + "\n".join(f"- {l}" for l in _lines)
-                + "\n\nGenerate 5 fresh, punchy tweet ideas for @tyler_polumbus — former NFL OL, Super Bowl 50 champion, Denver sports host. "
-                "Each should react to something in the feed, sound like an NFL insider, be under 280 chars. "
-                "Numbered list. No hashtags. No emojis."
-            )
-            with st.spinner("Reading the feed..."):
-                st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=TYLER_CONTEXT, max_tokens=1000)
-        if st.session_state.get("rg_inspiration_ideas"):
-            st.markdown(st.session_state["rg_inspiration_ideas"])
-            _ic1, _ic2 = st.columns(2)
-            with _ic1:
-                if st.button("↺ Regenerate", use_container_width=True, key="btn_regen_insp"):
-                    del st.session_state["rg_inspiration_ideas"]
-                    st.rerun()
-            with _ic2:
-                if st.button("→ Open Creator Studio", use_container_width=True, key="btn_insp_to_studio"):
-                    st.session_state.current_page = "Creator Studio"
-                    st.query_params["page"] = "Creator Studio"
-                    st.rerun()
-
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # ── PART 1: Top Stats Bar ──
@@ -3865,27 +3924,7 @@ def page_reply_guy():
         st.rerun()
 
     # ── PART 2: My Tweet Replies — Conversation Depth ──
-    st.markdown("### My Tweet Replies -- Conversation Depth")
-    btn_c1, btn_c2 = st.columns(2)
-    with btn_c1:
-        load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
-    with btn_c2:
-        load_verified = st.button("↓ Verified Replies", key="rg_load_verified", use_container_width=True, type="primary")
-
-    if load_all or load_verified:
-        with st.spinner("Fetching tweets and replies..."):
-            my_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=15)
-            filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
-            st.session_state["rg_my_tweets"] = filtered
-            for idx, tw in enumerate(filtered):
-                tw_id = tw.get("id", "")
-                replies = fetch_tweets(f"conversation_id:{tw_id}", count=25)
-                # Exclude Tyler's own tweets from the conversation
-                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != TYLER_HANDLE.lower() and r.get("id", "") != tw_id]
-                if load_verified:
-                    replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
-                replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
-                st.session_state[f"rg_replies_{idx}"] = replies[:8]
+    st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#445;font-weight:700;margin-bottom:10px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
 
     for idx, tw in enumerate(st.session_state.get("rg_my_tweets", [])):
         txt = tw.get("text", "")
