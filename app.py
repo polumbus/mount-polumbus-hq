@@ -2264,19 +2264,19 @@ Return ONLY this JSON, no other text:
         tyler_score = gd.get("tyler_score", 0)
         algo_color = "#22c55e" if algo_score >= 75 else "#2DD4BF" if algo_score >= 55 else "#ef4444"
         tyler_color = "#22c55e" if tyler_score >= 75 else "#2DD4BF" if tyler_score >= 55 else "#ef4444"
-        # ── Score header ──
-        st.markdown(f"""<div style="display:flex;gap:10px;margin-bottom:16px;">
-            <div style="flex:1;background:#09111e;border-radius:12px;padding:18px 16px;display:flex;align-items:center;gap:14px;">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:{algo_color};line-height:1;letter-spacing:1px;">{algo_score}</div>
-                <div><div style="font-size:13px;font-weight:700;color:#e8e8f0;margin-bottom:2px;">Algo Score</div><div style="font-size:11px;color:#3a5070;">X algorithm performance</div></div>
+        # ── Compact score strip ──
+        st.markdown(f"""<div style="display:flex;align-items:center;gap:20px;padding:10px 18px;background:#09111e;border-radius:10px;margin-bottom:14px;">
+            <div style="display:flex;align-items:baseline;gap:7px;">
+                <span style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:{algo_color};line-height:1;">{algo_score}</span>
+                <span style="font-size:10px;color:#4a6080;text-transform:uppercase;letter-spacing:1px;">Algo</span>
             </div>
-            <div style="flex:1;background:#09111e;border-radius:12px;padding:18px 16px;display:flex;align-items:center;gap:14px;">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:{tyler_color};line-height:1;letter-spacing:1px;">{tyler_score}</div>
-                <div><div style="font-size:13px;font-weight:700;color:#e8e8f0;margin-bottom:2px;">Tyler Score</div><div style="font-size:11px;color:#3a5070;">Your voice + patterns</div></div>
+            <div style="width:1px;height:26px;background:#1a2535;"></div>
+            <div style="display:flex;align-items:baseline;gap:7px;">
+                <span style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:{tyler_color};line-height:1;">{tyler_score}</span>
+                <span style="font-size:10px;color:#4a6080;text-transform:uppercase;letter-spacing:1px;">Tyler</span>
             </div>
         </div>""", unsafe_allow_html=True)
-        # ── Personal insights ──
-        # ── Grade cards — 2-col layout with Apply Fix buttons ──
+        # ── Grade cards as expanders ──
         grades = gd.get("grades", [])
 
         def _apply_fix(fix_instruction, clear_all=False):
@@ -2290,32 +2290,27 @@ Return ONLY this JSON, no other text:
             if _updated:
                 st.session_state["ci_text"] = _updated.strip()
             st.session_state.pop("ci_grades", None)
-            st.query_params["page"] = "Creator Studio"
+            st.rerun(scope="app")
 
         if grades:
-            for _gi in range(0, len(grades), 2):
-                _gc1, _gc2 = st.columns(2)
-                for _col, _g in zip([_gc1, _gc2], grades[_gi:_gi+2]):
-                    _gname = _g.get('name', '')
-                    _gscore = _g.get('score', 0)
-                    _gsc = "#22c55e" if _gscore >= 8 else "#2DD4BF" if _gscore >= 6 else "#ef4444"
-                    _gfix = _g.get('fix', '')
-                    _gdetail = _g.get('detail', '')
-                    with _col:
-                        _fix_line = f'<div style="font-size:11px;color:#00C8C0;margin-top:10px;padding-top:10px;border-top:1px solid #0f1e30;line-height:1.4;">→ {_gfix}</div>' if _gfix else ''
-                        st.markdown(f'''<div style="background:#09111e;border-top:2px solid {_gsc};border-radius:10px;padding:14px 15px;margin-bottom:4px;">
-                            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                                <span style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;line-height:1.3;">{_gname}</span>
-                                <span style="font-family:\'Bebas Neue\',sans-serif;font-size:28px;color:{_gsc};line-height:1;">{_gscore}</span>
-                            </div>
-                            <div style="font-size:12px;color:#6a8098;line-height:1.55;">{_gdetail}</div>
-                            {_fix_line}
-                        </div>''', unsafe_allow_html=True)
-                        if _gfix:
-                            if st.button("↳ Make Change", key=f"ci_fix_{_gi}_{_gname[:8]}", use_container_width=True):
+            for _g in grades:
+                _gname = _g.get('name', '')
+                _gscore = _g.get('score', 0)
+                _gsc = "#22c55e" if _gscore >= 8 else "#2DD4BF" if _gscore >= 6 else "#ef4444"
+                _gfix = _g.get('fix', '')
+                _gdetail = _g.get('detail', '')
+                _expanded = _gscore < 7  # Low scores open by default — they need attention
+                with st.expander(f"{_gname}  ·  {_gscore}/10", expanded=_expanded):
+                    if _gdetail:
+                        st.markdown(f'<div style="font-size:12px;color:#6a8098;line-height:1.55;margin-bottom:10px;">{_gdetail}</div>', unsafe_allow_html=True)
+                    if _gfix:
+                        _fc, _bc = st.columns([11, 1])
+                        with _fc:
+                            st.markdown(f'<div style="font-size:12px;color:#e0e0f0;font-weight:600;line-height:1.45;padding:8px 12px;background:#06101a;border-left:2px solid {_gsc};border-radius:0 6px 6px 0;">→ {_gfix}</div>', unsafe_allow_html=True)
+                        with _bc:
+                            if st.button("✎", key=f"ci_fix_ico_{_gname[:8]}", help="Apply this fix"):
                                 with st.spinner("Applying..."):
                                     _apply_fix(_gfix)
-                                st.rerun()
 
         # ── Make All Changes ──
         _all_fixes = [g.get("fix", "") for g in grades if g.get("fix", "")]
@@ -2324,13 +2319,6 @@ Return ONLY this JSON, no other text:
             if st.button("⚡ Make All Changes", key="ci_fix_all", use_container_width=True, type="primary"):
                 with st.spinner("Applying all fixes..."):
                     _apply_fix(None, clear_all=True)
-                st.rerun()
-
-        # ── Suggestions ──
-        suggestions = gd.get("suggestions", [])
-        if suggestions:
-            _sug_html = "".join([f'<div style="font-size:12px;color:#6a8098;line-height:1.55;padding:5px 0;border-bottom:1px solid #0f1e30;">· {s}</div>' for s in suggestions])
-            st.markdown(f'<div style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;margin-top:16px;">Suggestions</div><div style="background:#06101a;border-radius:10px;padding:12px 16px;">{_sug_html}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
