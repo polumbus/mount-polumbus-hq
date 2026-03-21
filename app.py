@@ -80,6 +80,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; font-size: 15px; 
 #MainMenu { visibility: hidden; }
 header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden; }
+html, body { background-color: #080E1E !important; }
 .stApp { background: radial-gradient(ellipse at 50% 35%, #0F2244 0%, #080E1E 45%, #030508 100%) !important; color: #E6EDF3; }
 .block-container { max-width: 1280px !important; padding-top: 1.5rem !important; }
 
