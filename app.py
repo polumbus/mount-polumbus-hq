@@ -3854,6 +3854,8 @@ def page_reply_guy():
             if img_url:
                 st.image(img_url, use_container_width=True)
         with rc3:
+            if st.session_state.get(f"{et_input_key}_p"):
+                st.session_state[et_input_key] = st.session_state.pop(f"{et_input_key}_p")
             reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed",
                 placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key, "")))
 
@@ -3863,7 +3865,7 @@ def page_reply_guy():
                 st.markdown('<div style="font-size:11px;color:#666888;margin-bottom:4px;">Pick an option:</div>', unsafe_allow_html=True)
                 for oi, opt in enumerate(opts):
                     if st.button(f"{opt[:80]}{'...' if len(opt)>80 else ''}", key=f"rg_opt_{i}_{oi}", use_container_width=True, type="secondary"):
-                        st.session_state[et_input_key] = opt
+                        st.session_state[f"{et_input_key}_p"] = opt
                         del st.session_state[options_key]
                         st.rerun()
 
@@ -3882,7 +3884,7 @@ def page_reply_guy():
                         if opts:
                             st.session_state[options_key] = opts
                             if not st.session_state.get(et_input_key,"").strip():
-                                st.session_state[et_input_key] = opts[0]
+                                st.session_state[f"{et_input_key}_p"] = opts[0]
                     st.rerun()
             with ab2:
                 if et_already_liked:
@@ -4021,6 +4023,8 @@ def page_reply_guy():
                     f'<a href="{reply_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                     unsafe_allow_html=True)
             with rc3:
+                if st.session_state.get(f"{input_key}_p"):
+                    st.session_state[input_key] = st.session_state.pop(f"{input_key}_p")
                 reply_val = st.text_area("r", key=input_key, label_visibility="collapsed",
                     placeholder="Write reply...", height=auto_height(st.session_state.get(input_key, "")))
 
@@ -4030,7 +4034,7 @@ def page_reply_guy():
                     st.markdown('<div style="font-size:11px;color:#666888;margin-bottom:4px;">Pick an option:</div>', unsafe_allow_html=True)
                     for oi, opt in enumerate(opts):
                         if st.button(f"{opt[:80]}{'...' if len(opt)>80 else ''}", key=f"rg_ri_opt_{idx}_{ri}_{oi}", use_container_width=True, type="secondary"):
-                            st.session_state[input_key] = opt
+                            st.session_state[f"{input_key}_p"] = opt
                             del st.session_state[opts_key]
                             st.rerun()
 
@@ -4050,7 +4054,7 @@ def page_reply_guy():
                             if opts:
                                 st.session_state[opts_key] = opts
                                 if not st.session_state.get(input_key, "").strip():
-                                    st.session_state[input_key] = opts[0]
+                                    st.session_state[f"{input_key}_p"] = opts[0]
                         st.rerun()
                 with ab2:
                     if already_liked:
