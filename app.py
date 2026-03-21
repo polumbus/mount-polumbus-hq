@@ -2276,10 +2276,6 @@ Return ONLY this JSON, no other text:
             </div>
         </div>""", unsafe_allow_html=True)
         # ── Personal insights ──
-        insights = gd.get("personal_insights", [])
-        if insights:
-            _ins_html = "".join([f'<div style="font-size:12px;color:#7a9ab8;line-height:1.55;padding:6px 0;border-bottom:1px solid #0f1e30;">{ins}</div>' for ins in insights])
-            st.markdown(f'<div style="background:#06101a;border-radius:10px;padding:12px 16px;margin-bottom:16px;">{_ins_html}</div>', unsafe_allow_html=True)
         # ── Grade cards — 2-col layout with Apply Fix buttons ──
         grades = gd.get("grades", [])
 
