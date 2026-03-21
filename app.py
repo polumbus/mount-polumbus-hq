@@ -1359,7 +1359,9 @@ _sidebar_html = f"""
   var timers = new Map();
 
   function cleanOrphanPanels() {{
-    document.querySelectorAll('body > .mp-panel').forEach(function(p) {{ p.remove(); }});
+    document.querySelectorAll('body > .mp-panel').forEach(function(p) {{
+      if (!p._mpZone || !document.contains(p._mpZone)) {{ p.remove(); }}
+    }});
   }}
 
   function setupZone(zone) {{
@@ -1370,13 +1372,10 @@ _sidebar_html = f"""
     if (!panel) return;
 
     document.body.appendChild(panel);
+    panel._mpZone = zone;
 
-    function getLeft() {{
-      return zone.getBoundingClientRect().right + 6;
-    }}
-    function getTop() {{
-      return zone.getBoundingClientRect().top;
-    }}
+    function getLeft() {{ return zone.getBoundingClientRect().right + 6; }}
+    function getTop()  {{ return zone.getBoundingClientRect().top; }}
 
     function show() {{
       var t = timers.get(zone);
@@ -1411,8 +1410,7 @@ _sidebar_html = f"""
     document.querySelectorAll('.mp-zone').forEach(setupZone);
   }}
 
-  setTimeout(init, 100);
-  setTimeout(init, 600);
+  setTimeout(init, 150);
 
   new MutationObserver(function(mutations) {{
     var relevant = mutations.some(function(m) {{
@@ -3601,14 +3599,23 @@ def page_reply_guy():
             _now_utc = datetime.now(_tz.utc)
             def _fresh(t):
                 ts = t.get("createdAt", t.get("created_at", ""))
-                if not ts: return True
+                if not ts: return False
                 try:
-                    import re as _re
-                    tc = _re.sub(r"\+\d{2}:\d{2}$","Z",ts)
-                    td = datetime.fromisoformat(tc.replace("Z","+00:00"))
+                    # twitterapi.io uses Twitter-style: "Fri Mar 21 14:33:00 +0000 2026"
+                    from email.utils import parsedate_to_datetime
+                    td = parsedate_to_datetime(ts)
                     return (_now_utc - td).total_seconds() < 10800
-                except Exception: return True
+                except Exception:
+                    try:
+                        import re as _re
+                        tc = _re.sub(r"\+\d{2}:\d{2}$", "Z", ts)
+                        td = datetime.fromisoformat(tc.replace("Z", "+00:00"))
+                        return (_now_utc - td).total_seconds() < 10800
+                    except Exception:
+                        return False
             all_tweets = [t for t in all_tweets if _fresh(t)]
+            if not all_tweets:
+                st.info("No tweets from the last 3 hours found. Try loading again shortly.")
             st.session_state["rg_tweets"] = all_tweets
             st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
 
@@ -3691,13 +3698,13 @@ def page_reply_guy():
                 f'</div>',
                 unsafe_allow_html=True)
         with rc2:
-            img_html = f'<img src="{img_url}" style="width:100%;max-width:280px;border-radius:10px;margin-top:8px;display:block;" />' if img_url else ""
             st.markdown(
                 f'<div style="font-size:15px;color:#d8d8e8;line-height:1.6;">{text[:220]}</div>'
-                f'{img_html}'
                 f'<div style="font-size:11px;color:#555577;margin-top:6px;">{created} · {likes}♡ · {rpl}↩ · {rts}↺</div>'
                 f'<a href="{tweet_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                 unsafe_allow_html=True)
+            if img_url:
+                st.image(img_url, use_container_width=True)
         with rc3:
             reply_text = st.text_area("r", key=et_input_key, label_visibility="collapsed",
                 placeholder="Write your reply...", height=auto_height(st.session_state.get(et_input_key, "")))
