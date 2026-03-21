@@ -882,6 +882,32 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     return data["text"]
 
 
+def _post_tweet(text: str) -> bool:
+    """Post a new tweet via proxy or local xurl."""
+    import urllib.request
+    proxy_url = _get_proxy_url()
+    if proxy_url:
+        try:
+            proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+        except Exception:
+            proxy_key = ""
+        body = json.dumps({"text": text}).encode()
+        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        try:
+            req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read())
+            return data.get("ok", False)
+        except Exception:
+            pass
+    if os.path.exists(XURL):
+        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=15)
+        return result.returncode == 0
+    return False
+
+
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
     """Route like/reply through local proxy. Returns True on success."""
     import urllib.request, urllib.error
@@ -1619,6 +1645,7 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
             st.session_state["ci_text"] = val
         for _k in _RESULT_KEYS:
             st.session_state.pop(_k, None)
+        st.query_params["page"] = "Creator Studio"
 
     def _use_result(edit_key):
         val = st.session_state.get(edit_key, "")
@@ -1626,6 +1653,7 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
             st.session_state["ci_text"] = val
         for _k in _RESULT_KEYS:
             st.session_state.pop(_k, None)
+        st.query_params["page"] = "Creator Studio"
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -2243,17 +2271,26 @@ def page_compose_ideas():
             regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
 
         st.divider()
-        sc_col, sb_col = st.columns([3, 1])
+        sc_col, sb_col, sp_col = st.columns([2.5, 1, 1])
         with sc_col:
             sc_cat = st.selectbox("Save to", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"],
                 key="ci_cat", label_visibility="collapsed")
         with sb_col:
-            if st.button("↓ Save Post", key="ci_save", use_container_width=True, type="primary"):
+            if st.button("↓ Save Post", key="ci_save", use_container_width=True):
                 if tweet_text.strip():
                     ideas = load_json("saved_ideas.json", [])
                     ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
+        with sp_col:
+            if st.button("𝕏 Post", key="ci_post_direct", use_container_width=True, type="primary"):
+                if tweet_text.strip():
+                    with st.spinner("Posting..."):
+                        _ok = _post_tweet(tweet_text.strip())
+                    if _ok:
+                        st.success("Posted to X!")
+                    else:
+                        st.error("Post failed — proxy offline or xurl unavailable.")
 
     # ── Modal triggers ──
     if banger and tweet_text.strip():
