@@ -1390,122 +1390,81 @@ _sidebar_html = f"""
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
 
+# ── Desktop flyout panels (JS, same-origin iframe) ──────────────────────────
 import streamlit.components.v1 as _stc
-_stc.html("""
+_stc.html("""<script>
+(function(){
+  if(window.parent.innerWidth<=768) return; /* mobile handled by CSS below */
+  function init(){
+    var doc=window.parent.document;
+    doc.querySelectorAll('.mp-zone').forEach(function(zone){
+      if(zone._mpReady) return;
+      zone._mpReady=true;
+      var panel=zone.querySelector('.mp-panel');
+      if(!panel) return;
+      doc.body.appendChild(panel);
+      panel.style.position='fixed';panel.style.zIndex='999999';
+      panel.style.opacity='0';panel.style.pointerEvents='none';
+      panel.style.transform='translateX(-4px)';
+      panel.style.transition='opacity 0.12s,transform 0.12s';
+      panel.querySelectorAll('a').forEach(function(a){a.setAttribute('target','_self');});
+      zone.querySelectorAll('a.mp-ico').forEach(function(a){a.setAttribute('target','_self');});
+      var t=null;
+      function show(){clearTimeout(t);var r=zone.getBoundingClientRect();panel.style.top=r.top+'px';panel.style.left=(r.right+8)+'px';panel.style.opacity='1';panel.style.transform='translateX(0)';panel.style.pointerEvents='all';}
+      function hide(){t=setTimeout(function(){panel.style.opacity='0';panel.style.transform='translateX(-4px)';panel.style.pointerEvents='none';},300);}
+      zone.addEventListener('mouseenter',show);zone.addEventListener('mouseleave',hide);
+      panel.addEventListener('mouseenter',function(){clearTimeout(t);});panel.addEventListener('mouseleave',hide);
+    });
+  }
+  setTimeout(init,600);setTimeout(init,1500);setTimeout(init,3000);
+})();
+</script>""", height=0)
+
+# ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
+st.markdown("""
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,sans-serif;}
-body{background:transparent;overflow:hidden;}
-#burger{position:fixed;top:8px;left:8px;width:40px;height:40px;background:#0A1628;border:1px solid #1E3050;border-radius:8px;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:10;}
-#overlay{display:none;position:fixed;inset:0;background:#080E1E;overflow-y:auto;padding:24px 28px;z-index:9;}
-.sec-label{font-size:9px;letter-spacing:2px;color:#445;font-weight:700;margin:24px 0 10px;}
-.nav-lnk{display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;}
-#hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
-#logo{font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;}
-#close{background:none;border:none;color:#667;font-size:32px;cursor:pointer;line-height:1;padding:0;}
+#_mob_chk{display:none;}
+#_mob_ham{display:none;position:fixed;top:10px;left:10px;z-index:9999;
+  background:#0A1628;border:1px solid #1E3050;border-radius:8px;
+  width:40px;height:40px;align-items:center;justify-content:center;cursor:pointer;}
+#_mob_nav{display:none;position:fixed;inset:0;background:#080E1E;z-index:9998;
+  padding:24px 28px;overflow-y:auto;font-family:-apple-system,sans-serif;}
+#_mob_chk:checked~#_mob_nav{display:block;}
+#_mob_chk:checked~#_mob_ham{display:none!important;}
+.mn-sec{font-size:9px;letter-spacing:2px;color:#445;font-weight:700;margin:24px 0 10px;}
+.mn-lnk{display:block;padding:14px 0;font-size:16px;color:#c0c8d8;
+  text-decoration:none;border-bottom:1px solid #111a2a;}
+@media(max-width:768px){#_mob_ham{display:flex!important;}}
 </style>
-<button id="burger">
+<input type="checkbox" id="_mob_chk">
+<div id="_mob_nav">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
+    <div style="font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>
+    <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
+  </div>
+  <div class="mn-sec">CREATE</div>
+  <a href="/?page=Creator+Studio" class="mn-lnk">Creator Studio</a>
+  <a href="/?page=Raw+Thoughts" class="mn-lnk">Raw Thoughts</a>
+  <a href="/?page=Content+Advisor" class="mn-lnk">Content Advisor</a>
+  <a href="/?page=Article+Writer" class="mn-lnk">Article Writer</a>
+  <div class="mn-sec">INTERACT</div>
+  <a href="/?page=Reply+Mode" class="mn-lnk">Reply Mode</a>
+  <a href="/?page=Idea+Bank" class="mn-lnk">Idea Bank</a>
+  <div class="mn-sec">INSIGHTS</div>
+  <a href="/?page=Post+History" class="mn-lnk">Post History</a>
+  <a href="/?page=Algorithm+Score" class="mn-lnk">Algorithm Score</a>
+  <a href="/?page=Account+Audit" class="mn-lnk">Account Audit</a>
+  <a href="/?page=My+Stats" class="mn-lnk">My Stats</a>
+  <a href="/?page=Profile+Analyzer" class="mn-lnk">Profile Analyzer</a>
+</div>
+<label for="_mob_chk" id="_mob_ham">
   <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
     <line x1="0" y1="1" x2="18" y2="1" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
     <line x1="0" y1="7" x2="18" y2="7" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
     <line x1="0" y1="13" x2="18" y2="13" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>
   </svg>
-</button>
-<div id="overlay">
-  <div id="hdr">
-    <div id="logo">MOUNT<br>POLUMBUS</div>
-    <button id="close">&#215;</button>
-  </div>
-  <div id="nav"></div>
-</div>
-<script>
-(function(){
-  var isMob = window.parent.innerWidth <= 768;
-
-  if(!isMob){
-    /* ── DESKTOP: move panels to parent body, hover to show ── */
-    function initDesktop(){
-      var doc = window.parent.document;
-      doc.querySelectorAll('.mp-zone').forEach(function(zone){
-        if(zone._mpReady) return;
-        zone._mpReady = true;
-        var panel = zone.querySelector('.mp-panel');
-        if(!panel) return;
-        doc.body.appendChild(panel);
-        panel.style.position='fixed';panel.style.zIndex='999999';
-        panel.style.opacity='0';panel.style.pointerEvents='none';
-        panel.style.transform='translateX(-4px)';
-        panel.style.transition='opacity 0.12s,transform 0.12s';
-        /* Force same-tab on all panel links and zone icon links */
-        panel.querySelectorAll('a').forEach(function(a){ a.setAttribute('target','_self'); });
-        zone.querySelectorAll('a.mp-ico').forEach(function(a){ a.setAttribute('target','_self'); });
-        var t=null;
-        function show(){
-          clearTimeout(t);
-          var r=zone.getBoundingClientRect();
-          panel.style.top=r.top+'px';panel.style.left=(r.right+8)+'px';
-          panel.style.opacity='1';panel.style.transform='translateX(0)';
-          panel.style.pointerEvents='all';
-        }
-        function hide(){t=setTimeout(function(){panel.style.opacity='0';panel.style.transform='translateX(-4px)';panel.style.pointerEvents='none';},300);}
-        zone.addEventListener('mouseenter',show);
-        zone.addEventListener('mouseleave',hide);
-        panel.addEventListener('mouseenter',function(){clearTimeout(t);});
-        panel.addEventListener('mouseleave',hide);
-      });
-    }
-    setTimeout(initDesktop,600);
-    setTimeout(initDesktop,1500);
-    setTimeout(initDesktop,3000);
-    return;
-  }
-
-  /* ── MOBILE: iframe-based hamburger menu ── */
-  var iframe = window.frameElement;
-  var burger = document.getElementById('burger');
-  var overlay = document.getElementById('overlay');
-  var navEl = document.getElementById('nav');
-
-  /* Resize iframe to small fixed button at top-left */
-  function shrink(){
-    if(iframe) iframe.style.cssText='position:fixed;top:0;left:0;width:50px;height:50px;border:none;z-index:9999;background:transparent;';
-    overlay.style.display='none';
-    burger.style.display='flex';
-  }
-  function expand(){
-    if(iframe) iframe.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;border:none;z-index:9999;background:#080E1E;pointer-events:all;';
-    burger.style.display='none';
-    overlay.style.display='block';
-  }
-
-  /* Build nav from parent zones */
-  function buildNav(){
-    var doc=window.parent.document;
-    var html='';
-    doc.querySelectorAll('.mp-zone').forEach(function(zone){
-      var hdr=zone.querySelector('.mp-panel-header');
-      var links=zone.querySelectorAll('.mp-panel a');
-      if(!links.length) return;
-      html+='<div class="sec-label">'+(hdr?hdr.textContent.trim():'')+'</div>';
-      links.forEach(function(a){
-        html+='<a class="nav-lnk" data-href="'+a.getAttribute('href')+'">'+a.textContent.trim()+'</a>';
-      });
-    });
-    navEl.innerHTML=html;
-    navEl.querySelectorAll('.nav-lnk').forEach(function(a){
-      a.addEventListener('click',function(e){
-        e.preventDefault();
-        shrink();
-        window.parent.location.href=a.getAttribute('data-href');
-      });
-    });
-  }
-
-  shrink();
-  setTimeout(buildNav,600);
-  burger.addEventListener('click',expand);
-  document.getElementById('close').addEventListener('click',shrink);
-})();
-</script>""", height=0)
+</label>
+""", unsafe_allow_html=True)
 
 
 
