@@ -2133,30 +2133,61 @@ Give the repurposed tweet, then show character count."""
         if insights:
             _ins_html = "".join([f'<div style="font-size:12px;color:#7a9ab8;line-height:1.55;padding:6px 0;border-bottom:1px solid #0f1e30;">{ins}</div>' for ins in insights])
             st.markdown(f'<div style="background:#06101a;border-radius:10px;padding:12px 16px;margin-bottom:16px;">{_ins_html}</div>', unsafe_allow_html=True)
-        # ── Grade cards — 2-col grid ──
+        # ── Grade cards — 2-col layout with Apply Fix buttons ──
         grades = gd.get("grades", [])
+
+        def _apply_fix(fix_instruction, clear_all=False):
+            _base = st.session_state.get("ci_text", "")
+            if clear_all:
+                _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in grades if g.get("fix","")])
+                _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\nReturn ONLY the updated tweet text, nothing else.'
+            else:
+                _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\nReturn ONLY the updated tweet text, nothing else.'
+            _updated = call_claude(_prompt, max_tokens=400)
+            if _updated:
+                st.session_state["ci_text"] = _updated.strip()
+            st.session_state.pop("ci_grades", None)
+            st.query_params["page"] = "Creator Studio"
+
         if grades:
-            _grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
-            for g in grades:
-                score = g.get("score", 0)
-                sc = "#22c55e" if score >= 8 else "#00F5FF" if score >= 6 else "#ef4444"
-                fix = g.get("fix", "")
-                fix_html = f'<div style="font-size:11px;color:#00C8C0;margin-top:10px;padding-top:10px;border-top:1px solid #0f1e30;line-height:1.4;">→ {fix}</div>' if fix else ""
-                _grid += f'''<div style="background:#09111e;border-top:2px solid {sc};border-radius:10px;padding:14px 15px;">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                        <span style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;line-height:1.3;">{g.get('name','')}</span>
-                        <span style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:{sc};line-height:1;">{score}</span>
-                    </div>
-                    <div style="font-size:12px;color:#6a8098;line-height:1.55;">{g.get('detail','')}</div>
-                    {fix_html}
-                </div>'''
-            _grid += '</div>'
-            st.markdown(_grid, unsafe_allow_html=True)
+            for _gi in range(0, len(grades), 2):
+                _gc1, _gc2 = st.columns(2)
+                for _col, _g in zip([_gc1, _gc2], grades[_gi:_gi+2]):
+                    _gname = _g.get('name', '')
+                    _gscore = _g.get('score', 0)
+                    _gsc = "#22c55e" if _gscore >= 8 else "#00F5FF" if _gscore >= 6 else "#ef4444"
+                    _gfix = _g.get('fix', '')
+                    _gdetail = _g.get('detail', '')
+                    with _col:
+                        _fix_line = f'<div style="font-size:11px;color:#00C8C0;margin-top:10px;padding-top:10px;border-top:1px solid #0f1e30;line-height:1.4;">→ {_gfix}</div>' if _gfix else ''
+                        st.markdown(f'''<div style="background:#09111e;border-top:2px solid {_gsc};border-radius:10px;padding:14px 15px;margin-bottom:4px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                                <span style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;line-height:1.3;">{_gname}</span>
+                                <span style="font-family:\'Bebas Neue\',sans-serif;font-size:28px;color:{_gsc};line-height:1;">{_gscore}</span>
+                            </div>
+                            <div style="font-size:12px;color:#6a8098;line-height:1.55;">{_gdetail}</div>
+                            {_fix_line}
+                        </div>''', unsafe_allow_html=True)
+                        if _gfix:
+                            if st.button("↳ Make Change", key=f"ci_fix_{_gi}_{_gname[:8]}", use_container_width=True):
+                                with st.spinner("Applying..."):
+                                    _apply_fix(_gfix)
+                                st.rerun()
+
+        # ── Make All Changes ──
+        _all_fixes = [g.get("fix", "") for g in grades if g.get("fix", "")]
+        if len(_all_fixes) > 1:
+            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+            if st.button("⚡ Make All Changes", key="ci_fix_all", use_container_width=True, type="primary"):
+                with st.spinner("Applying all fixes..."):
+                    _apply_fix(None, clear_all=True)
+                st.rerun()
+
         # ── Suggestions ──
         suggestions = gd.get("suggestions", [])
         if suggestions:
             _sug_html = "".join([f'<div style="font-size:12px;color:#6a8098;line-height:1.55;padding:5px 0;border-bottom:1px solid #0f1e30;">· {s}</div>' for s in suggestions])
-            st.markdown(f'<div style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Suggestions</div><div style="background:#06101a;border-radius:10px;padding:12px 16px;">{_sug_html}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:10px;font-weight:700;color:#3a5070;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;margin-top:16px;">Suggestions</div><div style="background:#06101a;border-radius:10px;padding:12px 16px;">{_sug_html}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
