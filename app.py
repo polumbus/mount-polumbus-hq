@@ -1962,7 +1962,8 @@ Return ONLY this JSON, no other text:
                 st.session_state["ci_banger_data"] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                st.session_state.pop("ci_result", None)
+                for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
             except Exception:
                 result = raw
 
@@ -2003,7 +2004,8 @@ Return ONLY valid JSON:
                 gdata = None
             if gdata and "grades" in gdata:
                 st.session_state["ci_grades"] = gdata
-                st.session_state.pop("ci_result", None)
+                for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
             else:
                 result = raw
 
