@@ -108,9 +108,20 @@ section[data-testid="stSidebar"] > div:first-child {
   padding: 0 !important;
   height: 100% !important;
 }
-[data-testid="collapsedControl"] { display: none !important; }
-button[kind="header"] { display: none !important; }
-.st-emotion-cache-1oe5cao { display: none !important; }
+[data-testid="collapsedControl"],
+[data-testid="baseButton-headerNoPadding"],
+button[kind="header"],
+.st-emotion-cache-1oe5cao,
+.st-emotion-cache-nakb8l,
+[data-testid="stSidebarCollapseButton"],
+[aria-label="Collapse sidebar"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
 [data-testid="stSidebarNav"] { display: none !important; }
 [data-testid="stAppViewContainer"] > .main { margin-left: 96px !important; }
 
@@ -1080,8 +1091,12 @@ _sidebar_html = f"""
 .mp-ico {{
     width: 48px; height: 40px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    position: relative; flex-shrink: 0; transition: background 0.15s; text-decoration: none;
+    position: relative; flex-shrink: 0; transition: background 0.15s; text-decoration: none !important;
 }}
+.mp-ico:link,
+.mp-ico:visited,
+.mp-ico:hover,
+.mp-ico:active {{ text-decoration: none !important; }}
 .mp-ico:hover {{ background: #142038; }}
 .mp-ico.active {{ background: #00E5CC14; }}
 .mp-ico.active svg * {{ stroke: #00E5CC !important; }}
@@ -1109,8 +1124,13 @@ _sidebar_html = f"""
 .mp-panel-item {{
     padding: 8px 16px; font-size: 12px; color: #4A6888;
     display: flex; align-items: center; gap: 10px; cursor: pointer;
-    transition: background 0.12s, color 0.12s; text-decoration: none; font-family: sans-serif;
+    transition: background 0.12s, color 0.12s; text-decoration: none !important;
+    -webkit-text-decoration: none !important; font-family: sans-serif;
 }}
+.mp-panel-item:link,
+.mp-panel-item:visited,
+.mp-panel-item:hover,
+.mp-panel-item:active {{ text-decoration: none !important; }}
 .mp-panel-item:hover {{ background: #142038; color: #8AAAC8; }}
 .mp-panel-item.active {{ color: #00E5CC; }}
 .mp-panel-item.active svg * {{ stroke: #00E5CC !important; }}
