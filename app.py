@@ -87,8 +87,8 @@ footer { visibility: hidden; }
    SIDEBAR — ICON RAIL
 ═══════════════════════════════════════════════ */
 section[data-testid="stSidebar"] {
-  min-width: 58px !important;
-  max-width: 58px !important;
+  min-width: 96px !important;
+  max-width: 96px !important;
   background: #080E1E !important;
   border-right: 1px solid #14203A !important;
   overflow: visible !important;
@@ -99,7 +99,7 @@ section[data-testid="stSidebar"] > div:first-child {
 }
 [data-testid="collapsedControl"] { display: none !important; }
 [data-testid="stSidebarNav"] { display: none !important; }
-[data-testid="stAppViewContainer"] > .main { margin-left: 58px !important; }
+[data-testid="stAppViewContainer"] > .main { margin-left: 96px !important; }
 
 /* ═══════════════════════════════════════════════
    PAGE HEADERS
@@ -1037,16 +1037,16 @@ _sidebar_html = f"""
 .mp-rail {{
     display: flex; flex-direction: column; align-items: center;
     padding: 14px 8px 16px; gap: 6px;
-    height: 100vh; position: fixed; top: 0; left: 0; width: 58px;
+    height: 100vh; position: fixed; top: 0; left: 0; width: 80px;
     background: #080E1E; z-index: 999; overflow: visible;
 }}
 .mp-logo {{
-    width: 36px; height: 36px; background: #0D1E36; border-radius: 10px;
+    width: 52px; height: 52px; background: #0D1E36; border-radius: 10px;
     border: 1px solid #1E3050; display: flex; align-items: center; justify-content: center;
     margin-bottom: 8px; flex-shrink: 0; text-decoration: none;
 }}
 .mp-zone {{
-    width: 42px; background: #0A1628; border-radius: 11px; border: 1px solid #14203A;
+    width: 64px; background: #0A1628; border-radius: 11px; border: 1px solid #14203A;
     display: flex; flex-direction: column; align-items: center;
     padding: 5px 4px 6px; gap: 1px; flex-shrink: 0;
     position: relative; cursor: default; transition: border-color 0.2s;
@@ -1056,7 +1056,7 @@ _sidebar_html = f"""
 .mp-zone-insights:hover {{ border-color: #6B8AAA33; }}
 .mp-zone-label {{
     font-size: 7px; letter-spacing: 1.8px; font-weight: 700;
-    padding: 1px 0 4px; font-family: sans-serif;
+    padding: 3px 0 6px; font-family: sans-serif;
 }}
 .mp-zone-create .mp-zone-label   {{ color: #00E5CC44; }}
 .mp-zone-interact .mp-zone-label  {{ color: #C49E3C44; }}
@@ -1065,7 +1065,7 @@ _sidebar_html = f"""
 .mp-zone-interact:hover .mp-zone-label {{ color: #C49E3C99; }}
 .mp-zone-insights:hover .mp-zone-label {{ color: #6B8AAA99; }}
 .mp-ico {{
-    width: 34px; height: 32px; border-radius: 8px;
+    width: 48px; height: 40px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     position: relative; flex-shrink: 0; transition: background 0.15s; text-decoration: none;
 }}
@@ -1078,7 +1078,7 @@ _sidebar_html = f"""
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
 .mp-panel {{
-    position: absolute; left: 50px; top: 0; background: #0D1929;
+    position: absolute; left: 72px; top: 0; background: #0D1929;
     border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 172px;
     pointer-events: none; opacity: 0; transform: translateX(-8px);
     transition: opacity 0.18s, transform 0.18s; z-index: 9999;
@@ -1115,7 +1115,7 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?page=Creator+Studio" class="mp-logo">
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
       <polygon points="10,2 19,18 1,18" stroke="#C49E3C" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
       <polygon points="10,7 15,17 5,17" fill="#C49E3C" opacity="0.25"/>
       <circle cx="10" cy="2" r="1.2" fill="#00E5CC"/>
@@ -1126,27 +1126,27 @@ _sidebar_html = f"""
     <div class="mp-zone-label">CREATE</div>
     <a href="/?page=Creator+Studio" class="mp-ico {_act('Creator Studio')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M12 20h9" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/>
         <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="#00E5CC" stroke-width="1.5" stroke-linejoin="round" opacity="0.9"/>
       </svg>
     </a>
     <a href="/?page=Raw+Thoughts" class="mp-ico {_act('Raw Thoughts')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M12 8v4l3 3" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
       </svg>
     </a>
     <a href="/?page=Content+Advisor" class="mp-ico {_act('Content Advisor')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#00E5CC" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>
     <a href="/?page=Article+Writer" class="mp-ico {_act('Article Writer')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#00E5CC" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>
         <polyline points="14 2 14 8 20 8" stroke="#00E5CC" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>
         <line x1="16" y1="13" x2="8" y2="13" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
@@ -1177,7 +1177,7 @@ _sidebar_html = f"""
     <div class="mp-zone-label">INTERACT</div>
     <a href="/?page=Reply+Mode" class="mp-ico {_act('Reply Mode')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <polyline points="17 1 21 5 17 9" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
         <path d="M3 11V9a4 4 0 014-4h14" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
         <polyline points="7 23 3 19 7 15" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
@@ -1186,7 +1186,7 @@ _sidebar_html = f"""
     </a>
     <a href="/?page=Idea+Bank" class="mp-ico {_act('Idea Bank')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#C49E3C" stroke-width="1.5" stroke-linejoin="round" opacity="0.6"/>
         <path d="M2 17l10 5 10-5" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
         <path d="M2 12l10 5 10-5" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
@@ -1209,14 +1209,14 @@ _sidebar_html = f"""
     <div class="mp-zone-label">INSIGHTS</div>
     <a href="/?page=Post+History" class="mp-ico {_act('Post History')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="#91A2B2" stroke-width="1.5" opacity="0.5"/>
         <polyline points="12 6 12 12 16 14" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
       </svg>
     </a>
     <a href="/?page=Algorithm+Score" class="mp-ico {_act('Algorithm Score')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <line x1="18" y1="20" x2="18" y2="10" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
         <line x1="12" y1="20" x2="12" y2="4" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
         <line x1="6" y1="20" x2="6" y2="14" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
@@ -1224,20 +1224,20 @@ _sidebar_html = f"""
     </a>
     <a href="/?page=Account+Audit" class="mp-ico {_act('Account Audit')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
         <polyline points="22 4 12 14.01 9 11.01" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
       </svg>
     </a>
     <a href="/?page=My+Stats" class="mp-ico {_act('My Stats')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
       </svg>
     </a>
     <a href="/?page=Profile+Analyzer" class="mp-ico {_act('Profile Analyzer')}">
       <div class="mp-active-pip"></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <circle cx="11" cy="11" r="8" stroke="#91A2B2" stroke-width="1.5" opacity="0.5"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#91A2B2" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
       </svg>
@@ -1979,7 +1979,7 @@ def page_compose_ideas():
             f'''<div style="font-size:13px;color:#00F5FF;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
             f''' &nbsp;<span style="font-size:11px;color:#666888;font-weight:400;">{_fg["chars"]}</span></div>''',
             unsafe_allow_html=True)
-        with st.expander("📋 Format Tips", expanded=True):
+        with st.expander("📋 Format Tips", expanded=False):
             _rules_html = "".join([f'<div class="fg-rule">{r}</div>' for r in _fg["rules"]])
             st.markdown(f'<div class="format-guide" style="border-top:none;margin:0;">{_rules_html}</div>', unsafe_allow_html=True)
 
