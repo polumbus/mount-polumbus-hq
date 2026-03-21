@@ -1307,20 +1307,13 @@ _sidebar_html = f"""
     width: 3px; height: 16px; border-radius: 0 3px 3px 0; background: #00E5CC; opacity: 0;
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
-.mp-zone::after {{
-    content: ''; position: absolute; left: 100%; top: 0; width: 10px; height: 100%;
-}}
 .mp-panel {{
-    position: absolute; left: calc(100% + 6px); top: 0;
+    position: fixed; top: 0; left: 0;
     background: #0D1929;
     border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 180px;
     pointer-events: none; opacity: 0; transform: translateX(-4px);
-    transition: opacity 0.12s 0.15s, transform 0.12s 0.15s; z-index: 100;
+    transition: opacity 0.12s, transform 0.12s; z-index: 99999;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7);
-}}
-.mp-zone:hover .mp-panel {{
-    opacity: 1; transform: translateX(0); pointer-events: all;
-    transition: opacity 0.12s 0s, transform 0.12s 0s;
 }}
 .mp-panel-header {{
     font-size: 8px; letter-spacing: 2px; font-weight: 700;
@@ -1516,6 +1509,44 @@ _sidebar_html = f"""
 
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
+
+import streamlit.components.v1 as _stc
+_stc.html("""<script>
+(function(){
+  function init(){
+    var doc = window.parent.document;
+    doc.querySelectorAll('.mp-zone').forEach(function(zone){
+      if(zone._mpReady) return;
+      zone._mpReady = true;
+      var panel = zone.querySelector('.mp-panel');
+      if(!panel) return;
+      var timer = null;
+      function show(){
+        clearTimeout(timer);
+        var r = zone.getBoundingClientRect();
+        panel.style.top  = r.top + 'px';
+        panel.style.left = (r.right + 8) + 'px';
+        panel.style.opacity = '1';
+        panel.style.transform = 'translateX(0)';
+        panel.style.pointerEvents = 'all';
+      }
+      function hide(){
+        timer = setTimeout(function(){
+          panel.style.opacity = '0';
+          panel.style.transform = 'translateX(-4px)';
+          panel.style.pointerEvents = 'none';
+        }, 200);
+      }
+      zone.addEventListener('mouseenter', show);
+      zone.addEventListener('mouseleave', hide);
+      panel.addEventListener('mouseenter', function(){ clearTimeout(timer); });
+      panel.addEventListener('mouseleave', hide);
+    });
+  }
+  setTimeout(init, 600);
+  setTimeout(init, 1500);
+})();
+</script>""", height=0)
 
 
 
