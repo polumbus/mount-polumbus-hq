@@ -1135,16 +1135,21 @@ def load_engagement_lists() -> dict:
             migrated = {}
             for k, v in loaded.items():
                 if isinstance(v, str):
-                    migrated[k] = {'list_id': '', 'legacy_handles': v}
+                    # Restore known list_id from defaults when migrating old handle-string format
+                    migrated[k] = {'list_id': _ENGAGEMENT_DEFAULTS.get(k, {}).get('list_id', ''), 'legacy_handles': v}
                 else:
-                    migrated[k] = v
+                    entry = dict(v)
+                    # Restore list_id from defaults if entry exists but list_id is empty
+                    if not entry.get('list_id') and k in _ENGAGEMENT_DEFAULTS:
+                        entry['list_id'] = _ENGAGEMENT_DEFAULTS[k]['list_id']
+                    migrated[k] = entry
             for k, v in _ENGAGEMENT_DEFAULTS.items():
                 if k not in migrated:
-                    migrated[k] = v
+                    migrated[k] = dict(v)
             return migrated
         except Exception:
             pass
-    return dict(_ENGAGEMENT_DEFAULTS)
+    return {k: dict(v) for k, v in _ENGAGEMENT_DEFAULTS.items()}
 
 def save_engagement_lists(lists: dict):
     ENGAGEMENT_LISTS_PATH.write_text(json.dumps(lists, indent=2))
@@ -3540,6 +3545,11 @@ def page_reply_guy():
     XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
     if "custom_lists" not in st.session_state:
         st.session_state.custom_lists = load_engagement_lists()
+    # Restore any known list_ids that got wiped (migration safety net)
+    for _k, _v in _ENGAGEMENT_DEFAULTS.items():
+        if _k in st.session_state.custom_lists and isinstance(st.session_state.custom_lists[_k], dict):
+            if not st.session_state.custom_lists[_k].get('list_id'):
+                st.session_state.custom_lists[_k]['list_id'] = _v['list_id']
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
