@@ -368,7 +368,35 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
   .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
   .output-box { padding: 14px 16px !important; font-size: 13px !important; }
   .format-guide { display: none; }
+  section[data-testid="stSidebar"] {
+    min-width: 100vw !important; max-width: 100vw !important;
+    height: 64px !important; position: fixed !important;
+    bottom: 0 !important; top: auto !important; left: 0 !important; z-index: 9999 !important;
+  }
+  [data-testid="stAppViewContainer"] > .main {
+    margin-left: 0 !important; margin-bottom: 64px !important; padding: 12px !important;
+  }
+  .mp-rail {
+    flex-direction: row !important; width: 100vw !important; height: 64px !important;
+    padding: 8px 12px !important; justify-content: space-around !important;
+    align-items: center !important; border-top: 1px solid #14203A !important;
+    border-radius: 0 !important; gap: 0 !important;
+  }
+  .mp-logo { display: none !important; }
+  .mp-pro { display: none !important; }
+  .mp-zone { width: auto !important; flex-direction: row !important;
+    background: transparent !important; border: none !important; padding: 0 !important; gap: 0 !important; }
+  .mp-zone-label { display: none !important; }
+  .mp-panel { bottom: 70px !important; top: auto !important; left: 0 !important;
+    width: 100vw !important; border-radius: 12px 12px 0 0 !important; }
+  .mp-ico { width: 52px !important; height: 52px !important; }
 }
+/* ─── Global color tokens ──────────────────────────────────────────── */
+:root { --mp-cyan: #00E5CC; --mp-gold: #C49E3C; --mp-navy: #080E1E; --mp-steel: #91A2B2; }
+[data-testid="stMetricValue"] { color: #C49E3C !important; }
+hr { border-color: #14203A !important; }
+[data-testid="stExpander"] summary p { color: #00E5CC !important; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -980,6 +1008,25 @@ def save_json(filename: str, data):
     path.write_text(json.dumps(data, indent=2, default=str))
 
 
+ENGAGEMENT_LISTS_PATH = DATA_DIR / 'engagement_lists.json'
+
+def load_engagement_lists() -> dict:
+    defaults = {
+        'Broncos Reporters': '@MikeKlis, @TroyRenck, @RyanOHalloran, @NickKosmider',
+        'NBA / Avs': '@PeterBaugh, @EvanSidery',
+        'My Custom List': '',
+    }
+    if ENGAGEMENT_LISTS_PATH.exists():
+        try:
+            return json.loads(ENGAGEMENT_LISTS_PATH.read_text())
+        except Exception:
+            pass
+    return defaults
+
+def save_engagement_lists(lists: dict):
+    ENGAGEMENT_LISTS_PATH.write_text(json.dumps(lists, indent=2))
+
+
 def fetch_tweets(query: str, count: int = 50) -> list:
     if not TWITTER_API_IO_KEY:
         return []
@@ -1110,15 +1157,15 @@ _sidebar_html = f"""
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
 .mp-panel {{
-    position: absolute; left: 60px; top: 0; background: #0D1929;
-    border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 172px;
-    pointer-events: none; opacity: 0; transform: translateX(-8px);
-    transition: opacity 0.18s 0.12s, transform 0.18s 0.12s; z-index: 9999;
+    position: absolute; left: 56px; top: -8px; background: #0D1929;
+    border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 180px;
+    pointer-events: none; opacity: 0; transform: translateX(-4px);
+    transition: opacity 0.15s 0.35s, transform 0.15s 0.35s; z-index: 9999;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7);
 }}
 .mp-zone:hover .mp-panel {{
     opacity: 1; transform: translateX(0); pointer-events: all;
-    transition: opacity 0.18s 0s, transform 0.18s 0s;
+    transition: opacity 0.15s 0s, transform 0.15s 0s;
 }}
 .mp-panel-header {{
     font-size: 8px; letter-spacing: 2px; font-weight: 700;
@@ -2034,10 +2081,17 @@ def page_compose_ideas():
         char_len = len(tweet_text)
         cls = "char-over" if char_len > 280 else ""
         st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+        st.components.v1.html(
+            '<script>'
+            '(function(){'
+            'function ar(){document.querySelectorAll("[data-testid=\'stTextArea\'] textarea").forEach(function(e){if(e._ar)return;e._ar=1;e.addEventListener("input",function(){this.style.height="auto";this.style.height=Math.max(130,this.scrollHeight)+"px";});});}'  
+            'new MutationObserver(ar).observe(document.body,{childList:1,subtree:1});ar();})()</script>',
+            height=0
+        )
 
         fc1, fc2 = st.columns(2)
         with fc1:
-            fmt = st.selectbox("Format", ["Normal Tweet", "Punchy Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
+            fmt = st.selectbox("Format", ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
         with fc2:
             _custom_voices = load_json("voice_styles.json", [])
             _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
@@ -3346,6 +3400,8 @@ def page_reply_guy():
     XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
     LISTS = {"Broncos Reporters": "1294328608417177604", "Nuggets": "1755985316752642285",
              "Morning Engagement": "2011987998699897046", "Work": "1182699241329721344"}
+    if "custom_eng_lists" not in st.session_state:
+        st.session_state.custom_eng_lists = load_engagement_lists()
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
@@ -3383,24 +3439,49 @@ def page_reply_guy():
 
     # ── PART 3: Engagement Targets — Table Layout ──
     st.markdown("### Engagement Targets")
-    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 2])
+    _all_list_names = list(st.session_state.custom_eng_lists.keys()) + [k for k in LISTS if k not in st.session_state.custom_eng_lists]
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
     with ctrl1:
-        list_source = st.selectbox("List", ["My Custom List"] + list(LISTS.keys()), key="rg_source", label_visibility="collapsed")
+        list_source = st.selectbox("List", _all_list_names, key="rg_source", label_visibility="collapsed")
     with ctrl2:
         do_load = st.button("↓ Load", key="rg_load_posts", use_container_width=True, type="primary")
     with ctrl3:
-        new_acc = st.text_input("Add account", key="rg_add_acc", placeholder="@handle", label_visibility="collapsed")
+        if st.button("+ New List", key="rg_new_list_btn", use_container_width=True):
+            st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
 
-    if list_source == "My Custom List":
-        custom_accounts = st.text_input("Accounts (comma-separated):", placeholder="@MikeKlis, @TroyRenck", key="rg_accounts")
+    if st.session_state.get("rg_show_new_list"):
+        _nl_name = st.text_input("List name", placeholder="e.g. NFL Insiders", key="rg_nl_name")
+        _nl_handles = st.text_input("Handles", placeholder="@handle1, @handle2", key="rg_nl_handles")
+        _s1, _s2 = st.columns(2)
+        with _s1:
+            if st.button("Save List", use_container_width=True, type="primary", key="rg_nl_save"):
+                if _nl_name.strip() and _nl_handles.strip():
+                    st.session_state.custom_eng_lists[_nl_name.strip()] = _nl_handles.strip()
+                    save_engagement_lists(st.session_state.custom_eng_lists)
+                    st.session_state["rg_show_new_list"] = False
+                    st.success(f"List '{_nl_name.strip()}' saved!")
+                    st.rerun()
+        with _s2:
+            if st.button("Cancel", use_container_width=True, key="rg_nl_cancel"):
+                st.session_state["rg_show_new_list"] = False
+                st.rerun()
+
+    _is_twitter_list = list_source in LISTS and list_source not in st.session_state.custom_eng_lists
+    _list_handles_str = st.session_state.custom_eng_lists.get(list_source, "")
+    if not _is_twitter_list:
+        custom_accounts = st.text_input("Accounts (comma-separated):", value=_list_handles_str, key="rg_accounts", placeholder="@MikeKlis, @TroyRenck")
+        if custom_accounts != _list_handles_str:
+            st.session_state.custom_eng_lists[list_source] = custom_accounts
+            save_engagement_lists(st.session_state.custom_eng_lists)
+    else:
+        custom_accounts = ""
+    new_acc = ""
 
     if do_load:
-        with st.spinner("Fetching posts..."):
+        with st.spinner("Fetching posts (last 3 hours)..."):
             all_tweets = []
-            if list_source == "My Custom List":
-                accs = [a.strip().lstrip("@") for a in (custom_accounts if list_source == "My Custom List" else "").replace(",", "\n").split("\n") if a.strip()]
-                if new_acc.strip():
-                    accs.append(new_acc.strip().lstrip("@"))
+            if not _is_twitter_list:
+                accs = [a.strip().lstrip("@") for a in custom_accounts.replace(",", "\n").split("\n") if a.strip()]
                 for acc in accs[:12]:
                     tweets = fetch_tweets(f"from:{acc}", count=1)
                     for t in tweets:
@@ -3445,10 +3526,25 @@ def page_reply_guy():
                                 st.warning("List has no members or couldn't be read")
                     except Exception as e:
                         st.error(f"List fetch error: {str(e)[:100]}")
+            from datetime import timezone as _tz
+            _now_utc = datetime.now(_tz.utc)
+            def _fresh(t):
+                ts = t.get("createdAt", t.get("created_at", ""))
+                if not ts: return True
+                try:
+                    import re as _re
+                    tc = _re.sub(r"\+\d{2}:\d{2}$","Z",ts)
+                    td = datetime.fromisoformat(tc.replace("Z","+00:00"))
+                    return (_now_utc - td).total_seconds() < 10800
+                except Exception: return True
+            all_tweets = [t for t in all_tweets if _fresh(t)]
             st.session_state["rg_tweets"] = all_tweets
+            st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
+    if st.session_state.get("rg_loaded_at"):
+        st.caption(f"Tweets from the last 3 hours · Loaded {st.session_state['rg_loaded_at']}")
 
     if tweets_data:
         # Sort by engagement score (likes*2 + replies*3 + retweets)
@@ -3594,7 +3690,33 @@ def page_reply_guy():
 
         st.markdown('<hr style="margin:6px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
 
-
+    # ── Inspiration Engine ──────────────────────────────────────────────────
+    if tweets_data:
+        st.divider()
+        st.markdown('<div class="cs-panel-label">INSPIRATION ENGINE</div>', unsafe_allow_html=True)
+        if st.button("⚡ Generate Ideas From This Feed", use_container_width=True, type="primary", key="btn_inspiration"):
+            _lines = [f"@{t.get('_target_account','?')}: {t.get('text','')[:120]}" for t in tweets_data[:15]]
+            _prompt = (
+                "Based on these tweets from sports journalists and analysts:\n\n"
+                + "\n".join(f"- {l}" for l in _lines)
+                + "\n\nGenerate 5 fresh, punchy tweet ideas for @tyler_polumbus — former NFL OL, Super Bowl 50 champion, Denver sports host. "
+                "Each should react to something in the feed, sound like an NFL insider, be under 280 chars. "
+                "Numbered list. No hashtags. No emojis."
+            )
+            with st.spinner("Reading the feed..."):
+                st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=TYLER_CONTEXT, max_tokens=1000)
+        if st.session_state.get("rg_inspiration_ideas"):
+            st.markdown(st.session_state["rg_inspiration_ideas"])
+            _ic1, _ic2 = st.columns(2)
+            with _ic1:
+                if st.button("↺ Regenerate", use_container_width=True, key="btn_regen_insp"):
+                    del st.session_state["rg_inspiration_ideas"]
+                    st.rerun()
+            with _ic2:
+                if st.button("→ Open Creator Studio", use_container_width=True, key="btn_insp_to_studio"):
+                    st.session_state.current_page = "Creator Studio"
+                    st.query_params["page"] = "Creator Studio"
+                    st.rerun()
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
