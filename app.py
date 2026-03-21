@@ -1716,9 +1716,6 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
     """Run AI action and display output in a dialog modal."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
-    # Use button sets this flag — early return closes the dialog without re-running AI
-    if st.session_state.pop("ci_close_modal", False):
-        return
 
     def _use_option(opt_key):
         val = st.session_state.get(opt_key, "")
@@ -2030,7 +2027,7 @@ IMAGE RECOMMENDATION:
         </div>
         {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#00F5FF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
 
-    elif action == "banger" and tweet_text.strip():
+    elif action == "banger" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
@@ -2076,7 +2073,7 @@ Return ONLY this JSON, no other text:
             except Exception:
                 result = raw
 
-    elif action == "grades" and tweet_text.strip():
+    elif action == "grades" and tweet_text.strip() and not st.session_state.get("ci_grades"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             grade_prompt = f"""Grade this tweet for X algorithm performance.
 
@@ -2118,31 +2115,51 @@ Return ONLY valid JSON:
             else:
                 result = raw
 
-    elif action == "build" and tweet_text.strip():
+    elif action == "build" and tweet_text.strip() and not st.session_state.get("ci_result"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet.
+            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
 {format_mod}
 
-TASK: Extract the best version of this idea and write the finished tweet. This is NOT a rewrite — you are crafting the actual tweet from a raw concept description.
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
+Rules:
 - Strong hook — first line stops the scroll
 - No hashtags, no emojis
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
 
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle/structure this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "recommendation": "Which option to post and exactly why"
+}}"""
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                build_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = build_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_result"] = raw
+                for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                    st.session_state.pop(_k, None)
 
-Give ONLY the finished tweet/thread/article. No explanation. No character count. No commentary."""
-            st.session_state["ci_result"] = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod))
-            st.session_state["ci_result_edit"] = st.session_state.get("ci_result", "")
-            for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                st.session_state.pop(_k, None)
-
-    elif action == "rewrite" and tweet_text.strip():
+    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_repurposed"):
         with st.spinner("Repurposing in your voice..."):
             repurpose_prompt = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject — do NOT copy any original phrasing.
 
@@ -2191,8 +2208,9 @@ Give the repurposed tweet, then show character count."""
                     val = st.session_state.get(opt_key, opt_text)
                     if val:
                         st.session_state["ci_text"] = val
-                    st.session_state["ci_close_modal"] = True
-                    st.rerun()
+                    for _k in _RESULT_KEYS:
+                        st.session_state.pop(_k, None)
+                    st.rerun(scope="app")
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(0,245,255,0.04);border:1px solid rgba(0,245,255,0.15);border-left:3px solid #00F5FF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
@@ -2292,8 +2310,9 @@ Give the repurposed tweet, then show character count."""
                 val = st.session_state.get(_edit_key, edited)
                 if val:
                     st.session_state["ci_text"] = val
-                st.session_state["ci_close_modal"] = True
-                st.rerun()
+                for _k in _RESULT_KEYS:
+                    st.session_state.pop(_k, None)
+                st.rerun(scope="app")
 
     # ── Bottom action bar ──
     st.divider()
