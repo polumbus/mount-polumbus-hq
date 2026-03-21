@@ -1157,15 +1157,11 @@ _sidebar_html = f"""
 }}
 .mp-ico.active .mp-active-pip {{ opacity: 1; }}
 .mp-panel {{
-    position: absolute; left: 56px; top: -8px; background: #0D1929;
+    position: fixed; background: #0D1929;
     border: 1px solid #1E3050; border-radius: 12px; padding: 8px 0; min-width: 180px;
-    pointer-events: none; opacity: 0; transform: translateX(-4px);
-    transition: opacity 0.15s 0.35s, transform 0.15s 0.35s; z-index: 9999;
+    pointer-events: none; opacity: 0; transform: translateX(-6px);
+    transition: opacity 0.15s, transform 0.15s; z-index: 99999;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7);
-}}
-.mp-zone:hover .mp-panel {{
-    opacity: 1; transform: translateX(0); pointer-events: all;
-    transition: opacity 0.15s 0s, transform 0.15s 0s;
 }}
 .mp-panel-header {{
     font-size: 8px; letter-spacing: 2px; font-weight: 700;
@@ -1356,6 +1352,81 @@ _sidebar_html = f"""
 
   <div class="mp-pro">PRO</div>
 </div>
+
+<script>
+(function() {{
+  'use strict';
+  var timers = new Map();
+
+  function cleanOrphanPanels() {{
+    document.querySelectorAll('body > .mp-panel').forEach(function(p) {{ p.remove(); }});
+  }}
+
+  function setupZone(zone) {{
+    if (zone._mpDone) return;
+    zone._mpDone = true;
+
+    var panel = zone.querySelector('.mp-panel');
+    if (!panel) return;
+
+    document.body.appendChild(panel);
+
+    function getLeft() {{
+      return zone.getBoundingClientRect().right + 6;
+    }}
+    function getTop() {{
+      return zone.getBoundingClientRect().top;
+    }}
+
+    function show() {{
+      var t = timers.get(zone);
+      if (t) {{ clearTimeout(t); timers.delete(zone); }}
+      panel.style.left  = getLeft() + 'px';
+      panel.style.top   = getTop()  + 'px';
+      panel.style.opacity = '1';
+      panel.style.transform = 'translateX(0)';
+      panel.style.pointerEvents = 'all';
+    }}
+
+    function scheduleHide(delay) {{
+      var t = setTimeout(function() {{
+        panel.style.opacity = '0';
+        panel.style.transform = 'translateX(-6px)';
+        panel.style.pointerEvents = 'none';
+        timers.delete(zone);
+      }}, delay == null ? 250 : delay);
+      timers.set(zone, t);
+    }}
+
+    zone.addEventListener('mouseenter', show);
+    zone.addEventListener('mouseleave', function() {{ scheduleHide(250); }});
+    panel.addEventListener('mouseenter', function() {{
+      var t = timers.get(zone); if (t) {{ clearTimeout(t); timers.delete(zone); }}
+    }});
+    panel.addEventListener('mouseleave', function() {{ scheduleHide(150); }});
+  }}
+
+  function init() {{
+    cleanOrphanPanels();
+    document.querySelectorAll('.mp-zone').forEach(setupZone);
+  }}
+
+  setTimeout(init, 100);
+  setTimeout(init, 600);
+
+  new MutationObserver(function(mutations) {{
+    var relevant = mutations.some(function(m) {{
+      return Array.from(m.addedNodes).some(function(n) {{
+        return n.nodeType === 1 && (
+          (n.classList && n.classList.contains('mp-zone')) ||
+          (n.querySelector && n.querySelector('.mp-zone'))
+        );
+      }});
+    }});
+    if (relevant) {{ setTimeout(init, 50); }}
+  }}).observe(document.body, {{ childList: true, subtree: true }});
+}})();
+</script>
 """
 
 with st.sidebar:
