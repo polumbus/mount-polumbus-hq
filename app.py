@@ -1121,18 +1121,24 @@ def save_json(filename: str, data):
 
 ENGAGEMENT_LISTS_PATH = DATA_DIR / 'engagement_lists.json'
 
+_ENGAGEMENT_DEFAULTS = {
+    'Broncos Reporters': '@MikeKlis, @TroyRenck, @RyanOHalloran, @NickKosmider',
+    'NBA / Avs': '@PeterBaugh, @EvanSidery',
+    'My Custom List': '',
+}
+
 def load_engagement_lists() -> dict:
-    defaults = {
-        'Broncos Reporters': '@MikeKlis, @TroyRenck, @RyanOHalloran, @NickKosmider',
-        'NBA / Avs': '@PeterBaugh, @EvanSidery',
-        'My Custom List': '',
-    }
     if ENGAGEMENT_LISTS_PATH.exists():
         try:
-            return json.loads(ENGAGEMENT_LISTS_PATH.read_text())
+            loaded = json.loads(ENGAGEMENT_LISTS_PATH.read_text())
+            # Restore defaults for any key stored with empty value
+            for k, v in _ENGAGEMENT_DEFAULTS.items():
+                if k not in loaded or not loaded[k]:
+                    loaded[k] = v
+            return loaded
         except Exception:
             pass
-    return defaults
+    return dict(_ENGAGEMENT_DEFAULTS)
 
 def save_engagement_lists(lists: dict):
     ENGAGEMENT_LISTS_PATH.write_text(json.dumps(lists, indent=2))
@@ -3578,6 +3584,10 @@ def page_reply_guy():
 
     _is_twitter_list = list_source in LISTS and list_source not in st.session_state.custom_eng_lists
     _list_handles_str = st.session_state.custom_eng_lists.get(list_source, "")
+    # Reset widget when list_source changes so value= param takes effect
+    if st.session_state.get("rg_last_list") != list_source:
+        st.session_state["rg_last_list"] = list_source
+        st.session_state.pop("rg_accounts", None)
     if not _is_twitter_list:
         custom_accounts = st.text_input("Accounts (comma-separated):", value=_list_handles_str, key="rg_accounts", placeholder="@MikeKlis, @TroyRenck")
         if custom_accounts != _list_handles_str:
@@ -3591,9 +3601,11 @@ def page_reply_guy():
         with st.spinner("Fetching posts..."):
             all_tweets = []
             _debug_steps = []
+            # Read handles from dict directly — widget value unreliable due to Streamlit key persistence
+            _fetch_handles_str = st.session_state.custom_eng_lists.get(list_source, "") if not _is_twitter_list else ""
             _debug_steps.append(f"key={'SET' if TWITTER_API_IO_KEY else 'MISSING'} | list={list_source!r} | is_twitter_list={_is_twitter_list}")
             if not _is_twitter_list:
-                accs = [a.strip().lstrip("@") for a in custom_accounts.replace(",", "\n").split("\n") if a.strip()]
+                accs = [a.strip().lstrip("@") for a in _fetch_handles_str.replace(",", "\n").split("\n") if a.strip()]
                 _debug_steps.append(f"custom path: {len(accs)} accounts: {accs[:5]}")
                 for acc in accs[:12]:
                     tweets = fetch_tweets(f"from:{acc}", count=20)
