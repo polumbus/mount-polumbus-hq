@@ -2365,12 +2365,13 @@ def sync_tweet_history(quick=False):
     if quick:
         all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:25]
     else:
-        # Slide backwards in 2-week windows for up to 2 years (52 windows) until 500 tweets collected
+        # Slide backwards in 7-day windows for up to 2 years (104 windows) until 500 tweets collected
+        # Smaller windows = fewer tweets per window = less pagination cutoff risk
         all_tweets = []
         seen_ids = set()
         end_dt = datetime.now()
-        for _ in range(52):
-            start_dt = end_dt - timedelta(days=14)
+        for _ in range(104):
+            start_dt = end_dt - timedelta(days=7)
             since_str = start_dt.strftime("%Y-%m-%d")
             until_str = end_dt.strftime("%Y-%m-%d")
             query = f"from:{TYLER_HANDLE} since:{since_str} until:{until_str}"
@@ -2434,18 +2435,36 @@ def _save_tweet_history_gist(tweets: list):
 
 
 def fetch_tweet_by_id(tweet_id: str) -> dict:
-    """Fetch a single tweet by ID from twitterapi.io."""
+    """Fetch a single tweet by ID.
+    twitterapi.io has no lookup endpoint — decode snowflake timestamp and
+    do a targeted 1-day date-window search, then match by ID."""
     try:
-        resp = requests.get(
-            "https://api.twitterapi.io/twitter/tweet/detail",
-            headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"tweet_id": tweet_id},
-            timeout=15,
-        )
-        if resp.status_code == 200:
+        # Decode Twitter snowflake ID to posting date
+        TWITTER_EPOCH = 1288834974657
+        ts_ms = (int(tweet_id) >> 22) + TWITTER_EPOCH
+        dt = datetime.utcfromtimestamp(ts_ms / 1000)
+        since = dt.strftime("%Y-%m-%d")
+        until = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        query = f"from:{TYLER_HANDLE} since:{since} until:{until}"
+        cursor = ""
+        for _ in range(5):  # up to 5 pages
+            params = {"query": query, "queryType": "Latest", "count": "50"}
+            if cursor:
+                params["cursor"] = cursor
+            resp = requests.get(
+                "https://api.twitterapi.io/twitter/tweet/advanced_search",
+                headers={"X-API-Key": TWITTER_API_IO_KEY},
+                params=params, timeout=15,
+            )
+            if resp.status_code != 200:
+                break
             data = resp.json()
-            # API may return tweet under different keys
-            return data.get("tweet", data.get("data", data if "id" in data else {}))
+            for t in data.get("tweets", []):
+                if str(t.get("id", "")) == str(tweet_id):
+                    return t
+            cursor = data.get("next_cursor", "")
+            if not cursor:
+                break
     except Exception:
         pass
     return {}
