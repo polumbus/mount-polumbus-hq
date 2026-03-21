@@ -3632,7 +3632,7 @@ def page_reply_guy():
                 from dateutil import parser as _dtparser
                 raw_tweets = fetch_tweets_from_list(_list_id, count=100)
                 _now_utc = datetime.now(_tz.utc)
-                _cutoff  = _now_utc - _td(hours=6)
+                _cutoff  = _now_utc - _td(hours=24)
                 def _fresh(t):
                     ts = t.get("createdAt", t.get("created_at", ""))
                     if not ts: return False
@@ -3667,15 +3667,16 @@ def page_reply_guy():
                         })
                 st.session_state["rg_tweets"] = all_tweets
                 st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
+                _oldest = raw_tweets[-1].get("createdAt", "?") if raw_tweets else "none"
                 st.session_state["rg_debug"] = (
-                    f"DEBUG: fetched {len(raw_tweets)} from list, {len(all_tweets)} passed 6hr filter, "
-                    f"list_id={_list_id}, cutoff={_cutoff.isoformat()}"
+                    f"DEBUG: fetched {len(raw_tweets)} from list, {len(all_tweets)} passed 24hr filter, "
+                    f"oldest={_oldest}, cutoff={_cutoff.isoformat()}"
                 )
 
     # ── Engagement Targets header + controls ──
     tweets_data = st.session_state.get("rg_tweets", [])
     if st.session_state.get("rg_loaded_at"):
-        st.caption(f"Tweets from the last 6 hours · Loaded {st.session_state['rg_loaded_at']}")
+        st.caption(f"Tweets from the last 24 hours · Loaded {st.session_state['rg_loaded_at']}")
     if st.session_state.get("rg_debug"):
         st.caption(st.session_state["rg_debug"])
 
