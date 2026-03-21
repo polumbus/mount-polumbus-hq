@@ -87,12 +87,14 @@ footer { visibility: hidden; }
    SIDEBAR — ICON RAIL
 ═══════════════════════════════════════════════ */
 section[data-testid="stSidebar"] {
-  min-width: 96px !important;
-  max-width: 96px !important;
+  width: 80px !important;
+  min-width: 80px !important;
+  max-width: 80px !important;
   background: #080E1E !important;
   border-right: 1px solid #14203A !important;
   overflow: visible !important;
 }
+[data-testid="stSidebarResizeHandle"] { display: none !important; }
 section[data-testid="stSidebar"] > div:first-child {
   padding: 0 !important;
   overflow: visible !important;
@@ -361,146 +363,24 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 
 /* Mobile */
 @media screen and (max-width: 768px) {
-
-    /* Hide Streamlit's own deploy/menu buttons on mobile — they bleed over our nav */
+    /* Hide Streamlit toolbar chrome */
     [data-testid="stToolbar"],
     [data-testid="stDecoration"],
     [data-testid="stAppDeployButton"],
     [data-testid="stMainMenu"],
     [data-testid="stMainMenuButton"],
     .st-emotion-cache-1dp5vir,
-    .st-emotion-cache-15zrgzn,
-    iframe[title="streamlit_analytics"] {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        overflow: hidden !important;
-    }
+    .st-emotion-cache-15zrgzn { display: none !important; }
 
-    /* Sidebar becomes a bottom bar */
-    [data-testid="stSidebar"],
-    [data-testid="stSidebarContent"],
-    [data-testid="stSidebarUserContent"] {
-        position: fixed !important;
-        bottom: 0 !important;
-        top: auto !important;
-        left: 0 !important;
-        width: 100vw !important;
-        min-width: 100vw !important;
-        max-width: 100vw !important;
-        height: 72px !important;
-        min-height: 72px !important;
-        max-height: 72px !important;
-        border-top: 1px solid #1E3050 !important;
-        border-right: none !important;
-        border-radius: 0 !important;
-        overflow: visible !important;
-        z-index: 99999 !important;
-        background: #080E1E !important;
-        padding: 0 !important;
-    }
+    /* Hide sidebar — JS injects hamburger + overlay instead */
+    section[data-testid="stSidebar"] { display: none !important; }
 
-    /* Main content — add bottom padding so nav doesn't cover it */
+    /* Main content full-width, leave room for hamburger button */
     [data-testid="stAppViewContainer"] > section.main,
     [data-testid="stMain"] {
         margin-left: 0 !important;
-        padding-bottom: 90px !important;
-        padding-top: 16px !important;
+        padding-top: 60px !important;
     }
-
-    /* The rail becomes a horizontal tab bar */
-    .mp-rail {
-        flex-direction: row !important;
-        width: 100vw !important;
-        height: 72px !important;
-        padding: 0 !important;
-        gap: 0 !important;
-        justify-content: space-around !important;
-        align-items: stretch !important;
-        background: #080E1E !important;
-    }
-
-    /* Hide logo and PRO on mobile */
-    .mp-logo,
-    .mp-pro {
-        display: none !important;
-    }
-
-    /* Each zone becomes a tab button taking equal width */
-    .mp-zone {
-        flex: 1 !important;
-        width: auto !important;
-        min-width: 0 !important;
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        padding: 8px 4px 4px !important;
-        gap: 2px !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        position: static !important;
-        cursor: pointer !important;
-        border-top: 2px solid transparent !important;
-        transition: border-color 0.15s !important;
-    }
-
-    /* Show ONLY the first icon from each zone on mobile (the zone representative) */
-    .mp-zone .mp-ico:not(:first-of-type) {
-        display: none !important;
-    }
-
-    /* Zone icons in mobile tab bar */
-    .mp-ico {
-        width: 36px !important;
-        height: 36px !important;
-        border-radius: 8px !important;
-    }
-
-    /* Zone labels visible on mobile as tab labels */
-    .mp-zone-label {
-        display: block !important;
-        font-size: 8px !important;
-        letter-spacing: 1px !important;
-        padding: 0 !important;
-        text-align: center !important;
-    }
-    .mp-zone-create .mp-zone-label  { color: #00E5CC99 !important; }
-    .mp-zone-interact .mp-zone-label { color: #C49E3C99 !important; }
-    .mp-zone-insights .mp-zone-label { color: #91A2B299 !important; }
-
-    /* Flyout panel becomes a bottom sheet rising from the nav */
-    .mp-panel {
-        position: fixed !important;
-        bottom: 72px !important;
-        left: 4px !important;
-        right: 4px !important;
-        top: auto !important;
-        width: auto !important;
-        border-radius: 16px 16px 0 0 !important;
-        padding: 16px 0 8px !important;
-        min-width: 0 !important;
-        transform: none !important;
-        box-shadow: 0 -8px 40px rgba(0,0,0,0.8) !important;
-        max-height: 60vh !important;
-        overflow-y: auto !important;
-    }
-
-    /* Panel items bigger on mobile for touch targets */
-    .mp-panel-item {
-        padding: 14px 20px !important;
-        font-size: 14px !important;
-    }
-
-    .mp-panel-header {
-        font-size: 9px !important;
-        padding: 2px 20px 12px !important;
-    }
-
-    /* Active zone gets top border accent */
-    .mp-zone-create:hover  { border-top-color: #00E5CC !important; }
-    .mp-zone-interact:hover { border-top-color: #C49E3C !important; }
-    .mp-zone-insights:hover { border-top-color: #91A2B2 !important; }
 }
 /* ─── Global color tokens ──────────────────────────────────────────── */
 :root { --mp-cyan: #00E5CC; --mp-gold: #C49E3C; --mp-navy: #080E1E; --mp-steel: #91A2B2; }
@@ -1513,34 +1393,28 @@ with st.sidebar:
 import streamlit.components.v1 as _stc
 _stc.html("""<script>
 (function(){
-  function init(){
-    var doc = window.parent.document;
+  function isMobile(){ return window.parent.innerWidth <= 768; }
+
+  function initDesktop(doc){
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
       if(zone._mpReady) return;
       zone._mpReady = true;
-      var srcPanel = zone.querySelector('.mp-panel');
-      if(!srcPanel) return;
-
-      /* Move panel to document.body — escapes sidebar transform/overflow entirely */
-      var panel = srcPanel;
+      var panel = zone.querySelector('.mp-panel');
+      if(!panel) return;
       doc.body.appendChild(panel);
       panel.style.position = 'fixed';
-      panel.style.zIndex   = '999999';
-      panel.style.opacity  = '0';
+      panel.style.zIndex = '999999';
+      panel.style.opacity = '0';
       panel.style.pointerEvents = 'none';
       panel.style.transform = 'translateX(-4px)';
       panel.style.transition = 'opacity 0.12s, transform 0.12s';
-
-      /* Fix links — Streamlit adds target=_blank; force same-tab navigation */
       panel.querySelectorAll('a').forEach(function(a){
         a.removeAttribute('target');
         a.addEventListener('click', function(e){
-          e.preventDefault();
-          e.stopPropagation();
+          e.preventDefault(); e.stopPropagation();
           window.parent.location.href = a.getAttribute('href');
         });
       });
-
       var timer = null;
       function show(){
         clearTimeout(timer);
@@ -1564,7 +1438,63 @@ _stc.html("""<script>
       panel.addEventListener('mouseleave', hide);
     });
   }
-  /* Run at 600ms, 1500ms, and again at 3s in case Streamlit re-renders */
+
+  function initMobile(doc){
+    if(doc.getElementById('mp-hamburger')) return;
+    /* Collect nav links from zones */
+    var sections = [];
+    doc.querySelectorAll('.mp-zone').forEach(function(zone){
+      var hdr = zone.querySelector('.mp-panel-header');
+      var items = [];
+      zone.querySelectorAll('.mp-panel a').forEach(function(a){
+        items.push({href: a.getAttribute('href'), text: a.textContent.trim()});
+      });
+      if(items.length) sections.push({label: hdr ? hdr.textContent.trim() : '', items: items});
+    });
+    /* Build overlay */
+    var navHtml = '';
+    sections.forEach(function(sec){
+      navHtml += '<div style="margin-bottom:28px;">';
+      navHtml += '<div style="font-size:9px;letter-spacing:2px;color:#556;font-weight:700;margin-bottom:12px;">' + sec.label + '</div>';
+      sec.items.forEach(function(item){
+        navHtml += '<a data-href="' + item.href + '" style="display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;">' + item.text + '</a>';
+      });
+      navHtml += '</div>';
+    });
+    var overlay = doc.createElement('div');
+    overlay.id = 'mp-mobile-overlay';
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:#080E1E;z-index:99999;padding:24px 28px;overflow-y:auto;font-family:sans-serif;';
+    overlay.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;">' +
+        '<div style="font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>' +
+        '<button id="mp-mob-close" style="background:none;border:none;color:#667;font-size:30px;cursor:pointer;padding:0;line-height:1;">×</button>' +
+      '</div>' + navHtml;
+    doc.body.appendChild(overlay);
+    /* Hamburger */
+    var burger = doc.createElement('button');
+    burger.id = 'mp-hamburger';
+    burger.innerHTML = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none">' +
+      '<line x1="0" y1="1" x2="18" y2="1" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
+      '<line x1="0" y1="7" x2="18" y2="7" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
+      '<line x1="0" y1="13" x2="18" y2="13" stroke="#c0c8d8" stroke-width="2" stroke-linecap="round"/>' +
+      '</svg>';
+    burger.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9998;background:#0A1628;border:1px solid #1E3050;border-radius:8px;width:40px;height:40px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    doc.body.appendChild(burger);
+    burger.addEventListener('click', function(){ overlay.style.display = 'block'; });
+    doc.getElementById('mp-mob-close').addEventListener('click', function(){ overlay.style.display = 'none'; });
+    overlay.querySelectorAll('a[data-href]').forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        overlay.style.display = 'none';
+        window.parent.location.href = a.getAttribute('data-href');
+      });
+    });
+  }
+
+  function init(){
+    var doc = window.parent.document;
+    if(isMobile()){ initMobile(doc); } else { initDesktop(doc); }
+  }
   setTimeout(init, 600);
   setTimeout(init, 1500);
   setTimeout(init, 3000);
