@@ -1280,7 +1280,6 @@ _sidebar_html = f"""
     </div>
   </div>
 
-  <div class="mp-spacer"></div>
   <div class="mp-pro">PRO</div>
 </div>
 """
