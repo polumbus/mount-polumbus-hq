@@ -1159,6 +1159,11 @@ def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
     """Fetch recent tweets from a Twitter List via twitterapi.io."""
     if not TWITTER_API_IO_KEY or not list_id:
         return []
+    # Strip full URL to bare numeric ID (e.g. https://x.com/i/lists/1234567890)
+    if '/' in list_id:
+        import re as _re
+        _m = _re.search(r'(\d{10,})', list_id)
+        list_id = _m.group(1) if _m else list_id
     try:
         resp = requests.get(
             "https://api.twitterapi.io/twitter/list/tweets",
@@ -3606,7 +3611,12 @@ def page_reply_guy():
         with _s1:
             if st.button("Save", use_container_width=True, type="primary", key="rg_nl_save"):
                 if _nl_name.strip() and _nl_lid.strip():
-                    st.session_state.custom_lists[_nl_name.strip()] = {"list_id": _nl_lid.strip()}
+                    import re as _re2
+                    _raw_lid = _nl_lid.strip()
+                    if '/' in _raw_lid:
+                        _m2 = _re2.search(r'(\d{10,})', _raw_lid)
+                        _raw_lid = _m2.group(1) if _m2 else _raw_lid
+                    st.session_state.custom_lists[_nl_name.strip()] = {"list_id": _raw_lid}
                     save_engagement_lists(st.session_state.custom_lists)
                     st.session_state["rg_show_new_list"] = False
                     st.success(f"List '{_nl_name.strip()}' saved.")
@@ -3618,10 +3628,30 @@ def page_reply_guy():
 
     _list_data = st.session_state.custom_lists.get(list_source, {})
     _list_id   = _list_data.get("list_id", "") if isinstance(_list_data, dict) else ""
-    if _list_id:
-        st.caption(f"X List ID: {_list_id}")
-    else:
-        st.caption("No List ID — click + New List to add one")
+    _cap_col, _del_col = st.columns([3, 1])
+    with _cap_col:
+        if _list_id:
+            st.caption(f"X List ID: {_list_id}")
+        else:
+            st.caption("No List ID — click + New List to add one")
+    with _del_col:
+        if st.button("🗑 Delete", key="rg_del_list_btn", use_container_width=True,
+                     help="Remove this list from engagement targets"):
+            st.session_state["rg_confirm_delete"] = list_source
+
+    if st.session_state.get("rg_confirm_delete") == list_source:
+        st.warning(f"Delete **{list_source}**? This cannot be undone.")
+        _dc1, _dc2 = st.columns(2)
+        with _dc1:
+            if st.button("Yes, delete", key="rg_del_confirm", type="primary", use_container_width=True):
+                del st.session_state.custom_lists[list_source]
+                save_engagement_lists(st.session_state.custom_lists)
+                st.session_state.pop("rg_confirm_delete", None)
+                st.rerun()
+        with _dc2:
+            if st.button("Cancel", key="rg_del_cancel", use_container_width=True):
+                st.session_state.pop("rg_confirm_delete", None)
+                st.rerun()
 
     if do_load:
         if not _list_id:
