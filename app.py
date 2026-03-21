@@ -98,6 +98,8 @@ section[data-testid="stSidebar"] > div:first-child {
   overflow: visible !important;
 }
 [data-testid="collapsedControl"] { display: none !important; }
+button[kind="header"] { display: none !important; }
+.st-emotion-cache-1oe5cao { display: none !important; }
 [data-testid="stSidebarNav"] { display: none !important; }
 [data-testid="stAppViewContainer"] > .main { margin-left: 96px !important; }
 
@@ -1036,7 +1038,7 @@ _sidebar_html = f"""
 <style>
 .mp-rail {{
     display: flex; flex-direction: column; align-items: center;
-    padding: 14px 8px 16px; gap: 6px;
+    padding: 14px 8px 16px; gap: 0; justify-content: space-between;
     height: 100vh; position: fixed; top: 0; left: 0; width: 80px;
     background: #080E1E; z-index: 999; overflow: visible;
 }}
@@ -1048,7 +1050,7 @@ _sidebar_html = f"""
 .mp-zone {{
     width: 64px; background: #0A1628; border-radius: 11px; border: 1px solid #14203A;
     display: flex; flex-direction: column; align-items: center;
-    padding: 5px 4px 6px; gap: 1px; flex-shrink: 0;
+    padding: 8px 6px 10px; gap: 4px; flex-shrink: 0;
     position: relative; cursor: default; transition: border-color 0.2s;
 }}
 .mp-zone-create:hover  {{ border-color: #00E5CC33; }}
