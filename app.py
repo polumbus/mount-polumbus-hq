@@ -2388,8 +2388,8 @@ def sync_tweet_history(quick=False):
             if len(all_tweets) >= 500:
                 break
 
-    # Merge with existing history
-    existing = load_json("tweet_history.json", [])
+    # Merge with existing history (from Gist)
+    existing = _load_tweet_history_gist()
     combined = all_tweets + existing
     seen = set()
     unique = []
@@ -2399,13 +2399,64 @@ def sync_tweet_history(quick=False):
             seen.add(tid)
             unique.append(t)
     unique = unique[:500]
-    save_json("tweet_history.json", unique)
+    _save_tweet_history_gist(unique)
     return unique
 
 
-def get_tweet_knowledge_base():
-    """Load the local tweet history — this is the knowledge base for the whole app."""
+def _load_tweet_history_gist() -> list:
+    """Load tweet history from Gist (persistent across Streamlit redeploys)."""
+    if "_tweet_history_cache" in st.session_state:
+        return st.session_state["_tweet_history_cache"]
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=15)
+        data = resp.json()
+        content = data.get("files", {}).get("hq_tweet_history.json", {}).get("content", "")
+        if content:
+            tweets = json.loads(content)
+            st.session_state["_tweet_history_cache"] = tweets
+            return tweets
+    except Exception:
+        pass
+    # Fallback to local file
     return load_json("tweet_history.json", [])
+
+
+def _save_tweet_history_gist(tweets: list):
+    """Save tweet history to Gist and local file."""
+    st.session_state["_tweet_history_cache"] = tweets
+    # Save locally as backup
+    save_json("tweet_history.json", tweets)
+    # Save to Gist
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(tweets, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=15)
+    except Exception:
+        pass
+
+
+def fetch_tweet_by_id(tweet_id: str) -> dict:
+    """Fetch a single tweet by ID from twitterapi.io."""
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/tweet/detail",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"tweet_id": tweet_id},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            # API may return tweet under different keys
+            return data.get("tweet", data.get("data", data if "id" in data else {}))
+    except Exception:
+        pass
+    return {}
+
+
+def get_tweet_knowledge_base():
+    """Load tweet history — Gist-backed so it survives Streamlit redeploys."""
+    return _load_tweet_history_gist()
 
 
 def classify_tweet(tweet):
@@ -2535,6 +2586,32 @@ def page_tweet_history():
     hof_tweets = sorted(hof_candidates, key=_eng_score, reverse=True)[:20]
 
     with st.expander(f"★ Hall of Fame — Top {len(hof_tweets)} Tweets", expanded=False):
+        # Manual import
+        imp_col1, imp_col2 = st.columns([4, 1])
+        with imp_col1:
+            imp_url = st.text_input("Paste tweet URL to add to history:", placeholder="https://x.com/Tyler_Polumbus/status/...", key="hof_import_url", label_visibility="collapsed")
+        with imp_col2:
+            if st.button("+ Add", key="hof_import_btn", use_container_width=True):
+                if imp_url.strip():
+                    # Extract tweet ID from URL
+                    imp_id = imp_url.strip().rstrip("/").split("/")[-1].split("?")[0]
+                    if imp_id.isdigit():
+                        existing_ids = {t.get("id", "") for t in tweets}
+                        if imp_id in existing_ids:
+                            st.info("Already in your history.")
+                        else:
+                            with st.spinner("Fetching tweet..."):
+                                fetched = fetch_tweet_by_id(imp_id)
+                            if fetched and fetched.get("id"):
+                                updated = [fetched] + tweets
+                                _save_tweet_history_gist(updated[:500])
+                                st.success(f"Added: {fetched.get('text','')[:80]}...")
+                                st.rerun()
+                            else:
+                                st.error("Couldn't fetch that tweet — check the URL.")
+                    else:
+                        st.error("Couldn't parse tweet ID from URL.")
+        st.markdown("---")
         for rank, t in enumerate(hof_tweets, 1):
             text  = t.get("text", "")
             likes = t.get("likeCount", t.get("like_count", 0))
@@ -3566,7 +3643,7 @@ page_map = {
 # - If history exists → quick sync of last 25 only (fast, every load)
 if not st.session_state.get("_tweets_synced"):
     try:
-        _existing_history = load_json("tweet_history.json", [])
+        _existing_history = _load_tweet_history_gist()
         if len(_existing_history) < 50:
             sync_tweet_history(quick=False)  # first-ever load: build full history
         else:
