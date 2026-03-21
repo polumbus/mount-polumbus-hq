@@ -4159,18 +4159,32 @@ page_map = {
 }
 
 # Sync strategy:
-# - If tweet_history.json is empty or missing → full 500-tweet sync (one time, slow, builds the base)
-# - If history exists → quick sync of last 25 only (fast, every load)
-if not st.session_state.get("_tweets_synced"):
+# @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
+# st.session_state resets on every navigation (full page reload on Streamlit Cloud),
+# so the old session_state guard was useless — the sync ran on every click.
+@st.cache_data(ttl=3600, show_spinner=False)
+def _auto_sync_tweets():
     try:
-        _existing_history = _load_tweet_history_gist()
-        if len(_existing_history) < 50:
-            sync_tweet_history(quick=False)  # first-ever load: build full history
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        resp = requests.get(
+            f"https://api.github.com/gists/{gist_id}",
+            headers=_gist_headers(), timeout=10
+        )
+        file_meta = resp.json().get("files", {}).get("hq_tweet_history.json", {})
+        existing_count = 0
+        if file_meta:
+            raw_url = file_meta.get("raw_url", "")
+            if raw_url:
+                raw_resp = requests.get(raw_url, timeout=20)
+                existing_count = len(json.loads(raw_resp.text))
+        if existing_count < 50:
+            sync_tweet_history(quick=False)
         else:
-            sync_tweet_history(quick=True)   # history exists: just grab latest 25
+            sync_tweet_history(quick=True)
     except Exception:
         pass
-    st.session_state["_tweets_synced"] = True
+
+_auto_sync_tweets()
 
 st.markdown('<div class="main-watermark">MP</div>', unsafe_allow_html=True)
 
