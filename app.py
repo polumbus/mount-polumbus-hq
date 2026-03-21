@@ -102,6 +102,10 @@ section[data-testid="stSidebar"] > div:first-child {
   display: flex !important;
   flex-direction: column !important;
 }
+[data-testid="stSidebar"] > div:first-child {
+  background: linear-gradient(180deg, #0a1628 0%, #070d1a 100%) !important;
+  border-right: 1px solid rgba(45,212,191,0.1) !important;
+}
 [data-testid="stSidebarContent"] {
   height: 100vh !important;
   padding: 0 !important;
@@ -132,12 +136,17 @@ button[kind="header"],
 ═══════════════════════════════════════════════ */
 .main-header {
   font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 3px;
-  line-height: 1; margin-bottom: 2px; font-weight: 400; color: #8B949E;
+  line-height: 1; margin-bottom: 2px; font-weight: 400; color: rgba(255,255,255,0.75);
 }
 .main-header span {
-  background: linear-gradient(135deg, #00F5FF 0%, #7DF9FF 60%, #b2fcff 100%);
+  background: linear-gradient(135deg, #2DD4BF 0%, #5eebd4 60%, #8af5e4 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(0,245,255,0.35));
+  filter: drop-shadow(0 0 20px rgba(45,212,191,0.35));
+}
+.main-header::after {
+  content: ''; display: block; width: 44px; height: 2px;
+  background: linear-gradient(90deg, #C49E3C, transparent);
+  margin-top: 7px; margin-bottom: 4px;
 }
 .tool-desc { color: #4a5160; font-size: 13px; margin-bottom: 28px; letter-spacing: 0.3px; }
 
@@ -153,27 +162,27 @@ button[kind="header"],
 }
 /* PRIMARY — gradient teal, glow on hover only */
 .stButton > button[kind="primary"] {
-  background: linear-gradient(135deg, #00C8E8 0%, #00F5FF 55%, #7DFAFF 100%) !important;
+  background: linear-gradient(135deg, #1fb8a8 0%, #2DD4BF 55%, #5eebd4 100%) !important;
   color: #0B0E14 !important; border: none !important; font-weight: 700 !important;
   box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
   transform: translateY(-2px) scale(1.02) !important;
-  box-shadow: 0 0 20px rgba(0,245,255,0.4), 0 8px 24px rgba(0,245,255,0.2) !important;
-  background: linear-gradient(135deg, #00D8F5 0%, #1af6ff 55%, #8FFCFF 100%) !important;
+  box-shadow: 0 0 20px rgba(45,212,191,0.4), 0 8px 24px rgba(45,212,191,0.2) !important;
+  background: linear-gradient(135deg, #25c4b0 0%, #33dcc8 55%, #8af5e4 100%) !important;
   border: none !important; color: #0B0E14 !important;
 }
 /* SECONDARY — ghost cyan outlined */
 .stButton > button[kind="secondary"] {
   background: transparent !important;
-  border: 1px solid rgba(0,245,255,0.25) !important;
-  color: #00F5FF !important; box-shadow: none !important;
+  border: 1px solid rgba(45,212,191,0.25) !important;
+  color: #2DD4BF !important; box-shadow: none !important;
 }
 .stButton > button[kind="secondary"]:hover {
-  background: rgba(0,245,255,0.06) !important;
-  border-color: rgba(0,245,255,0.6) !important;
-  color: #00F5FF !important; transform: translateY(-1px) !important;
-  box-shadow: 0 0 16px rgba(0,245,255,0.15) !important;
+  background: rgba(45,212,191,0.06) !important;
+  border-color: rgba(45,212,191,0.6) !important;
+  color: #2DD4BF !important; transform: translateY(-1px) !important;
+  box-shadow: 0 0 16px rgba(45,212,191,0.15) !important;
 }
 /* DEFAULT (no kind) — ghost subtle */
 .stButton > button:not([kind="primary"]):not([kind="secondary"]) {
@@ -182,7 +191,7 @@ button[kind="header"],
   color: #8B949E !important;
 }
 .stButton > button:not([kind="primary"]):not([kind="secondary"]):hover {
-  border-color: rgba(0,245,255,0.3) !important;
+  border-color: rgba(45,212,191,0.3) !important;
   color: #E6EDF3 !important; transform: translateY(-1px) !important;
 }
 
@@ -191,82 +200,90 @@ button[kind="header"],
 ═══════════════════════════════════════════════ */
 /* Pro card (generic reusable surface) */
 .pro-card {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.15);
+  background: #161B22; border: 1px solid rgba(45,212,191,0.15);
   border-radius: 12px; padding: 25px; margin-bottom: 20px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 /* Output box */
 .output-box {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.15);
-  border-left: 3px solid #00F5FF; border-radius: 14px; padding: 20px 22px;
+  background: #161B22; border: 1px solid rgba(45,212,191,0.15);
+  border-left: 3px solid #2DD4BF; border-radius: 14px; padding: 20px 22px;
   margin: 12px 0; font-size: 14px; line-height: 1.75; color: #C9D1D9;
   white-space: pre-wrap; font-family: 'JetBrains Mono', monospace;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
 /* Tweet / idea cards */
 .tweet-card {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.08);
+  background: #161B22; border: 1px solid rgba(45,212,191,0.08);
   border-top: 2px solid transparent; border-radius: 14px;
   padding: 16px 20px; margin: 8px 0; position: relative;
   transition: all 0.2s ease;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
 .tweet-card:hover {
-  border-color: rgba(0,245,255,0.2); border-top-color: #00F5FF;
+  border-color: rgba(45,212,191,0.2); border-top-color: #2DD4BF;
   background: #1c2128;
-  box-shadow: 0 4px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,245,255,0.1);
+  box-shadow: 0 4px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(45,212,191,0.1);
   transform: translateY(-1px);
 }
-.tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #00F5FF; letter-spacing: 1px; margin-bottom: 8px; }
+.tweet-num { font-family: 'Bebas Neue', sans-serif; font-size: 13px; color: #2DD4BF; letter-spacing: 1px; margin-bottom: 8px; }
 /* Stat cards */
 .stat-card {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.1);
+  background: #161B22; border: 1px solid rgba(45,212,191,0.1);
   border-radius: 16px; padding: 20px; text-align: center; transition: all 0.2s ease;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
-.stat-card:hover { border-color: rgba(0,245,255,0.3); box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 12px rgba(0,245,255,0.08); }
-.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #00F5FF; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-card:hover { border-color: rgba(45,212,191,0.3); box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 12px rgba(45,212,191,0.08); }
+.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 42px; color: #2DD4BF; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-label { font-size: 11px; color: #4a5160; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
 
 /* ═══════════════════════════════════════════════
    TAGS
 ═══════════════════════════════════════════════ */
-.tag { display: inline-block; background: rgba(0,245,255,0.04); border: 1px solid rgba(0,245,255,0.12); border-radius: 100px; padding: 2px 10px; font-size: 10px; color: #6E7681; margin: 2px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
-.tag-hot { background: rgba(0,245,255,0.1); color: #00F5FF; border-color: rgba(0,245,255,0.3); }
+.tag { display: inline-block; background: rgba(45,212,191,0.04); border: 1px solid rgba(45,212,191,0.12); border-radius: 100px; padding: 2px 10px; font-size: 10px; color: #6E7681; margin: 2px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+.tag-hot { background: rgba(45,212,191,0.1); color: #2DD4BF; border-color: rgba(45,212,191,0.3); }
+.tag-format { background: rgba(45,212,191,0.1); border-color: rgba(45,212,191,0.28); color: #2DD4BF; }
+.tag-original { background: rgba(196,158,60,0.1); border-color: rgba(196,158,60,0.28); color: #C49E3C; }
+.tag-ai { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.28); color: #8B5CF6; }
 
 /* ═══════════════════════════════════════════════
    INPUTS
 ═══════════════════════════════════════════════ */
 .stTextArea textarea, .stTextInput input {
-  background: #0D1117 !important; border: 1px solid #30363d !important;
-  border-radius: 12px !important; color: #E6EDF3 !important;
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(45,212,191,0.2) !important;
+  border-radius: 8px !important; color: #E6EDF3 !important;
   font-family: 'Inter', sans-serif !important; font-size: 14px !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
   padding-bottom: 10px !important;
 }
 .stTextArea textarea:focus, .stTextInput input:focus {
-  border-color: rgba(0,245,255,0.5) !important;
-  box-shadow: 0 0 0 3px rgba(0,245,255,0.07), 0 0 20px rgba(0,245,255,0.04) !important;
+  border-color: rgba(45,212,191,0.55) !important;
   outline: none !important;
+  box-shadow: 0 0 0 3px rgba(45,212,191,0.08) !important;
 }
 .stTextArea textarea { min-height: 60px !important; resize: vertical !important; }
-.stSelectbox > div > div { background: #0D1117 !important; border-color: #30363d !important; color: #E6EDF3 !important; border-radius: 12px !important; }
+.stSelectbox > div > div {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(45,212,191,0.18) !important;
+  color: #E6EDF3 !important; border-radius: 12px !important;
+}
 input[type="number"] { background: #0D1117 !important; border: 1px solid #30363d !important; color: #E6EDF3 !important; border-radius: 8px !important; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
 
 /* ═══════════════════════════════════════════════
    TABS
 ═══════════════════════════════════════════════ */
-.stTabs [data-baseweb="tab-list"] { background: #161B22 !important; border: 1px solid rgba(0,245,255,0.1); border-radius: 12px; gap: 2px; padding: 4px; }
+.stTabs [data-baseweb="tab-list"] { background: #161B22 !important; border: 1px solid rgba(45,212,191,0.1); border-radius: 12px; gap: 2px; padding: 4px; }
 .stTabs [data-baseweb="tab"] { background: transparent !important; color: #6E7681 !important; border-radius: 10px !important; font-weight: 600 !important; font-size: 13px !important; transition: all 0.15s ease !important; }
-.stTabs [aria-selected="true"] { background: #00F5FF !important; color: #0B0E14 !important; }
-.stSpinner > div > div { border-top-color: #00F5FF !important; }
+.stTabs [aria-selected="true"] { background: #2DD4BF !important; color: #0B0E14 !important; }
+.stSpinner > div > div { border-top-color: #2DD4BF !important; }
 
 /* ═══════════════════════════════════════════════
    EMPTY STATE CANVAS
 ═══════════════════════════════════════════════ */
 .empty-canvas {
-  background: #161B22; border: 1px dashed rgba(0,245,255,0.15);
+  background: #161B22; border: 1px dashed rgba(45,212,191,0.15);
   border-radius: 16px; padding: 60px 40px; text-align: center;
   margin: 16px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
@@ -275,13 +292,24 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .empty-canvas-sub { font-size: 13px; color: #3d4450; }
 
 /* ═══════════════════════════════════════════════
+   STAT CARD BORDERS
+═══════════════════════════════════════════════ */
+[data-testid="metric-container"] {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-left: 3px solid #2DD4BF !important;
+  border-radius: 10px !important;
+  padding: 12px 14px !important;
+}
+
+/* ═══════════════════════════════════════════════
    MISC
 ═══════════════════════════════════════════════ */
-.section-divider { border: none; border-top: 1px solid rgba(0,245,255,0.06); margin: 28px 0; }
+.section-divider { border: none; border-top: 1px solid rgba(45,212,191,0.06); margin: 28px 0; }
 /* Reserve right space for the floating Inspiration Engine panel (added by JS on Reply Mode) */
 body.rg-insp-active .block-container { padding-right: 270px !important; }
 .metric-label { font-size: 12px; color: #6E7681; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-.metric-score { font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00F5FF; }
+.metric-score { font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #2DD4BF; }
 .score-bar-wrap { background: #21262d; border-radius: 100px; height: 6px; width: 100%; margin: 6px 0 12px; overflow: hidden; }
 .score-bar-fill { height: 100%; border-radius: 100px; transition: width 0.8s ease; }
 .char-count { font-size: 12px; color: #4a5160; text-align: right; margin-top: -10px; margin-bottom: 10px; }
@@ -292,39 +320,39 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 /* Chat */
 .chat-msg { border-radius: 14px; padding: 20px 24px; margin: 12px 0; }
 .chat-user { background: #161B22; border-left: 2px solid #30363d; }
-.chat-ai { background: rgba(0,245,255,0.03); border-left: 3px solid #00F5FF; }
+.chat-ai { background: rgba(45,212,191,0.03); border-left: 3px solid #2DD4BF; }
 .chat-role { font-size: 10px; color: #4a5160; font-weight: 700; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 10px; }
 
 /* Progress bar */
 .progress-bar-bg { background: #21262d; border-radius: 100px; height: 12px; width: 100%; overflow: hidden; }
-.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #00F5FF, #7DF9FF); transition: width 0.5s; }
+.progress-bar-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, #2DD4BF, #5eebd4); transition: width 0.5s; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,245,255,0.3); }
+::-webkit-scrollbar-thumb { background: rgba(45,212,191,0.35); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(45,212,191,0.6); }
 
 /* Watermark */
 .main-watermark {
   position: fixed; bottom: 60px; right: 40px; z-index: 0; pointer-events: none;
   font-family: 'Bebas Neue', sans-serif; font-size: 120px; letter-spacing: 8px;
   line-height: 1; user-select: none;
-  background: linear-gradient(135deg, rgba(0,245,255,0.03), rgba(0,245,255,0.01));
+  background: linear-gradient(135deg, rgba(45,212,191,0.03), rgba(45,212,191,0.01));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
 /* Branded footer */
-.hq-footer { text-align: center; padding: 24px 0 8px 0; margin-top: 40px; border-top: 1px solid rgba(0,245,255,0.06); }
-.hq-footer a { color: #00F5FF; text-decoration: none; font-size: 12px; letter-spacing: 1.5px; font-weight: 600; text-transform: uppercase; opacity: 0.6; margin: 0 12px; }
+.hq-footer { text-align: center; padding: 24px 0 8px 0; margin-top: 40px; border-top: 1px solid rgba(45,212,191,0.06); }
+.hq-footer a { color: #2DD4BF; text-decoration: none; font-size: 12px; letter-spacing: 1.5px; font-weight: 600; text-transform: uppercase; opacity: 0.6; margin: 0 12px; }
 .hq-footer a:hover { opacity: 1; }
 
 /* Day card */
-.day-card { background: #161B22; border: 1px solid rgba(0,245,255,0.08); border-radius: 10px; padding: 10px 4px; text-align: center; }
+.day-card { background: #161B22; border: 1px solid rgba(45,212,191,0.08); border-radius: 10px; padding: 10px 4px; text-align: center; }
 .day-card-label { color: #6E7681; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .day-card-num { color: #E6EDF3; font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
-.day-card-active .day-card-num { color: #00F5FF; }
-.day-card-active { border-color: rgba(0,245,255,0.25); border-top: 2px solid #00F5FF; }
+.day-card-active .day-card-num { color: #2DD4BF; }
+.day-card-active { border-color: rgba(45,212,191,0.25); border-top: 2px solid #2DD4BF; }
 
 /* Hide Streamlit chrome */
 [data-testid="manage-app-button"] { display: none !important; }
@@ -334,7 +362,7 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 .main > div { padding-bottom: 0 !important; }
 
 /* Slider */
-.stSlider .st-br { background: #00F5FF !important; }
+.stSlider .st-br { background: #2DD4BF !important; }
 
 /* Expander */
 .streamlit-expanderHeader { color: #8B949E !important; }
@@ -343,24 +371,24 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 .cs-panel-label {
   font-size: 9px; color: #4a5160; font-weight: 700; letter-spacing: 2.5px;
   text-transform: uppercase; margin-bottom: 14px; padding-bottom: 10px;
-  border-bottom: 1px solid rgba(0,245,255,0.06);
+  border-bottom: 1px solid rgba(45,212,191,0.06);
 }
 .cs-params-wrap {
   background: #131920; border-radius: 12px;
-  border: 1px solid rgba(0,245,255,0.06);
+  border: 1px solid rgba(45,212,191,0.06);
   padding: 16px; height: 100%;
 }
 .format-guide {
-  background: #161B22; border: 1px solid rgba(0,245,255,0.1);
-  border-top: 2px solid #00F5FF; border-radius: 10px;
+  background: #161B22; border: 1px solid rgba(45,212,191,0.1);
+  border-top: 2px solid #2DD4BF; border-radius: 10px;
   padding: 14px 16px; margin-bottom: 12px;
 }
-.fg-format { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #00F5FF; letter-spacing: 1.5px; margin-bottom: 4px; }
+.fg-format { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: #2DD4BF; letter-spacing: 1.5px; margin-bottom: 4px; }
 .fg-chars { font-size: 11px; color: #6E7681; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
-.fg-rule { font-size: 12px; color: #8B949E; padding: 3px 0 3px 10px; border-left: 2px solid rgba(0,245,255,0.2); margin-bottom: 4px; }
+.fg-rule { font-size: 12px; color: #8B949E; padding: 3px 0 3px 10px; border-left: 2px solid rgba(45,212,191,0.2); margin-bottom: 4px; }
 .cs-nav-link { display: block; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #6E7681; text-decoration: none; cursor: pointer; transition: all 0.15s; margin-bottom: 4px; border: 1px solid transparent; }
-.cs-nav-link:hover { background: rgba(0,245,255,0.05); border-color: rgba(0,245,255,0.15); color: #00F5FF; }
-.canvas-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,245,255,0.06); }
+.cs-nav-link:hover { background: rgba(45,212,191,0.05); border-color: rgba(45,212,191,0.15); color: #2DD4BF; }
+.canvas-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(45,212,191,0.06); }
 .canvas-title { font-size: 9px; color: #4a5160; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; }
 
 /* Mobile */
@@ -869,11 +897,13 @@ def _get_oauth_token() -> str:
     try:
         with open(creds_path) as f:
             creds = json.load(f)
-        access_token = creds.get("accessToken", "")
-        expires_at = creds.get("expiresAt", 0)
+        # Credentials are nested under claudeAiOauth key
+        oauth = creds.get("claudeAiOauth", creds)
+        access_token = oauth.get("accessToken", "")
+        expires_at = oauth.get("expiresAt", 0)
         # Refresh if expiring within 5 minutes
         if time.time() * 1000 > expires_at - 300000:
-            refresh_token = creds.get("refreshToken", "")
+            refresh_token = oauth.get("refreshToken", "")
             if not refresh_token:
                 return access_token
             body = json.dumps({
@@ -890,7 +920,8 @@ def _get_oauth_token() -> str:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 new_creds = json.loads(resp.read())
             access_token = new_creds.get("access_token") or new_creds.get("accessToken", access_token)
-            creds.update(new_creds)
+            oauth.update(new_creds)
+            creds["claudeAiOauth"] = oauth
             with open(creds_path, "w") as f:
                 json.dump(creds, f, indent=2)
         return access_token
@@ -944,7 +975,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=130) as resp:
+    with urllib.request.urlopen(req, timeout=90) as resp:
         data = json.loads(resp.read())
     if "error" in data:
         raise Exception(data["error"])
@@ -1007,30 +1038,24 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     if system is None:
         system = get_voice_context()
 
-    # 1. Direct OAuth API — fastest, no subprocess startup overhead
-    try:
-        return _call_claude_direct(prompt, system or "", max_tokens)
-    except Exception:
-        pass
+    # 1. Local CLI — fast on local machine (~3-4s); not available on Streamlit Cloud
+    if os.path.exists(CLAUDE_CLI):
+        try:
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            result = subprocess.run(
+                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
+                input=full_prompt, capture_output=True, text=True, timeout=90,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
 
     # 2. Proxy server (Streamlit Cloud path — calls Tyler's local machine via ngrok)
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens)
     except Exception:
         pass
-
-    # 3. Local CLI subprocess — last resort fallback
-    if os.path.exists(CLAUDE_CLI):
-        try:
-            full_prompt = f"{system}\n\n{prompt}" if system else prompt
-            result = subprocess.run(
-                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
-                input=full_prompt, capture_output=True, text=True, timeout=120,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except Exception:
-            pass
 
     return "AI unavailable — check proxy or credentials."
 
@@ -1546,7 +1571,7 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="font-size:13px;font-weight:700;color:#00F5FF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>
+    <div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
@@ -1738,7 +1763,7 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
 
     # Action badge header
     _hdrs = {
-        "banger":  ("⚡ GO VIRAL",  "#00F5FF"),
+        "banger":  ("⚡ GO VIRAL",  "#2DD4BF"),
         "build":   ("⊞ BUILD",     "#22c55e"),
         "rewrite": ("↩ REWRITE",   "#f0a500"),
         "grades":  ("≋ GRADES",    "#a78bfa"),
@@ -2019,13 +2044,13 @@ IMAGE RECOMMENDATION:
         now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
         st.markdown(f"""<div style="background:#0d0d18;border:1px solid #2e2e45;border-radius:16px;padding:18px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#00F5FF,#00d4dd);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
+                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2DD4BF,#1fb8a8);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
                 <div style="font-size:14px;"><span style="font-weight:700;">Tyler Polumbus</span><br><span style="color:#666688;font-size:12px;">@{TYLER_HANDLE}</span></div>
             </div>
             <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#e8e8f0;">{truncated}{'<span style="color:#1d9bf0;"> Show more</span>' if show_more else ''}</div>
             <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
         </div>
-        {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#00F5FF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
+        {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#2DD4BF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
 
     elif action == "banger" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
@@ -2159,9 +2184,9 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
-    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_repurposed"):
+    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Someone else wrote this tweet. Write a completely NEW tweet on the same subject — do NOT copy any original phrasing.
+            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
@@ -2169,16 +2194,34 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 
 - Strong hook in the first line
 - Invites engagement/replies
-- No hashtags, no emojis
+- No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
-
-Give the repurposed tweet, then show character count."""
-            repurposed = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
-            st.session_state["ci_repurposed"] = repurposed
-            st.session_state["ci_rp_edit"] = repurposed
-            for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                st.session_state.pop(_k, None)
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "recommendation": "Which option to post and why"
+}}"""
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod))
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                rw_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = rw_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_repurposed"] = raw
+                for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                    st.session_state.pop(_k, None)
 
     if result:
         st.session_state["ci_result"] = result
@@ -2192,7 +2235,7 @@ Give the repurposed tweet, then show character count."""
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            st.markdown(f'''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
@@ -2212,15 +2255,15 @@ Give the repurposed tweet, then show character count."""
                         st.session_state.pop(_k, None)
                     st.rerun(scope="app")
         if bd.get("recommendation"):
-            st.markdown('''<div style="font-size:11px;color:#00F5FF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
-            st.markdown(f'''<div style="background:rgba(0,245,255,0.04);border:1px solid rgba(0,245,255,0.15);border-left:3px solid #00F5FF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
+            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
         algo_score = gd.get("algorithm_score", 0)
         tyler_score = gd.get("tyler_score", 0)
-        algo_color = "#22c55e" if algo_score >= 75 else "#00F5FF" if algo_score >= 55 else "#ef4444"
-        tyler_color = "#22c55e" if tyler_score >= 75 else "#00F5FF" if tyler_score >= 55 else "#ef4444"
+        algo_color = "#22c55e" if algo_score >= 75 else "#2DD4BF" if algo_score >= 55 else "#ef4444"
+        tyler_color = "#22c55e" if tyler_score >= 75 else "#2DD4BF" if tyler_score >= 55 else "#ef4444"
         # ── Score header ──
         st.markdown(f"""<div style="display:flex;gap:10px;margin-bottom:16px;">
             <div style="flex:1;background:#09111e;border-radius:12px;padding:18px 16px;display:flex;align-items:center;gap:14px;">
@@ -2259,7 +2302,7 @@ Give the repurposed tweet, then show character count."""
                 for _col, _g in zip([_gc1, _gc2], grades[_gi:_gi+2]):
                     _gname = _g.get('name', '')
                     _gscore = _g.get('score', 0)
-                    _gsc = "#22c55e" if _gscore >= 8 else "#00F5FF" if _gscore >= 6 else "#ef4444"
+                    _gsc = "#22c55e" if _gscore >= 8 else "#2DD4BF" if _gscore >= 6 else "#ef4444"
                     _gfix = _g.get('fix', '')
                     _gdetail = _g.get('detail', '')
                     with _col:
@@ -2361,7 +2404,7 @@ def page_compose_ideas():
         _fg = _FORMAT_GUIDES.get(_fmt_display, _FORMAT_GUIDES["Normal Tweet"])
         st.markdown('<div class="cs-panel-label">FORMAT GUIDE</div>', unsafe_allow_html=True)
         st.markdown(
-            f'''<div style="font-size:13px;color:#00F5FF;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
+            f'''<div style="font-size:13px;color:#2DD4BF;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
             f''' &nbsp;<span style="font-size:11px;color:#666888;font-weight:400;">{_fg["chars"]}</span></div>''',
             unsafe_allow_html=True)
         with st.expander("📋 Format Tips", expanded=False):
@@ -2705,7 +2748,7 @@ def page_article_writer():
             reps = tw.get("replyCount", 0)
             views = tw.get("viewCount", 0)
             selected = st.session_state.aw_sel_tweet == i
-            border = "border-left:3px solid #00F5FF;" if selected else ""
+            border = "border-left:3px solid #2DD4BF;" if selected else ""
             st.markdown(f"""<div class="tweet-card" style="{border}">
                 <div class="tweet-num">{dt}</div>
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
@@ -2745,7 +2788,7 @@ def page_article_writer():
                 ts = d.get("saved_at", "")[:16].replace("T", " ")
                 preview = d.get("text", "")[:160]
                 selected = st.session_state.aw_sel_dump == j
-                border = "border-left:3px solid #00F5FF;" if selected else ""
+                border = "border-left:3px solid #2DD4BF;" if selected else ""
                 st.markdown(f"""<div class="tweet-card" style="{border}">
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
@@ -3218,7 +3261,7 @@ def page_tweet_history():
                 st.markdown("**Top performers used for pattern analysis:**")
                 for ex in _pp.get("top_examples", []):
                     sc = ex.get("score", 0)
-                    sc_color = "#22c55e" if sc > 50 else "#00F5FF"
+                    sc_color = "#22c55e" if sc > 50 else "#2DD4BF"
                     st.markdown(
                         f'<div style="background:#0d0d18;border-left:3px solid {sc_color};border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;">'
                         f'<span style="color:{sc_color};font-weight:700;">Score {sc}</span> · '
@@ -3241,9 +3284,16 @@ def page_tweet_history():
         score = min(100, int((likes * 2 + rts * 5 + replies * 3) / max(1, views / 1000)))
 
         hot_tags = {"Viral", "Hot", "High Engagement"}
-        tags_html = " ".join([f'<span class="tag{" tag-hot" if tg in hot_tags else ""}">{tg}</span>' for tg in tags])
+        format_tags = {"Punchy Tweet", "Normal Tweet", "Long", "Thread"}
+        def _tag_cls(tg):
+            if tg in hot_tags: return "tag tag-hot"
+            if tg in format_tags: return "tag tag-format"
+            if tg == "Original": return "tag tag-original"
+            if tg == "AI Generated": return "tag tag-ai"
+            return "tag"
+        tags_html = " ".join([f'<span class="{_tag_cls(tg)}">{tg}</span>' for tg in tags])
 
-        score_color = "#22c55e" if score >= 60 else "#00F5FF" if score >= 30 else "#ef4444"
+        score_color = "#22c55e" if score >= 60 else "#2DD4BF" if score >= 30 else "#ef4444"
 
         st.markdown(f"""<div class="tweet-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -3323,7 +3373,7 @@ Return as JSON:
 
                     if data and "scores" in data:
                         overall = data.get("overall", 0)
-                        color = "#22c55e" if overall >= 75 else "#00F5FF" if overall >= 55 else "#ef4444"
+                        color = "#22c55e" if overall >= 75 else "#2DD4BF" if overall >= 55 else "#ef4444"
                         st.markdown(f"""<div style="text-align:center; padding:20px 0;">
                             <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{overall}</div>
                             <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Algorithm Score / 100</div>
@@ -3332,7 +3382,7 @@ Return as JSON:
                         for metric, val in data["scores"].items():
                             score = val.get("score", 0) if isinstance(val, dict) else val
                             note = val.get("note", "") if isinstance(val, dict) else ""
-                            bar_color = "#22c55e" if score >= 8 else "#00F5FF" if score >= 6 else "#ef4444"
+                            bar_color = "#22c55e" if score >= 8 else "#2DD4BF" if score >= 6 else "#ef4444"
                             st.markdown(f"""<div style="margin-bottom:12px;">
                                 <div style="display:flex; justify-content:space-between;">
                                     <span class="metric-label">{metric}</span>
@@ -3440,11 +3490,11 @@ Return as JSON:
     data = hc_cache.get("data")
     if data and "health_score" in data:
         score = data["health_score"]
-        ring_color = "#22c55e" if score >= 75 else "#00F5FF" if score >= 55 else "#ef4444"
+        ring_color = "#22c55e" if score >= 75 else "#2DD4BF" if score >= 55 else "#ef4444"
         st.markdown(f"""<div style="display:flex;flex-direction:column;align-items:center;margin:20px 0;">
           <div style="width:120px;height:120px;border-radius:50%;border:6px solid {ring_color};
                       display:flex;align-items:center;justify-content:center;
-                      background:rgba(0,245,255,0.05);">
+                      background:rgba(45,212,191,0.05);">
             <span style="font-family:'Bebas Neue',sans-serif;font-size:48px;font-weight:900;color:{ring_color};">{score}</span>
           </div>
           <span style="color:#91A2B2;font-size:12px;letter-spacing:2px;margin-top:8px;">HEALTH SCORE / 100</span>
@@ -3639,7 +3689,7 @@ Return this exact JSON structure:
             st.markdown('<div style="color:#555577; text-align:center; padding:60px 20px; font-size:14px;">Enter a handle and click Research Account</div>', unsafe_allow_html=True)
         else:
             hdl = st.session_state.get("ar_handle", "")
-            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#00F5FF; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#2DD4BF; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
 
             def ar_section(title, content):
                 st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
@@ -3752,7 +3802,7 @@ def page_reply_guy():
     # ── Top Controls: Engagement Targets + My Tweet Replies (merged) ──
     _rg_col_left, _rg_col_right = st.columns([3, 2])
     with _rg_col_left:
-        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;margin-bottom:6px;">ENGAGEMENT TARGETS</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#2DD4BF;font-weight:700;opacity:0.7;margin-bottom:6px;">ENGAGEMENT TARGETS</div>', unsafe_allow_html=True)
         c1, c2, c3 = st.columns([3, 1.2, 0.9])
         with c1:
             list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
@@ -3763,7 +3813,7 @@ def page_reply_guy():
             if st.button("+ New", key="rg_new_list_btn", use_container_width=True):
                 st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
     with _rg_col_right:
-        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#00F5FF;font-weight:700;opacity:0.7;margin-bottom:6px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#2DD4BF;font-weight:700;opacity:0.7;margin-bottom:6px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
         c4, c5 = st.columns(2)
         with c4:
             load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
@@ -4025,13 +4075,13 @@ def page_reply_guy():
         options_key = f"rg_et_opts_{i}"
 
         # Priority badge color
-        score_color = "#4ade80" if eng_score >= 20 else "#00F5FF" if eng_score >= 5 else "#555577"
+        score_color = "#4ade80" if eng_score >= 20 else "#2DD4BF" if eng_score >= 5 else "#555577"
 
         rc1, rc2, rc3 = st.columns([1, 3, 4])
         with rc1:
             st.markdown(
                 f'<div style="padding-top:8px;">'
-                f'<div style="font-weight:700;color:#00F5FF;font-size:14px;">@{acc}</div>'
+                f'<div style="font-weight:700;color:#2DD4BF;font-size:14px;">@{acc}</div>'
                 f'<div style="margin-top:6px;display:inline-block;background:rgba(255,255,255,0.04);border-radius:6px;padding:3px 8px;font-size:12px;color:{score_color};font-weight:600;">⚡ {eng_score}</div>'
                 f'</div>',
                 unsafe_allow_html=True)
@@ -4114,9 +4164,13 @@ def page_reply_guy():
     c1, c2 = st.columns([3, 1])
     with c1:
         pct = min(reply_count / 50 * 100, 100)
-        st.markdown(f'<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-                    f'<span class="metric-label">Today&#39;s Replies</span><span class="metric-score">{reply_count}/50</span></div>'
-                    f'<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{pct}%;"></div></div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="margin-bottom:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;margin-bottom:5px;">'
+                    f'<span style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(45,212,191,0.75);font-weight:600;">TODAY\'S REPLIES</span>'
+                    f'<span style="font-size:9px;font-weight:700;color:#2DD4BF;">{reply_count} / 50</span></div>'
+                    f'<div style="height:5px;background:rgba(45,212,191,0.1);border-radius:3px;">'
+                    f'<div style="width:{pct}%;height:100%;background:linear-gradient(90deg,#1fb8a8,#2DD4BF);border-radius:3px;transition:width .3s;"></div>'
+                    f'</div></div>', unsafe_allow_html=True)
     with c2:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
     day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -4177,8 +4231,8 @@ def page_reply_guy():
         rts = tw.get("retweetCount", tw.get("retweet_count", 0))
         rpl = tw.get("replyCount", tw.get("reply_count", 0))
         views = tw.get("viewCount", tw.get("view_count", 0))
-        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #00F5FF;">'
-                    f'<div style="color:#00F5FF;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
+        st.markdown(f'<div class="tweet-card" style="border-left:3px solid #2DD4BF;">'
+                    f'<div style="color:#2DD4BF;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR TWEET</div>'
                     f'<div style="color:#e8e8f0;font-size:14px;line-height:1.5;margin-bottom:8px;">{txt}</div>'
                     f'<div style="font-size:11px;color:#666688;">{likes:,} likes | {rts:,} RTs | {rpl:,} replies | {views:,} views</div></div>', unsafe_allow_html=True)
 
@@ -4205,7 +4259,7 @@ def page_reply_guy():
 
             rc1, rc2, rc3 = st.columns([1, 3, 4])
             with rc1:
-                st.markdown(f'<div style="font-weight:700;color:#00F5FF;font-size:13px;padding-top:8px;">@{rauthor}</div>'
+                st.markdown(f'<div style="font-weight:700;color:#2DD4BF;font-size:13px;padding-top:8px;">@{rauthor}</div>'
                             f'<div style="font-size:11px;color:#555577;">{r_likes} likes</div>', unsafe_allow_html=True)
             with rc2:
                 st.markdown(
