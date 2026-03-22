@@ -2556,15 +2556,15 @@ IMAGE RECOMMENDATION:
 
         # ── LEFT LIST ──
         with _left_col:
-            # CSS: invisible click targets for left list + Apply button styling
+            # CSS: compact invisible buttons + right-panel Apply/Skip styling
             st.markdown("""<style>
+            [data-testid="stDialog"] [data-testid="column"]:first-child .stButton {
+                position: relative; height: 34px; margin-bottom: 0;
+            }
             [data-testid="stDialog"] [data-testid="column"]:first-child .stButton button {
                 position: absolute; width: 100%; height: 100%; top: 0; left: 0;
                 opacity: 0; cursor: pointer; z-index: 2; padding: 0; margin: 0;
                 border: none; background: transparent;
-            }
-            [data-testid="stDialog"] [data-testid="column"]:first-child .stButton {
-                position: relative; margin-bottom: 2px;
             }
             [data-testid="stDialog"] [data-testid="column"]:nth-child(2) button[kind="primary"] {
                 background: #2DD4BF !important; color: #040f0f !important;
@@ -2588,25 +2588,25 @@ IMAGE RECOMMENDATION:
                 _is_accepted = (i in accepted)
                 _is_skipped = (i in skipped)
 
-                _pill_label = "✓" if _is_accepted else str(_gscore)
-                _row_bg = "rgba(45,212,191,0.06)" if _is_active else "transparent"
+                _pill_label = "✓" if _is_accepted else f"{_gscore}/10"
                 _border_l = "2px solid #2DD4BF" if _is_active else "2px solid transparent"
+                _row_bg = "rgba(45,212,191,0.06)" if _is_active else "transparent"
                 _lbl_color = "rgba(255,255,255,0.82)" if _is_active else "rgba(255,255,255,0.42)"
                 _lbl_weight = "600" if _is_active else "400"
-                _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#F87171;display:inline-block;margin-left:5px;vertical-align:middle;"></span>' if _has_suggestion and not _is_accepted else ''
+                _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#F87171;display:inline-block;margin-left:auto;flex-shrink:0;"></span>' if _has_suggestion and not _is_accepted else ''
                 _opacity = "0.35" if _is_skipped else "1"
 
-                # Hidden button for click handling
+                # Hidden button for click
                 if st.button(" ", key=f"ci_gsel_{i}", use_container_width=True):
                     st.session_state["ci_grade_selected"] = i
-                # Visible styled row rendered over the invisible button
+                # Styled row overlaid on the button area
                 st.markdown(
-                    f'<div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-left:{_border_l};background:{_row_bg};'
-                    f'border-radius:0 5px 5px 0;margin-top:-42px;pointer-events:none;opacity:{_opacity};">'
-                    f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;border-radius:9px;'
-                    f'background:{_pbg};color:{_ptx};font-size:9px;font-weight:700;letter-spacing:0.3px;">{_pill_label}</span>'
+                    f'<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-left:{_border_l};background:{_row_bg};'
+                    f'border-radius:0 4px 4px 0;margin-top:-34px;height:34px;pointer-events:none;opacity:{_opacity};">'
+                    f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:16px;border-radius:8px;'
+                    f'background:{_pbg};color:{_ptx};font-size:8px;font-weight:700;flex-shrink:0;">{_pill_label}</span>'
                     f'<span style="font-size:11px;color:{_lbl_color};font-weight:{_lbl_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
-                    f'{_gname}{_dot_html}</span></div>', unsafe_allow_html=True)
+                    f'{_gname}</span>{_dot_html}</div>', unsafe_allow_html=True)
 
         # ── RIGHT PANEL ──
         with _right_col:
@@ -2620,44 +2620,59 @@ IMAGE RECOMMENDATION:
                 _is_accepted = (sel_idx in accepted)
                 _is_skipped = (sel_idx in skipped)
 
-                # Category name + score inline
-                st.markdown(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-                            f'<span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);">{_sname}</span>'
-                            f'<span style="font-size:22px;font-weight:800;color:{_stx};">{_sscore}</span>'
-                            f'<span style="font-size:9px;color:rgba(255,255,255,0.2);">/ 10</span>'
-                            f'</div>', unsafe_allow_html=True)
+                # Category header
+                st.markdown(f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:4px;">{_sname}</div>', unsafe_allow_html=True)
 
-                # FIX section — suggestion as headline
+                # Large score + progress bar
+                st.markdown(f"""<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:4px;">
+                  <span style="font-size:36px;font-weight:800;color:{_stx};line-height:1;">{_sscore}</span>
+                  <span style="font-size:12px;color:rgba(255,255,255,0.25);">/10</span>
+                  <div style="flex:1;margin-left:10px;">
+                    <div style="height:4px;background:{_sbg};border-radius:2px;">
+                      <div style="width:{_sscore * 10}%;height:100%;background:{_stx};border-radius:2px;"></div>
+                    </div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+                # WHY THIS SCORE — between score and fix
+                if _sdetail:
+                    st.markdown(
+                        f'<div style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.22);font-weight:600;margin:10px 0 4px;">Why This Score</div>'
+                        f'<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px;">{_sdetail}</div>', unsafe_allow_html=True)
+
+                # FIX section
                 if _sfix and _sfix.lower() != "no changes needed":
+                    # FIX label with seafoam line
+                    st.markdown('<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                                '<span style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:#2DD4BF;font-weight:700;">Fix</span>'
+                                '<div style="flex:1;height:1px;background:rgba(45,212,191,0.15);"></div>'
+                                '</div>', unsafe_allow_html=True)
+
                     _card_opacity = "0.3" if _is_skipped else "1"
                     _check_html = '<span style="color:#2DD4BF;font-weight:800;font-size:16px;margin-right:6px;">✓</span>' if _is_accepted else ''
 
-                    # Suggestion text — the LARGEST element, headline treatment
+                    # Suggestion card with background
                     st.markdown(
-                        f'<div style="margin:12px 0 14px;opacity:{_card_opacity};">'
+                        f'<div style="border-radius:12px;background:rgba(45,212,191,0.07);border:1px solid rgba(45,212,191,0.22);padding:16px 18px;opacity:{_card_opacity};">'
                         f'{_check_html}'
                         f'<span style="font-size:15px;color:#fff;font-weight:600;line-height:1.6;">{_sfix}</span>'
                         f'</div>', unsafe_allow_html=True)
 
-                    # Apply button — full width, standalone row
+                    # Apply button — full width
                     if not _is_accepted and not _is_skipped:
                         if st.button("Apply this fix", key=f"ci_gapply_{sel_idx}", use_container_width=True, type="primary"):
                             accepted.add(sel_idx)
                             st.session_state["ci_grade_accepted"] = accepted
-                        # Skip + Why as small text links centered below
+                        # Skip + Why this change? as small text links
                         _skip_col, _why_col = st.columns(2)
                         with _skip_col:
                             if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
                                 skipped.add(sel_idx)
                                 st.session_state["ci_grade_skipped"] = skipped
                         with _why_col:
-                            st.markdown(f'<div style="text-align:center;font-size:11px;color:rgba(45,212,191,0.45);padding-top:6px;cursor:pointer;">Why?</div>', unsafe_allow_html=True)
+                            st.markdown('<div style="text-align:center;font-size:11px;color:rgba(45,212,191,0.45);padding-top:6px;cursor:pointer;text-decoration:underline;">Why this change?</div>', unsafe_allow_html=True)
                     elif _is_accepted:
-                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;">Queued for application</div>', unsafe_allow_html=True)
-
-                    # Rationale — footnote treatment
-                    if _sdetail:
-                        st.markdown(f'<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-top:14px;">{_sdetail}</div>', unsafe_allow_html=True)
+                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Queued for application</div>', unsafe_allow_html=True)
 
                 else:
                     # No fix needed
@@ -2665,8 +2680,6 @@ IMAGE RECOMMENDATION:
                                 '<div style="font-size:18px;font-weight:800;color:#2DD4BF;margin-bottom:4px;">✓</div>'
                                 '<div style="font-size:11px;color:rgba(255,255,255,0.3);">No changes needed</div>'
                                 '</div>', unsafe_allow_html=True)
-                    if _sdetail:
-                        st.markdown(f'<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-top:14px;">{_sdetail}</div>', unsafe_allow_html=True)
 
         # ── BOTTOM CTA BAR ──
         st.markdown('<div style="height:1px;background:rgba(255,255,255,0.04);margin:16px 0 12px;"></div>', unsafe_allow_html=True)
