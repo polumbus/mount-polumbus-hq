@@ -368,6 +368,8 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 /* Expander */
 .streamlit-expanderHeader { color: #8B949E !important; }
 
+/* Grade panel — left list uses button + overlay pattern */
+
 /* Creator Studio 3-col grid */
 .cs-panel-label {
   font-size: 9px; color: #4a5160; font-weight: 700; letter-spacing: 2.5px;
@@ -645,7 +647,7 @@ def build_patterns_context(patterns, fmt=""):
         top_pool = patterns.get("top_examples", [])
         pool_label = "Top Performing Tweets"
 
-    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:8]])
+    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:4]])
     bottom_ex = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes)' for ex in patterns.get("bottom_examples", [])[:5]])
     reply_ex  = "\n".join([f'  - "{ex["text"][:120]}" ({ex["replies"]} replies, {ex["likes"]} likes)' for ex in patterns.get("top_reply_examples", [])[:5]])
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
@@ -1743,7 +1745,7 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
     """Run AI action and display output in a dialog modal."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
-    # Use button sets this — prevents AI re-run on fragment rerun, forces dialog to clear
+    # Use button sets this — fragment reruns dialog, early return fires st.rerun(scope="app") to close
     if st.session_state.pop("ci_close_modal", False):
         st.rerun(scope="app")
 
@@ -2057,7 +2059,7 @@ IMAGE RECOMMENDATION:
         </div>
         {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#2DD4BF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
 
-    elif action == "banger" and tweet_text.strip():
+    elif action == "banger" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
@@ -2103,7 +2105,7 @@ Return ONLY this JSON, no other text:
             except Exception:
                 result = raw
 
-    elif action == "grades" and tweet_text.strip():
+    elif action == "grades" and tweet_text.strip() and not st.session_state.get("ci_grades"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             grade_prompt = f"""Grade this tweet for X algorithm performance.
 
@@ -2145,7 +2147,7 @@ Return ONLY valid JSON:
             else:
                 result = raw
 
-    elif action == "build" and tweet_text.strip():
+    elif action == "build" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
@@ -2189,7 +2191,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
-    elif action == "rewrite" and tweet_text.strip():
+    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
         with st.spinner("Repurposing in your voice..."):
             repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
@@ -2266,63 +2268,206 @@ Return ONLY this JSON, no other text:
         gd = st.session_state["ci_grades"]
         algo_score = gd.get("algorithm_score", 0)
         tyler_score = gd.get("tyler_score", 0)
-        algo_color = "#22c55e" if algo_score >= 75 else "#2DD4BF" if algo_score >= 55 else "#ef4444"
-        tyler_color = "#22c55e" if tyler_score >= 75 else "#2DD4BF" if tyler_score >= 55 else "#ef4444"
-        # ── Compact score strip ──
-        st.markdown(f"""<div style="display:flex;align-items:center;gap:20px;padding:10px 18px;background:#09111e;border-radius:10px;margin-bottom:14px;">
-            <div style="display:flex;align-items:baseline;gap:7px;">
-                <span style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:{algo_color};line-height:1;">{algo_score}</span>
-                <span style="font-size:10px;color:#4a6080;text-transform:uppercase;letter-spacing:1px;">Algo</span>
-            </div>
-            <div style="width:1px;height:26px;background:#1a2535;"></div>
-            <div style="display:flex;align-items:baseline;gap:7px;">
-                <span style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:{tyler_color};line-height:1;">{tyler_score}</span>
-                <span style="font-size:10px;color:#4a6080;text-transform:uppercase;letter-spacing:1px;">Tyler</span>
-            </div>
-        </div>""", unsafe_allow_html=True)
-        # ── Grade cards as expanders ──
         grades = gd.get("grades", [])
+        combined_score = round((algo_score + tyler_score) / 2) if algo_score or tyler_score else 0
+
+        # ── Session state for grade panel interactivity ──
+        if "ci_grade_selected" not in st.session_state:
+            st.session_state["ci_grade_selected"] = 0
+        if "ci_grade_accepted" not in st.session_state:
+            st.session_state["ci_grade_accepted"] = set()
+        if "ci_grade_skipped" not in st.session_state:
+            st.session_state["ci_grade_skipped"] = set()
+        sel_idx = st.session_state["ci_grade_selected"]
+        accepted = st.session_state["ci_grade_accepted"]
+        skipped = st.session_state["ci_grade_skipped"]
+
+        def _pill_color(s):
+            if s >= 7: return ("rgba(45,212,191,0.12)", "#2DD4BF")
+            if s >= 5: return ("rgba(251,191,36,0.12)", "#FBBF24")
+            return ("rgba(248,113,113,0.12)", "#F87171")
 
         def _apply_fix(fix_instruction, clear_all=False):
             _base = st.session_state.get("ci_text", "")
             if clear_all:
-                _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in grades if g.get("fix","")])
+                _accepted_grades = [g for i, g in enumerate(grades) if i in accepted and g.get("fix", "")]
+                if not _accepted_grades:
+                    _accepted_grades = [g for g in grades if g.get("fix", "")]
+                _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
                 _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\nReturn ONLY the updated tweet text, nothing else.'
             else:
                 _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\nReturn ONLY the updated tweet text, nothing else.'
             _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 st.session_state["ci_text"] = _updated.strip()
-            st.session_state.pop("ci_grades", None)
+            for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
+                st.session_state.pop(_k, None)
             st.rerun(scope="app")
 
-        if grades:
-            for _g in grades:
-                _gname = _g.get('name', '')
-                _gscore = _g.get('score', 0)
-                _gsc = "#22c55e" if _gscore >= 8 else "#2DD4BF" if _gscore >= 6 else "#ef4444"
-                _gfix = _g.get('fix', '')
-                _gdetail = _g.get('detail', '')
-                _expanded = _gscore < 7  # Low scores open by default — they need attention
-                with st.expander(f"{_gname}  ·  {_gscore}/10", expanded=_expanded):
-                    if _gdetail:
-                        st.markdown(f'<div style="font-size:14px;color:#8a9ab8;line-height:1.6;margin-bottom:10px;">{_gdetail}</div>', unsafe_allow_html=True)
-                    if _gfix:
-                        _fc, _bc = st.columns([11, 1])
-                        with _fc:
-                            st.markdown(f'<div style="font-size:14px;color:#e0e0f0;font-weight:600;line-height:1.5;padding:9px 14px;background:#06101a;border-left:2px solid {_gsc};border-radius:0 6px 6px 0;">→ {_gfix}</div>', unsafe_allow_html=True)
-                        with _bc:
-                            if st.button("✎", key=f"ci_fix_ico_{_gname[:8]}", help="Apply this fix"):
-                                with st.spinner("Applying..."):
-                                    _apply_fix(_gfix)
+        # ── HEADER ──
+        _hdr_col, _close_col = st.columns([10, 1])
+        with _hdr_col:
+            st.markdown(f'<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">Creator Studio — Grades</div>'
+                        f'<div style="font-size:10px;color:rgba(255,255,255,0.28);margin-top:2px;">{fmt} · {voice}</div>', unsafe_allow_html=True)
+        with _close_col:
+            if st.button("✕", key="ci_grades_close", help="Close"):
+                for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
+                    st.session_state.pop(_k, None)
+                st.rerun(scope="app")
 
-        # ── Make All Changes ──
-        _all_fixes = [g.get("fix", "") for g in grades if g.get("fix", "")]
-        if len(_all_fixes) > 1:
-            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+        # ── SCORE STRIP — 3 cards ──
+        st.markdown(f"""<div style="display:flex;gap:8px;margin:12px 0 16px;">
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #2DD4BF;border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#2DD4BF;line-height:1;">{algo_score}</div>
+            <div style="height:5px;background:rgba(45,212,191,0.1);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{algo_score}%;height:100%;background:#2DD4BF;border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Algorithm</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #C49E3C;border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#C49E3C;line-height:1;">{tyler_score}</div>
+            <div style="height:5px;background:rgba(196,158,60,0.1);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{tyler_score}%;height:100%;background:#C49E3C;border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Tyler Voice</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid rgba(255,255,255,0.18);border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:rgba(255,255,255,0.7);line-height:1;">{combined_score}</div>
+            <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{combined_score}%;height:100%;background:rgba(255,255,255,0.25);border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Combined</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # ── TWO-COLUMN BODY ──
+        _left_col, _right_col = st.columns([1, 3])
+
+        # ── LEFT LIST ──
+        with _left_col:
+            for i, _g in enumerate(grades):
+                _gname = _g.get("name", "")
+                _gscore = _g.get("score", 0)
+                _gfix = _g.get("fix", "")
+                _pbg, _ptx = _pill_color(_gscore)
+                _is_active = (i == sel_idx)
+                _has_suggestion = (_gscore <= 6 or bool(_gfix))
+                _is_accepted = (i in accepted)
+                _is_skipped = (i in skipped)
+
+                # Pill text
+                _pill_label = "✓" if _is_accepted else str(_gscore)
+
+                # Row styling
+                _row_bg = "rgba(45,212,191,0.06)" if _is_active else "transparent"
+                _row_border = "border-left:2px solid #2DD4BF;" if _is_active else "border-left:2px solid transparent;"
+                _label_color = "rgba(255,255,255,0.82)" if _is_active else "rgba(255,255,255,0.38)"
+                _label_weight = "500" if _is_active else "400"
+                _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#2DD4BF;display:inline-block;margin-left:4px;vertical-align:middle;"></span>' if _has_suggestion and not _is_accepted else ''
+                _strike = "text-decoration:line-through;opacity:0.4;" if _is_skipped else ""
+
+                # Render row as a button — click selects this category
+                if st.button(f"{_pill_label}  {_gname}", key=f"ci_gsel_{i}", use_container_width=True):
+                    st.session_state["ci_grade_selected"] = i
+                # Overlay styled HTML on top of button area
+                st.markdown(f'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;{_row_border}background:{_row_bg};border-radius:0 6px 6px 0;margin-top:-44px;margin-bottom:6px;pointer-events:none;">'
+                            f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:20px;border-radius:10px;background:{_pbg};color:{_ptx};font-size:10px;font-weight:700;letter-spacing:0.5px;">{_pill_label}</span>'
+                            f'<span style="font-size:11px;color:{_label_color};font-weight:{_label_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{_strike}">{_gname}{_dot_html}</span>'
+                            f'</div>', unsafe_allow_html=True)
+
+        # ── RIGHT PANEL ──
+        with _right_col:
+            if grades and 0 <= sel_idx < len(grades):
+                _sg = grades[sel_idx]
+                _sname = _sg.get("name", "")
+                _sscore = _sg.get("score", 0)
+                _sdetail = _sg.get("detail", "")
+                _sfix = _sg.get("fix", "")
+                _sbg, _stx = _pill_color(_sscore)
+                _is_accepted = (sel_idx in accepted)
+                _is_skipped = (sel_idx in skipped)
+
+                # Category name
+                st.markdown(f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:10px;">{_sname}</div>', unsafe_allow_html=True)
+
+                # Score row: large number + progress bar
+                st.markdown(f"""<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+                  <span style="font-size:36px;font-weight:800;color:{_stx};line-height:1;">{_sscore}</span>
+                  <div style="flex:1;">
+                    <div style="height:5px;background:{_sbg};border-radius:3px;">
+                      <div style="width:{_sscore * 10}%;height:100%;background:{_stx};border-radius:3px;"></div>
+                    </div>
+                    <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:4px;">out of 10</div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+                # WHY THIS SCORE — secondary
+                if _sdetail:
+                    st.markdown(f'<div style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.22);font-weight:600;margin-bottom:6px;">Why This Score</div>'
+                                f'<div style="font-size:11px;color:rgba(255,255,255,0.42);line-height:1.7;margin-bottom:18px;">{_sdetail}</div>', unsafe_allow_html=True)
+
+                # FIX section
+                if _sfix and _sfix.lower() != "no changes needed":
+                    # FIX label with seafoam line
+                    st.markdown('<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                                '<span style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:#2DD4BF;font-weight:700;">Fix</span>'
+                                '<div style="flex:1;height:1px;background:rgba(45,212,191,0.15);"></div>'
+                                '</div>', unsafe_allow_html=True)
+
+                    # Suggestion card
+                    if _is_accepted:
+                        _card_bg = "rgba(45,212,191,0.12)"
+                        _card_border = "rgba(45,212,191,0.3)"
+                    elif _is_skipped:
+                        _card_bg = "rgba(255,255,255,0.02)"
+                        _card_border = "rgba(255,255,255,0.05)"
+                    else:
+                        _card_bg = "rgba(45,212,191,0.07)"
+                        _card_border = "rgba(45,212,191,0.22)"
+                    _card_opacity = "0.3" if _is_skipped else "1"
+
+                    _check_html = '<span style="color:#2DD4BF;font-weight:800;font-size:14px;margin-right:8px;">✓</span>' if _is_accepted else ''
+                    st.markdown(f'<div style="border-radius:12px;background:{_card_bg};border:1px solid {_card_border};padding:14px 16px;opacity:{_card_opacity};">'
+                                f'{_check_html}<span style="font-size:13px;color:rgba(255,255,255,0.82);line-height:1.65;font-weight:400;">{_sfix}</span>'
+                                f'</div>', unsafe_allow_html=True)
+
+                    # Action buttons
+                    if not _is_accepted and not _is_skipped:
+                        _ab1, _ab2, _ab3 = st.columns([3, 1.5, 1])
+                        with _ab1:
+                            if st.button("Apply this fix", key=f"ci_gapply_{sel_idx}", use_container_width=True, type="primary"):
+                                accepted.add(sel_idx)
+                                st.session_state["ci_grade_accepted"] = accepted
+                        with _ab2:
+                            if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
+                                skipped.add(sel_idx)
+                                st.session_state["ci_grade_skipped"] = skipped
+                        with _ab3:
+                            st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.5);text-decoration:underline;padding-top:10px;cursor:pointer;">Why?</div>', unsafe_allow_html=True)
+                    elif _is_accepted:
+                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:8px;">Queued for application</div>', unsafe_allow_html=True)
+
+                else:
+                    # No fix needed — show checkmark card
+                    st.markdown('<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                                '<span style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:#2DD4BF;font-weight:700;">Fix</span>'
+                                '<div style="flex:1;height:1px;background:rgba(45,212,191,0.15);"></div>'
+                                '</div>', unsafe_allow_html=True)
+                    st.markdown('<div style="border:1px dashed rgba(45,212,191,0.15);border-radius:12px;padding:24px;text-align:center;">'
+                                '<div style="font-size:20px;font-weight:800;color:#2DD4BF;margin-bottom:6px;">✓</div>'
+                                '<div style="font-size:11px;color:rgba(255,255,255,0.3);">No changes needed here</div>'
+                                '</div>', unsafe_allow_html=True)
+
+        # ── BOTTOM CTA BAR ──
+        st.markdown('<div style="height:1px;background:rgba(255,255,255,0.04);margin:16px 0 12px;"></div>', unsafe_allow_html=True)
+        _accepted_fixes = [grades[i] for i in accepted if i < len(grades) and grades[i].get("fix", "")]
+        _pending_count = sum(1 for i, g in enumerate(grades) if g.get("fix", "") and g.get("fix", "").lower() != "no changes needed" and i not in accepted and i not in skipped)
+        if _accepted_fixes or _pending_count > 0:
             if st.button("⚡ Make All Changes", key="ci_fix_all", use_container_width=True, type="primary"):
                 with st.spinner("Applying all fixes..."):
                     _apply_fix(None, clear_all=True)
+            _sub_text = f"{len(_accepted_fixes)} fix{'es' if len(_accepted_fixes) != 1 else ''} queued" if _accepted_fixes else "Applies all accepted suggestions at once"
+            st.markdown(f'<div style="text-align:center;font-size:10px;color:rgba(255,255,255,0.25);margin-top:-4px;">{_sub_text}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
@@ -2465,23 +2610,41 @@ def page_compose_ideas():
                     else:
                         st.error("Post failed — proxy offline or xurl unavailable.")
 
-    # ── Modal triggers ──
+    # ── Modal triggers — clear cached result first so AI always runs fresh ──
+    def _clear_banger():
+        for _k in ["ci_banger_data"] + [f"ci_banger_opt_{i}" for i in [1, 2, 3]]:
+            st.session_state.pop(_k, None)
+
     if banger and tweet_text.strip():
+        _clear_banger()
         _ci_output_modal("banger", tweet_text, fmt, voice)
     elif build_this and tweet_text.strip():
+        _clear_banger()
         _ci_output_modal("build", tweet_text, fmt, voice)
     elif repurpose and tweet_text.strip():
+        _clear_banger()
         _ci_output_modal("rewrite", tweet_text, fmt, voice)
     elif engage and tweet_text.strip():
+        st.session_state.pop("ci_grades", None)
         _ci_output_modal("grades", tweet_text, fmt, voice)
     elif biz and tweet_text.strip():
         _ci_output_modal("preview", tweet_text, fmt, voice)
     elif regenerate:
         _last = st.session_state.get("ci_last_action", {})
         if _last.get("text"):
-            _ci_output_modal(_last.get("type", "build"), _last.get("text", tweet_text),
+            _lt = _last.get("type", "build")
+            if _lt in ("banger", "build", "rewrite"):
+                _clear_banger()
+            elif _lt == "grades":
+                st.session_state.pop("ci_grades", None)
+            _ci_output_modal(_lt, _last.get("text", tweet_text),
                              _last.get("fmt", fmt), _last.get("voice", voice))
     elif _pending_redo:
+        _pt = _pending_redo["action"]
+        if _pt in ("banger", "build", "rewrite"):
+            _clear_banger()
+        elif _pt == "grades":
+            st.session_state.pop("ci_grades", None)
         _ci_output_modal(_pending_redo["action"], _pending_redo["tweet_text"],
                          _pending_redo["fmt"], _pending_redo["voice"])
 
