@@ -2034,7 +2034,7 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "which top tweet pattern this is modeled after",
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2124,9 +2124,10 @@ Return ONLY this JSON, no other text:
   "option1": "full tweet text here",
   "option1_pattern": "angle/structure this version takes",
   "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2166,9 +2167,10 @@ Return ONLY this JSON, no other text:
   "option1": "full tweet text here",
   "option1_pattern": "angle this version takes",
   "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
