@@ -1041,49 +1041,45 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     if system is None:
         system = get_voice_context()
 
-    # 1. Direct OAuth API call — fastest path, no subprocess or proxy hop
+    # Haiku only: OAuth API works for Haiku; Sonnet/Opus return 400 with this token type
+    if "haiku" in model.lower():
+        try:
+            result = _call_claude_oauth(prompt, system or "", max_tokens, model)
+            if result and not result.startswith("Error: No OAuth token"):
+                return result
+        except Exception:
+            pass
+
+    # CLI subprocess — direct path for Sonnet/Opus, fallback for Haiku
+    if os.path.exists(CLAUDE_CLI):
+        try:
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+            result = subprocess.run(
+                [CLAUDE_CLI, "-p", "--max-turns", "1", "--no-session-persistence", "--model", model],
+                input=full_prompt, capture_output=True, text=True, timeout=30, env=clean_env,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+
+    # Proxy fallback (ngrok → Tyler's local machine → CLI)
     try:
-        result = _call_claude_oauth(prompt, system or "", max_tokens, model)
-        if result and not result.startswith("Error: No OAuth token"):
-            return result
+        return _call_claude_proxy(prompt, system or "", max_tokens, model)
     except Exception:
         pass
-
-    # 2. Direct local credentials fallback (if Gist token unavailable)
-    try:
-        return _call_claude_direct(prompt, system or "", max_tokens)
-    except Exception:
-        pass
-
-    # ── LEGACY FALLBACKS (kept for emergency use, normally bypassed) ──────────
-
-    # 3. Proxy server (ngrok → Tyler's local machine → CLI)
-    # try:
-    #     return _call_claude_proxy(prompt, system or "", max_tokens, model)
-    # except Exception:
-    #     pass
-
-    # 4. Local CLI subprocess (slowest — spawns Node.js process + API call)
-    # if os.path.exists(CLAUDE_CLI):
-    #     try:
-    #         full_prompt = f"{system}\n\n{prompt}" if system else prompt
-    #         clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-    #         result = subprocess.run(
-    #             [CLAUDE_CLI, "-p", "--model", model],
-    #             input=full_prompt, capture_output=True, text=True, timeout=90, env=clean_env,
-    #         )
-    #         if result.returncode == 0 and result.stdout.strip():
-    #             return result.stdout.strip()
-    #     except Exception:
-    #         pass
 
     return "AI unavailable — check proxy or credentials."
 
 
 def _call_claude_streaming(prompt: str, system: str, max_tokens: int = 800, model: str = "claude-sonnet-4-6"):
     """Generator: yields text chunks from Claude streaming API via OAuth bearer token.
-    Shows first token in ~1s instead of waiting for the full response to buffer."""
+    Only works for Haiku — Sonnet/Opus must use CLI (OAuth returns 400 for those models)."""
     import urllib.request, urllib.error
+    # OAuth streaming only works for Haiku — other models return 400 with this token type
+    if "haiku" not in model.lower():
+        raise Exception("OAuth streaming not supported for this model — use CLI via call_claude()")
     access_token = _get_access_token()
     if not access_token:
         err = st.session_state.get("_oauth_last_error", "No OAuth token")
@@ -1108,7 +1104,7 @@ def _call_claude_streaming(prompt: str, system: str, max_tokens: int = 800, mode
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=90) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         for line in resp:
             line = line.decode("utf-8", errors="replace").strip()
             if not line.startswith("data: "):
@@ -2119,8 +2115,61 @@ Return ONLY this JSON, no other text:
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after"
 }}"""
-        raw = _collect_stream(banger_prompt, system=get_system_for_voice(voice, voice_mod),
-                               max_tokens=500, placeholder=_stream_ph)
+        _banger_system = get_system_for_voice(voice, voice_mod)
+
+        def _cli_sonnet():
+            _fp = f"{_banger_system}\n\n{banger_prompt}" if _banger_system else banger_prompt
+            _env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+            _r = subprocess.run(
+                [CLAUDE_CLI, "-p", "--max-turns", "1", "--no-session-persistence", "--model", "claude-sonnet-4-6"],
+                input=_fp, capture_output=True, text=True, timeout=30, env=_env,
+            )
+            if _r.returncode == 0 and _r.stdout.strip():
+                return _r.stdout.strip()
+            raise Exception(f"CLI failed: {_r.stderr[:200]}")
+
+        def _haiku_oauth():
+            return _call_claude_oauth(banger_prompt, _banger_system or "", 500, "claude-haiku-4-5-20251001")
+
+        raw = None
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+            _fut_sonnet = _ex.submit(_cli_sonnet)
+            _fut_haiku = _ex.submit(_haiku_oauth)
+            _stream_ph.markdown(
+                '<div style="color:rgba(255,255,255,0.45);font-size:12px;">⚡ AI writing… (fast + quality paths)</div>',
+                unsafe_allow_html=True,
+            )
+            _done, _pending = concurrent.futures.wait(
+                [_fut_sonnet, _fut_haiku],
+                return_when=concurrent.futures.FIRST_COMPLETED,
+                timeout=32,
+            )
+            _first_was_haiku = False
+            for _fut in _done:
+                try:
+                    raw = _fut.result()
+                    _first_was_haiku = (_fut == _fut_haiku)
+                    break
+                except Exception:
+                    pass
+            # If Haiku came first, wait for Sonnet (better quality)
+            if _first_was_haiku and _fut_sonnet in _pending:
+                _stream_ph.markdown(
+                    '<div style="color:rgba(255,255,255,0.45);font-size:12px;">⚡ Upgrading to Sonnet quality…</div>',
+                    unsafe_allow_html=True,
+                )
+                try:
+                    raw = _fut_sonnet.result(timeout=20)
+                except Exception:
+                    pass  # keep Haiku result
+            # If nothing yet, wait for any remaining
+            if raw is None:
+                for _fut in list(_done) + list(_pending):
+                    try:
+                        raw = _fut.result(timeout=25)
+                        break
+                    except Exception:
+                        pass
         _stream_ph.empty()
         try:
             raw_clean = raw.strip()
