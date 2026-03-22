@@ -2575,31 +2575,31 @@ body{{background:transparent;font-family:system-ui,-apple-system,sans-serif;colo
 .gp-row:hover{{background:rgba(255,255,255,0.03);}}
 .gp-row.active{{border-left-color:#2DD4BF;background:rgba(45,212,191,0.06);}}
 .gp-row.active .gp-lbl{{color:rgba(255,255,255,0.82);font-weight:500;}}
-.gp-pill{{min-width:38px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}}
-.gp-lbl{{font-size:12px;flex:1;color:rgba(255,255,255,0.38);font-weight:400;line-height:1.3;}}
+.gp-pill{{min-width:38px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}}
+.gp-lbl{{font-size:13px;flex:1;color:rgba(255,255,255,0.38);font-weight:400;line-height:1.3;}}
 .gp-dot{{width:5px;height:5px;border-radius:50%;background:#F87171;flex-shrink:0;}}
-.gp-apply{{width:100%;border-radius:9px;background:#2DD4BF;border:none;padding:13px;font-size:13px;font-weight:800;color:#040f0f;cursor:pointer;letter-spacing:.03em;margin:10px 0 8px;}}
+.gp-apply{{width:100%;border-radius:9px;background:#2DD4BF;border:none;padding:13px;font-size:14px;font-weight:800;color:#040f0f;cursor:pointer;letter-spacing:.03em;margin:10px 0 8px;}}
 .gp-apply:hover{{background:#26bfad;}}
 .gp-secondary{{display:flex;justify-content:center;gap:20px;}}
-.gp-skip,.gp-why{{font-size:11px;background:none;border:none;cursor:pointer;}}
+.gp-skip,.gp-why{{font-size:12px;background:none;border:none;cursor:pointer;}}
 .gp-skip{{color:rgba(255,255,255,0.28);}}
 .gp-why{{color:rgba(45,212,191,0.5);text-decoration:underline;text-underline-offset:2px;}}
 </style></head><body>
 <div style="display:flex;gap:10px;margin-bottom:14px;">
   <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid #2DD4BF;">
-    <div style="font-size:28px;font-weight:800;color:#2DD4BF;line-height:1;">{algo_score}</div>
+    <div style="font-size:34px;font-weight:800;color:#2DD4BF;line-height:1;">{algo_score}</div>
     <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{algo_score}%;height:100%;border-radius:2px;background:#2DD4BF;"></div></div>
-    <div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Algorithm</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Algorithm</div>
   </div>
   <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid #C49E3C;">
-    <div style="font-size:28px;font-weight:800;color:#C49E3C;line-height:1;">{tyler_score}</div>
+    <div style="font-size:34px;font-weight:800;color:#C49E3C;line-height:1;">{tyler_score}</div>
     <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{tyler_score}%;height:100%;border-radius:2px;background:#C49E3C;"></div></div>
-    <div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Tyler Voice</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Tyler Voice</div>
   </div>
   <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid rgba(255,255,255,0.18);">
-    <div style="font-size:28px;font-weight:800;color:rgba(255,255,255,0.55);line-height:1;">{combined_score}</div>
+    <div style="font-size:34px;font-weight:800;color:rgba(255,255,255,0.55);line-height:1;">{combined_score}</div>
     <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{combined_score}%;height:100%;border-radius:2px;background:rgba(255,255,255,0.25);"></div></div>
-    <div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Combined</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Combined</div>
   </div>
 </div>
 <div style="display:flex;min-height:440px;border-top:1px solid rgba(255,255,255,0.05);">
@@ -2610,7 +2610,7 @@ body{{background:transparent;font-family:system-ui,-apple-system,sans-serif;colo
 const cats={_cats_json};
 let active=0;
 function buildLeft(){{let h='';cats.forEach((c,i)=>{{const act=i===active?' active':'';const dot=c.hasFix?'<span class="gp-dot"></span>':'';h+='<div class="gp-row'+act+'" onclick="sel('+i+')">'+'<span class="gp-pill" style="background:'+c.pillBg+';color:'+c.color+';border:1px solid '+c.pillBorder+';">'+c.score+'/10</span>'+'<span class="gp-lbl">'+c.name+'</span>'+dot+'</div>';}});document.getElementById('left-list').innerHTML=h;}}
-function buildRight(i){{const p=cats[i];let fixHtml='';if(p.hasFix){{fixHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#2DD4BF;">Fix</span><span style="flex:1;height:1px;background:rgba(45,212,191,0.2);display:inline-block;"></span></div><div style="border-radius:12px;border:1px solid rgba(45,212,191,0.3);background:rgba(45,212,191,0.08);padding:20px 18px;"><div style="font-size:14px;font-weight:400;color:rgba(255,255,255,0.88);line-height:1.75;letter-spacing:.01em;">'+p.fix+'</div></div><button class="gp-apply">Apply this fix</button><div class="gp-secondary"><button class="gp-skip">Skip</button><button class="gp-why">Why this change?</button></div>';}}else{{fixHtml='<div style="border-radius:10px;border:1px dashed rgba(45,212,191,0.15);padding:18px;text-align:center;margin-top:12px;"><div style="font-size:18px;font-weight:800;color:#2DD4BF;margin-bottom:3px;">&#10003;</div><div style="font-size:11px;color:rgba(255,255,255,0.25);">No changes needed</div></div>';}}let ratHtml='';if(p.rationale){{ratHtml='<div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin:10px 0 4px;">Why This Score</div><div style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.65;margin-bottom:20px;">'+p.rationale+'</div>';}}document.getElementById('right-panel').innerHTML='<div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.82);margin-bottom:12px;">'+p.name+'</div><div style="display:flex;align-items:baseline;gap:2px;margin-bottom:18px;"><span style="font-size:32px;font-weight:800;color:'+p.color+';line-height:1;">'+p.score+'</span><span style="font-size:12px;color:rgba(255,255,255,0.2);">/10</span><div style="flex:1;margin-left:10px;"><div style="height:4px;background:rgba(255,255,255,0.07);border-radius:2px;"><div style="width:'+p.pct+'%;height:100%;border-radius:2px;background:'+p.color+';"></div></div></div></div>'+ratHtml+fixHtml;}}
+function buildRight(i){{const p=cats[i];let fixHtml='';if(p.hasFix){{fixHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#2DD4BF;">Fix</span><span style="flex:1;height:1px;background:rgba(45,212,191,0.2);display:inline-block;"></span></div><div style="border-radius:12px;border:1px solid rgba(45,212,191,0.3);background:rgba(45,212,191,0.08);padding:20px 18px;"><div style="font-size:15px;font-weight:400;color:rgba(255,255,255,0.88);line-height:1.75;letter-spacing:.01em;">'+p.fix+'</div></div><button class="gp-apply">Apply this fix</button><div class="gp-secondary"><button class="gp-skip">Skip</button><button class="gp-why">Why this change?</button></div>';}}else{{fixHtml='<div style="border-radius:10px;border:1px dashed rgba(45,212,191,0.15);padding:18px;text-align:center;margin-top:12px;"><div style="font-size:18px;font-weight:800;color:#2DD4BF;margin-bottom:3px;">&#10003;</div><div style="font-size:11px;color:rgba(255,255,255,0.25);">No changes needed</div></div>';}}let ratHtml='';if(p.rationale){{ratHtml='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin:10px 0 4px;">Why This Score</div><div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.65;margin-bottom:20px;">'+p.rationale+'</div>';}}document.getElementById('right-panel').innerHTML='<div style="font-size:17px;font-weight:700;color:rgba(255,255,255,0.82);margin-bottom:12px;">'+p.name+'</div><div style="display:flex;align-items:baseline;gap:2px;margin-bottom:18px;"><span style="font-size:40px;font-weight:800;color:'+p.color+';line-height:1;">'+p.score+'</span><span style="font-size:16px;color:rgba(255,255,255,0.2);">/10</span><div style="flex:1;margin-left:10px;"><div style="height:4px;background:rgba(255,255,255,0.07);border-radius:2px;"><div style="width:'+p.pct+'%;height:100%;border-radius:2px;background:'+p.color+';"></div></div></div></div>'+ratHtml+fixHtml;}}
 function sel(i){{active=i;buildLeft();buildRight(i);}}
 buildLeft();buildRight(0);
 </script></body></html>"""
