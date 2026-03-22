@@ -939,11 +939,21 @@ def _get_oauth_token() -> str:
 _OAUTH_CACHE = {"token": "", "exp": 0.0}
 
 def _get_oauth_token_cloud() -> str:
-    """Get/refresh OAuth access token — module-level cache works from any thread."""
+    """Get OAuth access token — module-level cache works from any thread."""
     import urllib.request
     global _OAUTH_CACHE
     if _OAUTH_CACHE["token"] and time.time() < _OAUTH_CACHE["exp"] - 300:
         return _OAUTH_CACHE["token"]
+    # Prefer direct access token (no HTTP call, no expiry management needed within a session)
+    try:
+        access_token = st.secrets.get("CLAUDE_ACCESS_TOKEN", "")
+        if access_token:
+            _OAUTH_CACHE["token"] = access_token
+            _OAUTH_CACHE["exp"] = time.time() + 3600
+            return access_token
+    except Exception:
+        pass
+    # Fall back to refresh token flow
     try:
         refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
     except Exception:
