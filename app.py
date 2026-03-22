@@ -1042,20 +1042,21 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
     if system is None:
         system = get_voice_context()
 
-    # 1. Local CLI — fast on local machine (~3-4s); not available on Streamlit Cloud
+    # 1. Local CLI — strip any ANTHROPIC_API_KEY so CLI uses OAuth (not stale key)
     if os.path.exists(CLAUDE_CLI):
         try:
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             result = subprocess.run(
                 [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
-                input=full_prompt, capture_output=True, text=True, timeout=90,
+                input=full_prompt, capture_output=True, text=True, timeout=90, env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         except Exception:
             pass
 
-    # 2. Proxy server (Streamlit Cloud path — calls Tyler's local machine via ngrok)
+    # 2. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens)
     except Exception:
@@ -1737,33 +1738,446 @@ _FORMAT_GUIDES = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CREATOR STUDIO — OUTPUT MODAL
-# All AI generation happens inside this @st.dialog function.
+# CREATOR STUDIO — AI RUNNER (called BEFORE dialog opens)
 # ═══════════════════════════════════════════════════════════════════════════
-@st.dialog("Creator Studio — Output", width="large")
-def _ci_output_modal(action, tweet_text, fmt, voice):
-    """Run AI action and display output in a dialog modal."""
+def _run_ci_ai(action, tweet_text, fmt, voice):
+    """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
+    if action == "preview":
+        return
+
+    voice_mod = ""
+    if voice == "Critical":
+        voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as a hard accountability take. The output MUST:
+1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
+2. Call out exactly what isn't working and why it matters
+3. End with a pointed question or challenge that puts the responsibility on someone specific
+4. Sound like a disappointed former NFL player holding the team accountable — NOT an angry fan ranting
+5. DO NOT use generic phrases like "we need to be better" or "this has to change" — name the specific problem
+
+The tone is: calm, pointed, credible. Former player who knows what winning looks like and isn't seeing it.
+WRONG: "The Broncos need to improve their running game."
+RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
+=== END CRITICAL VOICE ==="""
+    elif voice == "Homer":
+        voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
+1. Use "we" or "this team" — make the reader feel included in the belief
+2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
+3. Convey real belief that comes from insider football knowledge — "I played 8 years in this league and I know what a winning culture looks like"
+4. End with forward momentum — something to look forward to or build on
+5. Make the reader feel GOOD about being a fan — positive sentiment, energy, shared belief
+
+The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerleading — earned optimism.
+WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
+RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
+=== END HOMER VOICE ==="""
+    elif voice == "Sarcastic":
+        voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
+YOU MUST write this as dry, deadpan understatement. The output MUST:
+1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
+2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
+3. The punchline is the deadpan acceptance of something that SHOULD be outrageous
+4. End with one dry final observation that lands the joke without explaining it
+5. DO NOT be mean or attack people — punch at situations, decisions, outcomes
+
+The tone is: former player press conference energy. Seen everything. Nothing surprises him. One eyebrow raised.
+WRONG: "This franchise is a disaster and everyone is incompetent."
+RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
+=== END SARCASTIC VOICE ==="""
+    else:
+        voice_mod = """=== DEFAULT VOICE MODE ===
+Tyler's natural voice — direct, confident, former-player authority. The output MUST:
+1. Lead with the insight or take — no throat-clearing
+2. Short punchy sentences. Ellipsis (...) as signature where appropriate
+3. State it flat. No hedging, no "maybe", no "I think" — just the take
+4. End with either a trailing thought (...) or a question that invites debate
+=== END DEFAULT VOICE ==="""
+
+    _fp = analyze_personal_patterns()
+    _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
+    _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
+    _fp_range = _fp.get("optimal_char_range", (40, 250)) if _fp else (40, 250)
+    _fp_hooks = []
+    if _fp:
+        _hook_pool = (
+            _fp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
+            else _fp.get("top_examples_normal", []) if fmt == "Normal Tweet"
+            else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
+            else _fp.get("top_examples", [])
+        )
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
+    _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+
+    format_mod = ""
+    if fmt == "Punchy Tweet":
+        format_mod = f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+
+STRUCTURE:
+SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
+SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
+
+RULES:
+- Exactly 2 sentences. Not one. Not three. Two.
+- Under 160 characters total
+- No hashtags, no emojis, no ellipsis
+- No "I think" / "maybe" / "honestly" — state it flat
+- Every word earns its place or gets cut
+- Sentence 2 must make the reader feel compelled to reply
+
+Top hooks to model Sentence 1 after:
+{_hooks_str}
+
+WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
+RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
+
+    elif fmt == "Normal Tweet":
+        _nt_lo = max(_fp_range[0], 161)
+        _nt_hi = min(_fp_range[1], 260)
+        format_mod = f"""FORMAT: NORMAL TWEET (161-260 characters)
+
+TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
+- {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
+- {_fp_ell}% of top tweets use ellipsis (his signature)
+- Top performing hooks to model after:
+{_hooks_str}
+
+STRUCTURE:
+[Confrontational hook or bold declaration]
+
+[Punch line, trailing thought, or question]
+
+RULES:
+- Between 161 and 260 characters total — don't be too brief
+- Use line break between hook and payoff
+- No hashtags, no links, no emojis
+- End with question OR ellipsis, not both
+- Must stop the scroll in the first 8 words
+- Model the hook after one of Tyler's top hooks above
+
+IMAGE RECOMMENDATION:
+- Hot take / opinion → NO image (text-only gets higher engagement rate)
+- Stat or comparison → YES — simple stat graphic
+- Reaction to news → OPTIONAL — screenshot of the news article headline"""
+
+    elif fmt == "Long Tweet":
+        format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
+
+TYLER'S LIVE DATA (updates every sync):
+- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
+- Top hooks to model the opening after:
+{_hooks_str}
+
+STRUCTURE:
+[Hot take — complete thought in first 280 chars, visible before "Show More" fold]
+
+[Line break]
+
+[Evidence paragraph — 1-2 sentences]
+
+[Line break]
+
+[Comparison list or supporting points]
+
+[Line break]
+
+[Closing question or trailing ellipsis]
+
+RULES:
+- 600-1200 characters total
+- First 280 chars MUST work as a standalone tweet (the fold)
+- Short paragraphs with line breaks between each
+- Use comparison list format when relevant (Team A: X / Team B: Y / etc.)
+- No hashtags, no links
+- End with debate invitation
+
+IMAGE RECOMMENDATION:
+- YES — include 1 supporting image
+- Best: stat graphic, comparison chart, or relevant screenshot
+- Place context for the image ABOVE the Show More fold
+- Images increase total impressions even though text-only has higher engagement rate"""
+
+    elif fmt == "Thread":
+        format_mod = f"""FORMAT: THREAD (5-8 tweets)
+
+TYLER'S LIVE DATA (updates every sync):
+- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
+- Top hooks to model Tweet 1 after:
+{_hooks_str}
+
+STRUCTURE:
+TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
+
+TWEET 2: [Set the stage — specific situation with numbers/facts]
+
+TWEET 3: [Point 1 — standalone insight with line breaks]
+
+TWEET 4: [Point 2 — comparison list format OR insider perspective]
+
+TWEET 5: [Point 3 — the contrarian angle nobody else is saying]
+
+TWEET 6: [Bold conclusion — no hedging, pick a side]
+
+TWEET 7: [Question CTA to drive replies]
+
+RULES:
+- 5-8 tweets total
+- Each tweet must stand alone as a good tweet
+- Use line breaks within each tweet
+- No hashtags except possibly in last tweet
+- Include one tweet with comparison list or specific stats
+- Tweet 1 must stop the scroll
+- Last tweet must drive replies (replies = 13.5x algorithm weight)
+
+IMAGE RECOMMENDATION:
+- Include at least 1 image in the thread (35% more retweets confirmed)
+- DO NOT put image in Tweet 1 — hook should be pure text
+- Best placement: Tweet 2-4 (data chart, stat graphic, or supporting visual)
+- For 7+ tweet threads: include 2 images spread across the middle tweets
+- Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
+
+    elif fmt == "Article":
+        format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+
+WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
+
+TYLER'S LIVE DATA (updates every sync):
+- Top hooks to model headline/intro after:
+{_hooks_str}
+- {_fp_q}% of top tweets use questions — use them between sections
+- {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
+
+STRUCTURE:
+HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
+- Numbers perform 2x better than vague headlines
+- Specificity over vagueness — name the player, name the stat
+- Model after Tyler's top hooks above
+[IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
+
+INTRO (2-3 paragraphs — this is the feed preview, must hook):
+[Provocative claim, surprising stat, or contrarian take]
+[Why this matters right now — urgency/timeliness]
+
+SECTION 1: [SUBHEADING]
+[2-3 short paragraphs with **bold key stats** — 2-3 bold items per section]
+[IMAGE: Supporting chart, stat graphic, or screenshot]
+
+SECTION 2: [SUBHEADING]
+[2-3 short paragraphs]
+[Include comparison list format if relevant (Team A: X / Team B: Y)]
+
+SECTION 3: [SUBHEADING]
+[Contrarian angle or insider perspective — former NFL player authority]
+[IMAGE: Supporting visual]
+
+SECTION 4: WHAT COMES NEXT
+[Bold prediction with reasoning — no hedging, pick a side]
+
+CONCLUSION:
+[**1-sentence hot take summary — bold it**]
+[Discussion question to drive comments (replies = 13.5x algorithm weight)]
+
+PROMOTION:
+[Suggest a companion tweet to promote this article — pull the most provocative stat]
+
+RULES:
+- 1,500-2,000 words (6-8 minute read — optimal for dwell time bonus)
+- Paragraphs: 2-4 sentences max
+- Subheadings every ~300 words
+- Bold key stats and claims (2-3 per section)
+- Tyler's voice throughout — direct, no hedging, former-player authority
+- Every point must reference specific players/schemes/numbers
+- Hero image REQUIRED (articles without hero images look like broken cards in feed)
+- 2-3 supporting images placed between sections
+- End with debate invitation to drive replies"""
+
+    result = None
+
+    if action == "banger" and tweet_text.strip():
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            pp = analyze_personal_patterns()
+            patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
+            _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
+            _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
+            if _char_limit:
+                _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
+            _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
+            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+
+Draft: "{tweet_text}"
+
+{format_mod}
+{patterns_ctx}
+
+Rules:
+- Reading Level (7th-9th grade)
+- No Hashtags, Links, Tags, Emojis
+- Hook & Pattern Breakers (first line stops the scroll)
+{_char_rule}
+
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "which top tweet pattern this is modeled after",
+  "option2": "full tweet text here",
+  "option2_pattern": "which top tweet pattern this is modeled after",
+  "option3": "full tweet text here",
+  "option3_pattern": "which top tweet pattern this is modeled after",
+  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+}}"""
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                banger_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = banger_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                result = raw
+
+    elif action == "grades" and tweet_text.strip():
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            grade_prompt = f"""Grade this tweet for X algorithm performance.
+
+X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
+
+Tweet ({len(tweet_text)} chars): "{tweet_text}"
+Has question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}
+
+Grade these 8 categories (score 1-10). For each, give a specific detail referencing the algorithm weight and a concrete fix (exact words, not general advice).
+
+Return ONLY valid JSON:
+{{
+"algorithm_score": 0-100,
+"tyler_score": 0-100,
+"grades": [
+    {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
+    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
+    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
+    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
+    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
+    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
+    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
+    {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
+],
+"personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
+"suggestions": ["improvement 1", "improvement 2", "improvement 3"]
+}}"""
+            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=1000)
+            try:
+                clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
+                json_match = re.search(r'\{.*\}', clean, re.DOTALL)
+                gdata = json.loads(json_match.group()) if json_match else None
+            except Exception:
+                gdata = None
+            if gdata and "grades" in gdata:
+                st.session_state["ci_grades"] = gdata
+                for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            else:
+                result = raw
+
+    elif action == "build" and tweet_text.strip():
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
+
+CONCEPT/ANGLE:
+\"{tweet_text}\"
+
+{format_mod}
+
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+
+Rules:
+- Strong hook — first line stops the scroll
+- No hashtags, no emojis
+- 7th-9th grade reading level
+- End with something that makes people reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
+
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle/structure this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "recommendation": "Which option to post and exactly why"
+}}"""
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                build_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = build_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_result"] = raw
+                for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                    st.session_state.pop(_k, None)
+
+    elif action == "rewrite" and tweet_text.strip():
+        with st.spinner("Repurposing in your voice..."):
+            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
+
+Original tweet (NOT Tyler's): "{tweet_text}"
+
+{format_mod}
+
+- Strong hook in the first line
+- Invites engagement/replies
+- No hashtags, no emojis, no character count
+- 7th-9th grade reading level
+
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "recommendation": "Which option to post and why"
+}}"""
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                rw_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = rw_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_repurposed"] = raw
+                for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                    st.session_state.pop(_k, None)
+
+    if result:
+        st.session_state["ci_result"] = result
+        st.session_state["ci_result_edit"] = result
+        for _k in ["ci_viral_data", "ci_grades", "ci_preview", "ci_repurposed", "ci_banger_data"]:
+            st.session_state.pop(_k, None)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CREATOR STUDIO — OUTPUT DIALOG (display-only — AI already ran in _run_ci_ai)
+# ═══════════════════════════════════════════════════════════════════════════
+def _ci_output_panel_impl(action, tweet_text, fmt, voice):
+    """Display AI results from session state. AI runs BEFORE this opens via _run_ci_ai()."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
-
-    # Use button sets this — fragment reruns dialog, early return fires st.rerun(scope="app") to close
-    if st.session_state.pop("ci_close_modal", False):
-        st.rerun(scope="app")
-
-    def _use_option(opt_key):
-        val = st.session_state.get(opt_key, "")
-        if val:
-            st.session_state["ci_text"] = val
-        for _k in _RESULT_KEYS:
-            st.session_state.pop(_k, None)
-        st.query_params["page"] = "Creator Studio"
-
-    def _use_result(edit_key):
-        val = st.session_state.get(edit_key, "")
-        if val:
-            st.session_state["ci_text"] = val
-        for _k in _RESULT_KEYS:
-            st.session_state.pop(_k, None)
-        st.query_params["page"] = "Creator Studio"
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -1781,7 +2195,6 @@ def _ci_output_modal(action, tweet_text, fmt, voice):
         f'''<div style="font-size:11px;color:{_clr};font-weight:700;letter-spacing:2px;margin-bottom:16px;">''' +
         f'''{_lbl} &nbsp;<span style="color:#3a4050;font-weight:400;letter-spacing:0;">{fmt} · {voice}</span></div>''',
         unsafe_allow_html=True)
-
     voice_mod = ""
     if voice == "Critical":
         voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
@@ -2041,11 +2454,8 @@ IMAGE RECOMMENDATION:
 - [IMAGE PLACEMENT] markers in the template show where to add each image"""
 
 
-    # ── Run AI based on action ──
-    result = None
-
+    # ── Display results ──
     if action == "preview":
-        # No AI — render X card preview
         truncated = tweet_text[:280]
         show_more = len(tweet_text) > 280
         now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
@@ -2058,185 +2468,9 @@ IMAGE RECOMMENDATION:
             <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
         </div>
         {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#2DD4BF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
+        return
 
-    elif action == "banger" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            pp = analyze_personal_patterns()
-            patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
-            _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
-            _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
-            if _char_limit:
-                _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
-            _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
-            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
-
-Draft: "{tweet_text}"
-
-{format_mod}
-{patterns_ctx}
-
-Rules:
-- Reading Level (7th-9th grade)
-- No Hashtags, Links, Tags, Emojis
-- Hook & Pattern Breakers (first line stops the scroll)
-{_char_rule}
-
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "which top tweet pattern this is modeled after",
-  "option2": "full tweet text here",
-  "option2_pattern": "which top tweet pattern this is modeled after",
-  "option3": "full tweet text here",
-  "option3_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
-}}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                banger_data = json.loads(raw_clean)
-                st.session_state["ci_banger_data"] = banger_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            except Exception:
-                result = raw
-
-    elif action == "grades" and tweet_text.strip() and not st.session_state.get("ci_grades"):
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            grade_prompt = f"""Grade this tweet for X algorithm performance.
-
-X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
-
-Tweet ({len(tweet_text)} chars): "{tweet_text}"
-Has question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}
-
-Grade these 8 categories (score 1-10). For each, give a specific detail referencing the algorithm weight and a concrete fix (exact words, not general advice).
-
-Return ONLY valid JSON:
-{{
-"algorithm_score": 0-100,
-"tyler_score": 0-100,
-"grades": [
-    {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
-    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
-    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
-    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
-    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
-    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
-    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
-    {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
-],
-"personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
-"suggestions": ["improvement 1", "improvement 2", "improvement 3"]
-}}"""
-            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=1000)
-            try:
-                clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-                json_match = re.search(r'\{.*\}', clean, re.DOTALL)
-                gdata = json.loads(json_match.group()) if json_match else None
-            except Exception:
-                gdata = None
-            if gdata and "grades" in gdata:
-                st.session_state["ci_grades"] = gdata
-                for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            else:
-                result = raw
-
-    elif action == "build" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
-
-CONCEPT/ANGLE:
-\"{tweet_text}\"
-
-{format_mod}
-
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
-
-Rules:
-- Strong hook — first line stops the scroll
-- No hashtags, no emojis
-- 7th-9th grade reading level
-- End with something that makes people reply or argue
-- Algorithm optimized: strong opinion, relatable, invites engagement
-
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle/structure this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
-  "recommendation": "Which option to post and exactly why"
-}}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                build_data = json.loads(raw_clean)
-                st.session_state["ci_banger_data"] = build_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            except Exception:
-                st.session_state["ci_result"] = raw
-                for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                    st.session_state.pop(_k, None)
-
-    elif action == "rewrite" and tweet_text.strip() and not st.session_state.get("ci_banger_data"):
-        with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
-
-Original tweet (NOT Tyler's): "{tweet_text}"
-
-{format_mod}
-
-- Strong hook in the first line
-- Invites engagement/replies
-- No hashtags, no emojis, no character count
-- 7th-9th grade reading level
-
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle this version takes",
-  "recommendation": "Which option to post and why"
-}}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                rw_data = json.loads(raw_clean)
-                st.session_state["ci_banger_data"] = rw_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            except Exception:
-                st.session_state["ci_repurposed"] = raw
-                for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                    st.session_state.pop(_k, None)
-
-    if result:
-        st.session_state["ci_result"] = result
-        st.session_state["ci_result_edit"] = result
-        for _k in ["ci_viral_data", "ci_grades", "ci_preview", "ci_repurposed", "ci_banger_data"]:
-            st.session_state.pop(_k, None)
-
-    # ── Display results ──
+    # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
@@ -2255,11 +2489,10 @@ Return ONLY this JSON, no other text:
                     st.success("Saved.")
             with b2:
                 if st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary"):
-                    val = st.session_state.get(opt_key, opt_text)
-                    if val:
-                        st.session_state["ci_text"] = val
-                    st.session_state["ci_close_modal"] = True
-                    st.rerun()
+                    v = st.session_state.get(opt_key, opt_text)
+                    if v:
+                        st.session_state["ci_text"] = v
+                    st.stop()
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
@@ -2483,11 +2716,10 @@ Return ONLY this JSON, no other text:
                 st.success("Saved.")
         with r2:
             if st.button("↗ Use", key="modal_result_use", use_container_width=True, type="primary"):
-                val = st.session_state.get(_edit_key, edited)
-                if val:
-                    st.session_state["ci_text"] = val
-                st.session_state["ci_close_modal"] = True
-                st.rerun()
+                v = st.session_state.get(_edit_key, edited)
+                if v:
+                    st.session_state["ci_text"] = v
+                st.stop()
 
     # ── Bottom action bar ──
     st.divider()
@@ -2510,6 +2742,14 @@ Return ONLY this JSON, no other text:
             st.rerun()
 
 
+@st.dialog("Creator Studio", width="large")
+def _ci_output_panel(action, tweet_text, fmt, voice):
+    """Thin wrapper — @st.dialog caches this bytecode, but the real logic
+    in _ci_output_panel_impl resolves from module globals at runtime,
+    so it always picks up the latest code."""
+    _ci_output_panel_impl(action, tweet_text, fmt, voice)
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -2519,13 +2759,12 @@ def page_compose_ideas():
         seed = st.session_state.pop("ci_repurpose_seed")
         st.session_state.pop("ci_auto_repurpose", None)
         st.session_state["ci_text"] = seed
-        _ci_output_modal("rewrite", seed, st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+        _run_ci_ai("rewrite", seed, st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+        _ci_output_panel("rewrite", seed, st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
         return
 
     # Redo pending from modal "↺ Redo" button
     _pending_redo = st.session_state.pop("ci_dialog_pending", None)
-    # Clear any stale close flag so it never blocks a fresh modal open
-    st.session_state.pop("ci_close_modal", None)
 
     # ── 2-COLUMN LAYOUT ──
     col_left, col_right = st.columns([1, 2.5])
@@ -2570,23 +2809,42 @@ def page_compose_ideas():
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
         # Row 1: primary CTA
-        banger = st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary")
+        def _click_banger():
+            if st.session_state.get("ci_text", "").strip():
+                st.session_state["_ci_pending"] = ("banger", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+        st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary", on_click=_click_banger)
 
         # Row 2: Build + Rewrite
         sr2, sr3 = st.columns(2)
         with sr2:
-            build_this = st.button("⊞ Build", key="ci_build", use_container_width=True)
+            def _click_build():
+                if st.session_state.get("ci_text", "").strip():
+                    st.session_state["_ci_pending"] = ("build", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+            st.button("⊞ Build", key="ci_build", use_container_width=True, on_click=_click_build)
         with sr3:
-            repurpose = st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True)
+            def _click_repurpose():
+                if st.session_state.get("ci_text", "").strip():
+                    st.session_state["_ci_pending"] = ("rewrite", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+            st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True, on_click=_click_repurpose)
 
         # Row 3: Grades / Preview / Redo
         sr4, sr5, sr6 = st.columns(3)
         with sr4:
-            engage = st.button("≋ Grades", key="ci_engage", use_container_width=True)
+            def _click_engage():
+                if st.session_state.get("ci_text", "").strip():
+                    st.session_state["_ci_pending"] = ("grades", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+            st.button("≋ Grades", key="ci_engage", use_container_width=True, on_click=_click_engage)
         with sr5:
-            biz = st.button("◎ Preview", key="ci_biz", use_container_width=True)
+            def _click_biz():
+                if st.session_state.get("ci_text", "").strip():
+                    st.session_state["_ci_pending"] = ("preview", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+            st.button("◎ Preview", key="ci_biz", use_container_width=True, on_click=_click_biz)
         with sr6:
-            regenerate = st.button("↺ Redo", key="ci_regen_top", use_container_width=True)
+            def _click_regen():
+                _last = st.session_state.get("ci_last_action", {})
+                if _last.get("text"):
+                    st.session_state["_ci_pending"] = (_last.get("type", "build"), _last.get("text", ""), _last.get("fmt", "Normal Tweet"), _last.get("voice", "Default"))
+            st.button("↺ Redo", key="ci_regen_top", use_container_width=True, on_click=_click_regen)
 
         st.divider()
         sc_col, sb_col, sp_col = st.columns([2.5, 1, 1])
@@ -2610,43 +2868,25 @@ def page_compose_ideas():
                     else:
                         st.error("Post failed — proxy offline or xurl unavailable.")
 
-    # ── Modal triggers — clear cached result first so AI always runs fresh ──
+    # ── Modal triggers — driven by one-shot session state, never by button return values ──
     def _clear_banger():
         for _k in ["ci_banger_data"] + [f"ci_banger_opt_{i}" for i in [1, 2, 3]]:
             st.session_state.pop(_k, None)
 
-    if banger and tweet_text.strip():
-        _clear_banger()
-        _ci_output_modal("banger", tweet_text, fmt, voice)
-    elif build_this and tweet_text.strip():
-        _clear_banger()
-        _ci_output_modal("build", tweet_text, fmt, voice)
-    elif repurpose and tweet_text.strip():
-        _clear_banger()
-        _ci_output_modal("rewrite", tweet_text, fmt, voice)
-    elif engage and tweet_text.strip():
-        st.session_state.pop("ci_grades", None)
-        _ci_output_modal("grades", tweet_text, fmt, voice)
-    elif biz and tweet_text.strip():
-        _ci_output_modal("preview", tweet_text, fmt, voice)
-    elif regenerate:
-        _last = st.session_state.get("ci_last_action", {})
-        if _last.get("text"):
-            _lt = _last.get("type", "build")
-            if _lt in ("banger", "build", "rewrite"):
-                _clear_banger()
-            elif _lt == "grades":
-                st.session_state.pop("ci_grades", None)
-            _ci_output_modal(_lt, _last.get("text", tweet_text),
-                             _last.get("fmt", fmt), _last.get("voice", voice))
-    elif _pending_redo:
-        _pt = _pending_redo["action"]
-        if _pt in ("banger", "build", "rewrite"):
+    # _pending_redo comes from modal Redo button (already popped above)
+    _pending = st.session_state.pop("_ci_pending", None) or (
+        (_pending_redo["action"], _pending_redo["tweet_text"], _pending_redo["fmt"], _pending_redo["voice"])
+        if _pending_redo else None
+    )
+
+    if _pending:
+        _action, _txt, _fmt, _voice = _pending
+        if _action in ("banger", "build", "rewrite"):
             _clear_banger()
-        elif _pt == "grades":
+        elif _action == "grades":
             st.session_state.pop("ci_grades", None)
-        _ci_output_modal(_pending_redo["action"], _pending_redo["tweet_text"],
-                         _pending_redo["fmt"], _pending_redo["voice"])
+        _run_ci_ai(_action, _txt, _fmt, _voice)
+        _ci_output_panel(_action, _txt, _fmt, _voice)
 
     # ── Bank ──
     with st.expander("Bank", expanded=False):
@@ -4371,7 +4611,8 @@ def page_reply_guy():
                 st.rerun()
         st.session_state["rg_viral_fmt"] = _viral_fmt
         st.session_state["rg_viral_voice"] = _viral_voice
-        _ci_output_modal("banger", _viral_idea, _viral_fmt, _viral_voice)
+        _run_ci_ai("banger", _viral_idea, _viral_fmt, _viral_voice)
+        _ci_output_panel("banger", _viral_idea, _viral_fmt, _viral_voice)
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # ── PART 2: My Tweet Replies — Conversation Depth ──
