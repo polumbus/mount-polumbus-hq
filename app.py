@@ -2557,16 +2557,6 @@ IMAGE RECOMMENDATION:
         _left_col, _right_col = st.columns([1, 3])
 
         # ── LEFT LIST ──
-        # CSS to hide button text and style the overlay correctly
-        st.markdown("""<style>
-        div[data-testid="stVerticalBlock"] button[kind="secondary"][key^="ci_gsel_"] p,
-        div[data-testid="column"]:first-child button[kind="secondary"] p {
-            font-size: 0 !important;
-            line-height: 0 !important;
-            height: 0 !important;
-            overflow: hidden !important;
-        }
-        </style>""", unsafe_allow_html=True)
         with _left_col:
             for i, _g in enumerate(grades):
                 _gname = _g.get("name", "")
@@ -2578,27 +2568,20 @@ IMAGE RECOMMENDATION:
                 _is_accepted = (i in accepted)
                 _is_skipped = (i in skipped)
 
-                # Pill text
                 _pill_label = "✓" if _is_accepted else str(_gscore)
-
-                # Row styling
                 _row_bg = "rgba(45,212,191,0.06)" if _is_active else "transparent"
                 _row_border = "border-left:2px solid #2DD4BF;" if _is_active else "border-left:2px solid transparent;"
                 _label_color = "rgba(255,255,255,0.82)" if _is_active else "rgba(255,255,255,0.38)"
-                _label_weight = "500" if _is_active else "400"
-                _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#2DD4BF;display:inline-block;margin-left:4px;vertical-align:middle;"></span>' if _has_suggestion and not _is_accepted else ''
-                _strike = "text-decoration:line-through;opacity:0.4;" if _is_skipped else ""
+                _label_weight = "600" if _is_active else "400"
+                _dot = " ●" if (_has_suggestion and not _is_accepted) else ""
+                _check = " ✓" if _is_accepted else ""
+                _strike_style = "opacity:0.4;" if _is_skipped else ""
 
-                # Container for button + styled overlay
-                _container = st.container()
-                with _container:
-                    if st.button(" ", key=f"ci_gsel_{i}", use_container_width=True):
-                        st.session_state["ci_grade_selected"] = i
-                    # Styled overlay positioned over the button
-                    st.markdown(f'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;{_row_border}background:{_row_bg};border-radius:0 6px 6px 0;margin-top:-44px;margin-bottom:6px;pointer-events:none;">'
-                                f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:20px;border-radius:10px;background:{_pbg};color:{_ptx};font-size:10px;font-weight:700;letter-spacing:0.5px;">{_pill_label}</span>'
-                                f'<span style="font-size:11px;color:{_label_color};font-weight:{_label_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{_strike}">{_gname}{_dot_html}</span>'
-                                f'</div>', unsafe_allow_html=True)
+                _btn_label = f"{_pill_label}  {_gname}{_dot}{_check}"
+                _btn_type = "primary" if _is_active else "secondary"
+                if st.button(_btn_label, key=f"ci_gsel_{i}", use_container_width=True, type=_btn_type):
+                    st.session_state["ci_grade_selected"] = i
+                    st.rerun()
 
         # ── RIGHT PANEL ──
         with _right_col:
