@@ -2182,18 +2182,9 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
 
-    # Action badge header
-    _hdrs = {
-        "banger":  ("⚡ GO VIRAL",  "#2DD4BF"),
-        "build":   ("⊞ BUILD",     "#22c55e"),
-        "rewrite": ("↩ REWRITE",   "#f0a500"),
-        "grades":  ("≋ GRADES",    "#a78bfa"),
-        "preview": ("◎ PREVIEW",   "#60a5fa"),
-    }
-    _lbl, _clr = _hdrs.get(action, ("OUTPUT", "#8888aa"))
+    # Subtle format/voice subtitle (dialog title already shows "Creator Studio")
     st.markdown(
-        f'''<div style="font-size:11px;color:{_clr};font-weight:700;letter-spacing:2px;margin-bottom:16px;">''' +
-        f'''{_lbl} &nbsp;<span style="color:#3a4050;font-weight:400;letter-spacing:0;">{fmt} · {voice}</span></div>''',
+        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice}</div>',
         unsafe_allow_html=True)
     voice_mod = ""
     if voice == "Critical":
@@ -2537,17 +2528,6 @@ IMAGE RECOMMENDATION:
                 st.session_state.pop(_k, None)
             st.rerun(scope="app")
 
-        # ── HEADER ──
-        _hdr_col, _close_col = st.columns([10, 1])
-        with _hdr_col:
-            st.markdown(f'<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">Creator Studio — Grades</div>'
-                        f'<div style="font-size:10px;color:rgba(255,255,255,0.28);margin-top:2px;">{fmt} · {voice}</div>', unsafe_allow_html=True)
-        with _close_col:
-            if st.button("✕", key="ci_grades_close", help="Close"):
-                for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
-                    st.session_state.pop(_k, None)
-                st.rerun(scope="app")
-
         # ── SCORE STRIP — 3 cards ──
         st.markdown(f"""<div style="display:flex;gap:8px;margin:12px 0 16px;">
           <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #2DD4BF;border-radius:10px;padding:12px 14px;text-align:center;">
@@ -2577,6 +2557,16 @@ IMAGE RECOMMENDATION:
         _left_col, _right_col = st.columns([1, 3])
 
         # ── LEFT LIST ──
+        # CSS to hide button text and style the overlay correctly
+        st.markdown("""<style>
+        div[data-testid="stVerticalBlock"] button[kind="secondary"][key^="ci_gsel_"] p,
+        div[data-testid="column"]:first-child button[kind="secondary"] p {
+            font-size: 0 !important;
+            line-height: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+        }
+        </style>""", unsafe_allow_html=True)
         with _left_col:
             for i, _g in enumerate(grades):
                 _gname = _g.get("name", "")
@@ -2599,14 +2589,16 @@ IMAGE RECOMMENDATION:
                 _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#2DD4BF;display:inline-block;margin-left:4px;vertical-align:middle;"></span>' if _has_suggestion and not _is_accepted else ''
                 _strike = "text-decoration:line-through;opacity:0.4;" if _is_skipped else ""
 
-                # Render row as a button — click selects this category
-                if st.button(f"{_pill_label}  {_gname}", key=f"ci_gsel_{i}", use_container_width=True):
-                    st.session_state["ci_grade_selected"] = i
-                # Overlay styled HTML on top of button area
-                st.markdown(f'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;{_row_border}background:{_row_bg};border-radius:0 6px 6px 0;margin-top:-44px;margin-bottom:6px;pointer-events:none;">'
-                            f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:20px;border-radius:10px;background:{_pbg};color:{_ptx};font-size:10px;font-weight:700;letter-spacing:0.5px;">{_pill_label}</span>'
-                            f'<span style="font-size:11px;color:{_label_color};font-weight:{_label_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{_strike}">{_gname}{_dot_html}</span>'
-                            f'</div>', unsafe_allow_html=True)
+                # Container for button + styled overlay
+                _container = st.container()
+                with _container:
+                    if st.button(" ", key=f"ci_gsel_{i}", use_container_width=True):
+                        st.session_state["ci_grade_selected"] = i
+                    # Styled overlay positioned over the button
+                    st.markdown(f'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;{_row_border}background:{_row_bg};border-radius:0 6px 6px 0;margin-top:-44px;margin-bottom:6px;pointer-events:none;">'
+                                f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:20px;border-radius:10px;background:{_pbg};color:{_ptx};font-size:10px;font-weight:700;letter-spacing:0.5px;">{_pill_label}</span>'
+                                f'<span style="font-size:11px;color:{_label_color};font-weight:{_label_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{_strike}">{_gname}{_dot_html}</span>'
+                                f'</div>', unsafe_allow_html=True)
 
         # ── RIGHT PANEL ──
         with _right_col:
