@@ -2076,6 +2076,17 @@ Return ONLY this JSON, no other text:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
+                # Auto-apply recommended option here (main app context, safe to set widget key)
+                _rec_raw = banger_data.get("recommendation", "")
+                _rec_num = 1
+                if _rec_raw:
+                    import re as _re2
+                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
+                    if _m2:
+                        _rec_num = int(_m2.group(1))
+                _best = banger_data.get(f"option{_rec_num}", banger_data.get("option1", ""))
+                if _best:
+                    st.session_state["ci_text"] = _best
             else:
                 result = raw
 
@@ -2166,6 +2177,16 @@ Return ONLY this JSON, no other text:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
+                _rec_raw = build_data.get("recommendation", "")
+                _rec_num = 1
+                if _rec_raw:
+                    import re as _re2
+                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
+                    if _m2:
+                        _rec_num = int(_m2.group(1))
+                _best = build_data.get(f"option{_rec_num}", build_data.get("option1", ""))
+                if _best:
+                    st.session_state["ci_text"] = _best
             else:
                 st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
@@ -2206,6 +2227,16 @@ Return ONLY this JSON, no other text:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
+                _rec_raw = rw_data.get("recommendation", "")
+                _rec_num = 1
+                if _rec_raw:
+                    import re as _re2
+                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
+                    if _m2:
+                        _rec_num = int(_m2.group(1))
+                _best = rw_data.get(f"option{_rec_num}", rw_data.get("option1", ""))
+                if _best:
+                    st.session_state["ci_text"] = _best
             else:
                 st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
@@ -2522,14 +2553,6 @@ IMAGE RECOMMENDATION:
                 _rec_num = int(_m.group(1))
             _dash = _rec_raw.find("—")
             _rec_reason = _rec_raw[_dash+1:].strip() if _dash != -1 else _rec_raw
-        # Auto-apply recommended option to ci_text on first open
-        _auto_key = f"ci_banger_auto_{id(bd)}"
-        if not st.session_state.get(_auto_key):
-            _best_text = bd.get(f"option{_rec_num}", bd.get("option1", ""))
-            if _best_text:
-                st.session_state["ci_text"] = _best_text
-            st.session_state[_auto_key] = True
-
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
             _is_pick = (ti + 1 == _rec_num)
