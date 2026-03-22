@@ -1044,6 +1044,20 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     if system is None:
         system = get_voice_context()
 
+    # Sonnet/Opus: OAuth API rejects these, go straight to CLI
+    if ("sonnet" in model or "opus" in model) and os.path.exists(CLAUDE_CLI):
+        try:
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+            result = subprocess.run(
+                [CLAUDE_CLI, "-p", "--model", model],
+                input=full_prompt, capture_output=True, text=True, timeout=30, env=clean_env,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+
     # 1. Local CLI — strip any ANTHROPIC_API_KEY so CLI uses OAuth (not stale key)
     if os.path.exists(CLAUDE_CLI):
         try:
