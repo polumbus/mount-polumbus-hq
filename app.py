@@ -2200,18 +2200,10 @@ Rules:
 Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
             _alt = _base + "\n\nTake a COMPLETELY DIFFERENT structural approach than the obvious rewrite — if declarative, try a question; if stat-led, try an observation. Unexpected pattern."
             _sys = get_system_for_voice(voice, voice_mod)
-            _tok = _get_oauth_token_cloud() or _get_oauth_token()
-            try:
-                if _tok:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                        _fa = _ex.submit(_anthropic_api_call, _tok, _base, _sys, 300)
-                        _fb = _ex.submit(_anthropic_api_call, _tok, _alt, _sys, 300)
-                        _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-                else:
-                    raise Exception("no token")
-            except Exception:
-                _opt1 = call_claude(_base, _sys, 300)
-                _opt2 = call_claude(_alt, _sys, 300)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _base, _sys, 300)
+                _fb = _ex.submit(call_claude, _alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
             if _opt1 and _opt2:
                 banger_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = banger_data
@@ -2292,18 +2284,10 @@ Rules:
 Return ONLY the tweet text. No explanation, no quotes, no JSON."""
             _build_alt = _build_base + "\n\nTake a completely different structural angle — if the obvious approach is declarative, try tension/question; if it's a hot take, try a surprising observation."
             _sys = get_system_for_voice(voice, voice_mod)
-            _tok = _get_oauth_token_cloud() or _get_oauth_token()
-            try:
-                if _tok:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                        _fa = _ex.submit(_anthropic_api_call, _tok, _build_base, _sys, 300)
-                        _fb = _ex.submit(_anthropic_api_call, _tok, _build_alt, _sys, 300)
-                        _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-                else:
-                    raise Exception("no token")
-            except Exception:
-                _opt1 = call_claude(_build_base, _sys, 300)
-                _opt2 = call_claude(_build_alt, _sys, 300)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _build_base, _sys, 300)
+                _fb = _ex.submit(call_claude, _build_alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
             if _opt1 and _opt2:
                 build_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = build_data
@@ -2338,18 +2322,10 @@ Original (NOT Tyler's): "{tweet_text}"
 Return ONLY the tweet text. No explanation, no quotes, no JSON."""
             _rw_alt = _rw_base + "\n\nTake a completely different angle from the first version — different structure, different emotional tone, different entry point into the subject."
             _sys = get_system_for_voice(voice, voice_mod)
-            _tok = _get_oauth_token_cloud() or _get_oauth_token()
-            try:
-                if _tok:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                        _fa = _ex.submit(_anthropic_api_call, _tok, _rw_base, _sys, 300)
-                        _fb = _ex.submit(_anthropic_api_call, _tok, _rw_alt, _sys, 300)
-                        _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-                else:
-                    raise Exception("no token")
-            except Exception:
-                _opt1 = call_claude(_rw_base, _sys, 300)
-                _opt2 = call_claude(_rw_alt, _sys, 300)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _rw_base, _sys, 300)
+                _fb = _ex.submit(call_claude, _rw_alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
             if _opt1 and _opt2:
                 rw_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = rw_data
