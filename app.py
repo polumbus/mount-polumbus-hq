@@ -935,6 +935,70 @@ def _get_oauth_token() -> str:
         return ""
 
 
+def _get_oauth_token_cloud() -> str:
+    """Get/refresh OAuth access token for Streamlit Cloud using CLAUDE_REFRESH_TOKEN secret."""
+    import urllib.request
+    cached = st.session_state.get("_oauth_token")
+    cached_exp = st.session_state.get("_oauth_token_exp", 0)
+    if cached and time.time() < cached_exp - 300:
+        return cached
+    try:
+        refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
+    except Exception:
+        refresh_token = ""
+    if not refresh_token:
+        return ""
+    body = json.dumps({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    }).encode()
+    req = urllib.request.Request(
+        "https://platform.claude.com/v1/oauth/token",
+        data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read())
+    access_token = data.get("access_token", "")
+    expires_in = data.get("expires_in", 3600)
+    if access_token:
+        st.session_state["_oauth_token"] = access_token
+        st.session_state["_oauth_token_exp"] = time.time() + expires_in
+    return access_token
+
+
+def _call_claude_oauth(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
+    """Call Claude API directly via OAuth — no subprocess, no proxy, fastest path on Streamlit Cloud."""
+    import urllib.request
+    token = _get_oauth_token_cloud() or _get_oauth_token()
+    if not token:
+        raise Exception("No OAuth token available")
+    body = json.dumps({
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system or "",
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "oauth-2025-04-20",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        data = json.loads(resp.read())
+    if "content" in data and data["content"]:
+        return data["content"][0].get("text", "")
+    raise Exception(f"API error: {data.get('error', data)}")
+
+
 def _call_claude_direct(prompt: str, system: str, max_tokens: int) -> str:
     """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
     import urllib.request
@@ -1058,7 +1122,13 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         except Exception:
             pass
 
-    # 2. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
+    # 2. Direct OAuth API call — no proxy, no subprocess, fastest on Streamlit Cloud
+    try:
+        return _call_claude_oauth(prompt, system or "", max_tokens, model)
+    except Exception:
+        pass
+
+    # 3. Proxy server fallback
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens, model)
     except Exception:
