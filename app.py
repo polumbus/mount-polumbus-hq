@@ -1994,39 +1994,6 @@ RULES:
 - 2-3 supporting images placed between sections
 - End with debate invitation to drive replies"""
 
-    def _parse_options_json(raw):
-        """Parse options JSON that may contain literal newlines inside string values."""
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        # Try direct parse first
-        try:
-            return json.loads(clean)
-        except Exception:
-            pass
-        # Fix literal newlines inside JSON strings char-by-char
-        try:
-            parts = []
-            in_string = False
-            i = 0
-            while i < len(clean):
-                c = clean[i]
-                if c == '\\' and in_string:
-                    parts.append(c)
-                    parts.append(clean[i + 1] if i + 1 < len(clean) else '')
-                    i += 2
-                    continue
-                if c == '"':
-                    in_string = not in_string
-                if c == '\n' and in_string:
-                    parts.append('\\n')
-                else:
-                    parts.append(c)
-                i += 1
-            return json.loads(''.join(parts))
-        except Exception:
-            return None
-
     result = None
 
     _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
@@ -2065,29 +2032,23 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "1 or 2 — one sentence on why"
+  "option3": "full tweet text here",
+  "option3_pattern": "which top tweet pattern this is modeled after",
+  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            banger_data = _parse_options_json(raw)
-            if banger_data and banger_data.get("option1") and banger_data.get("option2"):
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                banger_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = banger_data
                 _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
-                # Auto-apply recommended option here (main app context, safe to set widget key)
-                _rec_raw = banger_data.get("recommendation", "")
-                _rec_num = 1
-                if _rec_raw:
-                    import re as _re2
-                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
-                    if _m2:
-                        _rec_num = int(_m2.group(1))
-                _best = banger_data.get(f"option{_rec_num}", banger_data.get("option1", ""))
-                if _best:
-                    st.session_state["ci_text"] = _best
-            else:
+            except Exception:
                 result = raw
 
     elif action == "grades" and tweet_text.strip():
@@ -2151,7 +2112,7 @@ CONCEPT/ANGLE:
 
 {format_mod}
 
-TASK: Write 2 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -2166,28 +2127,23 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "angle/structure this version takes",
   "option2": "full tweet text here",
   "option2_pattern": "angle/structure this version takes",
-  "recommendation": "1 or 2 — one sentence on why"
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "recommendation": "Which option to post and exactly why"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            build_data = _parse_options_json(raw)
-            if build_data and build_data.get("option1") and build_data.get("option2"):
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                build_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = build_data
                 _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-                _rec_raw = build_data.get("recommendation", "")
-                _rec_num = 1
-                if _rec_raw:
-                    import re as _re2
-                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
-                    if _m2:
-                        _rec_num = int(_m2.group(1))
-                _best = build_data.get(f"option{_rec_num}", build_data.get("option1", ""))
-                if _best:
-                    st.session_state["ci_text"] = _best
-            else:
+            except Exception:
                 st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
@@ -2216,28 +2172,23 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "angle this version takes",
   "option2": "full tweet text here",
   "option2_pattern": "angle this version takes",
-  "recommendation": "1 or 2 — one sentence on why"
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "recommendation": "Which option to post and why"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            rw_data = _parse_options_json(raw)
-            if rw_data and rw_data.get("option1") and rw_data.get("option2"):
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                rw_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = rw_data
                 _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-                _rec_raw = rw_data.get("recommendation", "")
-                _rec_num = 1
-                if _rec_raw:
-                    import re as _re2
-                    _m2 = _re2.match(r'^\s*([12])', _rec_raw)
-                    if _m2:
-                        _rec_num = int(_m2.group(1))
-                _best = rw_data.get(f"option{_rec_num}", rw_data.get("option1", ""))
-                if _best:
-                    st.session_state["ci_text"] = _best
-            else:
+            except Exception:
                 st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
@@ -2541,24 +2492,10 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
-        # Parse recommended option number (e.g. "1 or 2 — ..." → 1)
-        _rec_raw = bd.get("recommendation", "")
-        _rec_num = 1
-        _rec_reason = ""
-        if _rec_raw:
-            import re as _re
-            _m = _re.match(r'^\s*([12])', _rec_raw)
-            if _m:
-                _rec_num = int(_m.group(1))
-            _dash = _rec_raw.find("—")
-            _rec_reason = _rec_raw[_dash+1:].strip() if _dash != -1 else _rec_raw
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            _is_pick = (ti + 1 == _rec_num)
-            _label = f'OPTION {ti + 1} {"· AI PICK" if _is_pick else ""}'
-            _label_color = "#2DD4BF" if _is_pick else "#666688"
-            st.markdown(f'''<div style="font-size:11px;color:{_label_color};font-weight:700;letter-spacing:2px;margin:20px 0 4px;">{_label}</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
@@ -2575,8 +2512,9 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
-        if _rec_reason:
-            st.markdown(f'''<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:16px;padding:10px 14px;border-left:2px solid rgba(45,212,191,0.3);">{_rec_reason}</div>''', unsafe_allow_html=True)
+        if bd.get("recommendation"):
+            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
@@ -2585,11 +2523,32 @@ IMAGE RECOMMENDATION:
         grades = gd.get("grades", [])
         combined_score = round((algo_score + tyler_score) / 2) if algo_score or tyler_score else 0
 
-        def _apply_fix_all():
+        # ── Session state for grade panel interactivity ──
+        if "ci_grade_selected" not in st.session_state:
+            st.session_state["ci_grade_selected"] = 0
+        if "ci_grade_accepted" not in st.session_state:
+            st.session_state["ci_grade_accepted"] = set()
+        if "ci_grade_skipped" not in st.session_state:
+            st.session_state["ci_grade_skipped"] = set()
+        sel_idx = st.session_state["ci_grade_selected"]
+        accepted = st.session_state["ci_grade_accepted"]
+        skipped = st.session_state["ci_grade_skipped"]
+
+        def _pill_color(s):
+            if s >= 7: return ("rgba(45,212,191,0.12)", "#2DD4BF")
+            if s >= 5: return ("rgba(251,191,36,0.12)", "#FBBF24")
+            return ("rgba(248,113,113,0.12)", "#F87171")
+
+        def _apply_fix(fix_instruction, clear_all=False):
             _base = st.session_state.get("ci_text", "")
-            _all_grades = [g for g in grades if g.get("fix", "") and g.get("fix", "").lower() != "no changes needed"]
-            _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _all_grades])
-            _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\nReturn ONLY the updated tweet text, nothing else.'
+            if clear_all:
+                _accepted_grades = [g for i, g in enumerate(grades) if i in accepted and g.get("fix", "")]
+                if not _accepted_grades:
+                    _accepted_grades = [g for g in grades if g.get("fix", "")]
+                _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
+                _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\nReturn ONLY the updated tweet text, nothing else.'
+            else:
+                _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\nReturn ONLY the updated tweet text, nothing else.'
             _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 st.session_state["ci_text"] = _updated.strip()
@@ -2597,80 +2556,130 @@ IMAGE RECOMMENDATION:
                 st.session_state.pop(_k, None)
             st.rerun(scope="app")
 
-        # Build category JSON for JS
-        _cats_data = []
-        for g in grades:
-            _s = g.get("score", 0)
-            _fix_raw = g.get("fix", "")
-            _has_fix = bool(_fix_raw) and _fix_raw.lower() != "no changes needed"
-            _cats_data.append({
-                "name": g.get("name", ""),
-                "score": _s,
-                "color": "#2DD4BF" if _s >= 7 else "#FBBF24" if _s >= 5 else "#F87171",
-                "pillBg": "rgba(45,212,191,0.12)" if _s >= 7 else "rgba(251,191,36,0.12)" if _s >= 5 else "rgba(248,113,113,0.12)",
-                "pillBorder": "rgba(45,212,191,0.25)" if _s >= 7 else "rgba(251,191,36,0.25)" if _s >= 5 else "rgba(248,113,113,0.25)",
-                "pct": _s * 10,
-                "rationale": g.get("detail", "").replace("'", "&#39;").replace('"', "&quot;"),
-                "fix": (_fix_raw if _has_fix else "").replace("'", "&#39;").replace('"', "&quot;"),
-                "hasFix": _has_fix
-            })
-        _cats_json = json.dumps(_cats_data)
+        # ── SCORE STRIP — 3 cards ──
+        st.markdown(f"""<div style="display:flex;gap:8px;margin:12px 0 16px;">
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #2DD4BF;border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#2DD4BF;line-height:1;">{algo_score}</div>
+            <div style="height:5px;background:rgba(45,212,191,0.1);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{algo_score}%;height:100%;background:#2DD4BF;border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Algorithm</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #C49E3C;border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#C49E3C;line-height:1;">{tyler_score}</div>
+            <div style="height:5px;background:rgba(196,158,60,0.1);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{tyler_score}%;height:100%;background:#C49E3C;border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Tyler Voice</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid rgba(255,255,255,0.18);border-radius:10px;padding:12px 14px;text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:rgba(255,255,255,0.7);line-height:1;">{combined_score}</div>
+            <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;margin:8px 0 6px;">
+              <div style="width:{combined_score}%;height:100%;background:rgba(255,255,255,0.25);border-radius:3px;"></div>
+            </div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Combined</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-        import streamlit.components.v1 as components
-        _grades_html = f"""<html><head><style>
-*{{margin:0;padding:0;box-sizing:border-box;}}
-body{{background:transparent;font-family:system-ui,-apple-system,sans-serif;color:#e8e8f0;}}
-.gp-row{{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-left:2px solid transparent;transition:background .1s;}}
-.gp-row:hover{{background:rgba(255,255,255,0.03);}}
-.gp-row.active{{border-left-color:#2DD4BF;background:rgba(45,212,191,0.06);}}
-.gp-row.active .gp-lbl{{color:rgba(255,255,255,0.82);font-weight:500;}}
-.gp-pill{{min-width:38px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}}
-.gp-lbl{{font-size:13px;flex:1;color:rgba(255,255,255,0.38);font-weight:400;line-height:1.3;}}
-.gp-dot{{width:5px;height:5px;border-radius:50%;background:#F87171;flex-shrink:0;}}
-.gp-apply{{width:100%;border-radius:9px;background:#2DD4BF;border:none;padding:13px;font-size:14px;font-weight:800;color:#040f0f;cursor:pointer;letter-spacing:.03em;margin:10px 0 8px;}}
-.gp-apply:hover{{background:#26bfad;}}
-.gp-secondary{{display:flex;justify-content:center;gap:20px;}}
-.gp-skip,.gp-why{{font-size:12px;background:none;border:none;cursor:pointer;}}
-.gp-skip{{color:rgba(255,255,255,0.28);}}
-.gp-why{{color:rgba(45,212,191,0.5);text-decoration:underline;text-underline-offset:2px;}}
-</style></head><body>
-<div style="display:flex;gap:10px;margin-bottom:14px;">
-  <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid #2DD4BF;">
-    <div style="font-size:34px;font-weight:800;color:#2DD4BF;line-height:1;">{algo_score}</div>
-    <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{algo_score}%;height:100%;border-radius:2px;background:#2DD4BF;"></div></div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Algorithm</div>
-  </div>
-  <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid #C49E3C;">
-    <div style="font-size:34px;font-weight:800;color:#C49E3C;line-height:1;">{tyler_score}</div>
-    <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{tyler_score}%;height:100%;border-radius:2px;background:#C49E3C;"></div></div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Tyler Voice</div>
-  </div>
-  <div style="flex:1;border-radius:9px;padding:14px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-top:2px solid rgba(255,255,255,0.18);">
-    <div style="font-size:34px;font-weight:800;color:rgba(255,255,255,0.55);line-height:1;">{combined_score}</div>
-    <div style="height:3px;border-radius:2px;margin-top:8px;background:rgba(255,255,255,0.07);"><div style="width:{combined_score}%;height:100%;border-radius:2px;background:rgba(255,255,255,0.25);"></div></div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;">Combined</div>
-  </div>
-</div>
-<div style="display:flex;min-height:440px;border-top:1px solid rgba(255,255,255,0.05);">
-  <div id="left-list" style="width:220px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.05);padding:8px 0;"></div>
-  <div id="right-panel" style="flex:1;padding:18px 20px;"></div>
-</div>
-<script>
-const cats={_cats_json};
-let active=0;
-function buildLeft(){{let h='';cats.forEach((c,i)=>{{const act=i===active?' active':'';const dot=c.hasFix?'<span class="gp-dot"></span>':'';h+='<div class="gp-row'+act+'" onclick="sel('+i+')">'+'<span class="gp-pill" style="background:'+c.pillBg+';color:'+c.color+';border:1px solid '+c.pillBorder+';">'+c.score+'/10</span>'+'<span class="gp-lbl">'+c.name+'</span>'+dot+'</div>';}});document.getElementById('left-list').innerHTML=h;}}
-function buildRight(i){{const p=cats[i];let fixHtml='';if(p.hasFix){{fixHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#2DD4BF;">Fix</span><span style="flex:1;height:1px;background:rgba(45,212,191,0.2);display:inline-block;"></span></div><div style="border-radius:12px;border:1px solid rgba(45,212,191,0.3);background:rgba(45,212,191,0.08);padding:20px 18px;"><div style="font-size:15px;font-weight:400;color:rgba(255,255,255,0.88);line-height:1.75;letter-spacing:.01em;">'+p.fix+'</div></div><button class="gp-apply">Apply this fix</button><div class="gp-secondary"><button class="gp-skip">Skip</button><button class="gp-why">Why this change?</button></div>';}}else{{fixHtml='<div style="border-radius:10px;border:1px dashed rgba(45,212,191,0.15);padding:18px;text-align:center;margin-top:12px;"><div style="font-size:18px;font-weight:800;color:#2DD4BF;margin-bottom:3px;">&#10003;</div><div style="font-size:11px;color:rgba(255,255,255,0.25);">No changes needed</div></div>';}}let ratHtml='';if(p.rationale){{ratHtml='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin:10px 0 4px;">Why This Score</div><div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.65;margin-bottom:20px;">'+p.rationale+'</div>';}}document.getElementById('right-panel').innerHTML='<div style="font-size:17px;font-weight:700;color:rgba(255,255,255,0.82);margin-bottom:12px;">'+p.name+'</div><div style="display:flex;align-items:baseline;gap:2px;margin-bottom:18px;"><span style="font-size:40px;font-weight:800;color:'+p.color+';line-height:1;">'+p.score+'</span><span style="font-size:16px;color:rgba(255,255,255,0.2);">/10</span><div style="flex:1;margin-left:10px;"><div style="height:4px;background:rgba(255,255,255,0.07);border-radius:2px;"><div style="width:'+p.pct+'%;height:100%;border-radius:2px;background:'+p.color+';"></div></div></div></div>'+ratHtml+fixHtml;}}
-function sel(i){{active=i;buildLeft();buildRight(i);}}
-buildLeft();buildRight(0);
-</script></body></html>"""
-        components.html(_grades_html, height=620, scrolling=False)
+        # ── TWO-COLUMN BODY ──
+        _left_col, _right_col = st.columns([1, 3])
 
-        # Make All Changes button (Streamlit — needs session state)
-        _has_fixes = any(g.get("fix", "") and g.get("fix", "").lower() != "no changes needed" for g in grades)
-        if _has_fixes:
-            if st.button("Make All Changes", key="ci_fix_all", use_container_width=True, type="primary"):
+        # ── LEFT LIST (pure st.button — no overlays) ──
+        with _left_col:
+            for i, _g in enumerate(grades):
+                _gname = _g.get("name", "")
+                _gscore = _g.get("score", 0)
+                _gfix = _g.get("fix", "")
+                _is_active = (i == sel_idx)
+                _has_suggestion = (_gscore <= 6 or bool(_gfix))
+                _is_accepted = (i in accepted)
+
+                _pill = "✓" if _is_accepted else f"{_gscore}/10"
+                _dot = " ●" if (_has_suggestion and not _is_accepted) else ""
+                _label = f"{_pill}  {_gname}{_dot}"
+
+                st.button(_label, key=f"ci_gsel_{i}", use_container_width=True,
+                         type="primary" if _is_active else "secondary",
+                         on_click=lambda idx=i: st.session_state.update({"ci_grade_selected": idx}))
+
+        # ── RIGHT PANEL ──
+        with _right_col:
+            if grades and 0 <= sel_idx < len(grades):
+                _sg = grades[sel_idx]
+                _sname = _sg.get("name", "")
+                _sscore = _sg.get("score", 0)
+                _sdetail = _sg.get("detail", "")
+                _sfix = _sg.get("fix", "")
+                _sbg, _stx = _pill_color(_sscore)
+                _is_accepted = (sel_idx in accepted)
+                _is_skipped = (sel_idx in skipped)
+
+                # Category header
+                st.markdown(f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:4px;">{_sname}</div>', unsafe_allow_html=True)
+
+                # Large score + progress bar
+                st.markdown(f"""<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:4px;">
+                  <span style="font-size:36px;font-weight:800;color:{_stx};line-height:1;">{_sscore}</span>
+                  <span style="font-size:12px;color:rgba(255,255,255,0.25);">/10</span>
+                  <div style="flex:1;margin-left:10px;">
+                    <div style="height:4px;background:{_sbg};border-radius:2px;">
+                      <div style="width:{_sscore * 10}%;height:100%;background:{_stx};border-radius:2px;"></div>
+                    </div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+                # WHY THIS SCORE — between score and fix
+                if _sdetail:
+                    st.markdown(
+                        f'<div style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.22);font-weight:600;margin:10px 0 4px;">Why This Score</div>'
+                        f'<div style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.65;margin-bottom:14px;">{_sdetail}</div>', unsafe_allow_html=True)
+
+                # FIX section
+                if _sfix and _sfix.lower() != "no changes needed":
+                    # FIX label with seafoam line
+                    st.markdown('<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                                '<span style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:#2DD4BF;font-weight:700;">Fix</span>'
+                                '<div style="flex:1;height:1px;background:rgba(45,212,191,0.15);"></div>'
+                                '</div>', unsafe_allow_html=True)
+
+                    _card_opacity = "0.3" if _is_skipped else "1"
+                    _check_html = '<span style="color:#2DD4BF;font-weight:800;font-size:16px;margin-right:6px;">✓</span>' if _is_accepted else ''
+
+                    # Suggestion card with background
+                    st.markdown(
+                        f'<div style="border-radius:12px;background:rgba(45,212,191,0.07);border:1px solid rgba(45,212,191,0.22);padding:16px 18px;opacity:{_card_opacity};">'
+                        f'{_check_html}'
+                        f'<span style="font-size:14px;color:rgba(255,255,255,0.88);font-weight:400;line-height:1.75;letter-spacing:0.01em;">{_sfix}</span>'
+                        f'</div>', unsafe_allow_html=True)
+
+                    # Apply + Skip buttons
+                    if not _is_accepted and not _is_skipped:
+                        if st.button("Apply this fix", key=f"ci_gapply_{sel_idx}", use_container_width=True, type="primary"):
+                            accepted.add(sel_idx)
+                            st.session_state["ci_grade_accepted"] = accepted
+                        if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
+                            skipped.add(sel_idx)
+                            st.session_state["ci_grade_skipped"] = skipped
+                    elif _is_accepted:
+                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Queued for application</div>', unsafe_allow_html=True)
+
+                else:
+                    # No fix needed
+                    st.markdown('<div style="border:1px dashed rgba(45,212,191,0.15);border-radius:12px;padding:20px;text-align:center;margin-top:12px;">'
+                                '<div style="font-size:18px;font-weight:800;color:#2DD4BF;margin-bottom:4px;">✓</div>'
+                                '<div style="font-size:11px;color:rgba(255,255,255,0.3);">No changes needed</div>'
+                                '</div>', unsafe_allow_html=True)
+
+        # ── BOTTOM CTA BAR ──
+        st.markdown('<div style="height:1px;background:rgba(255,255,255,0.04);margin:16px 0 12px;"></div>', unsafe_allow_html=True)
+        _accepted_fixes = [grades[i] for i in accepted if i < len(grades) and grades[i].get("fix", "")]
+        _pending_count = sum(1 for i, g in enumerate(grades) if g.get("fix", "") and g.get("fix", "").lower() != "no changes needed" and i not in accepted and i not in skipped)
+        if _accepted_fixes or _pending_count > 0:
+            if st.button("⚡ Make All Changes", key="ci_fix_all", use_container_width=True, type="primary"):
                 with st.spinner("Applying all fixes..."):
-                    _apply_fix_all()
+                    _apply_fix(None, clear_all=True)
+            _sub_text = f"{len(_accepted_fixes)} fix{'es' if len(_accepted_fixes) != 1 else ''} queued" if _accepted_fixes else "Applies all accepted suggestions at once"
+            st.markdown(f'<div style="text-align:center;font-size:10px;color:rgba(255,255,255,0.25);margin-top:-4px;">{_sub_text}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_result") or st.session_state.get("ci_repurposed"):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
