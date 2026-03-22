@@ -1994,6 +1994,39 @@ RULES:
 - 2-3 supporting images placed between sections
 - End with debate invitation to drive replies"""
 
+    def _parse_options_json(raw):
+        """Parse options JSON that may contain literal newlines inside string values."""
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        # Try direct parse first
+        try:
+            return json.loads(clean)
+        except Exception:
+            pass
+        # Fix literal newlines inside JSON strings char-by-char
+        try:
+            parts = []
+            in_string = False
+            i = 0
+            while i < len(clean):
+                c = clean[i]
+                if c == '\\' and in_string:
+                    parts.append(c)
+                    parts.append(clean[i + 1] if i + 1 < len(clean) else '')
+                    i += 2
+                    continue
+                if c == '"':
+                    in_string = not in_string
+                if c == '\n' and in_string:
+                    parts.append('\\n')
+                else:
+                    parts.append(c)
+                i += 1
+            return json.loads(''.join(parts))
+        except Exception:
+            return None
+
     result = None
 
     _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
@@ -2035,18 +2068,15 @@ Return ONLY this JSON, no other text:
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
             raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                banger_data = json.loads(raw_clean)
+            banger_data = _parse_options_json(raw)
+            if banger_data and banger_data.get("option1") and banger_data.get("option2"):
                 st.session_state["ci_banger_data"] = banger_data
                 _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 result = raw
 
     elif action == "grades" and tweet_text.strip():
@@ -2128,18 +2158,15 @@ Return ONLY this JSON, no other text:
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
             raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                build_data = json.loads(raw_clean)
+            build_data = _parse_options_json(raw)
+            if build_data and build_data.get("option1") and build_data.get("option2"):
                 st.session_state["ci_banger_data"] = build_data
                 _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
@@ -2171,18 +2198,15 @@ Return ONLY this JSON, no other text:
   "recommendation": "1 or 2 — one sentence on why"
 }}"""
             raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                rw_data = json.loads(raw_clean)
+            rw_data = _parse_options_json(raw)
+            if rw_data and rw_data.get("option1") and rw_data.get("option2"):
                 st.session_state["ci_banger_data"] = rw_data
                 _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
