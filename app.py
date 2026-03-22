@@ -2026,12 +2026,30 @@ Rules:
 - Hook & Pattern Breakers (first line stops the scroll)
 {_char_rule}
 
-Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=300)
-            if raw.strip():
-                result = raw.strip()
-            else:
-                result = "No output — try again"
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "which top tweet pattern this is modeled after",
+  "option2": "full tweet text here",
+  "option2_pattern": "which top tweet pattern this is modeled after",
+  "option3": "full tweet text here",
+  "option3_pattern": "which top tweet pattern this is modeled after",
+  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+}}"""
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                banger_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = banger_data
+                _ai_cache[_cache_key] = banger_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                result = raw
 
     elif action == "grades" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
@@ -2087,28 +2105,48 @@ Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet.
+            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
 {format_mod}
 
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+
 Rules:
 - Strong hook — first line stops the scroll
 - No hashtags, no emojis
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
 
-Return ONLY the tweet text. No explanation, no quotes, no JSON."""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=300)
-            if raw.strip():
-                st.session_state["ci_result"] = raw.strip()
-                _ai_cache[_cache_key] = raw.strip()
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle/structure this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "recommendation": "Which option to post and exactly why"
+}}"""
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                build_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = build_data
+                _ai_cache[_cache_key] = build_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_result"] = "No output — try again"
 
     elif action == "rewrite" and tweet_text.strip():
         if not force_regen and _cache_key in _ai_cache:
@@ -2117,7 +2155,7 @@ Return ONLY the tweet text. No explanation, no quotes, no JSON."""
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Someone else wrote this tweet. Write one completely NEW tweet on the same subject in Tyler's voice — do NOT copy any original phrasing.
+            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
@@ -2125,18 +2163,35 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 
 - Strong hook in the first line
 - Invites engagement/replies
-- No hashtags, no emojis
+- No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
-Return ONLY the tweet text. No explanation, no quotes, no JSON."""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=300)
-            if raw.strip():
-                st.session_state["ci_repurposed"] = raw.strip()
-                _ai_cache[_cache_key] = raw.strip()
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "recommendation": "Which option to post and why"
+}}"""
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                rw_data = json.loads(raw_clean)
+                st.session_state["ci_banger_data"] = rw_data
+                _ai_cache[_cache_key] = rw_data
+                for _i in [1, 2, 3]:
+                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
+                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
+            except Exception:
+                st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_repurposed"] = "No output — try again"
 
     if result:
         st.session_state["ci_result"] = result
