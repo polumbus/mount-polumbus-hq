@@ -249,11 +249,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
         elif self.path == "/call":
             prompt = body.get("prompt", "")
             system = body.get("system", "")
+            model = body.get("model", "claude-sonnet-4-6")
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
             try:
                 clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
                 result = subprocess.run(
-                    [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
+                    [CLAUDE_CLI, "-p", "--model", model],
                     input=full_prompt, capture_output=True, text=True, timeout=120, env=clean_env,
                 )
                 if result.returncode == 0 and result.stdout.strip():

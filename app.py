@@ -2066,7 +2066,7 @@ Return ONLY valid JSON:
     {{"name": "Voice Match", "score": 0, "detail": "...", "fix": "exact word or phrase to change"}}
 ]
 }}"""
-            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=800, model="claude-haiku-4-5-20251001")
+            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=800)
             try:
                 clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
                 json_match = re.search(r'\{.*\}', clean, re.DOTALL)
