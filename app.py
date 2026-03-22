@@ -961,8 +961,11 @@ def _get_oauth_token_cloud() -> str:
         headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        return ""
     access_token = data.get("access_token") or data.get("accessToken", "")
     expires_in = data.get("expires_in", 3600)
     if access_token:
