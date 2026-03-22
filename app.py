@@ -2032,11 +2032,9 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after",
-  "option3": "full tweet text here",
-  "option3_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2112,7 +2110,7 @@ CONCEPT/ANGLE:
 
 {format_mod}
 
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+TASK: Write 2 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -2126,12 +2124,9 @@ Return ONLY this JSON, no other text:
   "option1": "full tweet text here",
   "option1_pattern": "angle/structure this version takes",
   "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
-  "recommendation": "Which option to post and exactly why"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2171,12 +2166,9 @@ Return ONLY this JSON, no other text:
   "option1": "full tweet text here",
   "option1_pattern": "angle this version takes",
   "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle this version takes",
-  "recommendation": "Which option to post and why"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=550)
             try:
                 raw_clean = raw.strip()
                 if raw_clean.startswith("```"):
@@ -2492,10 +2484,32 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
+        # Parse recommended option number (e.g. "1 or 2 — ..." → 1)
+        _rec_raw = bd.get("recommendation", "")
+        _rec_num = 1
+        _rec_reason = ""
+        if _rec_raw:
+            import re as _re
+            _m = _re.match(r'^\s*([12])', _rec_raw)
+            if _m:
+                _rec_num = int(_m.group(1))
+            _dash = _rec_raw.find("—")
+            _rec_reason = _rec_raw[_dash+1:].strip() if _dash != -1 else _rec_raw
+        # Auto-apply recommended option to ci_text on first open
+        _auto_key = f"ci_banger_auto_{id(bd)}"
+        if not st.session_state.get(_auto_key):
+            _best_text = bd.get(f"option{_rec_num}", bd.get("option1", ""))
+            if _best_text:
+                st.session_state["ci_text"] = _best_text
+            st.session_state[_auto_key] = True
+
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
+            _is_pick = (ti + 1 == _rec_num)
+            _label = f'OPTION {ti + 1} {"· AI PICK" if _is_pick else ""}'
+            _label_color = "#2DD4BF" if _is_pick else "#666688"
+            st.markdown(f'''<div style="font-size:11px;color:{_label_color};font-weight:700;letter-spacing:2px;margin:20px 0 4px;">{_label}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
@@ -2512,9 +2526,8 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
-        if bd.get("recommendation"):
-            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
-            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
+        if _rec_reason:
+            st.markdown(f'''<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:16px;padding:10px 14px;border-left:2px solid rgba(45,212,191,0.3);">{_rec_reason}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
@@ -2558,12 +2571,12 @@ IMAGE RECOMMENDATION:
         _grades_html = f"""<html><head><style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
 body{{background:transparent;font-family:system-ui,-apple-system,sans-serif;color:#e8e8f0;}}
-.gp-row{{display:flex;align-items:center;gap:9px;padding:11px 14px;cursor:pointer;border-left:2px solid transparent;transition:background .1s;}}
+.gp-row{{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-left:2px solid transparent;transition:background .1s;}}
 .gp-row:hover{{background:rgba(255,255,255,0.03);}}
 .gp-row.active{{border-left-color:#2DD4BF;background:rgba(45,212,191,0.06);}}
 .gp-row.active .gp-lbl{{color:rgba(255,255,255,0.82);font-weight:500;}}
-.gp-pill{{min-width:34px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}}
-.gp-lbl{{font-size:11px;flex:1;color:rgba(255,255,255,0.38);font-weight:400;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+.gp-pill{{min-width:38px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}}
+.gp-lbl{{font-size:12px;flex:1;color:rgba(255,255,255,0.38);font-weight:400;line-height:1.3;}}
 .gp-dot{{width:5px;height:5px;border-radius:50%;background:#F87171;flex-shrink:0;}}
 .gp-apply{{width:100%;border-radius:9px;background:#2DD4BF;border:none;padding:13px;font-size:13px;font-weight:800;color:#040f0f;cursor:pointer;letter-spacing:.03em;margin:10px 0 8px;}}
 .gp-apply:hover{{background:#26bfad;}}
@@ -2590,8 +2603,8 @@ body{{background:transparent;font-family:system-ui,-apple-system,sans-serif;colo
   </div>
 </div>
 <div style="display:flex;min-height:440px;border-top:1px solid rgba(255,255,255,0.05);">
-  <div id="left-list" style="width:185px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.05);padding:8px 0;"></div>
-  <div id="right-panel" style="flex:1;padding:20px 22px;"></div>
+  <div id="left-list" style="width:220px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.05);padding:8px 0;"></div>
+  <div id="right-panel" style="flex:1;padding:18px 20px;"></div>
 </div>
 <script>
 const cats={_cats_json};
