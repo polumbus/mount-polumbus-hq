@@ -435,8 +435,8 @@ def get_voice_context():
     if not tweets:
         return TYLER_CONTEXT
 
-    # Get top 15 tweets by engagement as voice examples
-    top = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:15]
+    # Get top 8 tweets by engagement as voice examples
+    top = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:8]
     examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
 
     return TYLER_CONTEXT + f"""
@@ -649,9 +649,7 @@ def build_patterns_context(patterns, fmt=""):
         top_pool = patterns.get("top_examples", [])
         pool_label = "Top Performing Tweets"
 
-    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:4]])
-    bottom_ex = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes)' for ex in patterns.get("bottom_examples", [])[:5]])
-    reply_ex  = "\n".join([f'  - "{ex["text"][:120]}" ({ex["replies"]} replies, {ex["likes"]} likes)' for ex in patterns.get("top_reply_examples", [])[:5]])
+    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:3]])
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
     opt_range = patterns.get("optimal_char_range", (0, 280))
 
@@ -668,20 +666,8 @@ Style Patterns (top performers):
 - Average {patterns.get("top_linebreaks_avg", 0)} line breaks per top tweet
 - Common first words in top tweets: {first_words}
 
-Engagement Averages:
-- Average likes: {patterns.get("avg_likes", 0)}
-- Average RTs: {patterns.get("avg_rts", 0)}
-- Average replies: {patterns.get("avg_replies", 0)}
-- Average views: {patterns.get("avg_views", 0)}
-
 {pool_label}:
 {top_ex}
-
-Bottom 5 Performing Tweets (avoid these patterns):
-{bottom_ex}
-
-Top Reply-Getters (conversation starters):
-{reply_ex}
 """
 
 
@@ -759,7 +745,7 @@ def _get_access_token_from_gist(gist_id: str, github_pat: str):
             "X-GitHub-Api-Version": "2022-11-28",
         }
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=5) as resp:
         data = json.loads(resp.read())
     content = data["files"]["hq_token.json"]["content"]
     token_data = json.loads(content)
@@ -2131,13 +2117,10 @@ Return ONLY this JSON, no other text:
   "option1": "full tweet text here",
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
-  "option2_pattern": "which top tweet pattern this is modeled after",
-  "option3": "full tweet text here",
-  "option3_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+  "option2_pattern": "which top tweet pattern this is modeled after"
 }}"""
         raw = _collect_stream(banger_prompt, system=get_system_for_voice(voice, voice_mod),
-                               max_tokens=800, placeholder=_stream_ph)
+                               max_tokens=500, placeholder=_stream_ph)
         _stream_ph.empty()
         try:
             raw_clean = raw.strip()
@@ -2146,7 +2129,7 @@ Return ONLY this JSON, no other text:
             banger_data = json.loads(raw_clean)
             st.session_state["ci_banger_data"] = banger_data
             _ai_cache[_cache_key] = banger_data
-            for _i in [1, 2, 3]:
+            for _i in [1, 2]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
             for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                 st.session_state.pop(_k, None)
@@ -2606,7 +2589,7 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
             st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
@@ -2626,9 +2609,6 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
-        if bd.get("recommendation"):
-            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
-            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
@@ -2964,7 +2944,7 @@ def page_compose_ideas():
 
     # ── Modal triggers — driven by one-shot session state, never by button return values ──
     def _clear_banger():
-        for _k in ["ci_banger_data"] + [f"ci_banger_opt_{i}" for i in [1, 2, 3]]:
+        for _k in ["ci_banger_data"] + [f"ci_banger_opt_{i}" for i in [1, 2]]:
             st.session_state.pop(_k, None)
 
     # _pending_redo comes from modal Redo button (already popped above)
@@ -3461,7 +3441,7 @@ def _load_tweet_history_gist() -> list:
         return st.session_state["_tweet_history_cache"]
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=15)
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=5)
         file_meta = resp.json().get("files", {}).get("hq_tweet_history.json", {})
         if file_meta:
             # Always use raw_url — Gist API truncates files over ~1MB in content field
@@ -3498,7 +3478,7 @@ def _save_tweet_history_gist(tweets: list):
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(slimmed)}}})
-        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=15)
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=5)
     except Exception:
         pass
 
