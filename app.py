@@ -935,145 +935,6 @@ def _get_oauth_token() -> str:
         return ""
 
 
-# Module-level token cache — thread-safe, no st.session_state dependency
-_OAUTH_CACHE = {"token": "", "exp": 0.0}
-
-def _get_oauth_token_cloud() -> str:
-    """Get OAuth access token, persisting rotating tokens to Gist so they never go stale."""
-    import urllib.request
-    global _OAUTH_CACHE
-    if _OAUTH_CACHE["token"] and time.time() < _OAUTH_CACHE["exp"] - 300:
-        return _OAUTH_CACHE["token"]
-
-    # Load stored tokens from Gist (self-updating after each refresh)
-    gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-    try:
-        pat = st.secrets.get("GITHUB_PAT", "")
-    except Exception:
-        pat = ""
-
-    stored_access = ""
-    stored_refresh = ""
-    stored_exp = 0.0
-    if pat:
-        try:
-            req = urllib.request.Request(
-                f"https://api.github.com/gists/{gist_id}",
-                headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
-            )
-            with urllib.request.urlopen(req, timeout=10) as r:
-                gdata = json.loads(r.read())
-            if "hq_claude_creds.json" in gdata.get("files", {}):
-                creds = json.loads(gdata["files"]["hq_claude_creds.json"]["content"])
-                stored_access = creds.get("access_token", "")
-                stored_refresh = creds.get("refresh_token", "")
-                stored_exp = creds.get("expires_at", 0.0)
-        except Exception:
-            pass
-
-    # Use stored access token if still valid
-    if stored_access and time.time() < stored_exp - 300:
-        _OAUTH_CACHE["token"] = stored_access
-        _OAUTH_CACHE["exp"] = stored_exp
-        return stored_access
-
-    # Need to refresh — use stored refresh token, fall back to secret
-    refresh_token = stored_refresh
-    if not refresh_token:
-        try:
-            refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
-        except Exception:
-            refresh_token = ""
-    if not refresh_token:
-        return ""
-
-    body = json.dumps({
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-        "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-    }).encode()
-    req = urllib.request.Request(
-        "https://platform.claude.com/v1/oauth/token",
-        data=body,
-        headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-    except Exception:
-        return ""
-
-    access_token = data.get("access_token") or data.get("accessToken", "")
-    new_refresh = data.get("refresh_token") or data.get("refreshToken", refresh_token)
-    expires_in = data.get("expires_in", 3600)
-    expires_at = time.time() + expires_in
-
-    if access_token:
-        _OAUTH_CACHE["token"] = access_token
-        _OAUTH_CACHE["exp"] = expires_at
-        # Persist new tokens to Gist so next refresh works
-        if pat:
-            try:
-                creds_payload = json.dumps({
-                    "access_token": access_token,
-                    "refresh_token": new_refresh,
-                    "expires_at": expires_at,
-                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                })
-                patch = json.dumps({"files": {"hq_claude_creds.json": {"content": creds_payload}}}).encode()
-                patch_req = urllib.request.Request(
-                    f"https://api.github.com/gists/{gist_id}",
-                    data=patch, method="PATCH",
-                    headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json",
-                             "Content-Type": "application/json"},
-                )
-                with urllib.request.urlopen(patch_req, timeout=10):
-                    pass
-            except Exception:
-                pass
-
-    return access_token
-
-
-def _anthropic_api_call(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
-    """Thread-safe direct Anthropic API call with a pre-fetched bearer token."""
-    import urllib.request, urllib.error
-    body = json.dumps({
-        "model": model,
-        "max_tokens": max_tokens,
-        "system": system or "",
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "oauth-2025-04-20",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        raise Exception(f"Anthropic {e.code}: {e.read().decode()[:300]}")
-    if "content" in data and data["content"]:
-        return data["content"][0].get("text", "")
-    raise Exception(f"API error: {data.get('error', data)}")
-
-
-def _call_claude_oauth(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
-    """Call Claude API directly via OAuth — no subprocess, no proxy, fastest path on Streamlit Cloud."""
-    token = _get_oauth_token_cloud() or _get_oauth_token()
-    if not token:
-        raise Exception("No OAuth token available")
-    return _anthropic_api_call(token, prompt, system, max_tokens, model)
-
-
 def _call_claude_direct(prompt: str, system: str, max_tokens: int) -> str:
     """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
     import urllib.request
@@ -1197,13 +1058,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         except Exception:
             pass
 
-    # 2. Direct OAuth API call — no proxy, no subprocess, fastest on Streamlit Cloud
-    try:
-        return _call_claude_oauth(prompt, system or "", max_tokens, model)
-    except Exception:
-        pass
-
-    # 3. Proxy server fallback
+    # 2. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
         return _call_claude_proxy(prompt, system or "", max_tokens, model)
     except Exception:
@@ -2139,32 +1994,6 @@ RULES:
 - 2-3 supporting images placed between sections
 - End with debate invitation to drive replies"""
 
-    def _parse_options_json(raw):
-        """Parse options JSON that may contain literal newlines inside string values."""
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(clean)
-        except Exception:
-            pass
-        # Walk char-by-char: escape literal newlines that appear inside JSON strings
-        try:
-            parts, in_string, i = [], False, 0
-            while i < len(clean):
-                c = clean[i]
-                if c == '\\' and in_string:
-                    parts += [c, clean[i + 1] if i + 1 < len(clean) else '']
-                    i += 2
-                    continue
-                if c == '"':
-                    in_string = not in_string
-                parts.append('\\n' if (c == '\n' and in_string) else c)
-                i += 1
-            return json.loads(''.join(parts))
-        except Exception:
-            return None
-
     result = None
 
     _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
@@ -2184,7 +2013,7 @@ RULES:
             if _char_limit:
                 _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
             _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
-            _base = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
@@ -2197,23 +2026,30 @@ Rules:
 - Hook & Pattern Breakers (first line stops the scroll)
 {_char_rule}
 
-Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
-            _alt = _base + "\n\nTake a COMPLETELY DIFFERENT structural approach than the obvious rewrite — if declarative, try a question; if stat-led, try an observation. Unexpected pattern."
-            _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _base, _sys, 300)
-                _fb = _ex.submit(call_claude, _alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-            if _opt1 and _opt2:
-                banger_data = {"option1": _opt1, "option2": _opt2}
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "which top tweet pattern this is modeled after",
+  "option2": "full tweet text here",
+  "option2_pattern": "which top tweet pattern this is modeled after",
+  "option3": "full tweet text here",
+  "option3_pattern": "which top tweet pattern this is modeled after",
+  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+}}"""
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                banger_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = banger_data
                 _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            else:
-                result = _opt1 or _opt2 or "No output — try again"
+            except Exception:
+                result = raw
 
     elif action == "grades" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
@@ -2269,35 +2105,46 @@ Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _build_base = f"""Tyler has a tweet concept he wants materialized into a finished tweet.
+            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
-CONCEPT: "{tweet_text}"
+CONCEPT/ANGLE:
+\"{tweet_text}\"
 
 {format_mod}
+
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
 - No hashtags, no emojis
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
 
-Return ONLY the tweet text. No explanation, no quotes, no JSON."""
-            _build_alt = _build_base + "\n\nTake a completely different structural angle — if the obvious approach is declarative, try tension/question; if it's a hot take, try a surprising observation."
-            _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _build_base, _sys, 300)
-                _fb = _ex.submit(call_claude, _build_alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-            if _opt1 and _opt2:
-                build_data = {"option1": _opt1, "option2": _opt2}
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle/structure this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "recommendation": "Which option to post and exactly why"
+}}"""
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                build_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = build_data
                 _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_result"] = _opt1 or _opt2 or "No output — try again"
+            except Exception:
+                st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
@@ -2308,34 +2155,41 @@ Return ONLY the tweet text. No explanation, no quotes, no JSON."""
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Repurposing in your voice..."):
-            _rw_base = f"""Someone else wrote this tweet. Write a completely new tweet on the same subject in Tyler's voice — do NOT copy any original phrasing.
+            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
-Original (NOT Tyler's): "{tweet_text}"
+Original tweet (NOT Tyler's): "{tweet_text}"
 
 {format_mod}
 
 - Strong hook in the first line
 - Invites engagement/replies
-- No hashtags, no emojis
+- No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
-Return ONLY the tweet text. No explanation, no quotes, no JSON."""
-            _rw_alt = _rw_base + "\n\nTake a completely different angle from the first version — different structure, different emotional tone, different entry point into the subject."
-            _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _rw_base, _sys, 300)
-                _fb = _ex.submit(call_claude, _rw_alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
-            if _opt1 and _opt2:
-                rw_data = {"option1": _opt1, "option2": _opt2}
+Return ONLY this JSON, no other text:
+{{
+  "option1": "full tweet text here",
+  "option1_pattern": "angle this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "recommendation": "Which option to post and why"
+}}"""
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
+            try:
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                rw_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = rw_data
                 _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_repurposed"] = _opt1 or _opt2 or "No output — try again"
+            except Exception:
+                st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
@@ -2638,14 +2492,12 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        # Option 1 is always the AI pick (prompt A is designed as the best rewrite)
-        opts = [bd.get(f"option{i}", "") for i in [1, 2] if bd.get(f"option{i}")]
-        for ti, opt_text in enumerate(opts):
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            _is_pick = (ti == 0)
-            _label = f'OPTION {ti + 1}{"  ·  AI PICK" if _is_pick else ""}'
-            _label_color = "#2DD4BF" if _is_pick else "#888899"
-            st.markdown(f'''<div style="font-size:11px;color:{_label_color};font-weight:700;letter-spacing:2px;margin:20px 0 4px;">{_label}</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
+            if pattern:
+                st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
             b1, b2 = st.columns(2)
             with b1:
@@ -2660,6 +2512,9 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
+        if bd.get("recommendation"):
+            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
