@@ -935,13 +935,15 @@ def _get_oauth_token() -> str:
         return ""
 
 
+# Module-level token cache — thread-safe, no st.session_state dependency
+_OAUTH_CACHE = {"token": "", "exp": 0.0}
+
 def _get_oauth_token_cloud() -> str:
-    """Get/refresh OAuth access token for Streamlit Cloud using CLAUDE_REFRESH_TOKEN secret."""
+    """Get/refresh OAuth access token — module-level cache works from any thread."""
     import urllib.request
-    cached = st.session_state.get("_oauth_token")
-    cached_exp = st.session_state.get("_oauth_token_exp", 0)
-    if cached and time.time() < cached_exp - 300:
-        return cached
+    global _OAUTH_CACHE
+    if _OAUTH_CACHE["token"] and time.time() < _OAUTH_CACHE["exp"] - 300:
+        return _OAUTH_CACHE["token"]
     try:
         refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
     except Exception:
@@ -961,20 +963,17 @@ def _get_oauth_token_cloud() -> str:
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
-    access_token = data.get("access_token", "")
+    access_token = data.get("access_token") or data.get("accessToken", "")
     expires_in = data.get("expires_in", 3600)
     if access_token:
-        st.session_state["_oauth_token"] = access_token
-        st.session_state["_oauth_token_exp"] = time.time() + expires_in
+        _OAUTH_CACHE["token"] = access_token
+        _OAUTH_CACHE["exp"] = time.time() + expires_in
     return access_token
 
 
-def _call_claude_oauth(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
-    """Call Claude API directly via OAuth — no subprocess, no proxy, fastest path on Streamlit Cloud."""
+def _anthropic_api_call(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
+    """Thread-safe direct Anthropic API call with a pre-fetched bearer token."""
     import urllib.request
-    token = _get_oauth_token_cloud() or _get_oauth_token()
-    if not token:
-        raise Exception("No OAuth token available")
     body = json.dumps({
         "model": model,
         "max_tokens": max_tokens,
@@ -997,6 +996,14 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int, model: str = "
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
     raise Exception(f"API error: {data.get('error', data)}")
+
+
+def _call_claude_oauth(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
+    """Call Claude API directly via OAuth — no subprocess, no proxy, fastest path on Streamlit Cloud."""
+    token = _get_oauth_token_cloud() or _get_oauth_token()
+    if not token:
+        raise Exception("No OAuth token available")
+    return _anthropic_api_call(token, prompt, system, max_tokens, model)
 
 
 def _call_claude_direct(prompt: str, system: str, max_tokens: int) -> str:
@@ -2125,10 +2132,15 @@ Rules:
 Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
             _alt = _base + "\n\nTake a COMPLETELY DIFFERENT structural approach than the obvious rewrite — if declarative, try a question; if stat-led, try an observation. Unexpected pattern."
             _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _base, _sys, 300)
-                _fb = _ex.submit(call_claude, _alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            _tok = _get_oauth_token_cloud() or _get_oauth_token()
+            if _tok:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                    _fa = _ex.submit(_anthropic_api_call, _tok, _base, _sys, 300)
+                    _fb = _ex.submit(_anthropic_api_call, _tok, _alt, _sys, 300)
+                    _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            else:
+                _opt1 = call_claude(_base, _sys, 300)
+                _opt2 = call_claude(_alt, _sys, 300)
             if _opt1 and _opt2:
                 banger_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = banger_data
@@ -2209,10 +2221,15 @@ Rules:
 Return ONLY the tweet text. No explanation, no quotes, no JSON."""
             _build_alt = _build_base + "\n\nTake a completely different structural angle — if the obvious approach is declarative, try tension/question; if it's a hot take, try a surprising observation."
             _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _build_base, _sys, 300)
-                _fb = _ex.submit(call_claude, _build_alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            _tok = _get_oauth_token_cloud() or _get_oauth_token()
+            if _tok:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                    _fa = _ex.submit(_anthropic_api_call, _tok, _build_base, _sys, 300)
+                    _fb = _ex.submit(_anthropic_api_call, _tok, _build_alt, _sys, 300)
+                    _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            else:
+                _opt1 = call_claude(_build_base, _sys, 300)
+                _opt2 = call_claude(_build_alt, _sys, 300)
             if _opt1 and _opt2:
                 build_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = build_data
@@ -2247,10 +2264,15 @@ Original (NOT Tyler's): "{tweet_text}"
 Return ONLY the tweet text. No explanation, no quotes, no JSON."""
             _rw_alt = _rw_base + "\n\nTake a completely different angle from the first version — different structure, different emotional tone, different entry point into the subject."
             _sys = get_system_for_voice(voice, voice_mod)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(call_claude, _rw_base, _sys, 300)
-                _fb = _ex.submit(call_claude, _rw_alt, _sys, 300)
-                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            _tok = _get_oauth_token_cloud() or _get_oauth_token()
+            if _tok:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                    _fa = _ex.submit(_anthropic_api_call, _tok, _rw_base, _sys, 300)
+                    _fb = _ex.submit(_anthropic_api_call, _tok, _rw_alt, _sys, 300)
+                    _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            else:
+                _opt1 = call_claude(_rw_base, _sys, 300)
+                _opt2 = call_claude(_rw_alt, _sys, 300)
             if _opt1 and _opt2:
                 rw_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = rw_data
