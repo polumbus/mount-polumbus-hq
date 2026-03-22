@@ -963,7 +963,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int) -> str:
     raise Exception(f"API error: {data.get('error', data)}")
 
 
-def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
+def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
@@ -974,7 +974,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int) -> str:
     except Exception:
         proxy_key = ""
 
-    body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens}).encode()
+    body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens, "model": model}).encode()
     headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
@@ -1038,7 +1038,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         return False
 
 
-def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
+def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6") -> str:
     if system is None:
         system = get_voice_context()
 
@@ -1048,7 +1048,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
             full_prompt = f"{system}\n\n{prompt}" if system else prompt
             clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             result = subprocess.run(
-                [CLAUDE_CLI, "-p", "--model", "claude-sonnet-4-6"],
+                [CLAUDE_CLI, "-p", "--model", model],
                 input=full_prompt, capture_output=True, text=True, timeout=90, env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -1058,7 +1058,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
 
     # 2. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
-        return _call_claude_proxy(prompt, system or "", max_tokens)
+        return _call_claude_proxy(prompt, system or "", max_tokens, model)
     except Exception:
         pass
 
@@ -2049,26 +2049,24 @@ X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x
 Tweet ({len(tweet_text)} chars): "{tweet_text}"
 Has question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}
 
-Grade these 8 categories (score 1-10). For each, give a specific detail referencing the algorithm weight and a concrete fix (exact words, not general advice).
+Grade these 8 categories (score 1-10). For each, give a 1-sentence detail and a concrete fix (exact words, not general advice).
 
 Return ONLY valid JSON:
 {{
 "algorithm_score": 0-100,
 "tyler_score": 0-100,
 "grades": [
-    {{"name": "Hook Strength", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to first line"}},
-    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact edit to drive replies"}},
-    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact stat or insight to add"}},
-    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact phrasing to sharpen the take"}},
-    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact punctuation or structural edit"}},
-    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
-    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact structural edit to increase read time"}},
-    {{"name": "Voice Match", "score": 0, "detail": "...", "benchmark": "...", "fix": "exact word or phrase to change"}}
-],
-"personal_insights": ["insight 1 with Tyler's data", "insight 2 with Tyler's data"],
-"suggestions": ["improvement 1", "improvement 2", "improvement 3"]
+    {{"name": "Hook Strength", "score": 0, "detail": "...", "fix": "exact edit to first line"}},
+    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "fix": "exact edit to drive replies"}},
+    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "fix": "exact stat or insight to add"}},
+    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "fix": "exact phrasing to sharpen the take"}},
+    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "fix": "exact punctuation or structural edit"}},
+    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
+    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "fix": "exact structural edit to increase read time"}},
+    {{"name": "Voice Match", "score": 0, "detail": "...", "fix": "exact word or phrase to change"}}
+]
 }}"""
-            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=1000)
+            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=800, model="claude-haiku-4-5-20251001")
             try:
                 clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
                 json_match = re.search(r'\{.*\}', clean, re.DOTALL)
@@ -2581,7 +2579,6 @@ IMAGE RECOMMENDATION:
                 _btn_type = "primary" if _is_active else "secondary"
                 if st.button(_btn_label, key=f"ci_gsel_{i}", use_container_width=True, type=_btn_type):
                     st.session_state["ci_grade_selected"] = i
-                    st.rerun()
 
         # ── RIGHT PANEL ──
         with _right_col:
