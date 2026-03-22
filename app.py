@@ -2483,7 +2483,7 @@ IMAGE RECOMMENDATION:
                     v = st.session_state.get(opt_key, opt_text)
                     if v:
                         st.session_state["ci_text"] = v
-                    st.stop()
+                    st.rerun(scope="app")
         if bd.get("recommendation"):
             st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
             st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
@@ -2694,7 +2694,7 @@ IMAGE RECOMMENDATION:
                 v = st.session_state.get(_edit_key, edited)
                 if v:
                     st.session_state["ci_text"] = v
-                st.stop()
+                st.rerun(scope="app")
 
     # ── Bottom action bar ──
     st.divider()
