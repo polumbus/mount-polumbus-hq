@@ -939,27 +939,54 @@ def _get_oauth_token() -> str:
 _OAUTH_CACHE = {"token": "", "exp": 0.0}
 
 def _get_oauth_token_cloud() -> str:
-    """Get OAuth access token — module-level cache works from any thread."""
+    """Get OAuth access token, persisting rotating tokens to Gist so they never go stale."""
     import urllib.request
     global _OAUTH_CACHE
     if _OAUTH_CACHE["token"] and time.time() < _OAUTH_CACHE["exp"] - 300:
         return _OAUTH_CACHE["token"]
-    # Prefer direct access token (no HTTP call, no expiry management needed within a session)
+
+    # Load stored tokens from Gist (self-updating after each refresh)
+    gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
     try:
-        access_token = st.secrets.get("CLAUDE_ACCESS_TOKEN", "")
-        if access_token:
-            _OAUTH_CACHE["token"] = access_token
-            _OAUTH_CACHE["exp"] = time.time() + 3600
-            return access_token
+        pat = st.secrets.get("GITHUB_PAT", "")
     except Exception:
-        pass
-    # Fall back to refresh token flow
-    try:
-        refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
-    except Exception:
-        refresh_token = ""
+        pat = ""
+
+    stored_access = ""
+    stored_refresh = ""
+    stored_exp = 0.0
+    if pat:
+        try:
+            req = urllib.request.Request(
+                f"https://api.github.com/gists/{gist_id}",
+                headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                gdata = json.loads(r.read())
+            if "hq_claude_creds.json" in gdata.get("files", {}):
+                creds = json.loads(gdata["files"]["hq_claude_creds.json"]["content"])
+                stored_access = creds.get("access_token", "")
+                stored_refresh = creds.get("refresh_token", "")
+                stored_exp = creds.get("expires_at", 0.0)
+        except Exception:
+            pass
+
+    # Use stored access token if still valid
+    if stored_access and time.time() < stored_exp - 300:
+        _OAUTH_CACHE["token"] = stored_access
+        _OAUTH_CACHE["exp"] = stored_exp
+        return stored_access
+
+    # Need to refresh — use stored refresh token, fall back to secret
+    refresh_token = stored_refresh
+    if not refresh_token:
+        try:
+            refresh_token = st.secrets.get("CLAUDE_REFRESH_TOKEN", "")
+        except Exception:
+            refresh_token = ""
     if not refresh_token:
         return ""
+
     body = json.dumps({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -976,11 +1003,36 @@ def _get_oauth_token_cloud() -> str:
             data = json.loads(resp.read())
     except Exception:
         return ""
+
     access_token = data.get("access_token") or data.get("accessToken", "")
+    new_refresh = data.get("refresh_token") or data.get("refreshToken", refresh_token)
     expires_in = data.get("expires_in", 3600)
+    expires_at = time.time() + expires_in
+
     if access_token:
         _OAUTH_CACHE["token"] = access_token
-        _OAUTH_CACHE["exp"] = time.time() + expires_in
+        _OAUTH_CACHE["exp"] = expires_at
+        # Persist new tokens to Gist so next refresh works
+        if pat:
+            try:
+                creds_payload = json.dumps({
+                    "access_token": access_token,
+                    "refresh_token": new_refresh,
+                    "expires_at": expires_at,
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
+                patch = json.dumps({"files": {"hq_claude_creds.json": {"content": creds_payload}}}).encode()
+                patch_req = urllib.request.Request(
+                    f"https://api.github.com/gists/{gist_id}",
+                    data=patch, method="PATCH",
+                    headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json",
+                             "Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(patch_req, timeout=10):
+                    pass
+            except Exception:
+                pass
+
     return access_token
 
 
