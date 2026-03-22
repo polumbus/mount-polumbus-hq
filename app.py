@@ -2039,7 +2039,7 @@ RULES:
             if _char_limit:
                 _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
             _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
-            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+            _base = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
@@ -2052,17 +2052,15 @@ Rules:
 - Hook & Pattern Breakers (first line stops the scroll)
 {_char_rule}
 
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "which top tweet pattern this is modeled after",
-  "option2": "full tweet text here",
-  "option2_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "1 or 2 — one sentence on why"
-}}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            banger_data = _parse_options_json(raw)
-            if banger_data and banger_data.get("option1") and banger_data.get("option2"):
+Return ONLY the rewritten tweet text. No explanation, no quotes, no JSON."""
+            _alt = _base + "\n\nTake a COMPLETELY DIFFERENT structural approach than the obvious rewrite — if declarative, try a question; if stat-led, try an observation. Unexpected pattern."
+            _sys = get_system_for_voice(voice, voice_mod)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _base, _sys, 300)
+                _fb = _ex.submit(call_claude, _alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            if _opt1 and _opt2:
+                banger_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = banger_data
                 _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
@@ -2070,7 +2068,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                result = raw
+                result = _opt1 or _opt2 or "No output — try again"
 
     elif action == "grades" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
@@ -2126,33 +2124,27 @@ Return ONLY this JSON, no other text:
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
+            _build_base = f"""Tyler has a tweet concept he wants materialized into a finished tweet.
 
-CONCEPT/ANGLE:
-\"{tweet_text}\"
+CONCEPT: "{tweet_text}"
 
 {format_mod}
-
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
 - No hashtags, no emojis
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
-- Algorithm optimized: strong opinion, relatable, invites engagement
 
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle/structure this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "recommendation": "1 or 2 — one sentence on why"
-}}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            build_data = _parse_options_json(raw)
-            if build_data and build_data.get("option1") and build_data.get("option2"):
+Return ONLY the tweet text. No explanation, no quotes, no JSON."""
+            _build_alt = _build_base + "\n\nTake a completely different structural angle — if the obvious approach is declarative, try tension/question; if it's a hot take, try a surprising observation."
+            _sys = get_system_for_voice(voice, voice_mod)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _build_base, _sys, 300)
+                _fb = _ex.submit(call_claude, _build_alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            if _opt1 and _opt2:
+                build_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = build_data
                 _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
@@ -2160,7 +2152,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                st.session_state["ci_result"] = raw
+                st.session_state["ci_result"] = _opt1 or _opt2 or "No output — try again"
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
@@ -2171,28 +2163,26 @@ Return ONLY this JSON, no other text:
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
+            _rw_base = f"""Someone else wrote this tweet. Write a completely new tweet on the same subject in Tyler's voice — do NOT copy any original phrasing.
 
-Original tweet (NOT Tyler's): "{tweet_text}"
+Original (NOT Tyler's): "{tweet_text}"
 
 {format_mod}
 
 - Strong hook in the first line
 - Invites engagement/replies
-- No hashtags, no emojis, no character count
+- No hashtags, no emojis
 - 7th-9th grade reading level
 
-Return ONLY this JSON, no other text:
-{{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
-  "recommendation": "1 or 2 — one sentence on why"
-}}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
-            rw_data = _parse_options_json(raw)
-            if rw_data and rw_data.get("option1") and rw_data.get("option2"):
+Return ONLY the tweet text. No explanation, no quotes, no JSON."""
+            _rw_alt = _rw_base + "\n\nTake a completely different angle from the first version — different structure, different emotional tone, different entry point into the subject."
+            _sys = get_system_for_voice(voice, voice_mod)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(call_claude, _rw_base, _sys, 300)
+                _fb = _ex.submit(call_claude, _rw_alt, _sys, 300)
+                _opt1, _opt2 = _fa.result().strip(), _fb.result().strip()
+            if _opt1 and _opt2:
+                rw_data = {"option1": _opt1, "option2": _opt2}
                 st.session_state["ci_banger_data"] = rw_data
                 _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
@@ -2200,7 +2190,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                st.session_state["ci_repurposed"] = raw
+                st.session_state["ci_repurposed"] = _opt1 or _opt2 or "No output — try again"
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
 
@@ -2503,26 +2493,14 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        # Parse recommended option number from "1 or 2 — reason" format
-        _rec_raw = bd.get("recommendation", "")
-        _rec_num = 1
-        _rec_reason = ""
-        if _rec_raw:
-            import re as _re
-            _m = _re.match(r'^\s*([12])', _rec_raw)
-            if _m:
-                _rec_num = int(_m.group(1))
-            _dash = _rec_raw.find("—")
-            _rec_reason = _rec_raw[_dash + 1:].strip() if _dash != -1 else _rec_raw
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
-        for ti, (opt_text, pattern) in enumerate(opts):
+        # Option 1 is always the AI pick (prompt A is designed as the best rewrite)
+        opts = [bd.get(f"option{i}", "") for i in [1, 2] if bd.get(f"option{i}")]
+        for ti, opt_text in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            _is_pick = (ti + 1 == _rec_num)
+            _is_pick = (ti == 0)
             _label = f'OPTION {ti + 1}{"  ·  AI PICK" if _is_pick else ""}'
             _label_color = "#2DD4BF" if _is_pick else "#888899"
             st.markdown(f'''<div style="font-size:11px;color:{_label_color};font-weight:700;letter-spacing:2px;margin:20px 0 4px;">{_label}</div>''', unsafe_allow_html=True)
-            if pattern:
-                st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
             b1, b2 = st.columns(2)
             with b1:
