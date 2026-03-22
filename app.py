@@ -2563,59 +2563,23 @@ IMAGE RECOMMENDATION:
         # ── TWO-COLUMN BODY ──
         _left_col, _right_col = st.columns([1, 3])
 
-        # ── LEFT LIST ──
+        # ── LEFT LIST (pure st.button — no overlays) ──
         with _left_col:
-            # CSS: compact invisible buttons + right-panel Apply/Skip styling
-            st.markdown("""<style>
-            [data-testid="stDialog"] [data-testid="column"]:first-child .stButton {
-                position: relative; height: 34px; margin-bottom: 0;
-            }
-            [data-testid="stDialog"] [data-testid="column"]:first-child .stButton button {
-                position: absolute; width: 100%; height: 100%; top: 0; left: 0;
-                opacity: 0; cursor: pointer; z-index: 2; padding: 0; margin: 0;
-                border: none; background: transparent;
-            }
-            [data-testid="stDialog"] [data-testid="column"]:nth-child(2) button[kind="primary"] {
-                background: #2DD4BF !important; color: #040f0f !important;
-                font-weight: 800 !important; border-radius: 9px !important;
-                padding: 11px !important; border: none !important;
-            }
-            [data-testid="stDialog"] [data-testid="column"]:nth-child(2) button[kind="secondary"] {
-                background: transparent !important; border: none !important;
-                color: rgba(255,255,255,0.35) !important; font-size: 11px !important;
-                font-weight: 400 !important; padding: 4px !important;
-                text-decoration: underline !important;
-            }
-            </style>""", unsafe_allow_html=True)
             for i, _g in enumerate(grades):
                 _gname = _g.get("name", "")
                 _gscore = _g.get("score", 0)
                 _gfix = _g.get("fix", "")
-                _pbg, _ptx = _pill_color(_gscore)
                 _is_active = (i == sel_idx)
                 _has_suggestion = (_gscore <= 6 or bool(_gfix))
                 _is_accepted = (i in accepted)
-                _is_skipped = (i in skipped)
 
-                _pill_label = "✓" if _is_accepted else f"{_gscore}/10"
-                _border_l = "2px solid #2DD4BF" if _is_active else "2px solid transparent"
-                _row_bg = "rgba(45,212,191,0.06)" if _is_active else "transparent"
-                _lbl_color = "rgba(255,255,255,0.82)" if _is_active else "rgba(255,255,255,0.42)"
-                _lbl_weight = "600" if _is_active else "400"
-                _dot_html = '<span style="width:5px;height:5px;border-radius:50%;background:#F87171;display:inline-block;margin-left:auto;flex-shrink:0;"></span>' if _has_suggestion and not _is_accepted else ''
-                _opacity = "0.35" if _is_skipped else "1"
+                _pill = "✓" if _is_accepted else f"{_gscore}/10"
+                _dot = " ●" if (_has_suggestion and not _is_accepted) else ""
+                _label = f"{_pill}  {_gname}{_dot}"
 
-                # Hidden button for click
-                if st.button(" ", key=f"ci_gsel_{i}", use_container_width=True):
+                if st.button(_label, key=f"ci_gsel_{i}", use_container_width=True,
+                             type="primary" if _is_active else "secondary"):
                     st.session_state["ci_grade_selected"] = i
-                # Styled row overlaid on the button area
-                st.markdown(
-                    f'<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-left:{_border_l};background:{_row_bg};'
-                    f'border-radius:0 4px 4px 0;margin-top:-34px;height:34px;pointer-events:none;opacity:{_opacity};">'
-                    f'<span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:16px;border-radius:8px;'
-                    f'background:{_pbg};color:{_ptx};font-size:8px;font-weight:700;flex-shrink:0;">{_pill_label}</span>'
-                    f'<span style="font-size:11px;color:{_lbl_color};font-weight:{_lbl_weight};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
-                    f'{_gname}</span>{_dot_html}</div>', unsafe_allow_html=True)
 
         # ── RIGHT PANEL ──
         with _right_col:
@@ -2667,19 +2631,14 @@ IMAGE RECOMMENDATION:
                         f'<span style="font-size:14px;color:rgba(255,255,255,0.88);font-weight:400;line-height:1.75;letter-spacing:0.01em;">{_sfix}</span>'
                         f'</div>', unsafe_allow_html=True)
 
-                    # Apply button — full width
+                    # Apply + Skip buttons
                     if not _is_accepted and not _is_skipped:
                         if st.button("Apply this fix", key=f"ci_gapply_{sel_idx}", use_container_width=True, type="primary"):
                             accepted.add(sel_idx)
                             st.session_state["ci_grade_accepted"] = accepted
-                        # Skip + Why this change? as small text links
-                        _skip_col, _why_col = st.columns(2)
-                        with _skip_col:
-                            if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
-                                skipped.add(sel_idx)
-                                st.session_state["ci_grade_skipped"] = skipped
-                        with _why_col:
-                            st.markdown('<div style="text-align:center;font-size:11px;color:rgba(45,212,191,0.45);padding-top:6px;cursor:pointer;text-decoration:underline;">Why this change?</div>', unsafe_allow_html=True)
+                        if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
+                            skipped.add(sel_idx)
+                            st.session_state["ci_grade_skipped"] = skipped
                     elif _is_accepted:
                         st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Queued for application</div>', unsafe_allow_html=True)
 
