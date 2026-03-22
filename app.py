@@ -1994,6 +1994,32 @@ RULES:
 - 2-3 supporting images placed between sections
 - End with debate invitation to drive replies"""
 
+    def _parse_options_json(raw):
+        """Parse options JSON that may contain literal newlines inside string values."""
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        try:
+            return json.loads(clean)
+        except Exception:
+            pass
+        # Walk char-by-char: escape literal newlines that appear inside JSON strings
+        try:
+            parts, in_string, i = [], False, 0
+            while i < len(clean):
+                c = clean[i]
+                if c == '\\' and in_string:
+                    parts += [c, clean[i + 1] if i + 1 < len(clean) else '']
+                    i += 2
+                    continue
+                if c == '"':
+                    in_string = not in_string
+                parts.append('\\n' if (c == '\n' and in_string) else c)
+                i += 1
+            return json.loads(''.join(parts))
+        except Exception:
+            return None
+
     result = None
 
     _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
@@ -2032,23 +2058,18 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after",
-  "option3": "full tweet text here",
-  "option3_pattern": "which top tweet pattern this is modeled after",
-  "recommendation": "Which option to post and exactly why — reference his patterns and algorithm signals"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                banger_data = json.loads(raw_clean)
+            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
+            banger_data = _parse_options_json(raw)
+            if banger_data and banger_data.get("option1") and banger_data.get("option2"):
                 st.session_state["ci_banger_data"] = banger_data
                 _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 result = raw
 
     elif action == "grades" and tweet_text.strip():
@@ -2127,23 +2148,18 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "angle/structure this version takes",
   "option2": "full tweet text here",
   "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
-  "recommendation": "Which option to post and exactly why"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                build_data = json.loads(raw_clean)
+            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
+            build_data = _parse_options_json(raw)
+            if build_data and build_data.get("option1") and build_data.get("option2"):
                 st.session_state["ci_banger_data"] = build_data
                 _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
@@ -2172,23 +2188,18 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "angle this version takes",
   "option2": "full tweet text here",
   "option2_pattern": "angle this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle this version takes",
-  "recommendation": "Which option to post and why"
+  "recommendation": "1 or 2 — one sentence on why"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=800)
-            try:
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                rw_data = json.loads(raw_clean)
+            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=700)
+            rw_data = _parse_options_json(raw)
+            if rw_data and rw_data.get("option1") and rw_data.get("option2"):
                 st.session_state["ci_banger_data"] = rw_data
                 _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-            except Exception:
+            else:
                 st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                     st.session_state.pop(_k, None)
@@ -2492,10 +2503,24 @@ IMAGE RECOMMENDATION:
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        # Parse recommended option number from "1 or 2 — reason" format
+        _rec_raw = bd.get("recommendation", "")
+        _rec_num = 1
+        _rec_reason = ""
+        if _rec_raw:
+            import re as _re
+            _m = _re.match(r'^\s*([12])', _rec_raw)
+            if _m:
+                _rec_num = int(_m.group(1))
+            _dash = _rec_raw.find("—")
+            _rec_reason = _rec_raw[_dash + 1:].strip() if _dash != -1 else _rec_raw
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
-            st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
+            _is_pick = (ti + 1 == _rec_num)
+            _label = f'OPTION {ti + 1}{"  ·  AI PICK" if _is_pick else ""}'
+            _label_color = "#2DD4BF" if _is_pick else "#888899"
+            st.markdown(f'''<div style="font-size:11px;color:{_label_color};font-weight:700;letter-spacing:2px;margin:20px 0 4px;">{_label}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
@@ -2512,9 +2537,8 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
-        if bd.get("recommendation"):
-            st.markdown('''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:24px 0 8px;">RECOMMENDATION</div>''', unsafe_allow_html=True)
-            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:16px 18px;font-size:13px;color:#c0c0d8;line-height:1.7;">{bd["recommendation"]}</div>''', unsafe_allow_html=True)
+        if _rec_reason:
+            st.markdown(f'''<div style="background:rgba(45,212,191,0.04);border:1px solid rgba(45,212,191,0.15);border-left:3px solid #2DD4BF;border-radius:12px;padding:12px 16px;font-size:12px;color:#a0a0b8;margin-top:16px;">{_rec_reason}</div>''', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
