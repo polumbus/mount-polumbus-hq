@@ -2577,9 +2577,9 @@ IMAGE RECOMMENDATION:
                 _dot = " ●" if (_has_suggestion and not _is_accepted) else ""
                 _label = f"{_pill}  {_gname}{_dot}"
 
-                if st.button(_label, key=f"ci_gsel_{i}", use_container_width=True,
-                             type="primary" if _is_active else "secondary"):
-                    st.session_state["ci_grade_selected"] = i
+                st.button(_label, key=f"ci_gsel_{i}", use_container_width=True,
+                         type="primary" if _is_active else "secondary",
+                         on_click=lambda idx=i: st.session_state.update({"ci_grade_selected": idx}))
 
         # ── RIGHT PANEL ──
         with _right_col:
@@ -2611,7 +2611,7 @@ IMAGE RECOMMENDATION:
                 if _sdetail:
                     st.markdown(
                         f'<div style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.22);font-weight:600;margin:10px 0 4px;">Why This Score</div>'
-                        f'<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px;">{_sdetail}</div>', unsafe_allow_html=True)
+                        f'<div style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.65;margin-bottom:14px;">{_sdetail}</div>', unsafe_allow_html=True)
 
                 # FIX section
                 if _sfix and _sfix.lower() != "no changes needed":
