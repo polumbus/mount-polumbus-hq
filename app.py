@@ -1742,7 +1742,7 @@ _FORMAT_GUIDES = {
 # ═══════════════════════════════════════════════════════════════════════════
 # CREATOR STUDIO — AI RUNNER (called BEFORE dialog opens)
 # ═══════════════════════════════════════════════════════════════════════════
-def _run_ci_ai(action, tweet_text, fmt, voice):
+def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
     """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
     if action == "preview":
         return
@@ -1996,7 +1996,15 @@ RULES:
 
     result = None
 
+    _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
+    _cache_key = hashlib.md5(f"{action}|{tweet_text.strip()}|{fmt}|{voice}".encode()).hexdigest()
+
     if action == "banger" and tweet_text.strip():
+        if not force_regen and _cache_key in _ai_cache:
+            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
+            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
@@ -2035,6 +2043,7 @@ Return ONLY this JSON, no other text:
                     raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                 banger_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = banger_data
+                _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
@@ -2090,6 +2099,11 @@ Return ONLY this JSON, no other text:
                     result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip():
+        if not force_regen and _cache_key in _ai_cache:
+            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
+            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
@@ -2124,6 +2138,7 @@ Return ONLY this JSON, no other text:
                     raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                 build_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = build_data
+                _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -2134,6 +2149,11 @@ Return ONLY this JSON, no other text:
                     st.session_state.pop(_k, None)
 
     elif action == "rewrite" and tweet_text.strip():
+        if not force_regen and _cache_key in _ai_cache:
+            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
+            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            return
         with st.spinner("Repurposing in your voice..."):
             repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
@@ -2163,6 +2183,7 @@ Return ONLY this JSON, no other text:
                     raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
                 rw_data = json.loads(raw_clean)
                 st.session_state["ci_banger_data"] = rw_data
+                _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -2802,6 +2823,7 @@ def page_compose_ideas():
                 _last = st.session_state.get("ci_last_action", {})
                 if _last.get("text"):
                     st.session_state["_ci_pending"] = (_last.get("type", "build"), _last.get("text", ""), _last.get("fmt", "Normal Tweet"), _last.get("voice", "Default"))
+                    st.session_state["_ci_pending_is_redo"] = True
             st.button("↺ Redo", key="ci_regen_top", use_container_width=True, on_click=_click_regen)
 
         st.divider()
@@ -2832,10 +2854,15 @@ def page_compose_ideas():
             st.session_state.pop(_k, None)
 
     # _pending_redo comes from modal Redo button (already popped above)
-    _pending = st.session_state.pop("_ci_pending", None) or (
-        (_pending_redo["action"], _pending_redo["tweet_text"], _pending_redo["fmt"], _pending_redo["voice"])
-        if _pending_redo else None
-    )
+    _ci_pending_raw = st.session_state.pop("_ci_pending", None)
+    _is_redo = st.session_state.pop("_ci_pending_is_redo", False)
+    if _ci_pending_raw:
+        _pending = _ci_pending_raw
+    elif _pending_redo:
+        _pending = (_pending_redo["action"], _pending_redo["tweet_text"], _pending_redo["fmt"], _pending_redo["voice"])
+        _is_redo = True
+    else:
+        _pending = None
 
     if _pending:
         _action, _txt, _fmt, _voice = _pending
@@ -2843,7 +2870,7 @@ def page_compose_ideas():
             _clear_banger()
         elif _action == "grades":
             st.session_state.pop("ci_grades", None)
-        _run_ci_ai(_action, _txt, _fmt, _voice)
+        _run_ci_ai(_action, _txt, _fmt, _voice, force_regen=_is_redo)
         _ci_output_panel(_action, _txt, _fmt, _voice)
 
     # ── Bank ──
