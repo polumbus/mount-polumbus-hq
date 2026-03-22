@@ -2655,7 +2655,7 @@ IMAGE RECOMMENDATION:
                     st.markdown(
                         f'<div style="border-radius:12px;background:rgba(45,212,191,0.07);border:1px solid rgba(45,212,191,0.22);padding:16px 18px;opacity:{_card_opacity};">'
                         f'{_check_html}'
-                        f'<span style="font-size:15px;color:#fff;font-weight:600;line-height:1.6;">{_sfix}</span>'
+                        f'<span style="font-size:14px;color:rgba(255,255,255,0.88);font-weight:400;line-height:1.75;letter-spacing:0.01em;">{_sfix}</span>'
                         f'</div>', unsafe_allow_html=True)
 
                     # Apply button — full width
