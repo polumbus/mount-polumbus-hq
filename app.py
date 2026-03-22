@@ -5,6 +5,8 @@ import re
 import os
 import time
 import uuid
+import hashlib
+import concurrent.futures
 import requests
 import tomli
 from datetime import datetime, timedelta
@@ -2042,43 +2044,50 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            grade_prompt = f"""Grade this tweet for X algorithm performance.
-
-X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
-
-Tweet ({len(tweet_text)} chars): "{tweet_text}"
-Has question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}
-
-Grade these 8 categories (score 1-10). For each, give a 1-sentence detail and a concrete fix (exact words, not general advice).
-
-Return ONLY valid JSON:
-{{
-"algorithm_score": 0-100,
-"tyler_score": 0-100,
-"grades": [
-    {{"name": "Hook Strength", "score": 0, "detail": "...", "fix": "exact edit to first line"}},
-    {{"name": "Conversation Catalyst", "score": 0, "detail": "...", "fix": "exact edit to drive replies"}},
-    {{"name": "Bookmark Worthiness", "score": 0, "detail": "...", "fix": "exact stat or insight to add"}},
-    {{"name": "Share/Quote Potential", "score": 0, "detail": "...", "fix": "exact phrasing to sharpen the take"}},
-    {{"name": "Engagement Triggers", "score": 0, "detail": "...", "fix": "exact punctuation or structural edit"}},
-    {{"name": "Algorithm Compliance", "score": 0, "detail": "...", "fix": "exact penalty to remove or 'No changes needed'"}},
-    {{"name": "Dwell Time Potential", "score": 0, "detail": "...", "fix": "exact structural edit to increase read time"}},
-    {{"name": "Voice Match", "score": 0, "detail": "...", "fix": "exact word or phrase to change"}}
-]
-}}"""
-            raw = call_claude(grade_prompt, system=TYLER_CONTEXT, max_tokens=800)
-            try:
-                clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-                json_match = re.search(r'\{.*\}', clean, re.DOTALL)
-                gdata = json.loads(json_match.group()) if json_match else None
-            except Exception:
-                gdata = None
-            if gdata and "grades" in gdata:
-                st.session_state["ci_grades"] = gdata
+            # ── Cache check ──
+            _grade_hash = hashlib.md5(tweet_text.strip().encode()).hexdigest()
+            _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
+            if _cached:
+                st.session_state["ci_grades"] = _cached
                 for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                result = raw
+                # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
+                _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
+                _algo = "X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%."
+                _tweet_info = f'Tweet ({len(tweet_text)} chars): "{tweet_text}"\nHas question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}'
+
+                # ── Two parallel calls of 4 grades each ──
+                _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and tyler_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact edit to first line"}},{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
+                _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}]}}"""
+
+                def _parse(raw):
+                    try:
+                        clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
+                        m = re.search(r'\{.*\}', clean, re.DOTALL)
+                        return json.loads(m.group()) if m else None
+                    except Exception:
+                        return None
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                    _fa = _ex.submit(call_claude, _prompt_a, _grades_system, 400)
+                    _fb = _ex.submit(call_claude, _prompt_b, _grades_system, 400)
+                    _da, _db = _parse(_fa.result()), _parse(_fb.result())
+
+                if _da and _db and "grades" in _da and "grades" in _db:
+                    gdata = {
+                        "algorithm_score": _da.get("algorithm_score", 0),
+                        "tyler_score": _da.get("tyler_score", 0),
+                        "grades": _da["grades"] + _db["grades"],
+                    }
+                    _cache = st.session_state.get("ci_grades_cache", {})
+                    _cache[_grade_hash] = gdata
+                    st.session_state["ci_grades_cache"] = _cache
+                    st.session_state["ci_grades"] = gdata
+                    for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                        st.session_state.pop(_k, None)
+                else:
+                    result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip():
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
