@@ -2813,6 +2813,136 @@ IMAGE RECOMMENDATION:
             st.rerun()
 
 
+@st.dialog("What's Hot in Denver Right Now", width="large")
+def _ci_inspiration_dialog():
+    """Pull last 24h from sports lists + Twitter search → Claude generates tweet angles."""
+    with st.spinner("Mount Polumbus AI is reaching the summit..."):
+        from datetime import timezone as _tz
+        _cutoff = datetime.now(_tz.utc) - timedelta(hours=24)
+
+        # Fetch from Broncos Reporters + Nuggets lists
+        _lists = load_engagement_lists()
+        _sports_list_ids = [
+            _lists.get("Broncos Reporters", {}).get("list_id", ""),
+            _lists.get("Nuggets", {}).get("list_id", ""),
+        ]
+        _list_tweets = []
+        for _lid in _sports_list_ids:
+            if _lid:
+                _raw = fetch_tweets_from_list(_lid, count=100)
+                for _t in _raw:
+                    _ts = _t.get("createdAt", "")
+                    try:
+                        from dateutil import parser as _dtp
+                        _dt = _dtp.parse(_ts)
+                        if _dt.tzinfo is None:
+                            _dt = _dt.replace(tzinfo=_tz.utc)
+                        if _dt >= _cutoff:
+                            _list_tweets.append(_t)
+                    except Exception:
+                        _list_tweets.append(_t)  # include if can't parse
+
+        # Twitter search for breaking Denver sports news (last 24h)
+        _search_tweets = fetch_tweets(
+            "Denver Broncos OR Denver Nuggets OR Avalanche Denver -filter:retweets",
+            count=30
+        )
+
+        # Combine, dedupe by id, take most recent 60
+        _seen = set()
+        _all = []
+        for _t in _list_tweets + _search_tweets:
+            _tid = _t.get("id", _t.get("tweet_id", ""))
+            if _tid and _tid not in _seen:
+                _seen.add(_tid)
+                _all.append(_t)
+
+        if not _all:
+            st.error("Couldn't fetch timeline data. Check Twitter API key.")
+            return
+
+        # Build feed summary for Claude
+        _feed_lines = []
+        for _t in _all[:60]:
+            _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+            _text = _t.get("text", "")
+            _likes = _t.get("likeCount", _t.get("like_count", 0))
+            _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
+            if _text:
+                _feed_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:200]}")
+
+        _feed_str = "\n".join(_feed_lines)
+
+        _inspo_prompt = f"""Tyler Polumbus is a former NFL offensive lineman who tweets about Denver sports (Broncos, Nuggets, Avalanche). He needs tweet ideas based on what is being talked about on his timeline RIGHT NOW.
+
+Here is his live Twitter feed from the last 24 hours (list tweets + Denver sports search):
+
+{_feed_str}
+
+Your job:
+1. Identify the 5-6 most tweetable stories/topics from this feed — real things happening NOW, not old news
+2. For each, write ONE specific tweet angle in Tyler's voice — former player, direct, no fluff, ellipsis signature
+3. The angle should be a TAKE, not a recap. Something that adds perspective, not just repeats the news
+
+Return a JSON array, no other text:
+[
+  {{
+    "topic": "2-4 word topic label",
+    "headline": "one sentence: what actually happened",
+    "angle": "the tweet concept/angle for Tyler to take — 1-2 sentences, rough draft OK",
+    "hook": "the actual opening line he could use"
+  }},
+  ...
+]"""
+
+        _raw = _call_claude_direct(
+            _inspo_prompt,
+            "You are Tyler Polumbus's content strategist. Surface real stories happening right now in Denver sports and give Tyler sharp, specific takes he can own.",
+            max_tokens=1200
+        )
+
+    # Parse response
+    _ideas = []
+    try:
+        _clean = _raw.strip()
+        if _clean.startswith("```"):
+            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        _ideas = json.loads(_clean)
+    except Exception:
+        st.error("Couldn't parse ideas — try again.")
+        st.code(_raw)
+        return
+
+    if not _ideas:
+        st.warning("No ideas generated. Feed may be empty.")
+        return
+
+    st.markdown(
+        f'<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:16px;">'
+        f'Based on {len(_all)} tweets from your lists + Denver sports search · last 24h</div>',
+        unsafe_allow_html=True)
+
+    for _i, _idea in enumerate(_ideas):
+        _topic = _idea.get("topic", "")
+        _headline = _idea.get("headline", "")
+        _angle = _idea.get("angle", "")
+        _hook = _idea.get("hook", "")
+        st.markdown(
+            f'<div style="background:#0d1117;border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
+            f'<div style="font-size:9px;letter-spacing:2px;color:#2DD4BF;font-weight:700;text-transform:uppercase;margin-bottom:4px;">{_topic}</div>'
+            f'<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;">{_headline}</div>'
+            f'<div style="font-size:14px;color:#E6EDF3;font-weight:500;margin-bottom:6px;">{_angle}</div>'
+            f'<div style="font-size:12px;color:#2DD4BF;font-style:italic;margin-bottom:10px;">"{_hook}"</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+        if st.button(f"→ Use This", key=f"inspo_use_{_i}", use_container_width=True):
+            st.session_state["_ci_text_stage"] = _hook if _hook else _angle
+            st.rerun(scope="app")
+
+    if st.button("↺ Regenerate", use_container_width=True, key="inspo_regen"):
+        st.rerun()
+
+
 @st.dialog("Creator Studio", width="large")
 def _ci_output_panel(action, tweet_text, fmt, voice):
     """Thin wrapper — @st.dialog caches this bytecode, but the real logic
@@ -2919,6 +3049,11 @@ def page_compose_ideas():
                     st.session_state["_ci_pending_is_redo"] = True
             st.button("↺ Redo", key="ci_regen_top", use_container_width=True, on_click=_click_regen)
 
+        st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
+        if st.button("🎯 Stuck? What's Hot in Denver Right Now", key="ci_inspiration", use_container_width=True,
+                     help="Pull last 24h from your sports lists and get 5-6 real tweet angles"):
+            st.session_state["_ci_show_inspiration"] = True
+
         st.divider()
         sc_col, sb_col, sp_col = st.columns([2.5, 1, 1])
         with sc_col:
@@ -2965,6 +3100,9 @@ def page_compose_ideas():
             st.session_state.pop("ci_grades", None)
         st.session_state["_ci_force_regen"] = _is_redo
         _ci_output_panel(_action, _txt, _fmt, _voice)
+
+    if st.session_state.pop("_ci_show_inspiration", False):
+        _ci_inspiration_dialog()
 
     # ── Bank ──
     with st.expander("Bank", expanded=False):
