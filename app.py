@@ -649,9 +649,7 @@ def build_patterns_context(patterns, fmt=""):
         top_pool = patterns.get("top_examples", [])
         pool_label = "Top Performing Tweets"
 
-    top_ex    = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes, {ex["rts"]} RTs, {ex["replies"]} replies)' for ex in top_pool[:4]])
-    bottom_ex = "\n".join([f'  - "{ex["text"][:120]}" ({ex["likes"]} likes)' for ex in patterns.get("bottom_examples", [])[:5]])
-    reply_ex  = "\n".join([f'  - "{ex["text"][:120]}" ({ex["replies"]} replies, {ex["likes"]} likes)' for ex in patterns.get("top_reply_examples", [])[:5]])
+    top_ex    = "\n".join([f'  - "{ex["text"][:120]}"' for ex in top_pool[:2]])
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
     opt_range = patterns.get("optimal_char_range", (0, 280))
 
@@ -659,29 +657,16 @@ def build_patterns_context(patterns, fmt=""):
 TYLER'S PERSONAL TWEET BENCHMARKS (from his actual tweet history):
 
 Character Length:
-- Top tweets average {patterns.get("top_avg_chars", 0)} characters
-- Sweet spot: {opt_range[0]}–{opt_range[1]} characters (25th–75th percentile of top performers)
+- Sweet spot: {opt_range[0]}–{opt_range[1]} characters
 
 Style Patterns (top performers):
-- {patterns.get("top_ellipsis_pct", 0)}% use ellipsis (...) vs {patterns.get("bottom_ellipsis_pct", 0)}% in bottom tweets
-- {patterns.get("top_question_pct", 0)}% end with a question vs {patterns.get("bottom_question_pct", 0)}% in bottom tweets
+- {patterns.get("top_ellipsis_pct", 0)}% use ellipsis (...) — his signature
+- {patterns.get("top_question_pct", 0)}% end with a question
 - Average {patterns.get("top_linebreaks_avg", 0)} line breaks per top tweet
-- Common first words in top tweets: {first_words}
-
-Engagement Averages:
-- Average likes: {patterns.get("avg_likes", 0)}
-- Average RTs: {patterns.get("avg_rts", 0)}
-- Average replies: {patterns.get("avg_replies", 0)}
-- Average views: {patterns.get("avg_views", 0)}
+- Common first words: {first_words}
 
 {pool_label}:
 {top_ex}
-
-Bottom 5 Performing Tweets (avoid these patterns):
-{bottom_ex}
-
-Top Reply-Getters (conversation starters):
-{reply_ex}
 """
 
 
@@ -1822,7 +1807,7 @@ Tyler's natural voice — direct, confident, former-player authority. The output
             else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _fp.get("top_examples", [])
         )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:3]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
@@ -2292,7 +2277,7 @@ Tyler's natural voice — direct, confident, former-player authority. The output
             else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _fp.get("top_examples", [])
         )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:3]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
