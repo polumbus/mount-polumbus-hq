@@ -2290,8 +2290,12 @@ Return ONLY this JSON, no other text:
 # CREATOR STUDIO — OUTPUT DIALOG (display-only — AI already ran in _run_ci_ai)
 # ═══════════════════════════════════════════════════════════════════════════
 def _ci_output_panel_impl(action, tweet_text, fmt, voice):
-    """Display AI results from session state. AI runs BEFORE this opens via _run_ci_ai()."""
+    """Display AI results — AI runs here inside the dialog so spinner is visible to user."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
+
+    # Run AI inside the dialog so the spinner/loading message appears in the popup
+    _force_regen = st.session_state.pop("_ci_force_regen", False)
+    _run_ci_ai(action, tweet_text, fmt, voice, force_regen=_force_regen)
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -2826,7 +2830,6 @@ def page_compose_ideas():
         seed = st.session_state.pop("ci_repurpose_seed")
         st.session_state.pop("ci_auto_repurpose", None)
         st.session_state["ci_text"] = seed
-        _run_ci_ai("rewrite", seed, st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
         _ci_output_panel("rewrite", seed, st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
         return
 
@@ -2960,7 +2963,7 @@ def page_compose_ideas():
             _clear_banger()
         elif _action == "grades":
             st.session_state.pop("ci_grades", None)
-        _run_ci_ai(_action, _txt, _fmt, _voice, force_regen=_is_redo)
+        st.session_state["_ci_force_regen"] = _is_redo
         _ci_output_panel(_action, _txt, _fmt, _voice)
 
     # ── Bank ──
@@ -4685,7 +4688,6 @@ def page_reply_guy():
                 st.rerun()
         st.session_state["rg_viral_fmt"] = _viral_fmt
         st.session_state["rg_viral_voice"] = _viral_voice
-        _run_ci_ai("banger", _viral_idea, _viral_fmt, _viral_voice)
         _ci_output_panel("banger", _viral_idea, _viral_fmt, _viral_voice)
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
