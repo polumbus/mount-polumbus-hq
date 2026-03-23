@@ -4249,6 +4249,7 @@ def page_reply_guy():
         progress["count"] = 0
         save_json("reply_progress.json", progress)
     reply_count = progress.get("count", 0)
+    streak = progress.get("streak", 0)
 
     # ── Stats Bar ──
     _sc1, _sc2 = st.columns([3, 1])
@@ -4275,7 +4276,6 @@ def page_reply_guy():
         _dcls = "day-card day-card-active" if _cnt > 0 else "day-card"
         _dcols[6 - _d].markdown(f'<div class="{_dcls}"><div class="day-card-label">{_dlabel}</div><div class="day-card-num">{_cnt}</div></div>', unsafe_allow_html=True)
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-    streak = progress.get("streak", 0)
     _rg_actions = _load_actions_gist()
     replied_tweets = _rg_actions["replied"]
     liked_tweets_global = _rg_actions["liked"]
