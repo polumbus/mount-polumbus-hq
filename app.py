@@ -351,9 +351,9 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 .hq-footer a:hover { opacity: 1; }
 
 /* Day card */
-.day-card { background: #161B22; border: 1px solid rgba(45,212,191,0.08); border-radius: 10px; padding: 10px 4px; text-align: center; }
-.day-card-label { color: #6E7681; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
-.day-card-num { color: #E6EDF3; font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
+.day-card { background: #161B22; border: 1px solid rgba(45,212,191,0.08); border-radius: 7px; padding: 5px 2px; text-align: center; }
+.day-card-label { color: #6E7681; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+.day-card-num { color: #E6EDF3; font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
 .day-card-active .day-card-num { color: #2DD4BF; }
 .day-card-active { border-color: rgba(45,212,191,0.25); border-top: 2px solid #2DD4BF; }
 
@@ -4263,7 +4263,7 @@ def page_reply_guy():
                     f'<div style="width:{_pct}%;height:100%;background:linear-gradient(90deg,#1fb8a8,#2DD4BF);border-radius:3px;transition:width .3s;"></div>'
                     f'</div></div>', unsafe_allow_html=True)
     with _sc2:
-        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card" style="padding:8px 10px;"><div class="stat-num" style="font-size:28px;">{streak}</div><div class="stat-label" style="font-size:9px;letter-spacing:1px;">Streak</div></div>', unsafe_allow_html=True)
     _day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     _hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
     _hist_map[today_str] = reply_count
