@@ -2153,17 +2153,21 @@ Return ONLY this JSON, no other text:
                         return None
 
                 _tok = _get_oauth_token() or _get_access_token()
-                if _tok:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                        _fa = _ex.submit(_call_claude_direct, _prompt_a, _grades_system, 400, "claude-sonnet-4-6", _tok)
-                        _fb = _ex.submit(_call_claude_direct, _prompt_b, _grades_system, 400, "claude-sonnet-4-6", _tok)
+
+                def _grade_call(prompt, tok):
+                    """Try direct OAuth API, fall back to proxy — never raises."""
+                    if tok:
                         try:
-                            _da, _db = _parse(_fa.result()), _parse(_fb.result())
+                            return _call_claude_direct(prompt, _grades_system, 400, _token=tok)
                         except Exception:
-                            _da, _db = None, None
-                else:
-                    _da = _parse(call_claude(_prompt_a, _grades_system, 400))
-                    _db = _parse(call_claude(_prompt_b, _grades_system, 400))
+                            pass
+                    return call_claude(prompt, _grades_system, 400)
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                    _fa = _ex.submit(_grade_call, _prompt_a, _tok)
+                    _fb = _ex.submit(_grade_call, _prompt_b, _tok)
+                    _ra, _rb = _fa.result(), _fb.result()
+                _da, _db = _parse(_ra), _parse(_rb)
 
                 if _da and _db and "grades" in _da and "grades" in _db:
                     gdata = {
