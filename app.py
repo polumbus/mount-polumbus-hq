@@ -2933,18 +2933,18 @@ def _ci_inspiration_dialog():
 {_rss_block}
 
 Your job:
-1. Identify the 6-8 most tweetable moments from ALL of the above — Denver-specific AND national sports moments Tyler can weigh in on (March Madness brackets, NBA, NFL Draft news, etc.)
-2. Prioritize: (a) breaking news from last few hours, (b) things already getting buzz on his timeline, (c) big national moments he has a unique perspective on as a former player
-3. For each, write Tyler's TAKE — not a recap, a perspective. Former player, direct, no hedging, ellipsis signature
+1. Identify the 6-8 most tweetable moments — Denver-specific AND national sports moments Tyler can weigh in on
+2. Prioritize: (a) breaking news from last few hours, (b) things buzzing on his timeline, (c) big national moments he has a unique angle on as a former player
+3. "hook" = the actual first line Tyler would tweet. Direct, no hedging, ellipsis signature, under 200 chars.
+4. "why" = ONE sentence, MAX 12 words. Format: "[Tyler's specific lens]: [one-line angle]". Example: "OL angle: speed threats create 1-on-1s everywhere." This is his NFL/OL credibility hook — punchy, not explanatory.
 
 Return ONLY a JSON array:
 [
   {{
     "topic": "2-4 word label",
-    "source": "twitter" or "espn" or "news",
-    "headline": "what actually happened — one sentence",
-    "angle": "Tyler's take/concept — 1-2 sentences",
-    "hook": "the first line he'd actually tweet"
+    "source": "twitter", "espn", or "news",
+    "hook": "the actual tweet opening line Tyler would use",
+    "why": "OL angle: one tight credibility hook under 12 words."
   }}
 ]"""
 
@@ -2954,7 +2954,7 @@ Return ONLY a JSON array:
         except Exception:
             _raw = call_claude(_inspo_prompt, _inspo_system, max_tokens=1800)
 
-    # ── Parse + display ──
+    # ── Parse ──
     _ideas = []
     try:
         _clean = _raw.strip()
@@ -2962,7 +2962,6 @@ Return ONLY a JSON array:
             _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         _ideas = json.loads(_clean)
     except Exception:
-        # Try extracting JSON array from anywhere in the response
         try:
             _m = re.search(r'\[[\s\S]*\]', _raw)
             if _m:
@@ -2974,48 +2973,54 @@ Return ONLY a JSON array:
         st.code(_raw[:600])
         return
 
-    if not _ideas:
-        st.warning("No ideas generated. Try again.")
-        return
-
-    _source_colors = {"twitter": "#1DA1F2", "espn": "#FF6B35", "news": "#A78BFA"}
+    # ── Header ──
     st.markdown(
-        f'<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:16px;">'
+        f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:3px;">What\'s Hot Right Now</div>'
+        f'<div style="font-size:10px;color:rgba(255,255,255,0.22);margin-bottom:16px;">'
         f'{len(_all_tweets)} timeline tweets · {len(_rss_headlines)} news headlines · last 24h</div>',
         unsafe_allow_html=True)
 
+    # ── Source badge styles ──
+    _badge_styles = {
+        "twitter":  ("rgba(45,212,191,0.1)",  "rgba(45,212,191,0.65)",  "rgba(45,212,191,0.18)",  "TIMELINE"),
+        "espn":     ("rgba(251,191,36,0.1)",   "rgba(251,191,36,0.65)",  "rgba(251,191,36,0.18)",  "ESPN"),
+        "news":     ("rgba(167,139,250,0.1)",  "rgba(167,139,250,0.65)", "rgba(167,139,250,0.18)", "NEWS"),
+    }
+    _badge_default = ("rgba(100,100,120,0.1)", "rgba(200,200,220,0.5)", "rgba(100,100,120,0.2)", "SOURCE")
+
+    # ── Cards ──
     for _i, _idea in enumerate(_ideas):
         _topic = _idea.get("topic", "")
-        _src = _idea.get("source", "twitter").lower()
-        _src_color = _source_colors.get(_src, "#2DD4BF")
-        _src_label = {"twitter": "TIMELINE", "espn": "ESPN", "news": "NEWS"}.get(_src, _src.upper())
-        _headline = _idea.get("headline", "")
-        _angle = _idea.get("angle", "")
-        _hook = _idea.get("hook", "")
+        _src   = _idea.get("source", "twitter").lower()
+        _hook  = _idea.get("hook", "")
+        _why   = _idea.get("why", "")
+        _bg, _fg, _border, _label = _badge_styles.get(_src, _badge_default)
+
         st.markdown(
-            f'<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.08);border-left:3px solid {_src_color};border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
-            f'<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">'
-            f'<span style="font-size:9px;letter-spacing:2px;color:#2DD4BF;font-weight:700;">{_topic}</span>'
-            f'<span style="font-size:8px;letter-spacing:1px;color:{_src_color};font-weight:600;background:rgba(255,255,255,0.05);padding:1px 5px;border-radius:3px;">{_src_label}</span>'
-            f'</div>'
-            f'<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px;">{_headline}</div>'
-            f'<div style="font-size:13px;color:#E6EDF3;margin-bottom:6px;">{_angle}</div>'
-            f'<div style="font-size:13px;color:#2DD4BF;font-style:italic;margin-bottom:10px;">"{_hook}"</div>'
+            f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
+              f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">'
+                f'<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.38);">{_topic}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
+              f'</div>'
+              f'<div style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.7;letter-spacing:0.01em;margin-bottom:8px;">{_hook}</div>'
+              f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:12px;">{_why}</div>'
             f'</div>',
             unsafe_allow_html=True)
-        if st.button("→ Use This", key=f"inspo_use_{_i}", use_container_width=True):
-            v = _hook if _hook else _angle
-            if v:
-                st.session_state["ci_text"] = v
+
+        if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
+            if _hook:
+                st.session_state["ci_text"] = _hook
             st.rerun(scope="app")
 
+        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
+
+    # ── Footer actions ──
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
             st.rerun()
     with _rb2:
-        if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache",
-                     help="Force re-fetch latest tweets and headlines (feed caches for 20 min)"):
+        if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
             st.rerun()
 
