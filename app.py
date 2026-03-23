@@ -4512,13 +4512,16 @@ def page_reply_guy():
         eng_score = likes * 2 + rpl * 3 + rts
         tweet_url = t.get("url", t.get("twitterUrl", f"https://x.com/{acc}/status/{tid}"))
 
-        # Extract media image
-        media_list = t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else [])
+        # Extract media image — extendedEntities.media is the authoritative source
+        _ext = t.get("extendedEntities")
+        media_list = (_ext.get("media", []) if isinstance(_ext, dict) else None) or t.get("media") or []
         img_url = ""
-        if media_list and isinstance(media_list, list):
+        _is_video = False
+        if isinstance(media_list, list):
             for m in media_list:
                 if isinstance(m, dict):
-                    img_url = m.get("mediaUrl", m.get("url", m.get("media_url_https", "")))
+                    _is_video = m.get("type", "photo") in ("video", "animated_gif")
+                    img_url = m.get("media_url_https", "")
                     if img_url:
                         break
 
@@ -4558,6 +4561,8 @@ def page_reply_guy():
                 unsafe_allow_html=True)
             if img_url:
                 st.image(img_url, use_container_width=True)
+                if _is_video:
+                    st.markdown(f'<div style="font-size:11px;color:#888;margin-top:2px;">▶ video — <a href="{tweet_url}" target="_blank" style="color:#2DD4BF;">view on X</a></div>', unsafe_allow_html=True)
         with rc3:
             if st.session_state.get(f"{et_input_key}_p"):
                 st.session_state[et_input_key] = st.session_state.pop(f"{et_input_key}_p")
