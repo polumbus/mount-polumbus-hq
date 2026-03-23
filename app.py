@@ -4233,6 +4233,23 @@ def page_reply_guy():
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
 
+    # --- Load & roll-over progress ---
+    progress = load_json("reply_progress.json", {"today": "", "count": 0, "streak": 0, "history": []})
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if progress.get("today") != today_str:
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        if progress.get("today") == yesterday and progress.get("count", 0) >= 10:
+            progress["streak"] = progress.get("streak", 0) + 1
+        elif progress.get("today") != yesterday:
+            progress["streak"] = 0
+        if progress.get("today"):
+            progress["history"].append({"date": progress["today"], "count": progress.get("count", 0)})
+        progress["history"] = progress["history"][-30:]
+        progress["today"] = today_str
+        progress["count"] = 0
+        save_json("reply_progress.json", progress)
+    reply_count = progress.get("count", 0)
+
     # ── Stats Bar ──
     _sc1, _sc2 = st.columns([3, 1])
     with _sc1:
@@ -4258,23 +4275,6 @@ def page_reply_guy():
         _dcls = "day-card day-card-active" if _cnt > 0 else "day-card"
         _dcols[6 - _d].markdown(f'<div class="{_dcls}"><div class="day-card-label">{_dlabel}</div><div class="day-card-num">{_cnt}</div></div>', unsafe_allow_html=True)
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # --- Load & roll-over progress ---
-    progress = load_json("reply_progress.json", {"today": "", "count": 0, "streak": 0, "history": []})
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    if progress.get("today") != today_str:
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        if progress.get("today") == yesterday and progress.get("count", 0) >= 10:
-            progress["streak"] = progress.get("streak", 0) + 1
-        elif progress.get("today") != yesterday:
-            progress["streak"] = 0
-        if progress.get("today"):
-            progress["history"].append({"date": progress["today"], "count": progress.get("count", 0)})
-        progress["history"] = progress["history"][-30:]
-        progress["today"] = today_str
-        progress["count"] = 0
-        save_json("reply_progress.json", progress)
-    reply_count = progress.get("count", 0)
     streak = progress.get("streak", 0)
     _rg_actions = _load_actions_gist()
     replied_tweets = _rg_actions["replied"]
