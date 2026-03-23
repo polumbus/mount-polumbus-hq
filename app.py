@@ -2833,76 +2833,84 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
         return []
 
 
+@st.cache_data(ttl=1200, show_spinner=False)
+def _fetch_inspiration_feed():
+    """Fetch all lists + Twitter searches + RSS. Cached 20 min — data doesn't change that fast."""
+    import concurrent.futures as _cf
+    from datetime import timezone as _tz
+    _cutoff = datetime.now(_tz.utc) - timedelta(hours=24)
+
+    # Layer 1: ALL Twitter lists in parallel
+    _lists = load_engagement_lists()
+    _all_list_ids = [v.get("list_id", "") for v in _lists.values() if isinstance(v, dict) and v.get("list_id")]
+
+    def _fetch_list(lid):
+        if not lid:
+            return []
+        _raw = fetch_tweets_from_list(lid, count=60)
+        _out = []
+        for _t in _raw:
+            _ts = _t.get("createdAt", "")
+            try:
+                from dateutil import parser as _dtp
+                _dt = _dtp.parse(_ts)
+                if _dt.tzinfo is None:
+                    _dt = _dt.replace(tzinfo=_tz.utc)
+                if _dt >= _cutoff:
+                    _out.append(_t)
+            except Exception:
+                _out.append(_t)
+        return _out
+
+    # Layer 2: Twitter searches
+    _search_queries = [
+        "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
+        "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
+    ]
+
+    # Layer 3: RSS feeds
+    _rss_feeds = [
+        "https://www.espn.com/espn/rss/news",
+        "https://www.espn.com/espn/rss/nfl/news",
+        "https://www.espn.com/espn/rss/nba/news",
+        "https://news.google.com/rss/search?q=sports+news+today&hl=en-US&gl=US&ceid=US:en",
+        "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
+    ]
+
+    # Run ALL fetches in parallel
+    _list_tweets, _search_tweets, _rss_headlines = [], [], []
+    with _cf.ThreadPoolExecutor(max_workers=12) as _ex:
+        _list_futs = [_ex.submit(_fetch_list, lid) for lid in _all_list_ids]
+        _search_futs = [_ex.submit(fetch_tweets, q, 25) for q in _search_queries]
+        _rss_futs = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
+        for _f in _list_futs:
+            try: _list_tweets.extend(_f.result())
+            except Exception: pass
+        for _f in _search_futs:
+            try: _search_tweets.extend(_f.result())
+            except Exception: pass
+        for _f in _rss_futs:
+            try: _rss_headlines.extend(_f.result())
+            except Exception: pass
+
+    # Dedupe tweets
+    _seen = set()
+    _all_tweets = []
+    for _t in _list_tweets + _search_tweets:
+        _tid = _t.get("id", _t.get("tweet_id", ""))
+        if _tid and _tid not in _seen:
+            _seen.add(_tid)
+            _all_tweets.append(_t)
+
+    return _all_tweets, _rss_headlines
+
+
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Pull all lists + Twitter searches + ESPN/Google News RSS → Claude generates tweet angles."""
     with st.spinner("Mount Polumbus AI is reaching the summit..."):
-        import concurrent.futures as _cf
-        from datetime import timezone as _tz
-        _cutoff = datetime.now(_tz.utc) - timedelta(hours=24)
-
-        # ── Layer 1: ALL Twitter lists ──
-        _lists = load_engagement_lists()
-        _list_tweets = []
-        def _fetch_list(lid):
-            if not lid:
-                return []
-            _raw = fetch_tweets_from_list(lid, count=60)
-            _out = []
-            for _t in _raw:
-                _ts = _t.get("createdAt", "")
-                try:
-                    from dateutil import parser as _dtp
-                    _dt = _dtp.parse(_ts)
-                    if _dt.tzinfo is None:
-                        _dt = _dt.replace(tzinfo=_tz.utc)
-                    if _dt >= _cutoff:
-                        _out.append(_t)
-                except Exception:
-                    _out.append(_t)
-            return _out
-
-        _all_list_ids = [v.get("list_id", "") for v in _lists.values() if isinstance(v, dict) and v.get("list_id")]
-        with _cf.ThreadPoolExecutor(max_workers=4) as _ex:
-            for _result in _ex.map(_fetch_list, _all_list_ids):
-                _list_tweets.extend(_result)
-
-        # ── Layer 2: Twitter searches — Denver sports + national moment ──
-        _search_queries = [
-            "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
-            "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
-        ]
-        _search_tweets = []
-        with _cf.ThreadPoolExecutor(max_workers=2) as _ex:
-            _futures = [_ex.submit(fetch_tweets, q, 25) for q in _search_queries]
-            for _f in _futures:
-                _search_tweets.extend(_f.result())
-
-        # ── Layer 3: RSS headlines — ESPN + Google News Sports ──
-        _rss_feeds = [
-            "https://www.espn.com/espn/rss/news",
-            "https://www.espn.com/espn/rss/nfl/news",
-            "https://www.espn.com/espn/rss/nba/news",
-            "https://news.google.com/rss/search?q=sports+news+today&hl=en-US&gl=US&ceid=US:en",
-            "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
-        ]
-        _rss_headlines = []
-        with _cf.ThreadPoolExecutor(max_workers=5) as _ex:
-            _rss_futures = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
-            for _f in _rss_futures:
-                try:
-                    _rss_headlines.extend(_f.result())
-                except Exception:
-                    pass
-
-        # ── Dedupe and build context ──
-        _seen = set()
-        _all_tweets = []
-        for _t in _list_tweets + _search_tweets:
-            _tid = _t.get("id", _t.get("tweet_id", ""))
-            if _tid and _tid not in _seen:
-                _seen.add(_tid)
-                _all_tweets.append(_t)
+        # Feed data cached 20 min — only Claude runs fresh every time
+        _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
         _tweet_lines = []
         for _t in _all_tweets[:35]:
@@ -3001,8 +3009,15 @@ Return ONLY a JSON array:
                 st.session_state["ci_text"] = v
             st.rerun(scope="app")
 
-    if st.button("↺ Regenerate", use_container_width=True, key="inspo_regen"):
-        st.rerun()
+    _rb1, _rb2 = st.columns(2)
+    with _rb1:
+        if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
+            st.rerun()
+    with _rb2:
+        if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache",
+                     help="Force re-fetch latest tweets and headlines (feed caches for 20 min)"):
+            _fetch_inspiration_feed.clear()
+            st.rerun()
 
 
 @st.dialog("Creator Studio", width="large")
