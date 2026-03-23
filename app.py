@@ -4233,6 +4233,32 @@ def page_reply_guy():
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
 
+    # ── Stats Bar ──
+    _sc1, _sc2 = st.columns([3, 1])
+    with _sc1:
+        _pct = min(reply_count / 50 * 100, 100)
+        st.markdown(f'<div style="margin-bottom:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;margin-bottom:5px;">'
+                    f'<span style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(45,212,191,0.75);font-weight:600;">TODAY\'S REPLIES</span>'
+                    f'<span style="font-size:9px;font-weight:700;color:#2DD4BF;">{reply_count} / 50</span></div>'
+                    f'<div style="height:5px;background:rgba(45,212,191,0.1);border-radius:3px;">'
+                    f'<div style="width:{_pct}%;height:100%;background:linear-gradient(90deg,#1fb8a8,#2DD4BF);border-radius:3px;transition:width .3s;"></div>'
+                    f'</div></div>', unsafe_allow_html=True)
+    with _sc2:
+        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
+    _day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    _hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
+    _hist_map[today_str] = reply_count
+    _dcols = st.columns(7)
+    for _d in range(6, -1, -1):
+        _dt = datetime.now() - timedelta(days=_d)
+        _ds = _dt.strftime("%Y-%m-%d")
+        _dlabel = _day_labels[_dt.weekday()]
+        _cnt = _hist_map.get(_ds, 0)
+        _dcls = "day-card day-card-active" if _cnt > 0 else "day-card"
+        _dcols[6 - _d].markdown(f'<div class="{_dcls}"><div class="day-card-label">{_dlabel}</div><div class="day-card-num">{_cnt}</div></div>', unsafe_allow_html=True)
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+
     # --- Load & roll-over progress ---
     progress = load_json("reply_progress.json", {"today": "", "count": 0, "streak": 0, "history": []})
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -4627,40 +4653,6 @@ def page_reply_guy():
                     st.rerun()
 
         st.markdown('<hr style="margin:6px 0;border-color:rgba(255,255,255,0.04);">', unsafe_allow_html=True)
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-    # ── PART 1: Top Stats Bar ──
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        pct = min(reply_count / 50 * 100, 100)
-        st.markdown(f'<div style="margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;margin-bottom:5px;">'
-                    f'<span style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(45,212,191,0.75);font-weight:600;">TODAY\'S REPLIES</span>'
-                    f'<span style="font-size:9px;font-weight:700;color:#2DD4BF;">{reply_count} / 50</span></div>'
-                    f'<div style="height:5px;background:rgba(45,212,191,0.1);border-radius:3px;">'
-                    f'<div style="width:{pct}%;height:100%;background:linear-gradient(90deg,#1fb8a8,#2DD4BF);border-radius:3px;transition:width .3s;"></div>'
-                    f'</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="stat-card"><div class="stat-num">{streak}</div><div class="stat-label">Reply Streak</div></div>', unsafe_allow_html=True)
-    day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
-    hist_map[today_str] = reply_count
-    cols = st.columns(7)
-    for d in range(6, -1, -1):
-        dt = datetime.now() - timedelta(days=d)
-        ds = dt.strftime("%Y-%m-%d")
-        label = day_labels[dt.weekday()]
-        cnt = hist_map.get(ds, 0)
-        active_cls = "day-card day-card-active" if cnt > 0 else "day-card"
-        cols[6 - d].markdown(
-            f'<div class="{active_cls}">'
-            f'<div class="day-card-label">{label}</div>'
-            f'<div class="day-card-num">{cnt}</div>'
-            f'</div>',
-            unsafe_allow_html=True)
-
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # Force rerun if flagged (workaround for st.rerun inside nested columns)
     if st.session_state.pop("rg_force_rerun", False):
