@@ -1807,7 +1807,7 @@ Tyler's natural voice — direct, confident, former-player authority. The output
             else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _fp.get("top_examples", [])
         )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:3]]
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
@@ -2277,7 +2277,7 @@ Tyler's natural voice — direct, confident, former-player authority. The output
             else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _fp.get("top_examples", [])
         )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:3]]
+        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
     format_mod = ""
