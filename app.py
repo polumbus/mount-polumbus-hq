@@ -2905,15 +2905,15 @@ def _ci_inspiration_dialog():
                 _all_tweets.append(_t)
 
         _tweet_lines = []
-        for _t in _all_tweets[:70]:
+        for _t in _all_tweets[:35]:
             _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
             _text = _t.get("text", "")
             _likes = _t.get("likeCount", _t.get("like_count", 0))
             _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
             if _text:
-                _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:200]}")
+                _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:120]}")
 
-        _rss_block = "\n".join(_rss_headlines[:40]) if _rss_headlines else "(none)"
+        _rss_block = "\n".join(_rss_headlines[:20]) if _rss_headlines else "(none)"
         _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
         _inspo_prompt = f"""Tyler Polumbus is a former NFL offensive lineman turned Denver sports media personality. He needs tweet ideas RIGHT NOW — only things happening in the last 24 hours.
@@ -2940,11 +2940,11 @@ Return ONLY a JSON array:
   }}
 ]"""
 
-        _raw = _call_claude_direct(
-            _inspo_prompt,
-            "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player.",
-            max_tokens=1800
-        )
+        _inspo_system = "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player."
+        try:
+            _raw = _call_claude_direct(_inspo_prompt, _inspo_system, max_tokens=1800)
+        except Exception:
+            _raw = call_claude(_inspo_prompt, _inspo_system, max_tokens=1800)
 
     # ── Parse + display ──
     _ideas = []
