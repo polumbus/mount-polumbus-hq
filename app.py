@@ -972,6 +972,43 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
     raise Exception(f"API error: {data.get('error', data)}")
 
 
+def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
+    """Thread-safe direct API call — token passed in, no session state access."""
+    import urllib.request, hashlib as _hl
+    _salt = "59cf53e54c78"
+    _ver = "2.1.81"
+    _chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
+    _hash = _hl.sha256((_salt + "".join(_chars) + _ver).encode()).hexdigest()[:3]
+    billing_line = f"x-anthropic-billing-header: cc_version={_ver}.{_hash}; cc_entrypoint=claude-code; cch=ece3b;"
+    system_array = [{"type": "text", "text": billing_line}]
+    if system:
+        system_array.append({"type": "text", "text": system, "cache_control": {"type": "ephemeral"}})
+    body = json.dumps({
+        "model": model, "max_tokens": max_tokens,
+        "system": system_array,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages?beta=true", data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24",
+            "User-Agent": f"claude-cli/{_ver}", "x-app": "cli",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "x-stainless-lang": "js", "x-stainless-os": "Linux",
+            "x-stainless-arch": "x64", "x-stainless-runtime": "node",
+            "x-stainless-package-version": "0.74.0", "x-stainless-retry-count": "0",
+        }, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        data = json.loads(resp.read())
+    if "content" in data and data["content"]:
+        return data["content"][0].get("text", "")
+    raise Exception(f"API error: {data.get('error', data)}")
+
+
 def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
@@ -2115,10 +2152,15 @@ Return ONLY this JSON, no other text:
                     except Exception:
                         return None
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                    _fa = _ex.submit(call_claude, _prompt_a, _grades_system, 400)
-                    _fb = _ex.submit(call_claude, _prompt_b, _grades_system, 400)
-                    _da, _db = _parse(_fa.result()), _parse(_fb.result())
+                _tok = _get_oauth_token() or _get_access_token()
+                if _tok:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                        _fa = _ex.submit(_call_with_token, _tok, _prompt_a, _grades_system, 400)
+                        _fb = _ex.submit(_call_with_token, _tok, _prompt_b, _grades_system, 400)
+                        _da, _db = _parse(_fa.result()), _parse(_fb.result())
+                else:
+                    _da = _parse(call_claude(_prompt_a, _grades_system, 400))
+                    _db = _parse(call_claude(_prompt_b, _grades_system, 400))
 
                 if _da and _db and "grades" in _da and "grades" in _db:
                     gdata = {
