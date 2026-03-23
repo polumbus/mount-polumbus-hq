@@ -2935,15 +2935,15 @@ def _ci_inspiration_dialog():
 Your job:
 1. Identify the 6-8 most tweetable moments — Denver-specific AND national sports moments Tyler can weigh in on
 2. Prioritize: (a) breaking news from last few hours, (b) things buzzing on his timeline, (c) big national moments he has a unique angle on as a former player
-3. "hook" = the actual first line Tyler would tweet. Direct, no hedging, ellipsis signature, under 200 chars.
-4. "why" = ONE sentence, MAX 12 words. Format: "[Tyler's specific lens]: [one-line angle]". Example: "OL angle: speed threats create 1-on-1s everywhere." This is his NFL/OL credibility hook — punchy, not explanatory.
+3. "hook" = a COMPLETE Normal Tweet draft in Tyler's voice. Not just an opening line — a full thought he could post. 180-260 characters. Direct, no hedging, ellipsis signature where it fits. No hashtags, no emojis.
+4. "why" = ONE sentence, MAX 12 words. Format: "[Tyler's specific lens]: [one-line angle]". Example: "OL angle: speed threats create 1-on-1s everywhere." Punchy credibility hook, not an explanation.
 
 Return ONLY a JSON array:
 [
   {{
     "topic": "2-4 word label",
     "source": "twitter", "espn", or "news",
-    "hook": "the actual tweet opening line Tyler would use",
+    "hook": "complete Normal Tweet draft, 180-260 chars, ready to refine or post",
     "why": "OL angle: one tight credibility hook under 12 words."
   }}
 ]"""
