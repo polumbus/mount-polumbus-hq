@@ -2847,7 +2847,7 @@ def _fetch_inspiration_feed():
     def _fetch_list(lid):
         if not lid:
             return []
-        _raw = fetch_tweets_from_list(lid, count=60)
+        _raw = fetch_tweets_from_list(lid, count=20)
         _out = []
         for _t in _raw:
             _ts = _t.get("createdAt", "")
@@ -2881,7 +2881,7 @@ def _fetch_inspiration_feed():
     _list_tweets, _search_tweets, _rss_headlines = [], [], []
     with _cf.ThreadPoolExecutor(max_workers=12) as _ex:
         _list_futs = [_ex.submit(_fetch_list, lid) for lid in _all_list_ids]
-        _search_futs = [_ex.submit(fetch_tweets, q, 25) for q in _search_queries]
+        _search_futs = [_ex.submit(fetch_tweets, q, 15) for q in _search_queries]
         _rss_futs = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
         for _f in _list_futs:
             try: _list_tweets.extend(_f.result())
@@ -3031,6 +3031,12 @@ def _ci_output_panel(action, tweet_text, fmt, voice):
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
+
+    # Pre-warm inspiration feed cache in background so it's ready when user clicks the button
+    if not st.session_state.get("_inspo_cache_warming"):
+        st.session_state["_inspo_cache_warming"] = True
+        import threading as _th
+        _th.Thread(target=_fetch_inspiration_feed, daemon=True).start()
 
     # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
