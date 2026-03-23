@@ -2888,8 +2888,12 @@ def _ci_inspiration_dialog():
         ]
         _rss_headlines = []
         with _cf.ThreadPoolExecutor(max_workers=5) as _ex:
-            for _headlines in _ex.map(lambda u: _fetch_rss_headlines(u, 12), _rss_feeds):
-                _rss_headlines.extend(_headlines)
+            _rss_futures = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
+            for _f in _rss_futures:
+                try:
+                    _rss_headlines.extend(_f.result())
+                except Exception:
+                    pass
 
         # ── Dedupe and build context ──
         _seen = set()
@@ -2939,7 +2943,7 @@ Return ONLY a JSON array:
         _raw = _call_claude_direct(
             _inspo_prompt,
             "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player.",
-            max_tokens=1400
+            max_tokens=1800
         )
 
     # ── Parse + display ──
@@ -2950,8 +2954,16 @@ Return ONLY a JSON array:
             _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         _ideas = json.loads(_clean)
     except Exception:
+        # Try extracting JSON array from anywhere in the response
+        try:
+            _m = re.search(r'\[[\s\S]*\]', _raw)
+            if _m:
+                _ideas = json.loads(_m.group(0))
+        except Exception:
+            pass
+    if not _ideas:
         st.error("Couldn't parse — try again.")
-        st.code(_raw[:500])
+        st.code(_raw[:600])
         return
 
     if not _ideas:
