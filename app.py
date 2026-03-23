@@ -2127,6 +2127,7 @@ Return ONLY this JSON, no other text:
                     except Exception:
                         return None
 
+                _get_cached_token()  # pre-warm module cache before threads start
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
                     _fa = _ex.submit(call_claude, _prompt_a, _grades_system, 400)
                     _fb = _ex.submit(call_claude, _prompt_b, _grades_system, 400)
