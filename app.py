@@ -684,6 +684,18 @@ OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 CREDENTIALS_PATH = os.path.expanduser("~/.claude/.credentials.json")
+_TOKEN_CACHE = {"token": "", "exp": 0}  # Module-level — accessible from any thread
+
+
+def _get_cached_token() -> str:
+    """Thread-safe token getter — uses module-level cache so worker threads can access it."""
+    global _TOKEN_CACHE
+    if _TOKEN_CACHE["token"] and time.time() < _TOKEN_CACHE["exp"] - 60:
+        return _TOKEN_CACHE["token"]
+    token = _get_oauth_token() or _get_access_token()
+    if token:
+        _TOKEN_CACHE = {"token": token, "exp": time.time() + 3600}
+    return token
 
 
 def _load_oauth_credentials():
@@ -924,7 +936,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
     """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
     import urllib.request
     import hashlib
-    token = _get_oauth_token() or _get_access_token()
+    token = _get_cached_token()
     if not token:
         raise Exception("No OAuth token available")
 
