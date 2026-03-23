@@ -2984,7 +2984,9 @@ Return ONLY a JSON array:
             f'</div>',
             unsafe_allow_html=True)
         if st.button("→ Use This", key=f"inspo_use_{_i}", use_container_width=True):
-            st.session_state["_ci_text_stage"] = _hook if _hook else _angle
+            v = _hook if _hook else _angle
+            if v:
+                st.session_state["ci_text"] = v
             st.rerun(scope="app")
 
     if st.button("↺ Regenerate", use_container_width=True, key="inspo_regen"):
