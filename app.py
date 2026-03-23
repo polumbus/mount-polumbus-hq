@@ -2229,7 +2229,7 @@ Return ONLY this JSON, no other text:
                 _pick = int(build_data.get("pick", 1)) if str(build_data.get("pick", "1")).strip() in ("1", "2") else 1
                 _best = build_data.get(f"option{_pick}", build_data.get("option1", ""))
                 if _best:
-                    st.session_state["ci_text"] = _best
+                    st.session_state["_ci_text_stage"] = _best
             else:
                 st.session_state["ci_result"] = raw
                 for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
@@ -2273,7 +2273,7 @@ Return ONLY this JSON, no other text:
                 _pick = int(rw_data.get("pick", 1)) if str(rw_data.get("pick", "1")).strip() in ("1", "2") else 1
                 _best = rw_data.get(f"option{_pick}", rw_data.get("option1", ""))
                 if _best:
-                    st.session_state["ci_text"] = _best
+                    st.session_state["_ci_text_stage"] = _best
             else:
                 st.session_state["ci_repurposed"] = raw
                 for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
