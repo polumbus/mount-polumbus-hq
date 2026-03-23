@@ -2110,34 +2110,33 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
+                # ── Lean system prompt ──
                 _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
                 _algo = "X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%."
                 _tweet_info = f'Tweet ({len(tweet_text)} chars): "{tweet_text}"\nHas question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}'
 
-                # ── Two parallel calls of 4 grades each ──
-                _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and tyler_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact edit to first line"}},{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
-                _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}]}}"""
+                _grades_prompt = f"""Grade this tweet for X algorithm performance.
 
-                def _parse(raw):
-                    try:
-                        clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-                        m = re.search(r'\{.*\}', clean, re.DOTALL)
-                        return json.loads(m.group()) if m else None
-                    except Exception:
-                        return None
+{_algo}
 
-                _get_cached_token()  # pre-warm module cache before threads start
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                    _fa = _ex.submit(call_claude, _prompt_a, _grades_system, 400)
-                    _fb = _ex.submit(call_claude, _prompt_b, _grades_system, 400)
-                    _da, _db = _parse(_fa.result()), _parse(_fb.result())
+{_tweet_info}
 
-                if _da and _db and "grades" in _da and "grades" in _db:
+Grade ALL 8 categories (score 1-10). Return ONLY valid JSON:
+{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact edit to first line"}},{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}},{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}]}}"""
+
+                _raw = call_claude(_grades_prompt, _grades_system, 700)
+                try:
+                    _clean = re.sub(r'```(?:json)?\s*', '', _raw).strip().rstrip('`').strip()
+                    _m = re.search(r'\{.*\}', _clean, re.DOTALL)
+                    _gj = json.loads(_m.group()) if _m else None
+                except Exception:
+                    _gj = None
+
+                if _gj and "grades" in _gj:
                     gdata = {
-                        "algorithm_score": _da.get("algorithm_score", 0),
-                        "tyler_score": _da.get("tyler_score", 0),
-                        "grades": _da["grades"] + _db["grades"],
+                        "algorithm_score": _gj.get("algorithm_score", 0),
+                        "tyler_score": _gj.get("tyler_score", 0),
+                        "grades": _gj["grades"],
                     }
                     _cache = st.session_state.get("ci_grades_cache", {})
                     _cache[_grade_hash] = gdata
