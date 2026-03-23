@@ -924,7 +924,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
     """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
     import urllib.request
     import hashlib
-    token = _get_oauth_token()
+    token = _get_oauth_token() or _get_access_token()
     if not token:
         raise Exception("No OAuth token available")
 
