@@ -2813,95 +2813,136 @@ IMAGE RECOMMENDATION:
             st.rerun()
 
 
-@st.dialog("What's Hot in Denver Right Now", width="large")
+def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
+    """Fetch and parse an RSS feed, return list of headline strings."""
+    try:
+        import xml.etree.ElementTree as _ET
+        _resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        _root = _ET.fromstring(_resp.content)
+        _ns = {"media": "http://search.yahoo.com/mrss/"}
+        _items = _root.findall(".//item")[:max_items]
+        _out = []
+        for _item in _items:
+            _title = (_item.findtext("title") or "").strip()
+            _desc = (_item.findtext("description") or "").strip()
+            _pub = (_item.findtext("pubDate") or "").strip()
+            if _title:
+                _out.append(f"{_title} [{_pub[:16]}]" + (f" — {_desc[:120]}" if _desc and _desc != _title else ""))
+        return _out
+    except Exception:
+        return []
+
+
+@st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
-    """Pull last 24h from sports lists + Twitter search → Claude generates tweet angles."""
+    """Pull all lists + Twitter searches + ESPN/Google News RSS → Claude generates tweet angles."""
     with st.spinner("Mount Polumbus AI is reaching the summit..."):
+        import concurrent.futures as _cf
         from datetime import timezone as _tz
         _cutoff = datetime.now(_tz.utc) - timedelta(hours=24)
 
-        # Fetch from Broncos Reporters + Nuggets lists
+        # ── Layer 1: ALL Twitter lists ──
         _lists = load_engagement_lists()
-        _sports_list_ids = [
-            _lists.get("Broncos Reporters", {}).get("list_id", ""),
-            _lists.get("Nuggets", {}).get("list_id", ""),
-        ]
         _list_tweets = []
-        for _lid in _sports_list_ids:
-            if _lid:
-                _raw = fetch_tweets_from_list(_lid, count=100)
-                for _t in _raw:
-                    _ts = _t.get("createdAt", "")
-                    try:
-                        from dateutil import parser as _dtp
-                        _dt = _dtp.parse(_ts)
-                        if _dt.tzinfo is None:
-                            _dt = _dt.replace(tzinfo=_tz.utc)
-                        if _dt >= _cutoff:
-                            _list_tweets.append(_t)
-                    except Exception:
-                        _list_tweets.append(_t)  # include if can't parse
+        def _fetch_list(lid):
+            if not lid:
+                return []
+            _raw = fetch_tweets_from_list(lid, count=60)
+            _out = []
+            for _t in _raw:
+                _ts = _t.get("createdAt", "")
+                try:
+                    from dateutil import parser as _dtp
+                    _dt = _dtp.parse(_ts)
+                    if _dt.tzinfo is None:
+                        _dt = _dt.replace(tzinfo=_tz.utc)
+                    if _dt >= _cutoff:
+                        _out.append(_t)
+                except Exception:
+                    _out.append(_t)
+            return _out
 
-        # Twitter search for breaking Denver sports news (last 24h)
-        _search_tweets = fetch_tweets(
-            "Denver Broncos OR Denver Nuggets OR Avalanche Denver -filter:retweets",
-            count=30
-        )
+        _all_list_ids = [v.get("list_id", "") for v in _lists.values() if isinstance(v, dict) and v.get("list_id")]
+        with _cf.ThreadPoolExecutor(max_workers=4) as _ex:
+            for _result in _ex.map(_fetch_list, _all_list_ids):
+                _list_tweets.extend(_result)
 
-        # Combine, dedupe by id, take most recent 60
+        # ── Layer 2: Twitter searches — Denver sports + national moment ──
+        _search_queries = [
+            "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
+            "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
+        ]
+        _search_tweets = []
+        with _cf.ThreadPoolExecutor(max_workers=2) as _ex:
+            _futures = [_ex.submit(fetch_tweets, q, 25) for q in _search_queries]
+            for _f in _futures:
+                _search_tweets.extend(_f.result())
+
+        # ── Layer 3: RSS headlines — ESPN + Google News Sports ──
+        _rss_feeds = [
+            "https://www.espn.com/espn/rss/news",
+            "https://www.espn.com/espn/rss/nfl/news",
+            "https://www.espn.com/espn/rss/nba/news",
+            "https://news.google.com/rss/search?q=sports+news+today&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
+        ]
+        _rss_headlines = []
+        with _cf.ThreadPoolExecutor(max_workers=5) as _ex:
+            for _headlines in _ex.map(lambda u: _fetch_rss_headlines(u, 12), _rss_feeds):
+                _rss_headlines.extend(_headlines)
+
+        # ── Dedupe and build context ──
         _seen = set()
-        _all = []
+        _all_tweets = []
         for _t in _list_tweets + _search_tweets:
             _tid = _t.get("id", _t.get("tweet_id", ""))
             if _tid and _tid not in _seen:
                 _seen.add(_tid)
-                _all.append(_t)
+                _all_tweets.append(_t)
 
-        if not _all:
-            st.error("Couldn't fetch timeline data. Check Twitter API key.")
-            return
-
-        # Build feed summary for Claude
-        _feed_lines = []
-        for _t in _all[:60]:
+        _tweet_lines = []
+        for _t in _all_tweets[:70]:
             _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
             _text = _t.get("text", "")
             _likes = _t.get("likeCount", _t.get("like_count", 0))
             _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
             if _text:
-                _feed_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:200]}")
+                _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:200]}")
 
-        _feed_str = "\n".join(_feed_lines)
+        _rss_block = "\n".join(_rss_headlines[:40]) if _rss_headlines else "(none)"
+        _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-        _inspo_prompt = f"""Tyler Polumbus is a former NFL offensive lineman who tweets about Denver sports (Broncos, Nuggets, Avalanche). He needs tweet ideas based on what is being talked about on his timeline RIGHT NOW.
+        _inspo_prompt = f"""Tyler Polumbus is a former NFL offensive lineman turned Denver sports media personality. He needs tweet ideas RIGHT NOW — only things happening in the last 24 hours.
 
-Here is his live Twitter feed from the last 24 hours (list tweets + Denver sports search):
+=== HIS TWITTER FEED (all lists, last 24h) ===
+{_tweet_block}
 
-{_feed_str}
+=== NATIONAL SPORTS HEADLINES (ESPN + Google News, right now) ===
+{_rss_block}
 
 Your job:
-1. Identify the 5-6 most tweetable stories/topics from this feed — real things happening NOW, not old news
-2. For each, write ONE specific tweet angle in Tyler's voice — former player, direct, no fluff, ellipsis signature
-3. The angle should be a TAKE, not a recap. Something that adds perspective, not just repeats the news
+1. Identify the 6-8 most tweetable moments from ALL of the above — Denver-specific AND national sports moments Tyler can weigh in on (March Madness brackets, NBA, NFL Draft news, etc.)
+2. Prioritize: (a) breaking news from last few hours, (b) things already getting buzz on his timeline, (c) big national moments he has a unique perspective on as a former player
+3. For each, write Tyler's TAKE — not a recap, a perspective. Former player, direct, no hedging, ellipsis signature
 
-Return a JSON array, no other text:
+Return ONLY a JSON array:
 [
   {{
-    "topic": "2-4 word topic label",
-    "headline": "one sentence: what actually happened",
-    "angle": "the tweet concept/angle for Tyler to take — 1-2 sentences, rough draft OK",
-    "hook": "the actual opening line he could use"
-  }},
-  ...
+    "topic": "2-4 word label",
+    "source": "twitter" or "espn" or "news",
+    "headline": "what actually happened — one sentence",
+    "angle": "Tyler's take/concept — 1-2 sentences",
+    "hook": "the first line he'd actually tweet"
+  }}
 ]"""
 
         _raw = _call_claude_direct(
             _inspo_prompt,
-            "You are Tyler Polumbus's content strategist. Surface real stories happening right now in Denver sports and give Tyler sharp, specific takes he can own.",
-            max_tokens=1200
+            "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player.",
+            max_tokens=1400
         )
 
-    # Parse response
+    # ── Parse + display ──
     _ideas = []
     try:
         _clean = _raw.strip()
@@ -2909,33 +2950,40 @@ Return a JSON array, no other text:
             _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         _ideas = json.loads(_clean)
     except Exception:
-        st.error("Couldn't parse ideas — try again.")
-        st.code(_raw)
+        st.error("Couldn't parse — try again.")
+        st.code(_raw[:500])
         return
 
     if not _ideas:
-        st.warning("No ideas generated. Feed may be empty.")
+        st.warning("No ideas generated. Try again.")
         return
 
+    _source_colors = {"twitter": "#1DA1F2", "espn": "#FF6B35", "news": "#A78BFA"}
     st.markdown(
         f'<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:16px;">'
-        f'Based on {len(_all)} tweets from your lists + Denver sports search · last 24h</div>',
+        f'{len(_all_tweets)} timeline tweets · {len(_rss_headlines)} news headlines · last 24h</div>',
         unsafe_allow_html=True)
 
     for _i, _idea in enumerate(_ideas):
         _topic = _idea.get("topic", "")
+        _src = _idea.get("source", "twitter").lower()
+        _src_color = _source_colors.get(_src, "#2DD4BF")
+        _src_label = {"twitter": "TIMELINE", "espn": "ESPN", "news": "NEWS"}.get(_src, _src.upper())
         _headline = _idea.get("headline", "")
         _angle = _idea.get("angle", "")
         _hook = _idea.get("hook", "")
         st.markdown(
-            f'<div style="background:#0d1117;border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
-            f'<div style="font-size:9px;letter-spacing:2px;color:#2DD4BF;font-weight:700;text-transform:uppercase;margin-bottom:4px;">{_topic}</div>'
-            f'<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;">{_headline}</div>'
-            f'<div style="font-size:14px;color:#E6EDF3;font-weight:500;margin-bottom:6px;">{_angle}</div>'
-            f'<div style="font-size:12px;color:#2DD4BF;font-style:italic;margin-bottom:10px;">"{_hook}"</div>'
+            f'<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.08);border-left:3px solid {_src_color};border-radius:10px;padding:14px 16px;margin-bottom:10px;">'
+            f'<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">'
+            f'<span style="font-size:9px;letter-spacing:2px;color:#2DD4BF;font-weight:700;">{_topic}</span>'
+            f'<span style="font-size:8px;letter-spacing:1px;color:{_src_color};font-weight:600;background:rgba(255,255,255,0.05);padding:1px 5px;border-radius:3px;">{_src_label}</span>'
+            f'</div>'
+            f'<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px;">{_headline}</div>'
+            f'<div style="font-size:13px;color:#E6EDF3;margin-bottom:6px;">{_angle}</div>'
+            f'<div style="font-size:13px;color:#2DD4BF;font-style:italic;margin-bottom:10px;">"{_hook}"</div>'
             f'</div>',
             unsafe_allow_html=True)
-        if st.button(f"→ Use This", key=f"inspo_use_{_i}", use_container_width=True):
+        if st.button("→ Use This", key=f"inspo_use_{_i}", use_container_width=True):
             st.session_state["_ci_text_stage"] = _hook if _hook else _angle
             st.rerun(scope="app")
 
