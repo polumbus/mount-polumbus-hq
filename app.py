@@ -2158,10 +2158,10 @@ Return ONLY this JSON, no other text:
                     """Try direct OAuth API, fall back to proxy — never raises."""
                     if tok:
                         try:
-                            return _call_claude_direct(prompt, _grades_system, 400, _token=tok)
+                            return _call_claude_direct(prompt, _grades_system, 700, _token=tok)
                         except Exception:
                             pass
-                    return call_claude(prompt, _grades_system, 400)
+                    return call_claude(prompt, _grades_system, 700)
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
                     _fa = _ex.submit(_grade_call, _prompt_a, _tok)
