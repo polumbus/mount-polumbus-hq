@@ -2084,7 +2084,7 @@ Return ONLY this JSON, no other text:
                 _pick = int(banger_data.get("pick", 1)) if str(banger_data.get("pick", "1")).strip() in ("1", "2") else 1
                 _best = banger_data.get(f"option{_pick}", banger_data.get("option1", ""))
                 if _best:
-                    st.session_state["ci_text"] = _best
+                    st.session_state["_ci_text_stage"] = _best
             else:
                 result = raw
 
@@ -2807,6 +2807,8 @@ def page_compose_ideas():
     with col_right:
         st.markdown('<div class="cs-panel-label">PARAMETER SUITE</div>', unsafe_allow_html=True)
 
+        if "_ci_text_stage" in st.session_state:
+            st.session_state["ci_text"] = st.session_state.pop("_ci_text_stage")
         tweet_text = st.text_area("Your concept", height=220, key="ci_text",
             placeholder="Drop the raw concept, angle, or draft here...")
         char_len = len(tweet_text)
