@@ -351,11 +351,13 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 .hq-footer a:hover { opacity: 1; }
 
 /* Day card */
+.rg-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
 .day-card { background: #161B22; border: 1px solid rgba(45,212,191,0.08); border-radius: 7px; padding: 5px 2px; text-align: center; }
 .day-card-label { color: #6E7681; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
 .day-card-num { color: #E6EDF3; font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
 .day-card-active .day-card-num { color: #2DD4BF; }
 .day-card-active { border-color: rgba(45,212,191,0.25); border-top: 2px solid #2DD4BF; }
+@media (max-width: 640px) { .rg-week-grid { display: none; } }
 
 /* Hide Streamlit chrome */
 [data-testid="manage-app-button"] { display: none !important; }
@@ -4267,14 +4269,16 @@ def page_reply_guy():
     _day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     _hist_map = {h["date"]: h["count"] for h in progress.get("history", [])}
     _hist_map[today_str] = reply_count
-    _dcols = st.columns(7)
+    _week_html = '<div class="rg-week-grid">'
     for _d in range(6, -1, -1):
         _dt = datetime.now() - timedelta(days=_d)
         _ds = _dt.strftime("%Y-%m-%d")
         _dlabel = _day_labels[_dt.weekday()]
         _cnt = _hist_map.get(_ds, 0)
         _dcls = "day-card day-card-active" if _cnt > 0 else "day-card"
-        _dcols[6 - _d].markdown(f'<div class="{_dcls}"><div class="day-card-label">{_dlabel}</div><div class="day-card-num">{_cnt}</div></div>', unsafe_allow_html=True)
+        _week_html += f'<div class="{_dcls}"><div class="day-card-label">{_dlabel}</div><div class="day-card-num">{_cnt}</div></div>'
+    _week_html += '</div>'
+    st.markdown(_week_html, unsafe_allow_html=True)
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     _rg_actions = _load_actions_gist()
     replied_tweets = _rg_actions["replied"]
