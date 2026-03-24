@@ -2905,8 +2905,9 @@ def _fetch_inspiration_feed():
     return _all_tweets, _rss_headlines
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def _run_inspiration_claude():
-    """Fetch feed + call Claude. Returns (ideas, n_tweets, n_headlines)."""
+    """Fetch feed + call Claude. Cached 10 min — first call is slow, all others instant."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
@@ -3020,8 +3021,6 @@ def _ci_inspiration_dialog():
             unsafe_allow_html=True)
 
         if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
-            st.session_state.pop("inspo_ideas", None)
-            st.session_state.pop("inspo_meta", None)
             if _hook:
                 st.session_state["ci_text"] = _hook
             st.rerun(scope="app")
@@ -3057,11 +3056,6 @@ def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
 
-    # Pre-warm inspiration feed cache in background so it's ready when user clicks the button
-    if not st.session_state.get("_inspo_cache_warming"):
-        st.session_state["_inspo_cache_warming"] = True
-        import threading as _th
-        _th.Thread(target=_fetch_inspiration_feed, daemon=True).start()
 
     # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
