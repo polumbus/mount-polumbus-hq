@@ -2905,26 +2905,23 @@ def _fetch_inspiration_feed():
     return _all_tweets, _rss_headlines
 
 
-@st.dialog("What's Hot Right Now", width="large")
-def _ci_inspiration_dialog():
-    """Pull all lists + Twitter searches + ESPN/Google News RSS → Claude generates tweet angles."""
-    with st.spinner("Mount Polumbus AI is reaching the summit..."):
-        # Feed data cached 20 min — only Claude runs fresh every time
-        _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+def _run_inspiration_claude():
+    """Fetch feed + call Claude. Returns (ideas, n_tweets, n_headlines)."""
+    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
-        _tweet_lines = []
-        for _t in _all_tweets[:35]:
-            _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
-            _text = _t.get("text", "")
-            _likes = _t.get("likeCount", _t.get("like_count", 0))
-            _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
-            if _text:
-                _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:120]}")
+    _tweet_lines = []
+    for _t in _all_tweets[:35]:
+        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+        _text = _t.get("text", "")
+        _likes = _t.get("likeCount", _t.get("like_count", 0))
+        _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
+        if _text:
+            _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:120]}")
 
-        _rss_block = "\n".join(_rss_headlines[:20]) if _rss_headlines else "(none)"
-        _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
+    _rss_block = "\n".join(_rss_headlines[:20]) if _rss_headlines else "(none)"
+    _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-        _inspo_prompt = f"""Tyler Polumbus is a former NFL offensive lineman turned Denver sports media personality. He needs tweet ideas RIGHT NOW — only things happening in the last 24 hours.
+    _prompt = f"""Tyler Polumbus is a former NFL offensive lineman turned Denver sports media personality. He needs tweet ideas RIGHT NOW — only things happening in the last 24 hours.
 
 === HIS TWITTER FEED (all lists, last 24h) ===
 {_tweet_block}
@@ -2948,13 +2945,12 @@ Return ONLY a JSON array:
   }}
 ]"""
 
-        _inspo_system = "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player."
-        try:
-            _raw = _call_claude_direct(_inspo_prompt, _inspo_system, max_tokens=1800)
-        except Exception:
-            _raw = call_claude(_inspo_prompt, _inspo_system, max_tokens=1800)
+    _system = "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player."
+    try:
+        _raw = _call_claude_direct(_prompt, _system, max_tokens=1800)
+    except Exception:
+        _raw = call_claude(_prompt, _system, max_tokens=1800)
 
-    # ── Parse ──
     _ideas = []
     try:
         _clean = _raw.strip()
@@ -2968,16 +2964,32 @@ Return ONLY a JSON array:
                 _ideas = json.loads(_m.group(0))
         except Exception:
             pass
-    if not _ideas:
-        st.error("Couldn't parse — try again.")
-        st.code(_raw[:600])
-        return
+
+    return _ideas, len(_all_tweets), len(_rss_headlines)
+
+
+@st.dialog("What's Hot Right Now", width="large")
+def _ci_inspiration_dialog():
+    """Show cached ideas — only calls Claude once per open, not on every button click."""
+
+    # Run Claude only if we don't already have ideas for this dialog session
+    if "inspo_ideas" not in st.session_state:
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _ideas, _n_tweets, _n_heads = _run_inspiration_claude()
+        if not _ideas:
+            st.error("Couldn't generate ideas — try again.")
+            return
+        st.session_state["inspo_ideas"] = _ideas
+        st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
+
+    _ideas = st.session_state["inspo_ideas"]
+    _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
 
     # ── Header ──
     st.markdown(
         f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:3px;">What\'s Hot Right Now</div>'
         f'<div style="font-size:10px;color:rgba(255,255,255,0.22);margin-bottom:16px;">'
-        f'{len(_all_tweets)} timeline tweets · {len(_rss_headlines)} news headlines · last 24h</div>',
+        f'{_n_tweets} timeline tweets · {_n_heads} news headlines · last 24h</div>',
         unsafe_allow_html=True)
 
     # ── Source badge styles ──
@@ -3008,6 +3020,8 @@ Return ONLY a JSON array:
             unsafe_allow_html=True)
 
         if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
+            st.session_state.pop("inspo_ideas", None)
+            st.session_state.pop("inspo_meta", None)
             if _hook:
                 st.session_state["ci_text"] = _hook
             st.rerun(scope="app")
@@ -3018,12 +3032,15 @@ Return ONLY a JSON array:
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
-            # Re-set flag so dialog reopens after rerun (feed stays cached — only Claude re-runs)
+            st.session_state.pop("inspo_ideas", None)
+            st.session_state.pop("inspo_meta", None)
             st.session_state["_ci_show_inspiration"] = True
             st.rerun(scope="app")
     with _rb2:
         if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
+            st.session_state.pop("inspo_ideas", None)
+            st.session_state.pop("inspo_meta", None)
             st.session_state["_ci_show_inspiration"] = True
             st.rerun(scope="app")
 
