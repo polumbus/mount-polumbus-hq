@@ -3065,6 +3065,11 @@ def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
 
+    # Load text passed via URL from Idea Bank navigation
+    _idea_from_url = st.query_params.get("idea", "")
+    if _idea_from_url:
+        st.session_state["ci_text"] = _idea_from_url
+        del st.query_params["idea"]
 
     # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
@@ -3294,6 +3299,9 @@ def page_compose_ideas():
                         </div>
                         <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
                     </div>""", unsafe_allow_html=True)
+                    if st.button("Use This", key=f"bank_use_{i}", use_container_width=True):
+                        st.session_state["ci_text"] = idea.get("text", "")
+                        st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: CONTENT COACH
@@ -5124,13 +5132,16 @@ def page_inspiration():
                     <div style="margin-bottom:4px;">{tags_html}</div>
                     <div style="font-size:11px; color:#666688;">{metrics}</div>
                 </div>""", unsafe_allow_html=True)
-                if st.button("→ Use in Creator Studio", key=f"ib_use_{real_idx}", use_container_width=True):
-                    _ib_text = item.get("text", "")
-                    st.session_state["ci_text"] = _ib_text
-                    st.session_state["_ci_text_stage"] = _ib_text
-                    st.session_state["_nav_override"] = True
-                    st.session_state.current_page = "Creator Studio"
-                    st.rerun(scope="app")
+                import urllib.parse as _urlparse
+                _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
+                st.markdown(
+                    f'<a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" '
+                    f'style="display:block;width:100%;padding:8px 12px;background:#1e3a5f;'
+                    f'border:1px solid #2d5a8e;border-radius:4px;color:#7eb8f7;text-align:center;'
+                    f'text-decoration:none;font-size:14px;font-weight:600;margin-top:4px;">'
+                    f'→ Use in Creator Studio</a>',
+                    unsafe_allow_html=True
+                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
