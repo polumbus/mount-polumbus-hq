@@ -3068,7 +3068,7 @@ def page_compose_ideas():
     # Load text passed via URL from Idea Bank navigation
     _idea_from_url = st.query_params.get("idea", "")
     if _idea_from_url:
-        st.session_state["ci_text"] = _idea_from_url
+        st.session_state["_ci_text_stage"] = _idea_from_url
         del st.query_params["idea"]
 
     # Auto-repurpose from Idea Bank Vault click
@@ -3225,8 +3225,10 @@ def page_compose_ideas():
 
         _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
         _all_folders = load_json("saved_ideas_folders.json", _default_folders)
-        _folder_opts = ["All Ideas"] + _all_folders + ["Idea Bank Vault", "Rewrite Queue"]
+        _folder_opts = ["Idea Bank Vault"] + _all_folders + ["All Ideas", "Rewrite Queue"]
 
+        if "ci_folder" not in st.session_state:
+            st.session_state["ci_folder"] = "Idea Bank Vault"
         folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
 
         with st.expander("Manage Folders"):
@@ -3266,10 +3268,16 @@ def page_compose_ideas():
                         </div>
                         <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
                     </div>""", unsafe_allow_html=True)
-                    if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
-                        st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
-                        st.session_state["ci_auto_repurpose"] = True
-                        st.rerun()
+                    _vb1, _vb2 = st.columns(2)
+                    with _vb1:
+                        if st.button("Use This", key=f"ci_inspo_use_{ii}", use_container_width=True, type="primary"):
+                            st.session_state["_ci_text_stage"] = item.get("text", orig_text)
+                            st.rerun()
+                    with _vb2:
+                        if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
+                            st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
+                            st.session_state["ci_auto_repurpose"] = True
+                            st.rerun()
         else:
             ideas = load_json("saved_ideas.json", [])
             if folder == "All Ideas":
@@ -3300,7 +3308,7 @@ def page_compose_ideas():
                         <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
                     </div>""", unsafe_allow_html=True)
                     if st.button("Use This", key=f"bank_use_{i}", use_container_width=True):
-                        st.session_state["ci_text"] = idea.get("text", "")
+                        st.session_state["_ci_text_stage"] = idea.get("text", "")
                         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
