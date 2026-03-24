@@ -3018,11 +3018,14 @@ Return ONLY a JSON array:
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
-            st.rerun()
+            # Re-set flag so dialog reopens after rerun (feed stays cached — only Claude re-runs)
+            st.session_state["_ci_show_inspiration"] = True
+            st.rerun(scope="app")
     with _rb2:
         if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
-            st.rerun()
+            st.session_state["_ci_show_inspiration"] = True
+            st.rerun(scope="app")
 
 
 @st.dialog("Creator Studio", width="large")
