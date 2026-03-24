@@ -2931,7 +2931,7 @@ def _run_inspiration_claude():
 {_rss_block}
 
 Your job:
-1. Identify the 6-8 most tweetable moments — Denver-specific AND national sports moments Tyler can weigh in on
+1. Identify the 14 most tweetable moments — Denver-specific AND national sports moments Tyler can weigh in on
 2. Prioritize: (a) breaking news from last few hours, (b) things buzzing on his timeline, (c) big national moments he has a unique angle on as a former player
 3. "hook" = a COMPLETE Normal Tweet draft in Tyler's voice. Not just an opening line — a full thought he could post. 180-260 characters. Direct, no hedging, ellipsis signature where it fits. No hashtags, no emojis.
 4. "why" = ONE sentence, MAX 12 words. Format: "[Tyler's specific lens]: [one-line angle]". Example: "OL angle: speed threats create 1-on-1s everywhere." Punchy credibility hook, not an explanation.
@@ -2948,9 +2948,9 @@ Return ONLY a JSON array:
 
     _system = "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player."
     try:
-        _raw = _call_claude_direct(_prompt, _system, max_tokens=1800)
+        _raw = _call_claude_direct(_prompt, _system, max_tokens=2400)
     except Exception:
-        _raw = call_claude(_prompt, _system, max_tokens=1800)
+        _raw = call_claude(_prompt, _system, max_tokens=2400)
 
     _ideas = []
     try:
@@ -2973,18 +2973,23 @@ Return ONLY a JSON array:
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
 
-    # Run Claude only if we don't already have ideas for this dialog session
+    # Run Claude only if we don't already have the full idea pool cached
     if "inspo_ideas" not in st.session_state:
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _ideas, _n_tweets, _n_heads = _run_inspiration_claude()
-        if not _ideas:
+            _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude()
+        if not _all_ideas:
             st.error("Couldn't generate ideas — try again.")
             return
-        st.session_state["inspo_ideas"] = _ideas
+        st.session_state["inspo_ideas"] = _all_ideas
         st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
+        st.session_state["inspo_page"] = 0
 
-    _ideas = st.session_state["inspo_ideas"]
+    _all_ideas = st.session_state["inspo_ideas"]
     _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
+    _page = st.session_state.get("inspo_page", 0)
+    _per_page = 7
+    _start = (_page * _per_page) % max(len(_all_ideas), 1)
+    _ideas = (_all_ideas + _all_ideas)[_start:_start + _per_page]  # wrap-around slice
 
     # ── Header ──
     st.markdown(
@@ -3031,16 +3036,16 @@ def _ci_inspiration_dialog():
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
-            _run_inspiration_claude.clear()
-            st.session_state.pop("inspo_ideas", None)
-            st.session_state.pop("inspo_meta", None)
+            st.session_state["inspo_page"] = _page + 1
             st.session_state["_ci_show_inspiration"] = True
             st.rerun(scope="app")
     with _rb2:
         if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
+            _run_inspiration_claude.clear()
             st.session_state.pop("inspo_ideas", None)
             st.session_state.pop("inspo_meta", None)
+            st.session_state.pop("inspo_page", None)
             st.session_state["_ci_show_inspiration"] = True
             st.rerun(scope="app")
 
