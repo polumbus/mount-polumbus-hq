@@ -3031,6 +3031,7 @@ def _ci_inspiration_dialog():
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
+            _run_inspiration_claude.clear()
             st.session_state.pop("inspo_ideas", None)
             st.session_state.pop("inspo_meta", None)
             st.session_state["_ci_show_inspiration"] = True
