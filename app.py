@@ -1312,8 +1312,11 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
 # Always sync page from query params (enables HTML link navigation)
+# _nav_override flag lets button-driven navigation skip the query param override
 _qp_page = st.query_params.get("page", "")
-if _qp_page:
+if st.session_state.pop("_nav_override", False):
+    pass  # session_state.current_page already set by the button handler — keep it
+elif _qp_page:
     st.session_state.current_page = _qp_page
 elif "current_page" not in st.session_state:
     st.session_state.current_page = "Creator Studio"
@@ -5125,8 +5128,8 @@ def page_inspiration():
                     _ib_text = item.get("text", "")
                     st.session_state["ci_text"] = _ib_text
                     st.session_state["_ci_text_stage"] = _ib_text
+                    st.session_state["_nav_override"] = True
                     st.session_state.current_page = "Creator Studio"
-                    st.query_params["page"] = "Creator Studio"
                     st.rerun(scope="app")
 
 
