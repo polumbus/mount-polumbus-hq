@@ -2914,46 +2914,34 @@ def _run_inspiration_claude():
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
-    for _t in _all_tweets[:35]:
+    for _t in _all_tweets[:20]:
         _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
         _text = _t.get("text", "")
         _likes = _t.get("likeCount", _t.get("like_count", 0))
-        _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
         if _text:
-            _tweet_lines.append(f"@{_author} ({_likes}L {_rts}RT): {_text[:120]}")
+            _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
 
-    _rss_block = "\n".join(_rss_headlines[:20]) if _rss_headlines else "(none)"
+    _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-    _prompt = f"""Tyler Polumbus is a former NFL offensive lineman turned Denver sports media personality. He needs tweet ideas RIGHT NOW — only things happening in the last 24 hours.
+    _prompt = f"""Tyler Polumbus — former NFL OL, Denver sports media. Give him 7 tweet ideas from what's happening RIGHT NOW.
 
-=== HIS TWITTER FEED (all lists, last 24h) ===
+FEED (last 24h):
 {_tweet_block}
 
-=== NATIONAL SPORTS HEADLINES (ESPN + Google News, right now) ===
+HEADLINES:
 {_rss_block}
 
-Your job:
-1. Identify the 14 most tweetable moments — Denver-specific AND national sports moments Tyler can weigh in on
-2. Prioritize: (a) breaking news from last few hours, (b) things buzzing on his timeline, (c) big national moments he has a unique angle on as a former player
-3. "hook" = a COMPLETE Normal Tweet draft in Tyler's voice. Not just an opening line — a full thought he could post. 180-260 characters. Direct, no hedging, ellipsis signature where it fits. No hashtags, no emojis.
-4. "why" = ONE sentence, MAX 12 words. Format: "[Tyler's specific lens]: [one-line angle]". Example: "OL angle: speed threats create 1-on-1s everywhere." Punchy credibility hook, not an explanation.
+Rules: hook = complete tweet draft, 180-260 chars, Tyler's voice (direct, ellipsis, no hashtags/emojis). why = under 10 words, his unique angle as a former player.
 
-Return ONLY a JSON array:
-[
-  {{
-    "topic": "2-4 word label",
-    "source": "twitter", "espn", or "news",
-    "hook": "complete Normal Tweet draft, 180-260 chars, ready to refine or post",
-    "why": "OL angle: one tight credibility hook under 12 words."
-  }}
-]"""
+Return ONLY a JSON array of exactly 7 objects:
+[{{"topic":"2-4 words","source":"twitter/espn/news","hook":"full tweet draft 180-260 chars","why":"short angle under 10 words"}}]"""
 
-    _system = "You are Tyler Polumbus's content strategist. Identify what's happening RIGHT NOW in sports — both Denver and national — and give Tyler sharp angles he can own as a former NFL player."
+    _system = "You are Tyler Polumbus's content strategist. Return only the JSON array, no other text."
     try:
-        _raw = _call_claude_direct(_prompt, _system, max_tokens=2400)
+        _raw = _call_claude_direct(_prompt, _system, max_tokens=900)
     except Exception:
-        _raw = call_claude(_prompt, _system, max_tokens=2400)
+        _raw = call_claude(_prompt, _system, max_tokens=900)
 
     _ideas = []
     try:
@@ -3065,11 +3053,14 @@ def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
 
-    # Load text passed via URL from Idea Bank navigation
+    # Consume staging key FIRST — before any widget is registered
+    # Both "Use This" buttons and the URL ?idea= param funnel through here
     _idea_from_url = st.query_params.get("idea", "")
     if _idea_from_url:
-        st.session_state["_ci_text_stage"] = _idea_from_url
+        st.session_state["ci_text"] = _idea_from_url
         del st.query_params["idea"]
+    elif "_ci_text_stage" in st.session_state:
+        st.session_state["ci_text"] = st.session_state.pop("_ci_text_stage")
 
     # Auto-repurpose from Idea Bank Vault click
     if st.session_state.get("ci_auto_repurpose") and st.session_state.get("ci_repurpose_seed"):
@@ -3107,8 +3098,6 @@ def page_compose_ideas():
     with col_right:
         st.markdown('<div class="cs-panel-label">PARAMETER SUITE</div>', unsafe_allow_html=True)
 
-        if "_ci_text_stage" in st.session_state:
-            st.session_state["ci_text"] = st.session_state.pop("_ci_text_stage")
         tweet_text = st.text_area("Your concept", height=220, key="ci_text",
             placeholder="Drop the raw concept, angle, or draft here...")
         char_len = len(tweet_text)
@@ -5196,20 +5185,6 @@ def _auto_sync_tweets():
         pass
 
 _auto_sync_tweets()
-
-# ── Pre-warm What's Hot cache in background ──────────────────────────────────
-# Fires once per session. Populates @st.cache_data so the dialog is instant
-# when the user opens it. Background thread can write @st.cache_data (global
-# in-memory store) even though it can't write to st.session_state.
-if not st.session_state.get("_inspo_prewarm_started"):
-    st.session_state["_inspo_prewarm_started"] = True
-    import threading as _prewarm_th
-    def _prewarm_inspo():
-        try:
-            _run_inspiration_claude()
-        except Exception:
-            pass
-    _prewarm_th.Thread(target=_prewarm_inspo, daemon=True).start()
 
 st.markdown('<div class="main-watermark">MP</div>', unsafe_allow_html=True)
 
