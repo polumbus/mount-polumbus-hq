@@ -2836,7 +2836,7 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
         return []
 
 
-@st.cache_data(ttl=1200, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_inspiration_feed():
     """Fetch all lists + Twitter searches + RSS. Cached 20 min — data doesn't change that fast."""
     import concurrent.futures as _cf
@@ -2908,7 +2908,7 @@ def _fetch_inspiration_feed():
     return _all_tweets, _rss_headlines
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude():
     """Fetch feed + call Claude. Cached 10 min — first call is slow, all others instant."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
@@ -5196,6 +5196,20 @@ def _auto_sync_tweets():
         pass
 
 _auto_sync_tweets()
+
+# ── Pre-warm What's Hot cache in background ──────────────────────────────────
+# Fires once per session. Populates @st.cache_data so the dialog is instant
+# when the user opens it. Background thread can write @st.cache_data (global
+# in-memory store) even though it can't write to st.session_state.
+if not st.session_state.get("_inspo_prewarm_started"):
+    st.session_state["_inspo_prewarm_started"] = True
+    import threading as _prewarm_th
+    def _prewarm_inspo():
+        try:
+            _run_inspiration_claude()
+        except Exception:
+            pass
+    _prewarm_th.Thread(target=_prewarm_inspo, daemon=True).start()
 
 st.markdown('<div class="main-watermark">MP</div>', unsafe_allow_html=True)
 
