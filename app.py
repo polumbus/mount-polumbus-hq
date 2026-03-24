@@ -5122,7 +5122,7 @@ def page_inspiration():
                     <div style="font-size:11px; color:#666688;">{metrics}</div>
                 </div>""", unsafe_allow_html=True)
                 if st.button("→ Use in Creator Studio", key=f"ib_use_{real_idx}", use_container_width=True):
-                    st.session_state["ci_text"] = item.get("text", "")
+                    st.session_state["_ci_text_stage"] = item.get("text", "")
                     st.query_params["page"] = "Creator Studio"
                     st.rerun()
 
