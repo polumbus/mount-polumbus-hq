@@ -9,8 +9,10 @@ import hashlib
 import concurrent.futures
 import requests
 import tomli
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
+from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
+                  get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores)
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -2109,12 +2111,15 @@ RULES:
             if _char_limit:
                 _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
             _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
+            _sports_ctx = ""
+            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
+            except Exception: pass
             banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
 {format_mod}
-{patterns_ctx}
+{patterns_ctx}{_sports_ctx}
 
 Rules:
 - Reading Level (7th-9th grade)
@@ -2212,12 +2217,15 @@ Return ONLY this JSON, no other text:
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _sports_ctx_b = ""
+            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
+            except Exception: pass
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
-{format_mod}
+{format_mod}{_sports_ctx_b}
 
 TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
@@ -2613,7 +2621,7 @@ IMAGE RECOMMENDATION:
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
-            b1, b2 = st.columns(2)
+            b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
                     ideas = load_json("saved_ideas.json", [])
@@ -2626,6 +2634,23 @@ IMAGE RECOMMENDATION:
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
+            with b3:
+                if pplx_available() and st.button("Verify", key=f"modal_bverify_{ti+1}", use_container_width=True):
+                    _v_text = st.session_state.get(opt_key, opt_text)
+                    with st.spinner("Fact-checking..."):
+                        _fc = pplx_fact_check(_v_text)
+                    if _fc.get("answer"):
+                        st.session_state[f"_verify_{ti+1}"] = _fc
+                    else:
+                        st.warning("Couldn't verify — check API key.")
+            _vr = st.session_state.get(f"_verify_{ti+1}")
+            if _vr:
+                _va = _vr["answer"]
+                _vc = _vr.get("citations", [])
+                _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
+                st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
+                if _vc:
+                    st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
 
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
@@ -2896,12 +2921,16 @@ def _fetch_inspiration_feed():
         "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
     ]
 
-    # Run ALL fetches in parallel
+    # Run ALL fetches in parallel (Twitter lists + searches + RSS + ESPN API + Sleeper API)
     _list_tweets, _search_tweets, _rss_headlines = [], [], []
-    with _cf.ThreadPoolExecutor(max_workers=12) as _ex:
+    _espn_headlines, _sleeper_lines = [], []
+    with _cf.ThreadPoolExecutor(max_workers=14) as _ex:
         _list_futs = [_ex.submit(_fetch_list, lid) for lid in _all_list_ids]
         _search_futs = [_ex.submit(fetch_tweets, q, 15) for q in _search_queries]
         _rss_futs = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
+        # ESPN + Sleeper APIs (fast, no auth, more reliable than RSS scraping)
+        _espn_fut = _ex.submit(get_espn_headlines_for_inspo)
+        _sleeper_fut = _ex.submit(get_sleeper_trending_for_inspo)
         for _f in _list_futs:
             try: _list_tweets.extend(_f.result())
             except Exception: pass
@@ -2911,6 +2940,13 @@ def _fetch_inspiration_feed():
         for _f in _rss_futs:
             try: _rss_headlines.extend(_f.result())
             except Exception: pass
+        try: _espn_headlines = _espn_fut.result()
+        except Exception: pass
+        try: _sleeper_lines = _sleeper_fut.result()
+        except Exception: pass
+
+    # Merge ESPN + Sleeper headlines into RSS block (they're higher quality)
+    _rss_headlines = _espn_headlines + _sleeper_lines + _rss_headlines
 
     # Dedupe tweets
     _seen = set()
@@ -3377,7 +3413,10 @@ def page_content_coach():
     if "coach_current" not in st.session_state:
         st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
 
-    COACH_SYSTEM = get_voice_context() + """
+    _coach_sports = ""
+    try: _coach_sports = f"\n\nLIVE SPORTS CONTEXT (reference when relevant):\n{get_sports_context()}"
+    except Exception: pass
+    COACH_SYSTEM = get_voice_context() + f"""
 
 You are Tyler's personal social media coach. You are an EXPERT on:
 - X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
@@ -3393,7 +3432,7 @@ Your coaching style:
 - Challenge Tyler when his ideas won't perform well — don't just agree
 - Think in terms of SYSTEMS not individual posts — build repeatable frameworks
 - Always explain WHY something works in terms of the algorithm
-"""
+{_coach_sports}"""
 
     DEMO_QUESTIONS = [
         "What topics work best for me?", "What topics should I avoid?",
@@ -3605,7 +3644,21 @@ def page_article_writer():
             seed_text = manual.strip()
 
         # Section 3 — Generation buttons
-        ac1, ac2 = st.columns(2)
+        ac1, ac2, ac3 = st.columns(3)
+        with ac3:
+            if pplx_available() and st.button("Research", use_container_width=True, key="aw_research"):
+                if seed_text:
+                    with st.spinner("Researching with Perplexity..."):
+                        _research = pplx_research(seed_text)
+                        if _research.get("answer"):
+                            st.session_state["aw_research"] = _research
+                        else:
+                            st.warning("Research failed — check API key.")
+        if st.session_state.get("aw_research"):
+            _rr = st.session_state["aw_research"]
+            st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
+            if _rr.get("citations"):
+                st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
         with ac1:
             if st.button("↺ Scratch", use_container_width=True, key="aw_scratch", type="primary"):
                 if seed_text:
@@ -3615,7 +3668,13 @@ def page_article_writer():
                         pp_note = ""
                         if pp:
                             pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
-                        prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
+                        _aw_sports = ""
+                        try: _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
+                        except Exception: pass
+                        _aw_research = ""
+                        if st.session_state.get("aw_research", {}).get("answer"):
+                            _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research']['answer'][:1500]}"
+                        prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
                         st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
         with ac2:
             if st.button("⚡ Outline", use_container_width=True, key="aw_outline", type="primary"):
@@ -5251,10 +5310,14 @@ def _run_rd_council_hq(session_type: str) -> dict:
     _proposer = _RD_AGENTS[_pidx]
     _responders = [a for a in _RD_AGENTS if a["id"] != _proposer["id"]]
 
+    _sports_live = ""
+    try: _sports_live = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
+    except Exception: pass
     _ctx = (
         "Tyler Polumbus - Former NFL OL, Super Bowl 50 champion (Denver Broncos). "
         "Host of The PhD Show on Altitude 92.5 (noon-3 PM MST). 42K+ Twitter followers. "
         "YouTube channel. Goals: grow to 100K Twitter, build YouTube, land more sponsorships."
+        f"{_sports_live}"
     )
 
     _agent_personas = {
