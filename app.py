@@ -1499,6 +1499,17 @@ _sidebar_html = f"""
         <path d="M2 12l10 5 10-5" stroke="#C49E3C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
       </svg>
     </a>
+    <a href="/?page=R%26D+Council" class="mp-ico {_act('R&D Council')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="5" r="3" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+        <circle cx="4" cy="19" r="3" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+        <circle cx="20" cy="19" r="3" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+        <line x1="12" y1="8" x2="4" y2="16" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+        <line x1="12" y1="8" x2="20" y2="16" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+        <line x1="4" y1="19" x2="20" y2="19" stroke="#C49E3C" stroke-width="1.5" opacity="0.6"/>
+      </svg>
+    </a>
     <div class="mp-panel">
       <div class="mp-panel-header">INTERACT</div>
       <a href="/?page=Reply+Mode" class="mp-panel-item {_act('Reply Mode')}" target="_self">
@@ -1508,6 +1519,10 @@ _sidebar_html = f"""
       <a href="/?page=Idea+Bank" class="mp-panel-item {_act('Idea Bank')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Idea Bank
+      </a>
+      <a href="/?page=R%26D+Council" class="mp-panel-item {_act('R&D Council')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="3" stroke="#6B8AAA" stroke-width="1.5"/><circle cx="4" cy="19" r="3" stroke="#6B8AAA" stroke-width="1.5"/><circle cx="20" cy="19" r="3" stroke="#6B8AAA" stroke-width="1.5"/><line x1="12" y1="8" x2="4" y2="16" stroke="#6B8AAA" stroke-width="1.5"/><line x1="12" y1="8" x2="20" y2="16" stroke="#6B8AAA" stroke-width="1.5"/><line x1="4" y1="19" x2="20" y2="19" stroke="#6B8AAA" stroke-width="1.5"/></svg>
+        R&D Council
       </a>
     </div>
   </div>
@@ -1644,6 +1659,7 @@ st.markdown(f"""
   <div style="{_sec}">INTERACT</div>
   <a href="/?page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
+  <a href="/?page=R%26D+Council" target="_self" style="{_lnk}">R&D Council</a>
   <div style="{_sec}">INSIGHTS</div>
   <a href="/?page=Post+History" target="_self" style="{_lnk}">Post History</a>
   <a href="/?page=Algorithm+Score" target="_self" style="{_lnk}">Algorithm Score</a>
@@ -5142,6 +5158,208 @@ def page_inspiration():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PAGE: R&D COUNCIL DASHBOARD
+# ═══════════════════════════════════════════════════════════════════════════
+
+_RD_AGENTS = [
+    {"id": "cadence", "name": "Cadence", "role": "Strategy & Command", "color": "#2DD4BF"},
+    {"id": "blitz", "name": "Blitz", "role": "Content & Twitter", "color": "#C49E3C"},
+    {"id": "scout", "name": "Scout", "role": "Research & Intelligence", "color": "#6B8AAA"},
+    {"id": "tempo", "name": "Tempo", "role": "Show Prep & Ops", "color": "#E8441A"},
+    {"id": "booth", "name": "Booth", "role": "Podcast & YouTube", "color": "#9B59B6"},
+    {"id": "redzone", "name": "Redzone", "role": "Breaking News", "color": "#E53E3E"},
+    {"id": "snap", "name": "Snap", "role": "Email & Sponsors", "color": "#38A169"},
+    {"id": "audible", "name": "Audible", "role": "Personal Clarity", "color": "#805AD5"},
+    {"id": "gunner", "name": "Gunner", "role": "Daily Intelligence", "color": "#4299E1"},
+]
+
+def _load_council_sessions() -> list:
+    try:
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=10)
+        _files = _r.json().get("files", {})
+        if "rd_council_sessions.json" in _files:
+            return json.loads(_files["rd_council_sessions.json"]["content"])
+    except Exception:
+        pass
+    return []
+
+def _save_council_sessions(sessions: list):
+    try:
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        _payload = json.dumps({"files": {"rd_council_sessions.json": {"content": json.dumps(sessions[:30], indent=2, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{_gid}", data=_payload, headers=_gist_headers(), timeout=10)
+    except Exception:
+        pass
+
+def _run_rd_council_hq(session_type: str) -> dict:
+    """Run a full council session from the HQ app using Claude OAuth."""
+    from datetime import datetime as _dt_c
+    import uuid as _uuid_c
+    _today = date.today()
+    _day_num = _today.timetuple().tm_yday
+    _sidx = 0 if session_type == "morning" else 1
+    _pidx = (_day_num * 2 + _sidx) % len(_RD_AGENTS)
+    _proposer = _RD_AGENTS[_pidx]
+    _responders = [a for a in _RD_AGENTS if a["id"] != _proposer["id"]]
+
+    _ctx = (
+        "Tyler Polumbus - Former NFL OL, Super Bowl 50 champion (Denver Broncos). "
+        "Host of The PhD Show on Altitude 92.5 (noon-3 PM MST). 42K+ Twitter followers. "
+        "YouTube channel. Goals: grow to 100K Twitter, build YouTube, land more sponsorships."
+    )
+
+    _agent_personas = {
+        "cadence": "You are Cadence, Tyler's head coach agent. See the whole field. Think strategically, make decisive calls. Direct, no filler.",
+        "blitz": "You are Blitz, Tyler's content and Twitter agent. You know what goes viral in sports media. Focus on content ROI and social growth.",
+        "scout": "You are Scout, Tyler's research agent. Track what's winning on YouTube and Twitter in sports media. Surface data-driven gaps.",
+        "tempo": "You are Tempo, agent for The PhD Show on Altitude 92.5. Know Tyler's workflow and how to turn content into radio moments.",
+        "booth": "You are Booth, Tyler's podcast and YouTube agent. Understand clip strategy, thumbnails, and growing a sports YouTube channel.",
+        "redzone": "You are Redzone, Tyler's real-time sports intelligence. Track what's trending RIGHT NOW and which stories have legs.",
+        "snap": "You are Snap, Tyler's email and communications agent. Think about monetization through partnerships and sponsorships.",
+        "audible": "You are Audible, Tyler's personal clarity agent. Ask: is this sustainable? Is Tyler spreading too thin? Protect against burnout.",
+        "gunner": "You are Gunner, Tyler's daily briefing agent. Know the news cycle and connect current events to content opportunities.",
+    }
+
+    # Step 1: Proposer generates idea
+    _idea = call_claude(
+        f"{_ctx}\n\nToday: {_today.strftime('%A, %B %d, %Y')}. {session_type.title()} session.\n\n"
+        f"As {_proposer['name']} ({_proposer['role']}), propose ONE specific tactical idea for Tyler "
+        f"to grow his business in the next 7 days. Not vague - a real move with a first step. 3-4 sentences.",
+        system=_agent_personas.get(_proposer["id"], ""), max_tokens=250,
+    )
+
+    # Step 2: Each agent responds
+    _debate_ctx = f"{_ctx}\n\n{_proposer['name']}'s proposed idea:\n{_idea}"
+    _responses = []
+    for _ag in _responders:
+        _resp = call_claude(
+            f"{_debate_ctx}\n\nAs {_ag['name']} ({_ag['role']}), your honest 2-3 sentence take. "
+            f"Agree and build, push back, or flag a risk. Direct and specific.",
+            system=_agent_personas.get(_ag["id"], ""), max_tokens=180,
+        )
+        _responses.append({"agent": _ag["name"], "role": _ag["role"], "id": _ag["id"], "response": _resp})
+
+    # Step 3: Cadence synthesizes
+    _all_text = "\n\n".join(f"{r['agent']} ({r['role']}):\n{r['response']}" for r in _responses)
+    _memo = call_claude(
+        f"{_ctx}\n\nProposed idea by {_proposer['name']}:\n{_idea}\n\nCouncil:\n{_all_text}\n\n"
+        f"As Cadence, decisive memo:\nVERDICT: Move on this? Yes/No/Modified - one sentence why.\n"
+        f"#1 ACTION TODAY: One specific thing Tyler does in 24 hours.\nWATCH: One risk.\n4-6 sentences total.",
+        system=_agent_personas["cadence"], max_tokens=320,
+    )
+
+    return {
+        "id": str(_uuid_c.uuid4()),
+        "date": _today.strftime("%Y-%m-%d"),
+        "time": _dt_c.now().strftime("%-I:%M %p"),
+        "session": session_type,
+        "proposer": {"id": _proposer["id"], "name": _proposer["name"], "role": _proposer["role"]},
+        "idea": _idea,
+        "responses": _responses,
+        "memo": _memo,
+    }
+
+def _render_council_session(s: dict):
+    """Display a single council session with agent cards and memo."""
+    _session_lbl = s.get("session", "").upper() + " SESSION"
+    _date_str = s.get("date", "")
+    _time_str = s.get("time", "")
+    _prop = s.get("proposer", {})
+    _idea = s.get("idea", "")
+    _responses = s.get("responses", [])
+    _memo = s.get("memo", "")
+    _pcol = next((a["color"] for a in _RD_AGENTS if a["id"] == _prop.get("id", "")), "#2DD4BF")
+
+    # Header + proposed idea
+    st.markdown(f"""
+    <div style="background:#0d1829;border:1px solid #1e3a5f;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <span style="font-size:11px;letter-spacing:2px;color:#3a5070;font-weight:700;">{_session_lbl}</span>
+          <div style="font-size:13px;color:#8899aa;margin-top:2px;">{_date_str} &middot; {_time_str} MST</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:#3a5070;letter-spacing:1px;">PROPOSER</div>
+          <div style="font-size:14px;font-weight:700;color:{_pcol};">{_prop.get('name','')}</div>
+          <div style="font-size:11px;color:#556680;">{_prop.get('role','')}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;letter-spacing:2px;color:#3a5070;font-weight:700;margin-bottom:6px;">PROPOSED IDEA</div>
+      <div style="color:#d8d8e8;font-size:14px;line-height:1.7;border-left:3px solid {_pcol};padding-left:12px;">{_idea}</div>
+    </div>""", unsafe_allow_html=True)
+
+    # Council debate - 3-column grid
+    st.markdown('<div style="font-size:11px;letter-spacing:2px;color:#3a5070;font-weight:700;margin-bottom:10px;">COUNCIL DEBATE</div>', unsafe_allow_html=True)
+    _cols = st.columns(3)
+    for _i, _r in enumerate(_responses):
+        _acol = next((a["color"] for a in _RD_AGENTS if a["id"] == _r.get("id", "") or a["name"] == _r.get("agent", "")), "#6B8AAA")
+        with _cols[_i % 3]:
+            st.markdown(f"""
+            <div style="background:#0a1220;border:1px solid #1a2d45;border-top:3px solid {_acol};border-radius:8px;padding:12px;margin-bottom:10px;min-height:130px;">
+              <div style="font-size:12px;font-weight:700;color:{_acol};margin-bottom:2px;">{_r.get('agent','')}</div>
+              <div style="font-size:10px;color:#3a5070;margin-bottom:8px;">{_r.get('role','')}</div>
+              <div style="font-size:12px;color:#b8c8d8;line-height:1.6;">{_r.get('response','')}</div>
+            </div>""", unsafe_allow_html=True)
+
+    # Cadence's call (memo)
+    st.markdown(f"""
+    <div style="background:#0a1a10;border:1px solid #1a4a2a;border-left:4px solid #2DD4BF;border-radius:8px;padding:16px 20px;margin-top:8px;">
+      <div style="font-size:11px;letter-spacing:2px;color:#2DD4BF;font-weight:700;margin-bottom:8px;">CADENCE'S CALL</div>
+      <div style="color:#d8f0d8;font-size:14px;line-height:1.7;white-space:pre-wrap;">{_memo}</div>
+    </div>""", unsafe_allow_html=True)
+
+def page_rd_council():
+    st.markdown('<div class="main-header">R&D <span>COUNCIL</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">9-agent business advisory. Proposes, debates, and delivers a decisive memo twice daily (9 AM + 5 PM MST).</div>', unsafe_allow_html=True)
+
+    _sessions = _load_council_sessions()
+
+    # ── Action bar ──
+    _c1, _c2, _c3 = st.columns([1, 1, 2])
+    with _c1:
+        _run_m = st.button("Run Morning Session", key="rdc_morning", use_container_width=True, type="primary")
+    with _c2:
+        _run_e = st.button("Run Evening Session", key="rdc_evening", use_container_width=True)
+    with _c3:
+        st.markdown(f'<div style="font-size:12px;color:#3a5070;padding-top:10px;">Auto-scheduled 9 AM + 5 PM MST &middot; {len(_RD_AGENTS)} agents &middot; {len(_sessions)} sessions logged</div>', unsafe_allow_html=True)
+
+    if _run_m or _run_e:
+        _stype = "morning" if _run_m else "evening"
+        with st.spinner(f"Council in session... {len(_RD_AGENTS)} agents debating"):
+            try:
+                _new = _run_rd_council_hq(_stype)
+                _sessions = [_new] + _sessions[:29]
+                _save_council_sessions(_sessions)
+                st.rerun()
+            except Exception as _e:
+                st.error(f"Session failed: {_e}")
+
+    if not _sessions:
+        st.markdown("""
+        <div style="background:#0d1829;border:1px solid #1e3a5f;border-radius:10px;padding:40px;text-align:center;margin-top:20px;">
+          <div style="font-size:32px;margin-bottom:12px;">&#9878;</div>
+          <div style="font-size:16px;color:#8899aa;margin-bottom:6px;">No council sessions yet</div>
+          <div style="font-size:13px;color:#3a5070;">Run the first one above or wait for the 9 AM auto-session.</div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    st.markdown("---")
+
+    # ── Latest session ──
+    st.markdown('<div style="font-size:11px;letter-spacing:2px;color:#2DD4BF;font-weight:700;margin-bottom:12px;">LATEST SESSION</div>', unsafe_allow_html=True)
+    _render_council_session(_sessions[0])
+
+    # ── History ──
+    if len(_sessions) > 1:
+        st.markdown('<div style="font-size:11px;letter-spacing:2px;color:#3a5070;font-weight:700;margin:24px 0 10px;">PAST SESSIONS</div>', unsafe_allow_html=True)
+        for _s in _sessions[1:]:
+            _label = f"{_s.get('date','')} &middot; {_s.get('session','').upper()} &middot; Proposed by {_s.get('proposer',{}).get('name','')}"
+            with st.expander(_label):
+                _render_council_session(_s)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 page_map = {
@@ -5156,6 +5374,7 @@ page_map = {
     "Profile Analyzer": page_account_researcher,
     "Reply Mode": page_reply_guy,
     "Idea Bank": page_inspiration,
+    "R&D Council": page_rd_council,
 }
 
 # Sync strategy:
