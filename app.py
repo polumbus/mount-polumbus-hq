@@ -3117,10 +3117,28 @@ def _ci_inspiration_dialog():
             f'</div>',
             unsafe_allow_html=True)
 
-        if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
-            if _hook:
-                st.session_state["ci_text"] = _hook
-            st.rerun(scope="app")
+        _ib1, _ib2 = st.columns([2, 1])
+        with _ib1:
+            if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
+                if _hook:
+                    st.session_state["ci_text"] = _hook
+                st.rerun(scope="app")
+        with _ib2:
+            if pplx_available() and st.button("Verify", key=f"inspo_verify_{_i}", use_container_width=True):
+                with st.spinner("Checking..."):
+                    _fci = pplx_fact_check(_hook)
+                if _fci.get("answer"):
+                    st.session_state[f"_inspo_v_{_i}"] = _fci
+                else:
+                    st.warning("Verify failed.")
+        _ivr = st.session_state.get(f"_inspo_v_{_i}")
+        if _ivr:
+            _iva = _ivr["answer"]
+            _ivc = _ivr.get("citations", [])
+            _icol = "#2DD4BF" if "accurate" in _iva.lower() or "correct" in _iva.lower() else "#FBBF24"
+            st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_icol};padding:8px 12px;border-radius:6px;margin:4px 0;font-size:11px;color:#b8c8d8;line-height:1.5;">{_iva}</div>', unsafe_allow_html=True)
+            if _ivc:
+                st.markdown(f'<div style="font-size:9px;color:#3a5070;">Sources: {", ".join(str(c) for c in _ivc[:3])}</div>', unsafe_allow_html=True)
 
         st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
 
