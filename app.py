@@ -2924,9 +2924,46 @@ def _fetch_inspiration_feed():
     return _all_tweets, _rss_headlines
 
 
+def _load_inspo_from_gist() -> tuple:
+    """Load cached inspiration ideas from gist — instant, survives session resets."""
+    try:
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=8)
+        _files = _r.json().get("files", {})
+        if "hq_inspo_cache.json" in _files:
+            _data = json.loads(_files["hq_inspo_cache.json"]["content"])
+            _ideas = _data.get("ideas", [])
+            _ts = _data.get("generated_at", "")
+            _n_tweets = _data.get("n_tweets", 0)
+            _n_heads = _data.get("n_headlines", 0)
+            # Check freshness — use if under 2 hours old
+            if _ts and _ideas:
+                from datetime import timezone as _tz2
+                _gen = datetime.fromisoformat(_ts)
+                if _gen.tzinfo is None:
+                    _gen = _gen.replace(tzinfo=_tz2.utc)
+                _age = (datetime.now(_tz2.utc) - _gen).total_seconds()
+                if _age < 7200:  # 2 hours
+                    return _ideas, _n_tweets, _n_heads
+    except Exception:
+        pass
+    return [], 0, 0
+
+def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
+    """Persist inspiration ideas to gist for instant loads."""
+    try:
+        from datetime import timezone as _tz3
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        _data = {"ideas": ideas, "n_tweets": n_tweets, "n_headlines": n_headlines,
+                 "generated_at": datetime.now(_tz3.utc).isoformat()}
+        _payload = json.dumps({"files": {"hq_inspo_cache.json": {"content": json.dumps(_data, indent=2, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{_gid}", data=_payload, headers=_gist_headers(), timeout=8)
+    except Exception:
+        pass
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude():
-    """Fetch feed + call Claude. Cached 10 min — first call is slow, all others instant."""
+    """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
@@ -2973,6 +3010,10 @@ Return ONLY a JSON array of exactly 7 objects:
         except Exception:
             pass
 
+    # Save to gist for instant loads on future visits
+    if _ideas:
+        _save_inspo_to_gist(_ideas, len(_all_tweets), len(_rss_headlines))
+
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
@@ -2980,16 +3021,24 @@ Return ONLY a JSON array of exactly 7 objects:
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
 
-    # Run Claude only if we don't already have the full idea pool cached
+    # Load ideas: session state > gist cache > Claude (slowest, last resort)
     if "inspo_ideas" not in st.session_state:
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude()
-        if not _all_ideas:
-            st.error("Couldn't generate ideas — try again.")
-            return
-        st.session_state["inspo_ideas"] = _all_ideas
-        st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
-        st.session_state["inspo_page"] = 0
+        # Try gist first — instant load if fresh ideas exist
+        _gist_ideas, _gist_nt, _gist_nh = _load_inspo_from_gist()
+        if _gist_ideas:
+            st.session_state["inspo_ideas"] = _gist_ideas
+            st.session_state["inspo_meta"] = (_gist_nt, _gist_nh)
+            st.session_state["inspo_page"] = 0
+        else:
+            # No gist cache — generate fresh (slow, but only happens once)
+            with st.spinner("Mount Polumbus AI is reaching the summit..."):
+                _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude()
+            if not _all_ideas:
+                st.error("Couldn't generate ideas — try again.")
+                return
+            st.session_state["inspo_ideas"] = _all_ideas
+            st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
+            st.session_state["inspo_page"] = 0
 
     _all_ideas = st.session_state["inspo_ideas"]
     _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
@@ -3042,12 +3091,11 @@ def _ci_inspiration_dialog():
     # ── Footer actions ──
     _rb1, _rb2 = st.columns(2)
     with _rb1:
-        if st.button("↺ New Ideas", use_container_width=True, key="inspo_regen"):
+        if st.button("New Ideas", use_container_width=True, key="inspo_regen"):
             st.session_state["inspo_page"] = _page + 1
-            st.session_state["_ci_show_inspiration"] = True
-            st.rerun(scope="app")
+            st.rerun()
     with _rb2:
-        if st.button("⟳ Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
+        if st.button("Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
             _run_inspiration_claude.clear()
             st.session_state.pop("inspo_ideas", None)
