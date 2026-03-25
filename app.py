@@ -3147,7 +3147,7 @@ def _ci_inspiration_dialog():
     with _rb1:
         if st.button("New Ideas", use_container_width=True, key="inspo_regen"):
             st.session_state["inspo_page"] = _page + 1
-            st.rerun()
+            st.rerun(scope="fragment")
     with _rb2:
         if st.button("Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
