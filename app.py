@@ -3014,7 +3014,7 @@ def _run_inspiration_claude():
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-    _prompt = f"""Tyler Polumbus — former NFL OL, Denver sports media. Give him 7 tweet ideas from what's happening RIGHT NOW.
+    _prompt = f"""Tyler Polumbus — former NFL OL, Denver sports media. Give him 14 tweet ideas from what's happening RIGHT NOW.
 
 FEED (last 24h):
 {_tweet_block}
@@ -3024,14 +3024,14 @@ HEADLINES:
 
 Rules: hook = complete tweet draft, 180-260 chars, Tyler's voice (direct, ellipsis, no hashtags/emojis). why = under 10 words, his unique angle as a former player.
 
-Return ONLY a JSON array of exactly 7 objects:
+Return ONLY a JSON array of exactly 14 objects:
 [{{"topic":"2-4 words","source":"twitter/espn/news","hook":"full tweet draft 180-260 chars","why":"short angle under 10 words"}}]"""
 
     _system = "You are Tyler Polumbus's content strategist. Return only the JSON array, no other text."
     try:
-        _raw = _call_claude_direct(_prompt, _system, max_tokens=900)
+        _raw = _call_claude_direct(_prompt, _system, max_tokens=1800)
     except Exception:
-        _raw = call_claude(_prompt, _system, max_tokens=900)
+        _raw = call_claude(_prompt, _system, max_tokens=1800)
 
     _ideas = []
     try:
@@ -3076,6 +3076,10 @@ def _ci_inspiration_dialog():
             st.session_state["inspo_ideas"] = _all_ideas
             st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
             st.session_state["inspo_page"] = 0
+
+    # Check if New Ideas was clicked on previous run — increment page BEFORE rendering
+    if st.session_state.pop("_inspo_next", False):
+        st.session_state["inspo_page"] = st.session_state.get("inspo_page", 0) + 1
 
     _all_ideas = st.session_state["inspo_ideas"]
     _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
@@ -3147,7 +3151,7 @@ def _ci_inspiration_dialog():
     _rb1, _rb2 = st.columns(2)
     with _rb1:
         if st.button("New Ideas", use_container_width=True, key="inspo_regen"):
-            st.session_state["inspo_page"] = _page + 1
+            st.session_state["_inspo_next"] = True
             st.rerun(scope="fragment")
     with _rb2:
         if st.button("Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
