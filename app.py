@@ -3077,10 +3077,6 @@ def _ci_inspiration_dialog():
             st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
             st.session_state["inspo_page"] = 0
 
-    # Check if New Ideas was clicked on previous run — increment page BEFORE rendering
-    if st.session_state.pop("_inspo_next", False):
-        st.session_state["inspo_page"] = st.session_state.get("inspo_page", 0) + 1
-
     _all_ideas = st.session_state["inspo_ideas"]
     _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
     _page = st.session_state.get("inspo_page", 0)
@@ -3149,10 +3145,10 @@ def _ci_inspiration_dialog():
 
     # ── Footer actions ──
     _rb1, _rb2 = st.columns(2)
+    def _inspo_next_page():
+        st.session_state["inspo_page"] = st.session_state.get("inspo_page", 0) + 1
     with _rb1:
-        if st.button("New Ideas", use_container_width=True, key="inspo_regen"):
-            st.session_state["_inspo_next"] = True
-            st.rerun(scope="fragment")
+        st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_next_page)
     with _rb2:
         if st.button("Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
             _fetch_inspiration_feed.clear()
