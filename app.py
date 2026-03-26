@@ -2115,17 +2115,22 @@ RULES:
             _sports_ctx = ""
             try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
             except Exception: pass
+            _fmt_pats = _get_format_patterns()
+            _fmt_inject = ""
+            if _fmt_pats:
+                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
             banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
 {format_mod}
-{patterns_ctx}{_sports_ctx}
+{patterns_ctx}{_sports_ctx}{_fmt_inject}
 
 Rules:
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
 - Hook & Pattern Breakers (first line stops the scroll)
+- Structure each option to match the FORMAT PATTERNS above
 {_char_rule}
 
 Return ONLY this JSON, no other text:
@@ -2221,12 +2226,16 @@ Return ONLY this JSON, no other text:
             _sports_ctx_b = ""
             try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
             except Exception: pass
+            _fmt_pats_b = _get_format_patterns()
+            _fmt_inject_b = ""
+            if _fmt_pats_b:
+                _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
-{format_mod}{_sports_ctx_b}
+{format_mod}{_sports_ctx_b}{_fmt_inject_b}
 
 TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
@@ -2236,6 +2245,7 @@ Rules:
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
+- Structure each option to match the FORMAT PATTERNS above
 
 Return ONLY this JSON, no other text:
 {{
@@ -2961,6 +2971,68 @@ def _fetch_inspiration_feed():
     return _all_tweets, _rss_headlines
 
 
+# ── Format Pattern Analysis ──────────────────────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _analyze_format_patterns() -> str:
+    """
+    Analyze the FORMAT (not content) of top-performing tweets from Tyler's lists.
+    Returns a text block of structural patterns that What's Hot and Go Viral use
+    to shape output. Cached 1 hour — format trends don't change minute to minute.
+    """
+    _all_tweets, _ = _fetch_inspiration_feed()
+    if not _all_tweets:
+        return ""
+
+    # Sort by engagement — likes + RTs + replies
+    def _eng(t):
+        return (int(t.get("likeCount", t.get("like_count", 0)) or 0)
+                + int(t.get("retweetCount", t.get("retweet_count", 0)) or 0) * 3
+                + int(t.get("replyCount", t.get("reply_count", 0)) or 0) * 2)
+
+    _sorted = sorted(_all_tweets, key=_eng, reverse=True)
+    _top = _sorted[:12]
+
+    # Build the analysis prompt with full tweet text
+    _tweet_block = ""
+    for _i, _t in enumerate(_top):
+        _text = _t.get("text", "")[:300]
+        _likes = _t.get("likeCount", _t.get("like_count", 0))
+        _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
+        _reps = _t.get("replyCount", _t.get("reply_count", 0))
+        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+        _tweet_block += f"{_i+1}. @{_author} ({_likes}L {_rts}RT {_reps}R):\n{_text}\n\n"
+
+    if not _tweet_block.strip():
+        return ""
+
+    _prompt = f"""Analyze the STRUCTURE and FORMAT of these top-performing sports tweets. Do NOT summarize what they say — tell me HOW they're built.
+
+{_tweet_block}
+
+Return ONLY a numbered list of 5-7 format patterns you see. For each pattern, include:
+- What the pattern is (hook style, length, punctuation, line breaks, structure)
+- How many of the 12 tweets use it (e.g. "7/12")
+- One 5-word example of the pattern
+
+Focus on: opener length, line break placement, question vs statement, stat/number placement, ending style (period vs ellipsis vs question), sentence count, use of contrast/tension.
+
+Be specific and structural. Not "good hooks" — tell me "8-word bold claim opener, line break, then supporting stat"."""
+
+    try:
+        _raw = call_claude(_prompt, system="You are a tweet structure analyst. Return only the numbered pattern list, no preamble.", max_tokens=600)
+        return _raw.strip()
+    except Exception:
+        return ""
+
+
+def _get_format_patterns() -> str:
+    """Get cached format patterns, or empty string if unavailable."""
+    try:
+        return _analyze_format_patterns()
+    except Exception:
+        return ""
+
+
 def _load_inspo_from_gist() -> tuple:
     """Load cached inspiration ideas from gist — instant, survives session resets."""
     try:
@@ -3014,18 +3086,28 @@ def _run_inspiration_claude():
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
+    _fmt_patterns = _get_format_patterns()
+    _fmt_block = ""
+    if _fmt_patterns:
+        _fmt_block = f"""
+
+FORMAT PATTERNS (from highest-engagement tweets on Tyler's timeline RIGHT NOW — every hook MUST follow these patterns):
+{_fmt_patterns}
+
+Use these patterns to structure every hook. Match the opener style, line break placement, length, and ending style that's working THIS WEEK."""
+
     _prompt = f"""Tyler Polumbus — former NFL OL, Denver sports media. Give him 14 tweet ideas from what's happening RIGHT NOW.
 
 FEED (last 24h):
 {_tweet_block}
 
 HEADLINES:
-{_rss_block}
+{_rss_block}{_fmt_block}
 
-Rules: hook = complete tweet draft, 180-260 chars, Tyler's voice (direct, ellipsis, no hashtags/emojis). why = under 10 words, his unique angle as a former player.
+Rules: hook = complete tweet draft, Tyler's voice (direct, no hashtags/emojis). why = under 10 words, his unique angle as a former player.
 
 Return ONLY a JSON array of exactly 14 objects:
-[{{"topic":"2-4 words","source":"twitter/espn/news","hook":"full tweet draft 180-260 chars","why":"short angle under 10 words"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","hook":"full tweet draft matching the format patterns above","why":"short angle under 10 words"}}]"""
 
     _system = "You are Tyler Polumbus's content strategist. Return only the JSON array, no other text."
     try:
