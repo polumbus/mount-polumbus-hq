@@ -1320,7 +1320,8 @@ if st.session_state.pop("_nav_override", False):
     pass  # session_state.current_page already set by the button handler — keep it
 elif _qp_page:
     st.session_state.current_page = _qp_page
-elif "current_page" not in st.session_state:
+else:
+    # No page in URL — default to Creator Studio (fresh load or direct visit)
     st.session_state.current_page = "Creator Studio"
 
 _cur_pg = st.session_state.current_page
