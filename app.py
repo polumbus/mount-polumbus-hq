@@ -3081,6 +3081,21 @@ def _ci_inspiration_dialog():
     _n_tweets, _n_heads = st.session_state.get("inspo_meta", (0, 0))
     _page = st.session_state.get("inspo_page", 0)
     _per_page = 7
+
+    # If cached ideas are from old 7-idea prompt, clear and regenerate with 14
+    if len(_all_ideas) <= _per_page and _page > 0:
+        _run_inspiration_claude.clear()
+        st.session_state.pop("inspo_ideas", None)
+        st.session_state["inspo_page"] = 0
+        with st.spinner("Generating fresh ideas..."):
+            _fresh, _nt2, _nh2 = _run_inspiration_claude()
+        if _fresh:
+            st.session_state["inspo_ideas"] = _fresh
+            st.session_state["inspo_meta"] = (_nt2, _nh2)
+            _all_ideas = _fresh
+            _n_tweets, _n_heads = _nt2, _nh2
+        _page = 0
+
     _start = (_page * _per_page) % max(len(_all_ideas), 1)
     _ideas = (_all_ideas + _all_ideas)[_start:_start + _per_page]  # wrap-around slice
 
@@ -3147,6 +3162,7 @@ def _ci_inspiration_dialog():
     _rb1, _rb2 = st.columns(2)
     def _inspo_next_page():
         st.session_state["inspo_page"] = st.session_state.get("inspo_page", 0) + 1
+        st.session_state["_ci_show_inspiration"] = True  # re-open dialog after full app rerun
     with _rb1:
         st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_next_page)
     with _rb2:
