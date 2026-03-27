@@ -1830,7 +1830,7 @@ def _parse_banger_json(raw):
     except Exception:
         pass
     out = {}
-    for k in ["option1", "option1_pattern", "option2", "option2_pattern", "pick"]:
+    for k in ["option1", "option1_pattern", "option2", "option2_pattern", "pick", "pick_reason"]:
         m = re.search(rf'"{k}"\s*:\s*"((?:[^"\\]|\\.)*)"', clean, re.DOTALL)
         if m:
             out[k] = m.group(1).replace('\\n', '\n')
@@ -1841,78 +1841,88 @@ def _parse_banger_json(raw):
     return out if out.get("option1") else None
 
 
-def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
-    """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
-    if action == "preview":
-        return
+# ═══════════════════════════════════════════════════════════════════════════
+# CREATOR STUDIO — BUILDER FUNCTIONS (voice, format, patterns, grades)
+# ═══════════════════════════════════════════════════════════════════════════
 
-    voice_mod = ""
+def _build_voice_mod(voice: str) -> str:
+    """Return the voice instruction block for the given voice mode."""
     if voice == "Critical":
-        voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as a hard accountability take. The output MUST:
-1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
-2. Call out exactly what isn't working and why it matters
-3. End with a pointed question or challenge that puts the responsibility on someone specific
-4. Sound like a disappointed former NFL player holding the team accountable — NOT an angry fan ranting
-5. DO NOT use generic phrases like "we need to be better" or "this has to change" — name the specific problem
+        return """=== DIAGNOSIS MODE (Critical Voice) — MANDATORY STRUCTURE ===
+Three-part structure — no exceptions:
+SYMPTOM: Open with the specific, measurable failure. A stat, a named moment, a concrete gap — NOT a vague complaint. (e.g. "We ran on 38% of first downs in losses last year.")
+DIAGNOSIS: State exactly what's causing it and why it matters. One sentence. No hedging.
+CHALLENGE: End with a hard, pointed question or direct accountability statement aimed at a specific person or group. Hard stop — period or question mark. NEVER an ellipsis.
 
-The tone is: calm, pointed, credible. Former player who knows what winning looks like and isn't seeing it.
-WRONG: "The Broncos need to improve their running game."
-RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
-=== END CRITICAL VOICE ==="""
+Tone: calm, credible, disappointed — former player who knows what winning looks like and isn't seeing it.
+WRONG: "The Broncos need to improve their running game. When will they fix this?"
+RIGHT: "We ran on 38% of first downs in losses last year. Every Super Bowl team in the last 5 years was above 50%. That gap is a choice. Who's accountable for it?"
+=== END DIAGNOSIS MODE ==="""
     elif voice == "Homer":
-        voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
-1. Use "we" or "this team" — make the reader feel included in the belief
-2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
-3. Convey real belief that comes from insider football knowledge — "I played 8 years in this league and I know what a winning culture looks like"
-4. End with forward momentum — something to look forward to or build on
-5. Make the reader feel GOOD about being a fan — positive sentiment, energy, shared belief
+        return """=== DON'T SLEEP ON US MODE (Homer Voice) — MANDATORY STRUCTURE ===
+Three-part structure — no exceptions:
+SIGNAL: Open with one specific, concrete thing that a real football eye would notice — a player name, a stat, a scheme detail, a moment. NOT "this team is special."
+WHY IT MATTERS: Explain why that signal points toward something real. Connect it to winning. Draw on 8-year NFL experience.
+FORWARD: End with a statement (not a question) that shows the opponent hasn't realized what's coming yet. Convey earned confidence — the fanbase should feel they're in on something.
 
-The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerleading — earned optimism.
+Tone: infectious, grounded, insider knowledge. NOT blind homerism — earned belief.
 WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
-RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
-=== END HOMER VOICE ==="""
+RIGHT: "I've watched enough film to know when an O-line is gelling. What we have right now? Teams haven't adjusted yet. They will. By then it won't matter."
+=== END DON'T SLEEP ON US MODE ==="""
     elif voice == "Sarcastic":
-        voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as dry, deadpan understatement. The output MUST:
-1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
-2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
-3. The punchline is the deadpan acceptance of something that SHOULD be outrageous
-4. End with one dry final observation that lands the joke without explaining it
-5. DO NOT be mean or attack people — punch at situations, decisions, outcomes
+        return """=== LAYERED REFERENCE MODE (Sarcastic Voice) — MANDATORY STRUCTURE ===
+Two tools — pick the right one:
+CULTURAL LEAP (positive subject): Reference something from outside sports (pop culture, history, a universal human experience) that maps perfectly onto the situation. The comparison does the work — you don't explain it.
+IMPLIED REAL STORY (critical subject): State the surface-level "official" version of events in flat, deadpan language. The absurdity of accepting it straight-faced IS the joke. End with one dry observation.
 
-The tone is: former player press conference energy. Seen everything. Nothing surprises him. One eyebrow raised.
+Rules: Flat, understated language. One raised eyebrow. Never mean — punch at situations, not people. No explanation of the joke.
 WRONG: "This franchise is a disaster and everyone is incompetent."
-RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
-=== END SARCASTIC VOICE ==="""
+RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. Bold strategy. Can't wait to see how it plays out."
+=== END LAYERED REFERENCE MODE ==="""
     else:
-        voice_mod = """=== DEFAULT VOICE MODE ===
-Tyler's natural voice — direct, confident, former-player authority. The output MUST:
-1. Lead with the insight or take — no throat-clearing
-2. Short punchy sentences. Ellipsis (...) as signature where appropriate
-3. State it flat. No hedging, no "maybe", no "I think" — just the take
-4. End with either a trailing thought (...) or a question that invites debate
-=== END DEFAULT VOICE ==="""
+        return """=== FILM ROOM MODE (Default Voice) ===
+Three-part structure:
+OBSERVATION: Open with what you actually see — specific, concrete, not a take yet. Set the frame.
+CONTEXT: One sentence that gives it weight — what does this connect to? Why does it matter?
+OPEN DOOR: End with a trailing thought (...) or question that invites the reader in. Leave space for them to finish the thought.
 
-    _fp = analyze_personal_patterns()
-    _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
-    _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
-    _fp_range = _fp.get("optimal_char_range", (40, 250)) if _fp else (40, 250)
+Tone: direct, confident, former-player authority. Short punchy sentences. Ellipsis (...) as signature.
+=== END FILM ROOM MODE ==="""
+
+
+def _build_article_voice_mod(voice: str) -> str:
+    """Return article-specific voice overlay (layered on top of _build_voice_mod)."""
+    base = _build_voice_mod(voice)
+    article_overlay = """
+=== ARTICLE VOICE OVERLAY ===
+For long-form X Articles, adapt the voice mode above to full article structure:
+- Apply the voice mode's TONE throughout (not just the opener)
+- Each section subheading should carry the same energy as the opener
+- The conclusion should land with the same punch as a standalone tweet
+- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Homer, dry observation for Sarcastic) in the final line
+=== END ARTICLE OVERLAY ==="""
+    return base + article_overlay
+
+
+def _build_format_mod(fmt: str, patterns: dict) -> str:
+    """Return format instructions for the given fmt, using live personal patterns."""
+    _pp = patterns or {}
+    _fp_q = _pp.get("top_question_pct", 28)
+    _fp_ell = _pp.get("top_ellipsis_pct", 28)
+    _fp_range = _pp.get("optimal_char_range", (40, 250))
     _fp_hooks = []
-    if _fp:
+    if _pp:
         _hook_pool = (
-            _fp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
-            else _fp.get("top_examples_normal", []) if fmt == "Normal Tweet"
-            else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
-            else _fp.get("top_examples", [])
+            _pp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
+            else _pp.get("top_examples_normal", []) if fmt == "Normal Tweet"
+            else _pp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
+            else _pp.get("top_examples", [])
         )
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-    format_mod = ""
     if fmt == "Punchy Tweet":
-        format_mod = f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+        return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
 
 STRUCTURE:
 SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
@@ -1935,7 +1945,7 @@ RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
-        format_mod = f"""FORMAT: NORMAL TWEET (161-260 characters)
+        return f"""FORMAT: NORMAL TWEET (161-260 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
@@ -1963,7 +1973,7 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
-        format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
+        return f"""FORMAT: LONG TWEET (280-1200 characters)
 
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
@@ -2000,7 +2010,7 @@ IMAGE RECOMMENDATION:
 - Images increase total impressions even though text-only has higher engagement rate"""
 
     elif fmt == "Thread":
-        format_mod = f"""FORMAT: THREAD (5-8 tweets)
+        return f"""FORMAT: THREAD (5-8 tweets)
 
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
@@ -2039,7 +2049,7 @@ IMAGE RECOMMENDATION:
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
     elif fmt == "Article":
-        format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+        return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
 
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
@@ -2091,7 +2101,231 @@ RULES:
 - Every point must reference specific players/schemes/numbers
 - Hero image REQUIRED (articles without hero images look like broken cards in feed)
 - 2-3 supporting images placed between sections
-- End with debate invitation to drive replies"""
+- End with debate invitation to drive replies
+
+IMAGE RECOMMENDATION:
+- HERO IMAGE required — this becomes the feed thumbnail. Use: game photo, player action shot, or custom graphic
+- 2-3 SUPPORTING IMAGES throughout the body, placed between sections
+- Best types: stat charts, play diagrams, comparison graphics, game screenshots
+- Bold your image captions
+- Articles WITHOUT hero images look like broken cards in the feed — always include one
+- [IMAGE PLACEMENT] markers in the template show where to add each image"""
+
+    return ""
+
+
+def _sports_context_relevant(tweet_text: str) -> bool:
+    """Return True only if the tweet text likely needs live sports context (scores, injuries, breaking news)."""
+    _text = tweet_text.lower()
+    _live_signals = [
+        "score", "just", "tonight", "yesterday", "today", "last night",
+        "breaking", "news", "trade", "injury", "hurt", "out ", "signed",
+        "released", "cut ", "fired", "hired", "draft pick", "game ",
+        "win ", "loss", "beat ", "lost ", "won ", "tied ", "overtime",
+        "playoffs", "series", "matchup", "this week", "this weekend",
+    ]
+    return any(sig in _text for sig in _live_signals)
+
+
+def _analyze_format_patterns_segmented() -> dict:
+    """
+    Analyze FORMAT patterns of top-performing tweets, segmented by tweet length.
+    Returns dict with keys: 'short' (< 160 chars), 'medium' (160-280), 'long' (> 280).
+    Cached 1 hour — format trends don't change minute to minute.
+    """
+    _all_tweets, _ = _fetch_inspiration_feed()
+    if not _all_tweets:
+        return {}
+
+    def _eng(t):
+        return (int(t.get("likeCount", t.get("like_count", 0)) or 0)
+                + int(t.get("retweetCount", t.get("retweet_count", 0)) or 0) * 3
+                + int(t.get("replyCount", t.get("reply_count", 0)) or 0) * 2)
+
+    _sorted = sorted(_all_tweets, key=_eng, reverse=True)
+    _top = _sorted[:30]
+
+    # Segment by length
+    _short, _medium, _long = [], [], []
+    for _t in _top:
+        _txt = _t.get("text", "")
+        _n = len(_txt)
+        if _n < 160:
+            _short.append(_t)
+        elif _n <= 280:
+            _medium.append(_t)
+        else:
+            _long.append(_t)
+
+    def _analyze_segment(tweets, label):
+        if not tweets:
+            return ""
+        _block = ""
+        for _i, _t in enumerate(tweets[:10]):
+            _text = _t.get("text", "")[:300]
+            _likes = _t.get("likeCount", _t.get("like_count", 0))
+            _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
+            _reps = _t.get("replyCount", _t.get("reply_count", 0))
+            _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+            _block += f"{_i+1}. @{_author} ({_likes}L {_rts}RT {_reps}R):\n{_text}\n\n"
+        if not _block.strip():
+            return ""
+        _prompt = f"""Analyze the STRUCTURE and FORMAT of these top-performing {label} sports tweets. Do NOT summarize content — tell me HOW they're built.
+
+{_block}
+
+Return ONLY a numbered list of 4-5 format patterns. For each:
+- What the pattern is (hook style, length, punctuation, line breaks, structure)
+- How many tweets use it (e.g. "5/8")
+- One 5-word example
+
+Focus on: opener length, line breaks, question vs statement, stat placement, ending style, sentence count, contrast/tension."""
+        try:
+            _raw = call_claude(_prompt, system="You are a tweet structure analyst. Return only the numbered pattern list, no preamble.", max_tokens=400)
+            return _raw.strip()
+        except Exception:
+            return ""
+
+    return {
+        "short": _analyze_segment(_short, "short (under 160 char)"),
+        "medium": _analyze_segment(_medium, "medium (160-280 char)"),
+        "long": _analyze_segment(_long, "long (280+ char)"),
+    }
+
+
+def _get_format_patterns_for_fmt(fmt: str) -> str:
+    """Get format patterns for the appropriate length segment based on fmt."""
+    try:
+        _patterns = _analyze_format_patterns_segmented()
+        if not _patterns:
+            return ""
+        if fmt == "Punchy Tweet":
+            return _patterns.get("short", "") or _patterns.get("medium", "")
+        elif fmt in ("Long Tweet", "Thread", "Article"):
+            return _patterns.get("long", "") or _patterns.get("medium", "")
+        else:
+            return _patterns.get("medium", "") or _patterns.get("short", "")
+    except Exception:
+        return ""
+
+
+def _save_format_patterns_to_gist(patterns_dict: dict) -> None:
+    """Save format patterns dict to gist for cross-session caching."""
+    try:
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        from datetime import timezone as _tz4
+        _data = {"patterns": patterns_dict, "saved_at": datetime.now(_tz4.utc).isoformat()}
+        _payload = json.dumps({"files": {"hq_format_patterns.json": {"content": json.dumps(_data, indent=2, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{_gid}", data=_payload, headers=_gist_headers(), timeout=8)
+    except Exception:
+        pass
+
+
+def _get_format_patterns_with_fallback(fmt: str) -> str:
+    """Get format patterns for fmt — gist cache first, then fresh analysis, with gist save."""
+    try:
+        # Try gist cache first
+        _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=8)
+        _files = _r.json().get("files", {})
+        if "hq_format_patterns.json" in _files:
+            _cached = json.loads(_files["hq_format_patterns.json"]["content"])
+            _ts = _cached.get("saved_at", "")
+            _stored = _cached.get("patterns", {})
+            if _ts and _stored:
+                from datetime import timezone as _tz3
+                _gen = datetime.fromisoformat(_ts)
+                if _gen.tzinfo is None:
+                    _gen = _gen.replace(tzinfo=_tz3.utc)
+                _age = (datetime.now(_tz3.utc) - _gen).total_seconds()
+                if _age < 3600:  # 1 hour
+                    if fmt == "Punchy Tweet":
+                        return _stored.get("short", "") or _stored.get("medium", "")
+                    elif fmt in ("Long Tweet", "Thread", "Article"):
+                        return _stored.get("long", "") or _stored.get("medium", "")
+                    else:
+                        return _stored.get("medium", "") or _stored.get("short", "")
+    except Exception:
+        pass
+    # Fresh analysis
+    try:
+        _fresh = _analyze_format_patterns_segmented()
+        if _fresh:
+            _save_format_patterns_to_gist(_fresh)
+            if fmt == "Punchy Tweet":
+                return _fresh.get("short", "") or _fresh.get("medium", "")
+            elif fmt in ("Long Tweet", "Thread", "Article"):
+                return _fresh.get("long", "") or _fresh.get("medium", "")
+            else:
+                return _fresh.get("medium", "") or _fresh.get("short", "")
+    except Exception:
+        pass
+    return ""
+
+
+def _build_grades_system(fmt: str, pp: dict) -> tuple:
+    """
+    Return (prompt_a, prompt_b) for parallel grade calls.
+    Incorporates personal benchmarks from pp and format-specific criteria.
+    """
+    _pp = pp or {}
+    _fp_q = _pp.get("top_question_pct", 28)
+    _fp_ell = _pp.get("top_ellipsis_pct", 28)
+    _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _fp_avg = _pp.get("top_avg_chars", 162)
+    _fp_lo, _fp_hi = _fp_range
+
+    _algo = "X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%."
+
+    # Format-specific benchmark note
+    if fmt == "Punchy Tweet":
+        _fmt_note = f"Format: Punchy Tweet (target: under 160 chars). Tyler's top punchy tweets avg {_fp_avg} chars."
+        _fmt_fix_a = "exact edit to compress under 160 chars"
+        _char_guide = "under 160"
+    elif fmt == "Normal Tweet":
+        _nt_lo = max(_fp_lo, 161)
+        _nt_hi = min(_fp_hi, 260)
+        _fmt_note = f"Format: Normal Tweet (target: {_nt_lo}-{_nt_hi} chars). Tyler's top normal tweets avg {_fp_avg} chars."
+        _fmt_fix_a = f"exact edit to land in {_nt_lo}-{_nt_hi} char range"
+        _char_guide = f"{_nt_lo}-{_nt_hi}"
+    elif fmt == "Long Tweet":
+        _fmt_note = f"Format: Long Tweet (target: 600-1200 chars). Tyler's top long tweets avg {_fp_avg} chars."
+        _fmt_fix_a = "exact edit to add depth above the Show More fold"
+        _char_guide = "600-1200"
+    elif fmt == "Thread":
+        _fmt_note = "Format: Thread. Grade Tweet 1 as the hook — if it doesn't stop the scroll, the thread dies."
+        _fmt_fix_a = "exact rewrite of Tweet 1 opener"
+        _char_guide = "5-8 tweets"
+    elif fmt == "Article":
+        _fmt_note = "Format: X Article (1500-2000 words). Grade the headline and intro as the hook — they determine feed click-through."
+        _fmt_fix_a = "exact rewrite of headline or intro sentence"
+        _char_guide = "1500-2000 words"
+    else:
+        _fmt_note = f"Format: {fmt}. Tyler's top tweets avg {_fp_avg} chars."
+        _fmt_fix_a = "exact edit to first line"
+        _char_guide = f"{_fp_lo}-{_fp_hi}"
+
+    _benchmarks = f"""TYLER'S PERSONAL BENCHMARKS (from synced tweet history):
+- {_fp_q}% of his top tweets use questions — benchmark for Conversation Catalyst
+- {_fp_ell}% of his top tweets use ellipsis — benchmark for Voice Match
+- Optimal char range: {_fp_lo}-{_fp_hi} — benchmark for Format Fit
+- {_fmt_note}"""
+
+    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and tyler_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
+
+    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"format: {_char_guide}","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"benchmark: {_fp_ell}% ellipsis rate","fix":"exact word or phrase to change"}}]}}"""
+
+    return _prompt_a, _prompt_b
+
+
+def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
+    """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
+    if action == "preview":
+        return
+
+    voice_mod = _build_voice_mod(voice)
+    pp = analyze_personal_patterns()
+    format_mod = _build_format_mod(fmt, pp)
 
     result = None
 
@@ -2105,7 +2339,6 @@ RULES:
                 st.session_state.pop(_k, None)
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            pp = analyze_personal_patterns()
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
             _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
             _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
@@ -2113,9 +2346,10 @@ RULES:
                 _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
             _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
             _sports_ctx = ""
-            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
-            except Exception: pass
-            _fmt_pats = _get_format_patterns()
+            if _sports_context_relevant(tweet_text):
+                try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
+                except Exception: pass
+            _fmt_pats = _get_format_patterns_with_fallback(fmt)
             _fmt_inject = ""
             if _fmt_pats:
                 _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
@@ -2139,7 +2373,8 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after",
-  "pick": "1 or 2 — just the number, no explanation"
+  "pick": "1 or 2 — just the number, no explanation",
+  "pick_reason": "one sentence — why this option scores higher on the X algorithm"
 }}"""
             raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
             banger_data = _parse_banger_json(raw)
@@ -2169,12 +2404,14 @@ Return ONLY this JSON, no other text:
             else:
                 # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
                 _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
-                _algo = "X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%."
-                _tweet_info = f'Tweet ({len(tweet_text)} chars): "{tweet_text}"\nHas question mark: {"yes" if "?" in tweet_text else "no"} | Has ellipsis: {"yes" if "..." in tweet_text else "no"}'
+                _has_q = "yes" if "?" in tweet_text else "no"
+                _has_ell = "yes" if "..." in tweet_text else "no"
+                _char_count = len(tweet_text)
 
-                # ── Two parallel calls of 4 grades each ──
-                _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and tyler_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact edit to first line"}},{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
-                _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_tweet_info}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}]}}"""
+                # ── Two parallel calls of 4 grades each, with personal benchmarks ──
+                _raw_a, _raw_b = _build_grades_system(fmt, pp)
+                _prompt_a = _raw_a.format(tweet_text=tweet_text, char_count=_char_count, has_q=_has_q, has_ell=_has_ell)
+                _prompt_b = _raw_b.format(tweet_text=tweet_text, char_count=_char_count, has_q=_has_q, has_ell=_has_ell)
 
                 def _parse(raw):
                     try:
@@ -2224,9 +2461,10 @@ Return ONLY this JSON, no other text:
             return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             _sports_ctx_b = ""
-            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
-            except Exception: pass
-            _fmt_pats_b = _get_format_patterns()
+            if _sports_context_relevant(tweet_text):
+                try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
+                except Exception: pass
+            _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
             _fmt_inject_b = ""
             if _fmt_pats_b:
                 _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
@@ -2342,265 +2580,6 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     st.markdown(
         f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice}</div>',
         unsafe_allow_html=True)
-    voice_mod = ""
-    if voice == "Critical":
-        voice_mod = """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as a hard accountability take. The output MUST:
-1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
-2. Call out exactly what isn't working and why it matters
-3. End with a pointed question or challenge that puts the responsibility on someone specific
-4. Sound like a disappointed former NFL player holding the team accountable — NOT an angry fan ranting
-5. DO NOT use generic phrases like "we need to be better" or "this has to change" — name the specific problem
-
-The tone is: calm, pointed, credible. Former player who knows what winning looks like and isn't seeing it.
-WRONG: "The Broncos need to improve their running game."
-RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
-=== END CRITICAL VOICE ==="""
-    elif voice == "Homer":
-        voice_mod = """=== HOMER VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
-1. Use "we" or "this team" — make the reader feel included in the belief
-2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
-3. Convey real belief that comes from insider football knowledge — "I played 8 years in this league and I know what a winning culture looks like"
-4. End with forward momentum — something to look forward to or build on
-5. Make the reader feel GOOD about being a fan — positive sentiment, energy, shared belief
-
-The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerleading — earned optimism.
-WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
-RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
-=== END HOMER VOICE ==="""
-    elif voice == "Sarcastic":
-        voice_mod = """=== SARCASTIC VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as dry, deadpan understatement. The output MUST:
-1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
-2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
-3. The punchline is the deadpan acceptance of something that SHOULD be outrageous
-4. End with one dry final observation that lands the joke without explaining it
-5. DO NOT be mean or attack people — punch at situations, decisions, outcomes
-
-The tone is: former player press conference energy. Seen everything. Nothing surprises him. One eyebrow raised.
-WRONG: "This franchise is a disaster and everyone is incompetent."
-RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
-=== END SARCASTIC VOICE ==="""
-    else:
-        voice_mod = """=== DEFAULT VOICE MODE ===
-Tyler's natural voice — direct, confident, former-player authority. The output MUST:
-1. Lead with the insight or take — no throat-clearing
-2. Short punchy sentences. Ellipsis (...) as signature where appropriate
-3. State it flat. No hedging, no "maybe", no "I think" — just the take
-4. End with either a trailing thought (...) or a question that invites debate
-=== END DEFAULT VOICE ==="""
-
-    # Pull live patterns for format templates (evolves with each sync)
-    _fp = analyze_personal_patterns()
-    _fp_avg = _fp.get("top_avg_chars", 162) if _fp else 162
-    _fp_q = _fp.get("top_question_pct", 28) if _fp else 28
-    _fp_ell = _fp.get("top_ellipsis_pct", 28) if _fp else 28
-    _fp_range = _fp.get("optimal_char_range", (40, 250)) if _fp else (40, 250)
-    _fp_hooks = []
-    if _fp:
-        # Use format-specific examples so short formats only see short hooks
-        _hook_pool = (
-            _fp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
-            else _fp.get("top_examples_normal", []) if fmt == "Normal Tweet"
-            else _fp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
-            else _fp.get("top_examples", [])
-        )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
-    _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
-
-    format_mod = ""
-    if fmt == "Punchy Tweet":
-        format_mod = f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
-
-STRUCTURE:
-SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
-SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
-
-RULES:
-- Exactly 2 sentences. Not one. Not three. Two.
-- Under 160 characters total
-- No hashtags, no emojis, no ellipsis
-- No "I think" / "maybe" / "honestly" — state it flat
-- Every word earns its place or gets cut
-- Sentence 2 must make the reader feel compelled to reply
-
-Top hooks to model Sentence 1 after:
-{_hooks_str}
-
-WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
-RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
-
-    elif fmt == "Normal Tweet":
-        _nt_lo = max(_fp_range[0], 161)
-        _nt_hi = min(_fp_range[1], 260)
-        format_mod = f"""FORMAT: NORMAL TWEET (161-260 characters)
-
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
-- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
-- {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
-- {_fp_ell}% of top tweets use ellipsis (his signature)
-- Top performing hooks to model after:
-{_hooks_str}
-
-STRUCTURE:
-[Confrontational hook or bold declaration]
-
-[Punch line, trailing thought, or question]
-
-RULES:
-- Between 161 and 260 characters total — don't be too brief
-- Use line break between hook and payoff
-- No hashtags, no links, no emojis
-- End with question OR ellipsis, not both
-- Must stop the scroll in the first 8 words
-- Model the hook after one of Tyler's top hooks above
-
-IMAGE RECOMMENDATION:
-- Hot take / opinion → NO image (text-only gets higher engagement rate)
-- Stat or comparison → YES — simple stat graphic
-- Reaction to news → OPTIONAL — screenshot of the news article headline"""
-
-    elif fmt == "Long Tweet":
-        format_mod = f"""FORMAT: LONG TWEET (280-1200 characters)
-
-TYLER'S LIVE DATA (updates every sync):
-- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model the opening after:
-{_hooks_str}
-
-STRUCTURE:
-[Hot take — complete thought in first 280 chars, visible before "Show More" fold]
-
-[Line break]
-
-[Evidence paragraph — 1-2 sentences]
-
-[Line break]
-
-[Comparison list or supporting points]
-
-[Line break]
-
-[Closing question or trailing ellipsis]
-
-RULES:
-- 600-1200 characters total
-- First 280 chars MUST work as a standalone tweet (the fold)
-- Short paragraphs with line breaks between each
-- Use comparison list format when relevant (Team A: X / Team B: Y / etc.)
-- No hashtags, no links
-- End with debate invitation
-
-IMAGE RECOMMENDATION:
-- YES — include 1 supporting image
-- Best: stat graphic, comparison chart, or relevant screenshot
-- Place context for the image ABOVE the Show More fold
-- Images increase total impressions even though text-only has higher engagement rate"""
-
-    elif fmt == "Thread":
-        format_mod = f"""FORMAT: THREAD (5-8 tweets)
-
-TYLER'S LIVE DATA (updates every sync):
-- {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model Tweet 1 after:
-{_hooks_str}
-
-STRUCTURE:
-TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
-
-TWEET 2: [Set the stage — specific situation with numbers/facts]
-
-TWEET 3: [Point 1 — standalone insight with line breaks]
-
-TWEET 4: [Point 2 — comparison list format OR insider perspective]
-
-TWEET 5: [Point 3 — the contrarian angle nobody else is saying]
-
-TWEET 6: [Bold conclusion — no hedging, pick a side]
-
-TWEET 7: [Question CTA to drive replies]
-
-RULES:
-- 5-8 tweets total
-- Each tweet must stand alone as a good tweet
-- Use line breaks within each tweet
-- No hashtags except possibly in last tweet
-- Include one tweet with comparison list or specific stats
-- Tweet 1 must stop the scroll
-- Last tweet must drive replies (replies = 13.5x algorithm weight)
-
-IMAGE RECOMMENDATION:
-- Include at least 1 image in the thread (35% more retweets confirmed)
-- DO NOT put image in Tweet 1 — hook should be pure text
-- Best placement: Tweet 2-4 (data chart, stat graphic, or supporting visual)
-- For 7+ tweet threads: include 2 images spread across the middle tweets
-- Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
-
-    elif fmt == "Article":
-        format_mod = f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
-WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
-
-TYLER'S LIVE DATA (updates every sync):
-- Top hooks to model headline/intro after:
-{_hooks_str}
-- {_fp_q}% of top tweets use questions — use them between sections
-- {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
-
-STRUCTURE:
-HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
-- Numbers perform 2x better than vague headlines
-- Specificity over vagueness — name the player, name the stat
-- Model after Tyler's top hooks above
-[IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
-
-INTRO (2-3 paragraphs — this is the feed preview, must hook):
-[Provocative claim, surprising stat, or contrarian take]
-[Why this matters right now — urgency/timeliness]
-
-SECTION 1: [SUBHEADING]
-[2-3 short paragraphs with **bold key stats** — 2-3 bold items per section]
-[IMAGE: Supporting chart, stat graphic, or screenshot]
-
-SECTION 2: [SUBHEADING]
-[2-3 short paragraphs]
-[Include comparison list format if relevant (Team A: X / Team B: Y)]
-
-SECTION 3: [SUBHEADING]
-[Contrarian angle or insider perspective — former NFL player authority]
-[IMAGE: Supporting visual]
-
-SECTION 4: WHAT COMES NEXT
-[Bold prediction with reasoning — no hedging, pick a side]
-
-CONCLUSION:
-[**1-sentence hot take summary — bold it**]
-[Discussion question to drive comments (replies = 13.5x algorithm weight)]
-
-PROMOTION:
-[Suggest a companion tweet to promote this article — pull the most provocative stat]
-
-RULES:
-- 1,500-2,000 words (6-8 minute read — optimal for dwell time bonus)
-- Paragraphs: 2-4 sentences max
-- Subheadings every ~300 words
-- Bold key stats and claims (2-3 per section)
-- Tyler's voice throughout — direct, no hedging, former-player authority
-- Every point must reference specific players/schemes/numbers
-- Hero image REQUIRED (articles without hero images look like broken cards in feed)
-- 2-3 supporting images placed between sections
-- End with debate invitation to drive replies
-
-IMAGE RECOMMENDATION:
-- HERO IMAGE required — this becomes the feed thumbnail. Use: game photo, player action shot, or custom graphic
-- 2-3 SUPPORTING IMAGES throughout the body, placed between sections
-- Best types: stat charts, play diagrams, comparison graphics, game screenshots
-- Bold your image captions
-- Articles WITHOUT hero images look like broken cards in the feed — always include one
-- [IMAGE PLACEMENT] markers in the template show where to add each image"""
-
-
     # ── Display results ──
     if action == "preview":
         truncated = tweet_text[:280]
@@ -2627,6 +2606,9 @@ IMAGE RECOMMENDATION:
             _is_pick = _ai_pick == str(ti + 1)
             if _is_pick:
                 st.markdown(f'''<div style="font-size:11px;font-weight:700;letter-spacing:2px;margin:20px 0 4px;"><span style="color:#2DD4BF;">OPTION {ti + 1}</span>&nbsp;&nbsp;<span style="background:#2DD4BF;color:#0a0a14;padding:2px 8px;border-radius:4px;font-size:10px;">AI PICK</span></div>''', unsafe_allow_html=True)
+                _pick_reason = bd.get("pick_reason", "")
+                if _pick_reason:
+                    st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;opacity:0.7;margin-bottom:4px;font-style:italic;">{_pick_reason}</div>''', unsafe_allow_html=True)
             else:
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
@@ -2973,66 +2955,6 @@ def _fetch_inspiration_feed():
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def _analyze_format_patterns() -> str:
-    """
-    Analyze the FORMAT (not content) of top-performing tweets from Tyler's lists.
-    Returns a text block of structural patterns that What's Hot and Go Viral use
-    to shape output. Cached 1 hour — format trends don't change minute to minute.
-    """
-    _all_tweets, _ = _fetch_inspiration_feed()
-    if not _all_tweets:
-        return ""
-
-    # Sort by engagement — likes + RTs + replies
-    def _eng(t):
-        return (int(t.get("likeCount", t.get("like_count", 0)) or 0)
-                + int(t.get("retweetCount", t.get("retweet_count", 0)) or 0) * 3
-                + int(t.get("replyCount", t.get("reply_count", 0)) or 0) * 2)
-
-    _sorted = sorted(_all_tweets, key=_eng, reverse=True)
-    _top = _sorted[:12]
-
-    # Build the analysis prompt with full tweet text
-    _tweet_block = ""
-    for _i, _t in enumerate(_top):
-        _text = _t.get("text", "")[:300]
-        _likes = _t.get("likeCount", _t.get("like_count", 0))
-        _rts = _t.get("retweetCount", _t.get("retweet_count", 0))
-        _reps = _t.get("replyCount", _t.get("reply_count", 0))
-        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
-        _tweet_block += f"{_i+1}. @{_author} ({_likes}L {_rts}RT {_reps}R):\n{_text}\n\n"
-
-    if not _tweet_block.strip():
-        return ""
-
-    _prompt = f"""Analyze the STRUCTURE and FORMAT of these top-performing sports tweets. Do NOT summarize what they say — tell me HOW they're built.
-
-{_tweet_block}
-
-Return ONLY a numbered list of 5-7 format patterns you see. For each pattern, include:
-- What the pattern is (hook style, length, punctuation, line breaks, structure)
-- How many of the 12 tweets use it (e.g. "7/12")
-- One 5-word example of the pattern
-
-Focus on: opener length, line break placement, question vs statement, stat/number placement, ending style (period vs ellipsis vs question), sentence count, use of contrast/tension.
-
-Be specific and structural. Not "good hooks" — tell me "8-word bold claim opener, line break, then supporting stat"."""
-
-    try:
-        _raw = call_claude(_prompt, system="You are a tweet structure analyst. Return only the numbered pattern list, no preamble.", max_tokens=600)
-        return _raw.strip()
-    except Exception:
-        return ""
-
-
-def _get_format_patterns() -> str:
-    """Get cached format patterns, or empty string if unavailable."""
-    try:
-        return _analyze_format_patterns()
-    except Exception:
-        return ""
-
-
 def _load_inspo_from_gist() -> tuple:
     """Load cached inspiration ideas from gist — instant, survives session resets."""
     try:
@@ -3086,7 +3008,7 @@ def _run_inspiration_claude():
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-    _fmt_patterns = _get_format_patterns()
+    _fmt_patterns = _get_format_patterns_with_fallback("Normal Tweet")
     _fmt_block = ""
     if _fmt_patterns:
         _fmt_block = f"""
