@@ -2883,7 +2883,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": fmt, "voice": voice}
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
-            st.rerun()
+            st.rerun(scope="app")
     with _b2:
         import urllib.parse as _urlparse
         _post_text = (st.session_state.get("ci_result") or st.session_state.get("ci_repurposed") or tweet_text or "")[:280]
@@ -2893,7 +2893,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         if st.button("✕ Close", use_container_width=True, key="modal_close"):
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
-            st.rerun()
+            st.rerun(scope="app")
 
 
 def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
