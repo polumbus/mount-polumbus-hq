@@ -2998,12 +2998,19 @@ def _run_inspiration_claude():
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
-    for _t in _all_tweets[:20]:
-        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+    for _t in _all_tweets[:40]:
         _text = _t.get("text", "")
+        if not _text:
+            continue
+        if _text.startswith("RT "):
+            continue
+        if _text.startswith("@"):
+            continue
+        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
         _likes = _t.get("likeCount", _t.get("like_count", 0))
-        if _text:
-            _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
+        _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
+        if len(_tweet_lines) >= 20:
+            break
 
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
@@ -3032,7 +3039,10 @@ For each idea automatically select the most appropriate voice:
 - HOMER: Positive signals being overlooked, team momentum, good news the casual fan is missing
 - SARCASTIC: Ridiculous narratives, obvious takes presented as revelations, absurd situations, moments so good they deserve an unexpected cultural reference
 
-Rules: hook = complete Normal Tweet draft written in the selected voice matching Tyler's actual voice patterns. why = under 10 words, Tyler's unique angle.
+Rules:
+- hook = complete ORIGINAL Normal Tweet draft written in Tyler's voice — NEVER copy or paraphrase feed tweet text directly. Use the feed as inspiration for the topic only. Write a fresh original hook as if Tyler is reacting to or analyzing the situation.
+- If the feed item is a retweet or starts with RT — ignore it completely and use a different feed item.
+- why = under 10 words, Tyler's unique angle as a former player and Denver media host.
 
 Return ONLY a JSON array of exactly 14 objects:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Homer/Sarcastic","hook":"full tweet draft in the selected voice","why":"short angle under 10 words"}}]"""
