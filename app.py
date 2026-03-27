@@ -3018,7 +3018,7 @@ FORMAT PATTERNS (from highest-engagement tweets on Tyler's timeline RIGHT NOW �
 
 Use these patterns to structure every hook. Match the opener style, line break placement, length, and ending style that's working THIS WEEK."""
 
-    _prompt = f"""Tyler Polumbus — former NFL OL, Denver sports media. Give him 14 tweet ideas from what's happening RIGHT NOW.
+    _prompt = f"""Tyler Polumbus needs 14 tweet ideas from what's happening RIGHT NOW.
 
 FEED (last 24h):
 {_tweet_block}
@@ -3026,12 +3026,39 @@ FEED (last 24h):
 HEADLINES:
 {_rss_block}{_fmt_block}
 
-Rules: hook = complete tweet draft, Tyler's voice (direct, no hashtags/emojis). why = under 10 words, his unique angle as a former player.
+For each idea automatically select the most appropriate voice:
+- DEFAULT: Stats, observations, analytical reads, pure film room perspective
+- CRITICAL: Failures, bad decisions, accountability moments, underperformance
+- HOMER: Positive signals being overlooked, team momentum, good news the casual fan is missing
+- SARCASTIC: Ridiculous narratives, obvious takes presented as revelations, absurd situations, moments so good they deserve an unexpected cultural reference
+
+Rules: hook = complete Normal Tweet draft written in the selected voice matching Tyler's actual voice patterns. why = under 10 words, Tyler's unique angle.
 
 Return ONLY a JSON array of exactly 14 objects:
-[{{"topic":"2-4 words","source":"twitter/espn/news","hook":"full tweet draft matching the format patterns above","why":"short angle under 10 words"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Homer/Sarcastic","hook":"full tweet draft in the selected voice","why":"short angle under 10 words"}}]"""
 
-    _system = "You are Tyler Polumbus's content strategist. Return only the JSON array, no other text."
+    _system = """You are Tyler Polumbus's content strategist and voice expert.
+Tyler is a former NFL OL, Super Bowl 50 champion, Denver sports media host.
+
+VOICE RULES — apply the correct one to each idea:
+
+DEFAULT: Film room analytical voice. Observation + context + open door (ellipsis ending).
+Facts carry the weight. Authority implied through specificity never stated.
+Example: "Jokic in the fourth quarter of playoff games — 12.4 points on 67% shooting. The defense has no answer for the high post read..."
+
+CRITICAL: Diagnosis mode. Symptom (specific stat) + diagnosis (structural cause) + challenge (name who owns the fix). Ends with period not ellipsis.
+Example: "We gave up 6 sacks in losses, 1.2 in wins. The protection scheme in two-minute drill is broken. Bo Nix can't fix what the play design is doing to him."
+
+HOMER: Don't sleep on us mode. Overlooked signal + why it matters + outside reaction showing the opposition is already worried. Never state credentials directly.
+Example: "Jokic is averaging a triple double in March. The team drawing Denver in round 2 just redesigned their entire defensive scheme."
+
+SARCASTIC: Two tools available.
+Tool 1 Cultural Leap (positive moments): Jump to a completely unrelated world. Specific person in a specific human situation outside sports. Never explain the joke.
+Example: "That cornerback needs to call someone he trusts right now. Not about football."
+Tool 2 Implied Real Story (negative moments): State the surface story, imply the real story underneath. Never state the real story directly.
+Example: "Turns out the Patriots offense doesn't suck because of a snow storm."
+
+Return only the JSON array, no other text."""
     try:
         _raw = _call_claude_direct(_prompt, _system, max_tokens=1800)
     except Exception:
@@ -3050,6 +3077,10 @@ Return ONLY a JSON array of exactly 14 objects:
                 _ideas = json.loads(_m.group(0))
         except Exception:
             pass
+
+    for _idea in _ideas:
+        if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Homer", "Sarcastic"):
+            _idea["voice"] = "Default"
 
     # Save to gist for instant loads on future visits
     if _ideas:
@@ -3117,6 +3148,12 @@ def _ci_inspiration_dialog():
         "news":     ("rgba(167,139,250,0.1)",  "rgba(167,139,250,0.65)", "rgba(167,139,250,0.18)", "NEWS"),
     }
     _badge_default = ("rgba(100,100,120,0.1)", "rgba(200,200,220,0.5)", "rgba(100,100,120,0.2)", "SOURCE")
+    _voice_badge_styles = {
+        "Default":   ("rgba(100,100,120,0.1)", "rgba(180,180,200,0.65)", "rgba(100,100,120,0.2)"),
+        "Critical":  ("rgba(248,113,113,0.1)", "rgba(248,113,113,0.65)", "rgba(248,113,113,0.2)"),
+        "Homer":     ("rgba(45,212,191,0.1)",  "rgba(45,212,191,0.65)",  "rgba(45,212,191,0.2)"),
+        "Sarcastic": ("rgba(251,191,36,0.1)",  "rgba(251,191,36,0.65)",  "rgba(251,191,36,0.2)"),
+    }
 
     # ── Cards ──
     for _i, _idea in enumerate(_ideas):
@@ -3125,12 +3162,15 @@ def _ci_inspiration_dialog():
         _hook  = _idea.get("hook", "")
         _why   = _idea.get("why", "")
         _bg, _fg, _border, _label = _badge_styles.get(_src, _badge_default)
+        _voice = _idea.get("voice", "Default")
+        _vbg, _vfg, _vborder = _voice_badge_styles.get(_voice, _voice_badge_styles["Default"])
 
         st.markdown(
             f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
               f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">'
                 f'<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.38);">{_topic}</span>'
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_vbg};color:{_vfg};border:1px solid {_vborder};margin-left:4px;">{_voice.upper()}</span>'
               f'</div>'
               f'<div style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.7;letter-spacing:0.01em;margin-bottom:8px;">{_hook}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:12px;">{_why}</div>'
@@ -3142,6 +3182,9 @@ def _ci_inspiration_dialog():
             if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
                 if _hook:
                     st.session_state["ci_text"] = _hook
+                    _idea_voice = _idea.get("voice", "Default")
+                    if _idea_voice in ("Default", "Critical", "Homer", "Sarcastic"):
+                        st.session_state["ci_voice"] = _idea_voice
                 st.rerun(scope="app")
         with _ib2:
             if pplx_available() and st.button("Verify", key=f"inspo_verify_{_i}", use_container_width=True):
