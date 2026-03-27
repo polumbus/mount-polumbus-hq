@@ -108,9 +108,13 @@ Example: "Turns out the Patriots offense doesn't suck because of a snow storm."
 
 RULES FOR ALL VOICES:
 - Never copy feed content — use it as topic inspiration only
+- NEVER start a hook with "RT " or "@" — these are raw feed items not original hooks
+- If your only source for a topic is a retweet — skip that topic and use a different one
 - Never say "I played in this league" or "I know what winning looks like"
 - Authority comes from specificity not stated credentials
 - Hooks are Normal Tweet length — 161 to 260 characters
+- Hooks must be a single continuous paragraph — no line breaks, no bullet points, no numbered lists inside the hook field
+- The hook field contains ONLY the tweet text — nothing else
 - No hashtags, no emojis, no links
 """
 
@@ -2973,7 +2977,9 @@ def _fetch_inspiration_feed():
             try: _search_tweets.extend(_f.result())
             except Exception: pass
         for _f in _rss_futs:
-            try: _rss_headlines.extend(_f.result())
+            try:
+                _rss_results = _f.result()
+                _rss_headlines.extend([h for h in _rss_results if not h.startswith("RT ")])
             except Exception: pass
         try: _espn_headlines = _espn_fut.result()
         except Exception: pass
@@ -3114,9 +3120,24 @@ Return only the JSON array, no other text."""
         except Exception:
             pass
 
-    for _idea in _ideas:
-        if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Homer", "Sarcastic"):
-            _idea["voice"] = "Default"
+        for _idea in list(_ideas):
+            _hook = _idea.get("hook", "")
+            if _hook.startswith("RT ") or _hook.startswith("@"):
+                _ideas.remove(_idea)
+                continue
+            if not _idea.get("hook", "").strip():
+                _ideas.remove(_idea)
+                continue
+            if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Homer", "Sarcastic"):
+                _idea["voice"] = "Default"
+
+        for _idea in _ideas:
+            _hook = _idea.get("hook", "")
+            if "\n" in _hook:
+                _hook = _hook.split("\n")[0].strip()
+                _idea["hook"] = _hook
+            if len(_hook) > 280:
+                _idea["hook"] = _hook[:277] + "..."
 
     # Save to gist for instant loads on future visits
     if _ideas:
