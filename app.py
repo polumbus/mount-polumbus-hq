@@ -3136,7 +3136,21 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
-            edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
+            # Thread format: split into individual tweets and display as cards
+            if fmt == "Thread" and any(marker in opt_text for marker in ["Tweet 1:", "TWEET 1:", "tweet 1:", "1/", "1."]):
+                _thread_tweets = re.split(r'(?:Tweet\s*\d+\s*[:\-]|TWEET\s*\d+\s*[:\-]|\d+/\d*\s*[:\-]?)', opt_text)
+                _thread_tweets = [t.strip() for t in _thread_tweets if t.strip() and len(t.strip()) > 10]
+                _thread_html = ""
+                for _ti2, _tw in enumerate(_thread_tweets):
+                    _tw_clean = _tw.strip().strip('"').strip()
+                    _thread_html += f'''<div style="background:#0d0d18;border:1px solid #1e2a3a;border-left:3px solid #2DD4BF;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+                        <div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:4px;">TWEET {_ti2+1}</div>
+                        <div style="font-size:13px;color:#d8d8e8;line-height:1.6;white-space:pre-wrap;">{_tw_clean}</div>
+                    </div>'''
+                st.markdown(_thread_html, unsafe_allow_html=True)
+                edited_opt = st.text_area("Full thread (editable)", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
+            else:
+                edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
