@@ -3751,14 +3751,10 @@ def _ci_inspiration_dialog():
 
 
 @st.dialog("Creator Studio", width="large")
-def _ci_output_panel(action, tweet_text, fmt, voice):
-    """Read args from session state to avoid @st.dialog argument caching.
-    The dialog key changes every call so Streamlit never serves a stale dialog."""
-    _args = st.session_state.get("_ci_dialog_args")
-    if _args:
-        _ci_output_panel_impl(_args["action"], _args["text"], _args["fmt"], _args["voice"])
-    else:
-        _ci_output_panel_impl(action, tweet_text, fmt, voice)
+def _ci_output_panel(_nonce, action, tweet_text, fmt, voice):
+    """_nonce forces Streamlit to create a fresh dialog every call.
+    Without it, @st.dialog caches by arguments and may serve stale results."""
+    _ci_output_panel_impl(action, tweet_text, fmt, voice)
 
 
 def page_compose_ideas():
@@ -3781,8 +3777,7 @@ def page_compose_ideas():
         st.session_state["ci_text"] = seed
         _fmt = st.session_state.get("ci_format", "Normal Tweet")
         _vc = st.session_state.get("ci_voice", "Default")
-        st.session_state["_ci_dialog_args"] = {"action": "rewrite", "text": seed, "fmt": _fmt, "voice": _vc}
-        _ci_output_panel("rewrite", seed, _fmt, _vc)
+        _ci_output_panel(str(time.time()), "rewrite", seed, _fmt, _vc)
         return
 
     # Redo pending from modal "↺ Redo" button
@@ -3918,8 +3913,7 @@ def page_compose_ideas():
             _clear_banger()
         elif _action == "grades":
             st.session_state.pop("ci_grades", None)
-        st.session_state["_ci_dialog_args"] = {"action": _action, "text": _txt, "fmt": _fmt, "voice": _voice}
-        _ci_output_panel(_action, _txt, _fmt, _voice)
+        _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
 
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
@@ -5680,8 +5674,7 @@ def page_reply_guy():
                 st.rerun()
         st.session_state["rg_viral_fmt"] = _viral_fmt
         st.session_state["rg_viral_voice"] = _viral_voice
-        st.session_state["_ci_dialog_args"] = {"action": "banger", "text": _viral_idea, "fmt": _viral_fmt, "voice": _viral_voice}
-        _ci_output_panel("banger", _viral_idea, _viral_fmt, _viral_voice)
+        _ci_output_panel(str(time.time()), "banger", _viral_idea, _viral_fmt, _viral_voice)
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
     # ── PART 2: My Tweet Replies — Conversation Depth ──
