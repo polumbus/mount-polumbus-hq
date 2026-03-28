@@ -94,6 +94,14 @@ a specific outside party already reacting — opposing coaches,
 rival programs, national media. Their reaction is the proof.
 Never state confidence directly. Never say "I've been in
 winning rooms." Show the opposition already worried.
+ENDING RULE: The final sentence must name a specific outside
+party and show them already responding to what Tyler's team
+is doing. NOT Tyler explaining the signal. NOT "this is real."
+The opponent's reaction IS the proof — let it speak.
+WRONG ENDING: "Position coaches don't travel for guys they're
+not serious about." — Tyler explaining the insight
+RIGHT ENDING: "Every team picking in that range just added
+him to their board." — outside party already responding
 Example: "Jokic averaging a triple double in March. The team
 drawing Denver in round 2 just redesigned their defensive scheme."
 SARCASTIC: Two modes only.
