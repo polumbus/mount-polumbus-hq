@@ -1884,6 +1884,13 @@ def _parse_banger_json(raw):
         return json.loads(clean)
     except Exception:
         pass
+    # Replace literal newlines inside JSON string values with \\n so json.loads works
+    try:
+        _fixed = re.sub(r'(?<=": ")(.*?)(?="[,\s}])', lambda m: m.group(0).replace('\n', '\\n'), clean, flags=re.DOTALL)
+        return json.loads(_fixed)
+    except Exception:
+        pass
+    # Last resort: collapse newlines to spaces (loses thread formatting but at least parses)
     try:
         return json.loads(re.sub(r'\n(?![\s]*")', ' ', clean))
     except Exception:
@@ -2878,23 +2885,22 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     result = None
 
     if action == "banger" and tweet_text.strip():
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
-            _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
-            _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
-            if _char_limit:
-                _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
-            _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
-            _sports_ctx = ""
-            if _sports_context_relevant(tweet_text):
-                try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
-                except Exception: pass
-            _fmt_inject = ""
-            if voice == "Default":
-                _fmt_pats = _get_format_patterns_with_fallback(fmt)
-                if _fmt_pats:
-                    _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
-            banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+        patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
+        _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
+        _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
+        if _char_limit:
+            _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
+        _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
+        _sports_ctx = ""
+        if _sports_context_relevant(tweet_text):
+            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
+            except Exception: pass
+        _fmt_inject = ""
+        if voice == "Default":
+            _fmt_pats = _get_format_patterns_with_fallback(fmt)
+            if _fmt_pats:
+                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
+        banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
@@ -2917,92 +2923,90 @@ Return ONLY this JSON, no other text:
   "pick": "1 or 2 — just the number, no explanation",
   "pick_reason": "one sentence — why this option scores higher on the X algorithm"
 }}"""
-            _sys_prompt = get_system_for_voice(voice, voice_mod)
-            raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=400)
-            banger_data = _parse_banger_json(raw)
-            if banger_data and banger_data.get("option1"):
-                st.session_state["ci_banger_data"] = banger_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            else:
-                result = raw
+        _sys_prompt = get_system_for_voice(voice, voice_mod)
+        raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=400)
+        banger_data = _parse_banger_json(raw)
+        if banger_data and banger_data.get("option1"):
+            st.session_state["ci_banger_data"] = banger_data
+            for _i in [1, 2, 3]:
+                st.session_state.pop(f"ci_banger_opt_{_i}", None)
+            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
+                st.session_state.pop(_k, None)
+        else:
+            result = raw
 
     elif action == "grades" and tweet_text.strip():
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            # ── Cache check ──
-            _grade_hash = hashlib.md5(tweet_text.strip().encode()).hexdigest()
-            _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
-            if _cached:
-                st.session_state["ci_grades"] = _cached
+        # ── Cache check ──
+        _grade_hash = hashlib.md5(tweet_text.strip().encode()).hexdigest()
+        _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
+        if _cached:
+            st.session_state["ci_grades"] = _cached
+            for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                st.session_state.pop(_k, None)
+        else:
+            # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
+            _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
+            _has_q = "yes" if "?" in tweet_text else "no"
+            _has_ell = "yes" if "..." in tweet_text else "no"
+            _char_count = len(tweet_text)
+
+            # ── Two parallel calls of 4 grades each, with personal benchmarks ──
+            _raw_a, _raw_b = _build_grades_system(fmt, pp)
+            _prompt_a = _raw_a.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
+            _prompt_b = _raw_b.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
+
+            def _parse(raw):
+                try:
+                    clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
+                    m = re.search(r'\{.*\}', clean, re.DOTALL)
+                    return json.loads(m.group()) if m else None
+                except Exception:
+                    return None
+
+            _tok = _get_oauth_token() or _get_access_token()
+
+            def _grade_call(prompt, tok):
+                """Try direct OAuth API, fall back to proxy — never raises."""
+                if tok:
+                    try:
+                        return _call_claude_direct(prompt, _grades_system, 700, _token=tok)
+                    except Exception:
+                        pass
+                return call_claude(prompt, _grades_system, 700)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fa = _ex.submit(_grade_call, _prompt_a, _tok)
+                _fb = _ex.submit(_grade_call, _prompt_b, _tok)
+                _ra, _rb = _fa.result(), _fb.result()
+            _da, _db = _parse(_ra), _parse(_rb)
+
+            if _da and _db and "grades" in _da and "grades" in _db:
+                gdata = {
+                    "algorithm_score": _da.get("algorithm_score", 0),
+                    "tyler_score": _da.get("tyler_score", 0),
+                    "grades": _da["grades"] + _db["grades"],
+                }
+                _cache = st.session_state.get("ci_grades_cache", {})
+                _cache[_grade_hash] = gdata
+                st.session_state["ci_grades_cache"] = _cache
+                st.session_state["ci_grades"] = gdata
                 for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
-                _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
-                _has_q = "yes" if "?" in tweet_text else "no"
-                _has_ell = "yes" if "..." in tweet_text else "no"
-                _char_count = len(tweet_text)
-
-                # ── Two parallel calls of 4 grades each, with personal benchmarks ──
-                _raw_a, _raw_b = _build_grades_system(fmt, pp)
-                _prompt_a = _raw_a.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
-                _prompt_b = _raw_b.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
-
-                def _parse(raw):
-                    try:
-                        clean = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-                        m = re.search(r'\{.*\}', clean, re.DOTALL)
-                        return json.loads(m.group()) if m else None
-                    except Exception:
-                        return None
-
-                _tok = _get_oauth_token() or _get_access_token()
-
-                def _grade_call(prompt, tok):
-                    """Try direct OAuth API, fall back to proxy — never raises."""
-                    if tok:
-                        try:
-                            return _call_claude_direct(prompt, _grades_system, 700, _token=tok)
-                        except Exception:
-                            pass
-                    return call_claude(prompt, _grades_system, 700)
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                    _fa = _ex.submit(_grade_call, _prompt_a, _tok)
-                    _fb = _ex.submit(_grade_call, _prompt_b, _tok)
-                    _ra, _rb = _fa.result(), _fb.result()
-                _da, _db = _parse(_ra), _parse(_rb)
-
-                if _da and _db and "grades" in _da and "grades" in _db:
-                    gdata = {
-                        "algorithm_score": _da.get("algorithm_score", 0),
-                        "tyler_score": _da.get("tyler_score", 0),
-                        "grades": _da["grades"] + _db["grades"],
-                    }
-                    _cache = st.session_state.get("ci_grades_cache", {})
-                    _cache[_grade_hash] = gdata
-                    st.session_state["ci_grades_cache"] = _cache
-                    st.session_state["ci_grades"] = gdata
-                    for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
-                        st.session_state.pop(_k, None)
-                else:
-                    result = "Grades failed — try again"
+                result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip():
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _sports_ctx_b = ""
-            if _sports_context_relevant(tweet_text):
-                try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
-                except Exception: pass
-            _fmt_inject_b = ""
-            if voice == "Default":
-                _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
-                if _fmt_pats_b:
-                    _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-            _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching Tyler's voice exactly"
-            build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
+        _sports_ctx_b = ""
+        if _sports_context_relevant(tweet_text):
+            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
+            except Exception: pass
+        _fmt_inject_b = ""
+        if voice == "Default":
+            _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
+            if _fmt_pats_b:
+                _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+        _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching Tyler's voice exactly"
+        build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
@@ -3027,23 +3031,22 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle/structure this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-            raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
-            build_data = _parse_banger_json(raw)
-            if build_data and build_data.get("option1"):
-                st.session_state["ci_banger_data"] = build_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_result"] = raw
-                for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                    st.session_state.pop(_k, None)
+        raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
+        build_data = _parse_banger_json(raw)
+        if build_data and build_data.get("option1"):
+            st.session_state["ci_banger_data"] = build_data
+            for _i in [1, 2, 3]:
+                st.session_state.pop(f"ci_banger_opt_{_i}", None)
+            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                st.session_state.pop(_k, None)
+        else:
+            st.session_state["ci_result"] = raw
+            for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                st.session_state.pop(_k, None)
 
     elif action == "rewrite" and tweet_text.strip():
-        with st.spinner("Repurposing in your voice..."):
-            _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
-            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject {_rw_voice} — do NOT copy any original phrasing. Each takes a different angle.
+        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
+        repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject {_rw_voice} — do NOT copy any original phrasing. Each takes a different angle.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
@@ -3062,18 +3065,18 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-            raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
-            rw_data = _parse_banger_json(raw)
-            if rw_data and rw_data.get("option1"):
-                st.session_state["ci_banger_data"] = rw_data
-                for _i in [1, 2, 3]:
-                    st.session_state.pop(f"ci_banger_opt_{_i}", None)
-                for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
-                    st.session_state.pop(_k, None)
-            else:
-                st.session_state["ci_repurposed"] = raw
-                for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                    st.session_state.pop(_k, None)
+        raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
+        rw_data = _parse_banger_json(raw)
+        if rw_data and rw_data.get("option1"):
+            st.session_state["ci_banger_data"] = rw_data
+            for _i in [1, 2, 3]:
+                st.session_state.pop(f"ci_banger_opt_{_i}", None)
+            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+                st.session_state.pop(_k, None)
+        else:
+            st.session_state["ci_repurposed"] = raw
+            for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
+                st.session_state.pop(_k, None)
 
     if result:
         st.session_state["ci_result"] = result
