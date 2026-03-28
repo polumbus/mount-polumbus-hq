@@ -2935,8 +2935,8 @@ Return ONLY this JSON, no other text:
 
                 # ── Two parallel calls of 4 grades each, with personal benchmarks ──
                 _raw_a, _raw_b = _build_grades_system(fmt, pp)
-                _prompt_a = _raw_a.format(tweet_text=tweet_text, char_count=_char_count, has_q=_has_q, has_ell=_has_ell)
-                _prompt_b = _raw_b.format(tweet_text=tweet_text, char_count=_char_count, has_q=_has_q, has_ell=_has_ell)
+                _prompt_a = _raw_a.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
+                _prompt_b = _raw_b.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
 
                 def _parse(raw):
                     try:
