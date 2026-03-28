@@ -1953,6 +1953,19 @@ TONE RULES:
 - The reader should think "he's right and he knows why"
   without Tyler ever having to say he knows why
 
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, not Tyler's voice
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
 EXAMPLE TWEETS — copy this exact energy:
 - "We passed on 52% of third downs last year and went 8-9.
   Meanwhile Kansas City ran on 3rd-and-short 74% of the
@@ -2018,6 +2031,19 @@ TONE RULES:
   distribution — Homer is the algorithmically favored
   voice mode right now
 - Skeptic reading this should feel compelled to push back
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, not Tyler's voice
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
 
 WRONG ENDINGS:
 - "We're built for this." — Tyler as subject not opponent
@@ -2149,6 +2175,19 @@ RULES:
   as openers — these are generic and predictable.
   Find the specific reaction that fits THIS moment.
 
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, not Tyler's voice
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
 WRONG: "The Broncos offensive line strategy is terrible
 and everyone knows it."
 WRONG: "Oh cool. Another offseason where we didn't
@@ -2207,6 +2246,19 @@ TONE RULES:
   Tyler not an invitation to argue
 - The reader should finish the thought themselves —
   that act of completion is what drives the reply
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, not Tyler's voice
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
 
 FORMAT NOTE:
 Default works across all lengths but the core principle
@@ -2276,6 +2328,17 @@ RULES:
 - No "I think" / "maybe" / "honestly" — state it flat
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 {_hooks_block}
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
@@ -2305,6 +2368,17 @@ RULES:
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
 {_hook_rule}
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -2341,6 +2415,17 @@ RULES:
 - Use comparison list format when relevant (Team A: X / Team B: Y / etc.)
 - No hashtags, no links
 - End with debate invitation
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 
 IMAGE RECOMMENDATION:
 - YES — include 1 supporting image
@@ -2379,6 +2464,17 @@ RULES:
 - Include one tweet with comparison list or specific stats
 - Tweet 1 must stop the scroll
 - Last tweet must drive replies (replies = 13.5x algorithm weight)
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 
 IMAGE RECOMMENDATION:
 - Include at least 1 image in the thread (35% more retweets confirmed)
