@@ -2378,7 +2378,10 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
         return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
 {_voice_override}
 STRUCTURE:
-SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
+SENTENCE 1: The sharpest FACTUAL observation. A specific
+stat, fact, or measurable reality. Not an opinion.
+Not a recommendation. A fact that makes the take obvious
+without stating the take.
 SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
 
 RULES:
@@ -2417,9 +2420,9 @@ TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 {_hooks_block_nt}
 
 STRUCTURE:
-[Confrontational hook or bold declaration]
+[Factual observation or specific stat — NOT an opinion or prediction]
 
-[Punch line, trailing thought, or question]
+[Context or consequence that makes the conclusion obvious without stating it]
 
 RULES:
 - Between 161 and 260 characters total — don't be too brief
@@ -2427,6 +2430,14 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
+- The opener must be a FACT not an opinion — never a prediction,
+  never a recommendation, never a conclusion
+- If the input contains opinion language reframe it as the
+  underlying fact that makes the opinion obvious
+- BANNED first words: "Broncos should" "Broncos need" "Broncos must"
+  "Broncos take" "This is" "No brainer" "Obviously" "Clearly"
+- The tweet should make the reader reach the conclusion themselves
+  not tell them what to conclude
 {_hook_rule}
 
 BANNED OPENERS — never use these exact phrases:
