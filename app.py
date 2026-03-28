@@ -2914,6 +2914,8 @@ Rules:
 - Structure each option to match the FORMAT PATTERNS above
 {_char_rule}
 
+{"THREAD FORMAT: Inside each option, separate individual tweets with the marker ---TWEET--- between them. Example: first tweet text here---TWEET---second tweet text here---TWEET---third tweet text here" if fmt == "Thread" else ""}
+
 Return ONLY this JSON, no other text:
 {{
   "option1": "full tweet text here",
@@ -3137,18 +3139,40 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
             # Thread format: split into individual tweets and display as cards
-            if fmt == "Thread" and any(marker in opt_text for marker in ["Tweet 1:", "TWEET 1:", "tweet 1:", "1/", "1."]):
-                _thread_tweets = re.split(r'(?:Tweet\s*\d+\s*[:\-]|TWEET\s*\d+\s*[:\-]|\d+/\d*\s*[:\-]?)', opt_text)
-                _thread_tweets = [t.strip() for t in _thread_tweets if t.strip() and len(t.strip()) > 10]
-                _thread_html = ""
-                for _ti2, _tw in enumerate(_thread_tweets):
-                    _tw_clean = _tw.strip().strip('"').strip()
-                    _thread_html += f'''<div style="background:#0d0d18;border:1px solid #1e2a3a;border-left:3px solid #2DD4BF;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
-                        <div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:4px;">TWEET {_ti2+1}</div>
-                        <div style="font-size:13px;color:#d8d8e8;line-height:1.6;white-space:pre-wrap;">{_tw_clean}</div>
-                    </div>'''
-                st.markdown(_thread_html, unsafe_allow_html=True)
-                edited_opt = st.text_area("Full thread (editable)", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
+            if fmt == "Thread" and len(opt_text) > 200:
+                # Try multiple split patterns to find individual tweets
+                _thread_tweets = []
+                # Pattern 0: explicit ---TWEET--- separator (requested in prompt)
+                if "---TWEET---" in opt_text:
+                    _split0 = [t.strip() for t in opt_text.split("---TWEET---") if t.strip()]
+                    if len(_split0) >= 3:
+                        _thread_tweets = _split0
+                if not _thread_tweets:
+                    # Pattern 1: Tweet N: or TWEET N:
+                    _split1 = re.split(r'(?:—?\s*)?(?:Tweet|TWEET|tweet)\s*\d+\s*[:\-–]\s*', opt_text)
+                    # Pattern 2: N/ or N. at start of line
+                    _split2 = re.split(r'\n\s*\d+[/\.]\s*', opt_text)
+                    # Pattern 3: double newline separation
+                    _split3 = [s.strip() for s in opt_text.split('\n\n') if s.strip()]
+                    # Pattern 4: — or --- separators
+                    _split4 = re.split(r'\s*(?:—{2,}|---+)\s*', opt_text)
+                    for _candidate in [_split1, _split2, _split4, _split3]:
+                        _filtered = [t.strip().strip('"').strip() for t in _candidate if t.strip() and len(t.strip()) > 15]
+                        if 3 <= len(_filtered) <= 10:
+                            _thread_tweets = _filtered
+                            break
+                if _thread_tweets:
+                    _thread_html = ""
+                    for _ti2, _tw in enumerate(_thread_tweets):
+                        _thread_html += f'''<div style="background:#0d0d18;border:1px solid #1e2a3a;border-left:3px solid #2DD4BF;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+                            <div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:4px;">TWEET {_ti2+1}</div>
+                            <div style="font-size:13px;color:#d8d8e8;line-height:1.6;white-space:pre-wrap;">{_tw}</div>
+                        </div>'''
+                    st.markdown(_thread_html, unsafe_allow_html=True)
+                    edited_opt = st.text_area("Full thread (editable)", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
+                else:
+                    # Fallback: show as-is but with pre-wrap for readability
+                    edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=200), key=opt_key, label_visibility="collapsed")
             else:
                 edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
