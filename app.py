@@ -3139,16 +3139,12 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
-            # Thread format: split on ---TWEET--- and show individual tweets
-            if fmt == "Thread" and "---TWEET---" in opt_text:
-                _tweets = [t.strip() for t in opt_text.split("---TWEET---") if t.strip()]
-                for _ti2, _tw in enumerate(_tweets):
-                    st.info(f"**TWEET {_ti2+1}**")
-                    st.write(_tw)
-                    st.divider()
-                edited_opt = opt_text
-            else:
-                edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
+            # Thread format: replace markers with clean separators for display
+            _display_text = opt_text
+            if "---TWEET---" in _display_text:
+                _parts = [t.strip() for t in _display_text.split("---TWEET---") if t.strip()]
+                _display_text = "\n\n".join([f"── TWEET {i+1} ──\n{t}" for i, t in enumerate(_parts)])
+            edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=opt_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
