@@ -1147,11 +1147,13 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     # 2. Local CLI fallback
     if os.path.exists(CLAUDE_CLI):
         try:
-            full_prompt = f"{system}\n\n{prompt}" if system else prompt
             clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+            cmd = [CLAUDE_CLI, "-p", "--model", model]
+            if system:
+                cmd += ["--system-prompt", system]
             result = subprocess.run(
-                [CLAUDE_CLI, "-p", "--model", model],
-                input=full_prompt, capture_output=True, text=True, timeout=90, env=clean_env,
+                cmd,
+                input=prompt, capture_output=True, text=True, timeout=90, env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()

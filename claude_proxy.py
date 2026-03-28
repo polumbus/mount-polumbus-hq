@@ -250,12 +250,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
             prompt = body.get("prompt", "")
             system = body.get("system", "")
             model = body.get("model", "claude-sonnet-4-6")
-            full_prompt = f"{system}\n\n{prompt}" if system else prompt
             try:
                 clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+                cmd = [CLAUDE_CLI, "-p", "--model", model]
+                if system:
+                    cmd += ["--system-prompt", system]
                 result = subprocess.run(
-                    [CLAUDE_CLI, "-p", "--model", model],
-                    input=full_prompt, capture_output=True, text=True, timeout=120, env=clean_env,
+                    cmd,
+                    input=prompt, capture_output=True, text=True, timeout=120, env=clean_env,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     self.send_json(200, {"text": result.stdout.strip()})
