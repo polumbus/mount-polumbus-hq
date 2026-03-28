@@ -2854,12 +2854,15 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
     return _prompt_a, _prompt_b
 
 
-def _run_ci_ai(action, tweet_text, fmt, voice, **_kwargs):
+def _run_ci_ai(action, tweet_text, fmt, voice):
     """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
-    # Clear any stale session cache on every call
-    for _stale_key in ["ci_banger_data", "ci_result", "ci_repurposed"]:
-        if _stale_key in st.session_state and action != "grades":
-            pass  # Results cleared by action-specific logic below
+    # Force clear all previous results before every new generation
+    for _clear_key in [
+        "ci_banger_data", "ci_result", "ci_repurposed", "ci_preview",
+        "ci_grades", "ci_banger_opt_1", "ci_banger_opt_2", "ci_banger_opt_3",
+        "_verify_1", "_verify_2", "_verify_3"
+    ]:
+        st.session_state.pop(_clear_key, None)
 
     if action == "preview":
         return
