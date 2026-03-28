@@ -3144,7 +3144,9 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             if "---TWEET---" in _display_text:
                 _parts = [t.strip() for t in _display_text.split("---TWEET---") if t.strip()]
                 _display_text = "\n\n".join([f"── TWEET {i+1} ──\n{t}" for i, t in enumerate(_parts)])
-            edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=opt_key, label_visibility="collapsed")
+            # Use content-based key to prevent Streamlit serving stale session_state values
+            _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
+            edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
@@ -3154,13 +3156,13 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                     st.success("Saved.")
             with b2:
                 if st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary"):
-                    v = st.session_state.get(opt_key, opt_text)
+                    v = st.session_state.get(_widget_key, opt_text)
                     if v:
                         st.session_state["ci_text"] = v
                     st.rerun(scope="app")
             with b3:
                 if pplx_available() and st.button("Verify", key=f"modal_bverify_{ti+1}", use_container_width=True):
-                    _v_text = st.session_state.get(opt_key, opt_text)
+                    _v_text = st.session_state.get(_widget_key, opt_text)
                     with st.spinner("Fact-checking..."):
                         _fc = pplx_fact_check(_v_text)
                     if _fc.get("answer"):
