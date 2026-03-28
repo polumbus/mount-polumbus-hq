@@ -2926,7 +2926,8 @@ Return ONLY this JSON, no other text:
   "pick_reason": "one sentence — why this option scores higher on the X algorithm"
 }}"""
         _sys_prompt = get_system_for_voice(voice, voice_mod)
-        raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=400)
+        _max_tok = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=_max_tok)
         banger_data = _parse_banger_json(raw)
         if banger_data and banger_data.get("option1"):
             st.session_state["ci_banger_data"] = banger_data
@@ -3033,7 +3034,8 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle/structure this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-        raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
+        _max_tok_b = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         build_data = _parse_banger_json(raw)
         if build_data and build_data.get("option1"):
             st.session_state["ci_banger_data"] = build_data
@@ -3067,7 +3069,8 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-        raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
+        _max_tok_r = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
             st.session_state["ci_banger_data"] = rw_data
