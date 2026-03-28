@@ -3194,7 +3194,7 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
         return []
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=1, show_spinner=False)
 def _fetch_inspiration_feed():
     """Fetch all lists + Twitter searches + RSS. Cached 20 min — data doesn't change that fast."""
     import concurrent.futures as _cf
@@ -3318,7 +3318,7 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     except Exception:
         pass
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=1, show_spinner=False)
 def _run_inspiration_claude():
     """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
