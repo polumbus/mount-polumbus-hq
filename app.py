@@ -2864,6 +2864,10 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     ]:
         st.session_state.pop(_clear_key, None)
 
+    # DEBUG: log every AI call to stderr (visible in Streamlit Cloud logs)
+    import sys
+    print(f"[AI-CALL] action={action} voice={voice} fmt={fmt} text={tweet_text[:80]!r}", file=sys.stderr, flush=True)
+
     if action == "preview":
         return
 
@@ -3093,8 +3097,9 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
 
     # Subtle format/voice subtitle (dialog title already shows "Creator Studio")
+    _debug_hash = hex(hash(tweet_text))[-6:]
     st.markdown(
-        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice}</div>',
+        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · input: {tweet_text[:40]}... [{_debug_hash}]</div>',
         unsafe_allow_html=True)
     # ── Display results ──
     if action == "preview":
