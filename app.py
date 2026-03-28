@@ -3104,7 +3104,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     _debug_hash = hex(hash(tweet_text))[-6:]
     _has_sep = "---TWEET---" in str(st.session_state.get("ci_banger_data", {}).get("option1", ""))
     st.markdown(
-        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · v3.28 · sep:{_has_sep} · [{_debug_hash}]</div>',
+        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · v3.29 · sep:{_has_sep} · [{_debug_hash}]</div>',
         unsafe_allow_html=True)
     # ── Display results ──
     if action == "preview":
@@ -3139,14 +3139,13 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
-            # Thread format: always split on ---TWEET--- and show individual cards
+            # Thread format: split on ---TWEET--- and show individual tweets
             if fmt == "Thread" and "---TWEET---" in opt_text:
                 _tweets = [t.strip() for t in opt_text.split("---TWEET---") if t.strip()]
                 for _ti2, _tw in enumerate(_tweets):
-                    st.markdown(f'''<div style="background:#0d0d18;border:1px solid #1e2a3a;border-left:3px solid #2DD4BF;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
-<div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:4px;">TWEET {_ti2+1}</div>
-<div style="font-size:13px;color:#d8d8e8;line-height:1.6;white-space:pre-wrap;">{_tw}</div>
-</div>''', unsafe_allow_html=True)
+                    st.info(f"**TWEET {_ti2+1}**")
+                    st.write(_tw)
+                    st.divider()
                 edited_opt = opt_text
             else:
                 edited_opt = st.text_area("", value=opt_text, height=auto_height(opt_text, min_h=100), key=opt_key, label_visibility="collapsed")
