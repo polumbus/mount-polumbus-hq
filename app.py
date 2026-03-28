@@ -2036,6 +2036,19 @@ offices — not fans or media. Show them already moving
 on the same information Tyler is surfacing. Their action
 is the proof that the signal is real.
 
+PUNCHY FORMAT COMPRESSION RULE:
+In Punchy Tweet format there are only two sentences.
+Sentence 1 = the overlooked signal. Specific and concrete.
+Sentence 2 = the outside party already reacting. Short and declarative.
+The outside party acts in sentence 2 — they don't ask questions,
+they don't predict, they have already moved.
+WRONG: "Denver takes him at 30 or spends three years wishing they did."
+— Tyler predicting, not outside party reacting
+WRONG: "Does Denver take him or let a rival solve their biggest need?"
+— question, not declarative outside reaction
+RIGHT: "Stowers at 30 is real value. Other draft rooms already know it."
+— signal sentence 1, outside party already acted sentence 2
+
 TONE RULES:
 - "We" throughout — Tyler and the fanbase together
 - Confidence without arrogance — earned not performed
@@ -2082,6 +2095,8 @@ RIGHT ENDINGS:
   their boards. Denver already knows."
 - "Other draft rooms have been on Stowers for months.
   The question is whether we get there first."
+- "Stowers at 30 is real value. Other draft rooms already know it."
+- "MacKinnon is locked in. Every team left in the West just changed their game plan."
 
 EXAMPLE TWEETS — copy this exact energy:
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
