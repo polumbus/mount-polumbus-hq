@@ -2375,15 +2375,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
 
     result = None
 
-    _ai_cache = st.session_state.setdefault("ci_ai_cache", {})
-    _cache_key = hashlib.md5(f"{action}|{tweet_text.strip()}|{fmt}|{voice}".encode()).hexdigest()
-
     if action == "banger" and tweet_text.strip():
-        if not force_regen and _cache_key in _ai_cache:
-            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
-            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
-                st.session_state.pop(_k, None)
-            return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
             _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
@@ -2422,11 +2414,11 @@ Return ONLY this JSON, no other text:
   "pick": "1 or 2 — just the number, no explanation",
   "pick_reason": "one sentence — why this option scores higher on the X algorithm"
 }}"""
-            raw = call_claude(banger_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=400)
+            _sys_prompt = get_system_for_voice(voice, voice_mod)
+            raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=400)
             banger_data = _parse_banger_json(raw)
             if banger_data and banger_data.get("option1"):
                 st.session_state["ci_banger_data"] = banger_data
-                _ai_cache[_cache_key] = banger_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
@@ -2500,11 +2492,6 @@ Return ONLY this JSON, no other text:
                     result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip():
-        if not force_regen and _cache_key in _ai_cache:
-            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
-            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
-                st.session_state.pop(_k, None)
-            return
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             _sports_ctx_b = ""
             if _sports_context_relevant(tweet_text):
@@ -2543,7 +2530,6 @@ Return ONLY this JSON, no other text:
             build_data = _parse_banger_json(raw)
             if build_data and build_data.get("option1"):
                 st.session_state["ci_banger_data"] = build_data
-                _ai_cache[_cache_key] = build_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -2558,11 +2544,6 @@ Return ONLY this JSON, no other text:
                     st.session_state.pop(_k, None)
 
     elif action == "rewrite" and tweet_text.strip():
-        if not force_regen and _cache_key in _ai_cache:
-            st.session_state["ci_banger_data"] = _ai_cache[_cache_key]
-            for _k in ["ci_result", "ci_grades", "ci_repurposed", "ci_preview"]:
-                st.session_state.pop(_k, None)
-            return
         with st.spinner("Repurposing in your voice..."):
             repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
@@ -2587,7 +2568,6 @@ Return ONLY this JSON, no other text:
             rw_data = _parse_banger_json(raw)
             if rw_data and rw_data.get("option1"):
                 st.session_state["ci_banger_data"] = rw_data
-                _ai_cache[_cache_key] = rw_data
                 for _i in [1, 2, 3]:
                     st.session_state.pop(f"ci_banger_opt_{_i}", None)
                 for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
