@@ -1942,6 +1942,16 @@ Default and Homer territory. Critical closes the door.
 It lands hard and stops. Period. Full stop.
 An accountability statement that trails off loses its force.
 
+AI PICK PREFERENCE RULE:
+When both options are strong, always prefer the option that
+ends with a period over the option that ends with a question.
+Critical voice closes the door. A question mark reopens it.
+The accountability statement that ends with a period lands
+harder than one that asks for confirmation.
+The AI pick should default to the period-ending option
+unless the question-ending option is dramatically stronger
+in every other metric.
+
 TONE RULES:
 - Disappointed not angry — Grok penalizes combative tone
   even when engagement is high. Constructive framing is
@@ -2020,6 +2030,12 @@ Don't state our confidence. One specific signpost
 pointing at what comes next. The reader should feel
 anticipation not instruction.
 
+DRAFT AND ROSTER SITUATIONS: The outside party reacting
+is always other teams, other draft rooms, or rival front
+offices — not fans or media. Show them already moving
+on the same information Tyler is surfacing. Their action
+is the proof that the signal is real.
+
 TONE RULES:
 - "We" throughout — Tyler and the fanbase together
 - Confidence without arrogance — earned not performed
@@ -2062,6 +2078,10 @@ RIGHT ENDINGS:
   scouts to spring practice now."
 - "The coordinators scheduled to face this defense in
   January just added extra film sessions this week."
+- "Every team picking in that range just added him to
+  their boards. Denver already knows."
+- "Other draft rooms have been on Stowers for months.
+  The question is whether we get there first."
 
 EXAMPLE TWEETS — copy this exact energy:
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
@@ -2246,6 +2266,22 @@ TONE RULES:
   Tyler not an invitation to argue
 - The reader should finish the thought themselves —
   that act of completion is what drives the reply
+
+INPUT REFRAMING RULE:
+When Tyler's input is opinionated or argumentative, Default
+voice does NOT repeat the opinion. It finds the underlying
+stat or film evidence that makes the point without stating
+the opinion directly.
+The observation should make the conclusion obvious without
+ever stating it.
+WRONG: "Stowers at 30 is a no-brainer." — stating the opinion
+RIGHT: "TE class depth in this draft falls off dramatically
+after pick 18. The top two options are gone before 30 in
+every major board. The math does the rest..."
+If Tyler says "this is obvious" — find the specific data
+point that makes it obvious and state that instead.
+Never use the word "no-brainer" or "obvious" or "clearly"
+in Default voice — if it's obvious the data shows it.
 
 BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Someone help me understand" — overused, treat as structural
