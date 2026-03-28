@@ -3086,12 +3086,11 @@ Return ONLY this JSON, no other text:
 # CREATOR STUDIO — OUTPUT DIALOG (display-only — AI already ran in _run_ci_ai)
 # ═══════════════════════════════════════════════════════════════════════════
 def _ci_output_panel_impl(action, tweet_text, fmt, voice):
-    """Display AI results — AI runs here inside the dialog so spinner is visible to user."""
+    """Display AI results — AI ran BEFORE the dialog opened. This is display-only."""
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
-    # Run AI inside the dialog so the spinner/loading message appears in the popup
-    st.session_state.pop("_ci_force_regen", None)
-    _run_ci_ai(action, tweet_text, fmt, voice)
+    # AI already ran before dialog opened — do NOT call _run_ci_ai here
+    # (calling it inside @st.dialog caused fragment caching to serve stale results)
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -3782,6 +3781,8 @@ def page_compose_ideas():
         st.session_state["ci_text"] = seed
         _fmt = st.session_state.get("ci_format", "Normal Tweet")
         _vc = st.session_state.get("ci_voice", "Default")
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _run_ci_ai("rewrite", seed, _fmt, _vc)
         _ci_output_panel(str(time.time()), "rewrite", seed, _fmt, _vc)
         return
 
@@ -3918,6 +3919,9 @@ def page_compose_ideas():
             _clear_banger()
         elif _action == "grades":
             st.session_state.pop("ci_grades", None)
+        # Run AI BEFORE opening dialog — dialog is display-only
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _run_ci_ai(_action, _txt, _fmt, _voice)
         _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
 
     if st.session_state.pop("_ci_show_inspiration", False):
@@ -5679,6 +5683,8 @@ def page_reply_guy():
                 st.rerun()
         st.session_state["rg_viral_fmt"] = _viral_fmt
         st.session_state["rg_viral_voice"] = _viral_voice
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _run_ci_ai("banger", _viral_idea, _viral_fmt, _viral_voice)
         _ci_output_panel(str(time.time()), "banger", _viral_idea, _viral_fmt, _viral_voice)
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
