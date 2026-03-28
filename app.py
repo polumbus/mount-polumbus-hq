@@ -1952,14 +1952,15 @@ For long-form X Articles, adapt the voice mode above to full article structure:
     return base + article_overlay
 
 
-def _build_format_mod(fmt: str, patterns: dict) -> str:
+def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
     """Return format instructions for the given fmt, using live personal patterns."""
     _pp = patterns or {}
     _fp_q = _pp.get("top_question_pct", 28)
     _fp_ell = _pp.get("top_ellipsis_pct", 28)
     _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _is_default = voice == "Default"
     _fp_hooks = []
-    if _pp:
+    if _pp and _is_default:
         _hook_pool = (
             _pp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
             else _pp.get("top_examples_normal", []) if fmt == "Normal Tweet"
@@ -1969,9 +1970,12 @@ def _build_format_mod(fmt: str, patterns: dict) -> str:
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-    if fmt == "Punchy Tweet":
-        return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to Tyler's default tone.\n"
 
+    if fmt == "Punchy Tweet":
+        _hooks_block = f"\nTop hooks to model Sentence 1 after:\n{_hooks_str}\n" if _is_default else ""
+        return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+{_voice_override}
 STRUCTURE:
 SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
 SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
@@ -1983,24 +1987,22 @@ RULES:
 - No "I think" / "maybe" / "honestly" — state it flat
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
-
-Top hooks to model Sentence 1 after:
-{_hooks_str}
-
+{_hooks_block}
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
+        _hooks_block_nt = f"- Top performing hooks to model after:\n{_hooks_str}" if _is_default else ""
+        _hook_rule = "- Model the hook after one of Tyler's top hooks above" if _is_default else ""
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
-
+{_voice_override}
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
-- Top performing hooks to model after:
-{_hooks_str}
+{_hooks_block_nt}
 
 STRUCTURE:
 [Confrontational hook or bold declaration]
@@ -2013,7 +2015,7 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
-- Model the hook after one of Tyler's top hooks above
+{_hook_rule}
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -2021,12 +2023,12 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
+        _hooks_block_lt = f"- Top hooks to model the opening after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: LONG TWEET (280-1200 characters)
-
+{_voice_override}
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model the opening after:
-{_hooks_str}
+{_hooks_block_lt}
 
 STRUCTURE:
 [Hot take — complete thought in first 280 chars, visible before "Show More" fold]
@@ -2058,15 +2060,15 @@ IMAGE RECOMMENDATION:
 - Images increase total impressions even though text-only has higher engagement rate"""
 
     elif fmt == "Thread":
+        _hooks_block_th = f"- Top hooks to model Tweet 1 after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: THREAD (5-8 tweets)
-
+{_voice_override}
 TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model Tweet 1 after:
-{_hooks_str}
+{_hooks_block_th}
 
 STRUCTURE:
-TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
+TWEET 1: [Bold claim or confrontational question] A thread:
 
 TWEET 2: [Set the stage — specific situation with numbers/facts]
 
@@ -2097,13 +2099,14 @@ IMAGE RECOMMENDATION:
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
     elif fmt == "Article":
+        _hooks_block_art = f"- Top hooks to model headline/intro after:\n{_hooks_str}" if _is_default else ""
+        _hook_rule_art = "- Model after Tyler's top hooks above" if _is_default else ""
         return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
+{_voice_override}
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
 TYLER'S LIVE DATA (updates every sync):
-- Top hooks to model headline/intro after:
-{_hooks_str}
+{_hooks_block_art}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
 
@@ -2111,7 +2114,7 @@ STRUCTURE:
 HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
 - Numbers perform 2x better than vague headlines
 - Specificity over vagueness — name the player, name the stat
-- Model after Tyler's top hooks above
+{_hook_rule_art}
 [IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
 
 INTRO (2-3 paragraphs — this is the feed preview, must hook):
@@ -2373,7 +2376,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
 
     voice_mod = _build_voice_mod(voice)
     pp = analyze_personal_patterns()
-    format_mod = _build_format_mod(fmt, pp)
+    format_mod = _build_format_mod(fmt, pp, voice)
 
     result = None
 
@@ -2389,10 +2392,11 @@ def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
             if _sports_context_relevant(tweet_text):
                 try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
                 except Exception: pass
-            _fmt_pats = _get_format_patterns_with_fallback(fmt)
             _fmt_inject = ""
-            if _fmt_pats:
-                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
+            if voice == "Default":
+                _fmt_pats = _get_format_patterns_with_fallback(fmt)
+                if _fmt_pats:
+                    _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
             banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
@@ -2499,10 +2503,12 @@ Return ONLY this JSON, no other text:
             if _sports_context_relevant(tweet_text):
                 try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
                 except Exception: pass
-            _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
             _fmt_inject_b = ""
-            if _fmt_pats_b:
-                _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+            if voice == "Default":
+                _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
+                if _fmt_pats_b:
+                    _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+            _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching Tyler's voice exactly"
             build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
 CONCEPT/ANGLE:
@@ -2510,7 +2516,7 @@ CONCEPT/ANGLE:
 
 {format_mod}{_sports_ctx_b}{_fmt_inject_b}
 
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -2547,7 +2553,8 @@ Return ONLY this JSON, no other text:
 
     elif action == "rewrite" and tweet_text.strip():
         with st.spinner("Repurposing in your voice..."):
-            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
+            _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
+            repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject {_rw_voice} — do NOT copy any original phrasing. Each takes a different angle.
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
