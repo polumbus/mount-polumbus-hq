@@ -2502,6 +2502,20 @@ RULES:
 - No hashtags, no links
 - End with debate invitation
 
+BANNED OPENERS AND WORDS — never appear in Long Tweet Default voice:
+- "obvious" / "obviously" — opinion not observation
+- "no-brainer" — opinion not observation
+- "not complicated" — opinion framing
+- "stop overthinking" — instructing the reader
+- "clearly" / "definitely" — opinion markers
+- The opener must be a FACT not an opinion or conclusion
+- If the input contains opinion language find the underlying
+  stat or film evidence that makes the point without stating
+  the opinion directly
+- WRONG opener: "Taking Stowers at 30 is the most obvious pick."
+- RIGHT opener: "TE class depth in this draft falls off
+  dramatically after pick 18."
+
 BANNED OPENERS — never use these exact phrases:
 - "Someone help me understand"
 - "Nobody is talking about"
