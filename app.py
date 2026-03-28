@@ -991,7 +991,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
 
     # Billing header required in system prompt for Sonnet/Opus access via OAuth
     _salt = "59cf53e54c78"
-    _ver = "2.1.83"
+    _ver = "2.1.86"
     _chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
     _hash = hashlib.sha256((_salt + "".join(_chars) + _ver).encode()).hexdigest()[:3]
     billing_line = f"x-anthropic-billing-header: cc_version={_ver}.{_hash}; cc_entrypoint=claude-code; cch=00000;"
@@ -1037,7 +1037,7 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
     """Thread-safe direct API call — token passed in, no session state access."""
     import urllib.request, hashlib as _hl
     _salt = "59cf53e54c78"
-    _ver = "2.1.83"
+    _ver = "2.1.86"
     _chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
     _hash = _hl.sha256((_salt + "".join(_chars) + _ver).encode()).hexdigest()[:3]
     billing_line = f"x-anthropic-billing-header: cc_version={_ver}.{_hash}; cc_entrypoint=claude-code; cch=ece3b;"
