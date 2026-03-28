@@ -2854,8 +2854,13 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
     return _prompt_a, _prompt_b
 
 
-def _run_ci_ai(action, tweet_text, fmt, voice, force_regen=False):
+def _run_ci_ai(action, tweet_text, fmt, voice, **_kwargs):
     """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
+    # Clear any stale session cache on every call
+    for _stale_key in ["ci_banger_data", "ci_result", "ci_repurposed"]:
+        if _stale_key in st.session_state and action != "grades":
+            pass  # Results cleared by action-specific logic below
+
     if action == "preview":
         return
 
@@ -3078,8 +3083,8 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     _RESULT_KEYS = ["ci_banger_data", "ci_grades", "ci_result", "ci_repurposed", "ci_preview"]
 
     # Run AI inside the dialog so the spinner/loading message appears in the popup
-    _force_regen = st.session_state.pop("_ci_force_regen", False)
-    _run_ci_ai(action, tweet_text, fmt, voice, force_regen=_force_regen)
+    st.session_state.pop("_ci_force_regen", None)
+    _run_ci_ai(action, tweet_text, fmt, voice)
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -3904,7 +3909,6 @@ def page_compose_ideas():
             _clear_banger()
         elif _action == "grades":
             st.session_state.pop("ci_grades", None)
-        st.session_state["_ci_force_regen"] = _is_redo
         _ci_output_panel(_action, _txt, _fmt, _voice)
 
     if st.session_state.pop("_ci_show_inspiration", False):
