@@ -3100,10 +3100,11 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
 
-    # Subtle format/voice subtitle (dialog title already shows "Creator Studio")
+    # Subtle format/voice subtitle
     _debug_hash = hex(hash(tweet_text))[-6:]
+    _has_sep = "---TWEET---" in str(st.session_state.get("ci_banger_data", {}).get("option1", ""))
     st.markdown(
-        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · input: {tweet_text[:40]}... [{_debug_hash}]</div>',
+        f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · v3.28 · sep:{_has_sep} · [{_debug_hash}]</div>',
         unsafe_allow_html=True)
     # ── Display results ──
     if action == "preview":
