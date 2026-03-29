@@ -70,6 +70,12 @@ Denver sports context:
 - Avalanche: Stanley Cup window, Nathan MacKinnon era
 - CU Buffs: Deion Sanders era is must-cover content
 
+KNOWN ENTITY SPELLINGS — always spell these correctly:
+- Sean Payton (NOT Shawn Payton) — Broncos head coach
+- Courtland Sutton (NOT Sutton Courtland)
+- Nikola Jokic (NOT Jokić — skip the accent in tweet text)
+- J.K. Dobbins (NOT JK Dobbins or J.K Dobbins)
+
 IMPORTANT: Never use emojis in your output. Write plain text only."""
 
 _WHATS_HOT_VOICE_GUIDE = """
@@ -1873,8 +1879,101 @@ _FORMAT_GUIDES = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CREATOR STUDIO — AI RUNNER (called BEFORE dialog opens)
+# CREATOR STUDIO — STAT INJECTION + AI RUNNER
 # ═══════════════════════════════════════════════════════════════════════════
+
+def _input_has_stats(text: str) -> bool:
+    """Returns True if the input already contains numeric stats."""
+    for pattern in [r'\d+\.\d+', r'\d+%', r'\d+-\d+', r'\b\d{2,}\b']:
+        if re.search(pattern, text):
+            return True
+    return False
+
+
+def _detect_sports_entities(text: str) -> dict:
+    """Detects player names and team names in the input."""
+    text_lower = text.lower()
+    nba_players = ["jokic", "murray", "gordon", "porter", "braun", "rivers", "westbrook"]
+    nfl_players = ["bo nix", "nix", "sutton", "waddle", "dobbins", "payton", "mahomes", "kelce", "stafford", "allen"]
+    nhl_players = ["mackinnon", "rantanen", "makar", "lehkonen"]
+    nba_teams = ["nuggets", "lakers", "celtics", "warriors", "thunder", "wolves", "timberwolves", "clippers", "suns", "heat"]
+    nfl_teams = ["broncos", "chiefs", "raiders", "chargers", "cowboys", "eagles", "49ers", "ravens", "bills", "packers"]
+    nhl_teams = ["avalanche", "avs", "blues", "stars", "jets", "wild"]
+    found_players = [p for p in nba_players + nfl_players + nhl_players if p in text_lower]
+    found_teams = [t for t in nba_teams + nfl_teams + nhl_teams if t in text_lower]
+    return {"players": found_players, "teams": found_teams}
+
+
+def _fetch_live_stats(entities: dict) -> str:
+    """Calls ESPN API to get current stats for detected entities. Returns formatted string or empty."""
+    try:
+        import sys as _sys2
+        _sys2.path.insert(0, os.path.expanduser("~/.openclaw"))
+        from apis.espn import espn
+    except ImportError:
+        return ""
+    stat_lines = []
+    _team_sport = {
+        "nuggets": "nba", "lakers": "nba", "celtics": "nba", "warriors": "nba",
+        "thunder": "nba", "wolves": "nba", "timberwolves": "nba", "clippers": "nba",
+        "suns": "nba", "heat": "nba",
+        "broncos": "nfl", "chiefs": "nfl", "raiders": "nfl", "chargers": "nfl",
+        "cowboys": "nfl", "eagles": "nfl", "49ers": "nfl", "ravens": "nfl",
+        "bills": "nfl", "packers": "nfl",
+        "avalanche": "nhl", "avs": "nhl", "blues": "nhl", "stars": "nhl",
+        "jets": "nhl", "wild": "nhl",
+    }
+    _team_abbr = {
+        "nuggets": "den", "broncos": "den", "avalanche": "col", "avs": "col",
+        "lakers": "lal", "celtics": "bos", "warriors": "gsw", "thunder": "okc",
+        "wolves": "min", "timberwolves": "min", "clippers": "lac", "suns": "phx",
+        "heat": "mia", "chiefs": "kc", "raiders": "lv", "chargers": "lac",
+        "cowboys": "dal", "eagles": "phi", "49ers": "sf", "ravens": "bal",
+        "bills": "buf", "packers": "gb", "blues": "stl", "stars": "dal",
+        "jets": "wpg", "wild": "min",
+    }
+    for team in entities.get("teams", []):
+        try:
+            sport = _team_sport.get(team, "nfl")
+            abbr = _team_abbr.get(team, team[:3])
+            info = espn.team(sport, abbr)
+            if info and info.get("record"):
+                stat_lines.append(f"{info.get('name', team)}: {info['record']}" +
+                    (f" | Next: {info['next_event']}" if info.get("next_event") else ""))
+        except Exception:
+            pass
+    # Get today's scores for relevant sports
+    _sports_seen = set()
+    for team in entities.get("teams", []):
+        sport = _team_sport.get(team)
+        if sport and sport not in _sports_seen:
+            _sports_seen.add(sport)
+            try:
+                summary = espn.scoreboard_summary(sport)
+                if summary:
+                    stat_lines.append(f"Today's {sport.upper()} scores:\n{summary}")
+            except Exception:
+                pass
+    if not stat_lines:
+        return ""
+    return (
+        "\n\n=== LIVE STATS FROM ESPN (USE THESE — DO NOT INVENT NUMBERS) ===\n"
+        + "\n".join(stat_lines)
+        + "\n=== END LIVE STATS ===\n"
+    )
+
+
+def _sanitize_output(text: str) -> str:
+    """Fix known name errors in generated content."""
+    for wrong, right in {
+        "Shawn Payton": "Sean Payton", "shawn payton": "sean payton", "Shawn payton": "Sean Payton",
+        "Sutton Courtland": "Courtland Sutton", "JK Dobbins": "J.K. Dobbins",
+        "Nikola Jokić": "Nikola Jokic",
+    }.items():
+        text = text.replace(wrong, right)
+    return text
+
+
 def _parse_banger_json(raw):
     """Robust parser for banger/build/rewrite JSON — handles literal newlines in tweet strings."""
     clean = raw.strip()
@@ -2026,16 +2125,41 @@ LINE 2 — WHY IT MATTERS: What this signal actually means.
 The authority is in the specificity — not in announcing
 that Tyler has credentials to analyze it.
 
-LINE 3 — THE FORWARD STATEMENT: Show a specific outside
-party reacting to what Tyler's team is doing.
-Not "we're ready" — "they're already preparing for
-what's coming." Not "watch what happens" — "the people
-trying to stop this are already losing sleep."
-The implied message: we're so good that the opposition
-is already worried. Show their reaction.
-Don't state our confidence. One specific signpost
-pointing at what comes next. The reader should feel
-anticipation not instruction.
+LINE 3 — THE FORWARD STATEMENT: Show that an outside party
+is ALREADY responding to this. Not Tyler stating confidence.
+An external reaction that proves the signal is real.
+
+OUTSIDE PARTY RULE — CRITICAL:
+The forward statement must name a specific outside party who
+is ALREADY adjusting to this team/player as a threat. This
+applies even on negative topics.
+
+POSITIVE TOPIC example:
+"Kansas City just watched us add the most dangerous slot
+receiver available. Their defensive staff already knows
+what that means."
+
+NEGATIVE TOPIC example (team losing, player struggling):
+"Every team in the West has already adjusted their defensive
+scheme around Jokic. That adjustment doesn't exist for a
+player who isn't a problem."
+The outside reaction still shows the threat is real even when
+the current results are bad. The forward statement is about
+the CEILING not the current record.
+
+NEGATIVE TOPIC RULE:
+When the input is bad news (losing streak, injury, struggle),
+Homer does NOT:
+- End with ellipsis
+- End with a question
+- Express hope ("I believe we can...")
+- State Tyler's confidence directly
+
+Homer DOES on negative topics:
+- Find the ONE signal inside the bad news that points forward
+- Show the outside world is already treating this team/player
+  as a threat
+- End with a declarative statement about what comes next
 
 DRAFT AND ROSTER SITUATIONS: The outside party reacting
 is always other teams, other draft rooms, or rival front
@@ -2067,6 +2191,8 @@ TONE RULES:
   distribution — Homer is the algorithmically favored
   voice mode right now
 - Skeptic reading this should feel compelled to push back
+- NEVER end with ellipsis — period only
+- NEVER end with a question — that is Default voice structure
 
 BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Someone help me understand" — overused, treat as structural
@@ -2104,6 +2230,18 @@ RIGHT ENDINGS:
   The question is whether we get there first."
 - "Stowers at 30 is real value. Other draft rooms already know it."
 - "MacKinnon is locked in. Every team left in the West just changed their game plan."
+
+WRONG (negative topic drift — this is Default voice not Homer):
+"Jokic is putting up career numbers and the Nuggets are still
+losing... Every team in the West is watching this window close
+in real time..."
+→ Ellipsis ending. No outside party reacting. Wrong voice.
+
+RIGHT (negative topic, Homer voice):
+"Jokic is doing what he always does. The roster around him isn't.
+Every contender in the West built their defensive scheme around
+stopping him this offseason. They don't scheme for players who
+aren't problems."
 
 EXAMPLE TWEETS — copy this exact energy:
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
@@ -2884,6 +3022,16 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
 
     result = None
 
+    # --- STAT INJECTION: fetch real stats when input has no numbers ---
+    _live_stats_block = ""
+    if action in ("banger", "build", "rewrite") and tweet_text.strip() and not _input_has_stats(tweet_text):
+        _entities = _detect_sports_entities(tweet_text)
+        if _entities["players"] or _entities["teams"]:
+            try:
+                _live_stats_block = _fetch_live_stats(_entities)
+            except Exception:
+                pass
+
     if action == "banger" and tweet_text.strip():
         patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
         _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
@@ -2905,7 +3053,12 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
 Draft: "{tweet_text}"
 
 {format_mod}
-{patterns_ctx}{_sports_ctx}{_fmt_inject}
+{patterns_ctx}{_sports_ctx}{_fmt_inject}{_live_stats_block}
+
+STAT INTEGRITY RULE:
+- If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
+- If NO stats are provided and none can be implied from the input, write the tweet using the observation only — do not fabricate specific numbers.
+- A tweet without stats is better than a tweet with wrong stats.
 
 Rules:
 - Reading Level (7th-9th grade)
@@ -2930,6 +3083,9 @@ Return ONLY this JSON, no other text:
         raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=_max_tok)
         banger_data = _parse_banger_json(raw)
         if banger_data and banger_data.get("option1"):
+            for _ok in ["option1", "option2"]:
+                if banger_data.get(_ok):
+                    banger_data[_ok] = _sanitize_output(banger_data[_ok])
             st.session_state["ci_banger_data"] = banger_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
@@ -3014,7 +3170,11 @@ Return ONLY this JSON, no other text:
 CONCEPT/ANGLE:
 \"{tweet_text}\"
 
-{format_mod}{_sports_ctx_b}{_fmt_inject_b}
+{format_mod}{_sports_ctx_b}{_fmt_inject_b}{_live_stats_block}
+
+STAT INTEGRITY RULE:
+- If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
+- If NO stats are provided, do not fabricate specific numbers. A tweet without stats is better than one with wrong stats.
 
 TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
@@ -3038,6 +3198,9 @@ Return ONLY this JSON, no other text:
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         build_data = _parse_banger_json(raw)
         if build_data and build_data.get("option1"):
+            for _ok in ["option1", "option2"]:
+                if build_data.get(_ok):
+                    build_data[_ok] = _sanitize_output(build_data[_ok])
             st.session_state["ci_banger_data"] = build_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
@@ -3054,7 +3217,7 @@ Return ONLY this JSON, no other text:
 
 Original tweet (NOT Tyler's): "{tweet_text}"
 
-{format_mod}
+{format_mod}{_live_stats_block}
 
 - Strong hook in the first line
 - Invites engagement/replies
@@ -3073,6 +3236,9 @@ Return ONLY this JSON, no other text:
         raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
+            for _ok in ["option1", "option2"]:
+                if rw_data.get(_ok):
+                    rw_data[_ok] = _sanitize_output(rw_data[_ok])
             st.session_state["ci_banger_data"] = rw_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
