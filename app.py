@@ -4377,12 +4377,46 @@ Your coaching style:
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: ARTICLE WRITER
 # ═══════════════════════════════════════════════════════════════════════════
+@st.dialog("New Article", width="large")
+def _aw_create_new_dialog():
+    """Popup for writing a new article from scratch."""
+    _custom_voices = load_json("voice_styles.json", [])
+    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    voice_pick = st.selectbox("Voice", _voice_opts, key="aw_dialog_voice",
+        help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
+    freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
+        placeholder="Paste a topic, tweet, or start writing your article...")
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        if st.button("↓ Save Article", use_container_width=True, key="aw_dialog_save"):
+            if freeform.strip():
+                articles = load_json("saved_articles.json", [])
+                articles.append({"content": freeform.strip(), "seed": "", "saved_at": datetime.now().isoformat()})
+                save_json("saved_articles.json", articles)
+                st.session_state["aw_result"] = freeform.strip()
+                st.rerun()
+            else:
+                st.warning("Write something first.")
+    with fc2:
+        if st.button("Generate with AI", use_container_width=True, key="aw_dialog_gen", type="primary"):
+            if freeform.strip():
+                with st.spinner("Writing article..."):
+                    voice_mod = _build_article_voice_mod(voice_pick)
+                    voice_system = get_system_for_voice(voice_pick, voice_mod)
+                    prompt = f"""Write a complete X Article based on this seed:\n\n\"{freeform.strip()}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.\n\n{voice_mod}"""
+                    result = call_claude(prompt, system=voice_system, max_tokens=3000)
+                    st.session_state["aw_result"] = result
+                    st.rerun()
+            else:
+                st.warning("Type something first.")
+
+
 def page_article_writer():
-    # Handle Create New reset at top, before any rendering
+    # Handle Create New — open dialog
     if st.session_state.pop("aw_create_new", False):
         for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump", "aw_autogen", "aw_research_data"]:
             st.session_state.pop(k, None)
-        st.session_state["aw_show_editor"] = True
+        _aw_create_new_dialog()
 
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
@@ -4534,41 +4568,13 @@ def page_article_writer():
                     st.info("Text displayed above -- copy from there.")
             with bc3:
                 if st.button("↺ New", use_container_width=True, key="aw_new"):
-                    st.session_state["aw_create_new"] = True
-                    st.rerun()
-        elif st.session_state.pop("aw_show_editor", False):
-            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-            st.markdown("#### Write from scratch")
-            freeform = st.text_area("Write or paste your article here:", height=300, key="aw_freeform",
-                placeholder="Start writing your article...")
-            fc1, fc2 = st.columns(2)
-            with fc1:
-                if st.button("↓ Save Article", use_container_width=True, key="aw_freeform_save"):
-                    if freeform.strip():
-                        articles = load_json("saved_articles.json", [])
-                        articles.append({"content": freeform.strip(), "seed": "", "saved_at": datetime.now().isoformat()})
-                        save_json("saved_articles.json", articles)
-                        st.success("Article saved.")
-                        st.rerun()
-                    else:
-                        st.warning("Write something first.")
-            with fc2:
-                if st.button("Generate with AI", use_container_width=True, key="aw_freeform_gen", type="primary"):
-                    if freeform.strip():
-                        st.session_state["aw_autogen"] = freeform.strip()
-                        st.rerun()
-                    elif seed_text:
-                        st.session_state["aw_autogen"] = seed_text
-                        st.rerun()
-                    else:
-                        st.warning("Type something or select a tweet above first.")
+                    _aw_create_new_dialog()
 
     # ── Right 1/3: My Articles ────────────────────────────────────────
     with col_saved:
         st.markdown("### My Articles")
         if st.button("↺ Create New", key="aw_side_new", use_container_width=True):
-            st.session_state["aw_create_new"] = True
-            st.rerun()
+            _aw_create_new_dialog()
         articles = load_json("saved_articles.json", [])
         if not articles:
             st.markdown('<div style="padding:20px;border-radius:10px;background:#0d1929;border:1px solid rgba(0,229,204,0.13);color:#3a5070;text-align:center;font-style:italic;line-height:1.6;">No saved articles yet.<br>Select a tweet above, generate an article, then click Save Article.</div>', unsafe_allow_html=True)
