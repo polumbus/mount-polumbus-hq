@@ -3814,15 +3814,26 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
     # ── Bottom action bar ──
     st.divider()
+    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
     _custom_voices = load_json("voice_styles.json", [])
     _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
-    _vc1, _vc2 = st.columns([1, 2])
-    with _vc1:
+    _fc1, _fc2, _fc3 = st.columns([1, 1, 1.5])
+    with _fc1:
+        _new_fmt = st.selectbox("Format", _fmt_opts, index=_fmt_opts.index(fmt) if fmt in _fmt_opts else 1, key="modal_fmt_pick", label_visibility="collapsed")
+    with _fc2:
         _new_voice = st.selectbox("Voice", _voice_opts, index=_voice_opts.index(voice) if voice in _voice_opts else 0, key="modal_voice_pick", label_visibility="collapsed")
-    with _vc2:
-        if st.button(f"↺ Redo{' as ' + _new_voice if _new_voice != voice else ''}", use_container_width=True, key="modal_redo", type="primary" if _new_voice != voice else "secondary"):
+    _changed = _new_voice != voice or _new_fmt != fmt
+    _label_parts = []
+    if _new_fmt != fmt:
+        _label_parts.append(_new_fmt)
+    if _new_voice != voice:
+        _label_parts.append(_new_voice)
+    _redo_label = f"↺ Redo as {' / '.join(_label_parts)}" if _label_parts else "↺ Redo"
+    with _fc3:
+        if st.button(_redo_label, use_container_width=True, key="modal_redo", type="primary" if _changed else "secondary"):
             st.session_state["ci_voice"] = _new_voice
-            st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": fmt, "voice": _new_voice}
+            st.session_state["ci_format"] = _new_fmt
+            st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": _new_fmt, "voice": _new_voice}
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
             st.rerun(scope="app")
