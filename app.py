@@ -3055,7 +3055,51 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
             except Exception:
                 pass
 
-    if action == "banger" and tweet_text.strip():
+    if action == "banger" and tweet_text.strip() and fmt == "Article":
+        # Article format: single long-form article, NOT two-option JSON
+        _sports_ctx = ""
+        if _sports_context_relevant(tweet_text):
+            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant):\n{get_sports_context()}"
+            except Exception: pass
+        article_voice_mod = _build_article_voice_mod(voice)
+        article_prompt = f"""Write a complete X Article based on this seed:
+
+"{tweet_text}"
+
+FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+{_sports_ctx}{_live_stats_block}
+
+CONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost.
+
+STRUCTURE:
+- HEADLINE: 50-75 chars, include a number or specific claim, take a position.
+- [IMAGE: Hero image placeholder]
+- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters now.
+- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats**. [IMAGE placeholder]
+- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.
+- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]
+- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.
+- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.
+- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.
+
+RULES:
+- 1,500-2,000 words target
+- Paragraphs: 2-4 sentences max
+- Subheadings every ~300 words
+- Bold key stats and claims (2-3 per section)
+- Tyler's voice: direct, no hedging, former-player authority
+- Specific players/schemes/numbers only
+- Include [IMAGE] markers where supporting visuals should go
+- End with debate invitation to drive replies
+
+{article_voice_mod}
+
+Return the article as plain text. Do NOT wrap in JSON or code blocks."""
+        _sys_prompt = get_system_for_voice(voice, voice_mod)
+        raw = call_claude(article_prompt, system=_sys_prompt, max_tokens=3000)
+        result = _sanitize_output(raw.strip()) if raw else raw
+
+    elif action == "banger" and tweet_text.strip():
         patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
         _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
         _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
@@ -3106,7 +3150,7 @@ Return ONLY this JSON, no other text:
   "pick_reason": "one sentence — why this option scores higher on the X algorithm"
 }}"""
         _sys_prompt = get_system_for_voice(voice, voice_mod)
-        _max_tok = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        _max_tok = 2000 if fmt == "Thread" else 400
         raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=_max_tok)
         banger_data = _parse_banger_json(raw)
         if banger_data and banger_data.get("option1"):
@@ -3181,6 +3225,43 @@ Return ONLY this JSON, no other text:
             else:
                 result = "Grades failed — try again"
 
+    elif action == "build" and tweet_text.strip() and fmt == "Article":
+        # Article format: single long-form article from concept
+        _sports_ctx_b = ""
+        if _sports_context_relevant(tweet_text):
+            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
+            except Exception: pass
+        article_voice_mod = _build_article_voice_mod(voice)
+        build_article_prompt = f"""Tyler Polumbus has a concept he wants turned into a full X Article.
+
+CONCEPT/ANGLE:
+\"{tweet_text}\"
+{_sports_ctx_b}{_live_stats_block}
+
+FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+
+STRUCTURE:
+- HEADLINE: 50-75 chars, include a number or specific claim
+- [IMAGE: Hero image placeholder]
+- INTRO (2-3 paragraphs): Provocative claim or surprising stat
+- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**
+- WHAT COMES NEXT: Bold prediction with reasoning
+- CONCLUSION: 1-sentence bold hot take + debate question
+- PROMOTION: companion tweet idea
+
+RULES:
+- 1,500-2,000 words, paragraphs 2-4 sentences max, subheadings every ~300 words
+- Tyler's voice: direct, no hedging, former-player authority
+- Specific players/schemes/numbers only
+- Include [IMAGE] markers for visuals
+- End with debate invitation
+
+{article_voice_mod}
+
+Return the article as plain text. Do NOT wrap in JSON or code blocks."""
+        raw = call_claude(build_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=3000)
+        result = _sanitize_output(raw.strip()) if raw else raw
+
     elif action == "build" and tweet_text.strip():
         _sports_ctx_b = ""
         if _sports_context_relevant(tweet_text):
@@ -3221,7 +3302,7 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle/structure this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-        _max_tok_b = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        _max_tok_b = 2000 if fmt == "Thread" else 400
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         build_data = _parse_banger_json(raw)
         if build_data and build_data.get("option1"):
@@ -3237,6 +3318,38 @@ Return ONLY this JSON, no other text:
             st.session_state["ci_result"] = raw
             for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
                 st.session_state.pop(_k, None)
+
+    elif action == "rewrite" and tweet_text.strip() and fmt == "Article":
+        # Article format: rewrite as full article
+        article_voice_mod = _build_article_voice_mod(voice)
+        rewrite_article_prompt = f"""Rewrite this content as a full X Article in Tyler Polumbus's voice.
+
+Original content: "{tweet_text}"
+{_live_stats_block}
+
+FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
+
+STRUCTURE:
+- HEADLINE: 50-75 chars, include a number or specific claim
+- [IMAGE: Hero image placeholder]
+- INTRO (2-3 paragraphs): Provocative claim or surprising stat
+- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**
+- WHAT COMES NEXT: Bold prediction with reasoning
+- CONCLUSION: 1-sentence bold hot take + debate question
+- PROMOTION: companion tweet idea
+
+RULES:
+- 1,500-2,000 words, paragraphs 2-4 sentences max
+- Tyler's voice: direct, no hedging, former-player authority
+- Do NOT copy original phrasing — completely new execution
+- Specific players/schemes/numbers only
+- Include [IMAGE] markers for visuals
+
+{article_voice_mod}
+
+Return the article as plain text. Do NOT wrap in JSON or code blocks."""
+        raw = call_claude(rewrite_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=3000)
+        result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
         _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
@@ -3259,7 +3372,7 @@ Return ONLY this JSON, no other text:
   "option2_pattern": "angle this version takes",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
-        _max_tok_r = 2000 if fmt == "Thread" else (1500 if fmt == "Article" else 400)
+        _max_tok_r = 2000 if fmt == "Thread" else 400
         raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
