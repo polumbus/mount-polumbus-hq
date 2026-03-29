@@ -2056,15 +2056,13 @@ Default and Homer territory. Critical closes the door.
 It lands hard and stops. Period. Full stop.
 An accountability statement that trails off loses its force.
 
-AI PICK PREFERENCE RULE:
-When both options are strong, always prefer the option that
-ends with a period over the option that ends with a question.
+AI PICK RULE FOR CRITICAL VOICE:
+When generating two options, if one ends with a period and one ends
+with a question mark, the period ending is ALWAYS the correct pick.
+Do not override this with engagement predictions.
+The question ending is wrong by definition in Critical mode.
 Critical voice closes the door. A question mark reopens it.
-The accountability statement that ends with a period lands
-harder than one that asks for confirmation.
-The AI pick should default to the period-ending option
-unless the question-ending option is dramatically stronger
-in every other metric.
+This rule has NO exceptions.
 
 TONE RULES:
 - Disappointed not angry — Grok penalizes combative tone
@@ -2199,8 +2197,12 @@ TONE RULES:
   distribution — Homer is the algorithmically favored
   voice mode right now
 - Skeptic reading this should feel compelled to push back
-- NEVER end with ellipsis — period only
-- NEVER end with a question — that is Default voice structure
+ENDING RULES — NON-NEGOTIABLE:
+- NEVER end with a question mark — questions are Default voice structure
+- NEVER end with ellipsis — ellipsis is Default voice structure
+- ALWAYS end with a period
+- The final sentence must show an outside party already reacting
+- This applies to BOTH Option 1 AND Option 2 — no exceptions
 
 BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Someone help me understand" — overused, treat as structural
@@ -2387,6 +2389,16 @@ RIGHT: "Turns out the Patriots offense doesn't suck
 because of a snow storm."
 RIGHT: "That cornerback needs to call someone he trusts
 right now. Not about football."
+
+STAT RULE FOR SARCASTIC VOICE:
+If LIVE STATS are provided in the user message, use only those numbers.
+Sarcastic voice tends to fabricate stats because it prioritizes irony
+over accuracy — this is wrong. Real stats are funnier than fake ones
+because they're actually true.
+If no stats are provided, do not invent them.
+Build the sarcasm around the OBSERVATION not the number.
+WRONG: "Averaging 30-9-13 this month" (fabricated)
+RIGHT: "Three MVP awards. Best ball of his career." (known facts, no fabrication)
 === END SARCASTIC VOICE ==="""
 
     else:
@@ -3079,6 +3091,10 @@ Rules:
 {_char_rule}
 
 {"THREAD FORMAT: Inside each option, separate individual tweets with the marker ---TWEET--- between them. Example: first tweet text here---TWEET---second tweet text here---TWEET---third tweet text here" if fmt == "Thread" else ""}
+
+VOICE-SPECIFIC ENDING OVERRIDE:
+{"CRITICAL VOICE PICK RULE: ALWAYS prefer the option ending with a period over one ending with a question mark. A question ending in Critical voice is a structural failure regardless of engagement potential. Period ending wins every time. This overrides all other pick criteria." if voice == "Critical" else ""}
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. If a pattern calls for a question closer, replace it with a declarative outside-reaction statement. WRONG: 'How does the most dominant player not drag this roster over the line?' RIGHT: 'Every team in the West designed their rotations around stopping him. That is not a problem you scheme for unless the threat is real.'" if voice == "Homer" else ""}
 
 Return ONLY this JSON, no other text:
 {{
