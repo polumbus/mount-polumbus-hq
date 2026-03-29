@@ -3205,6 +3205,7 @@ STAT INTEGRITY RULE:
 - If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
 - If NO stats are provided and none can be implied from the input, write the tweet using the observation only — do not fabricate specific numbers.
 - A tweet without stats is better than a tweet with wrong stats.
+{"- SARCASTIC VOICE STAT WARNING: Do NOT fabricate stats like '30-9-13' or '28th in pass protection' unless those exact numbers appear in LIVE STATS above. Sarcastic voice builds humor from observations and framing, not invented numbers. Real stats are funnier than fake ones." if voice == "Sarcastic" else ""}
 
 Rules:
 - Reading Level (7th-9th grade)
@@ -3225,8 +3226,8 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "which top tweet pattern this is modeled after",
   "option2": "full tweet text here",
   "option2_pattern": "which top tweet pattern this is modeled after",
-  "pick": "1 or 2 — just the number, no explanation",
-  "pick_reason": "one sentence — why this option scores higher on the X algorithm"
+  "pick": "1 or 2 — {'MUST be the period-ending option (Critical voice rule overrides all other criteria)' if voice == 'Critical' else 'just the number, no explanation'}",
+  "pick_reason": "one sentence — {'why this option matches Critical voice structure (period ending = correct)' if voice == 'Critical' else 'why this option scores higher on the X algorithm'}"
 }}"""
         _sys_prompt = get_system_for_voice(voice, voice_mod)
         _max_tok = 2000 if fmt == "Thread" else 400
@@ -3236,6 +3237,18 @@ Return ONLY this JSON, no other text:
             for _ok in ["option1", "option2"]:
                 if banger_data.get(_ok):
                     banger_data[_ok] = _sanitize_output(banger_data[_ok])
+            # FIX 1: Critical voice — force pick to period-ending option
+            if voice == "Critical" and banger_data.get("option1") and banger_data.get("option2"):
+                _o1_ends_period = banger_data["option1"].rstrip().endswith(".")
+                _o2_ends_period = banger_data["option2"].rstrip().endswith(".")
+                _o1_ends_question = banger_data["option1"].rstrip().endswith("?")
+                _o2_ends_question = banger_data["option2"].rstrip().endswith("?")
+                if _o1_ends_period and _o2_ends_question:
+                    banger_data["pick"] = "1"
+                    banger_data["pick_reason"] = "Critical voice: period ending is structurally correct."
+                elif _o2_ends_period and _o1_ends_question:
+                    banger_data["pick"] = "2"
+                    banger_data["pick_reason"] = "Critical voice: period ending is structurally correct."
             st.session_state["ci_banger_data"] = banger_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
@@ -3377,6 +3390,8 @@ Rules:
 - Algorithm optimized: strong opinion, relatable, invites engagement
 - Structure each option to match the FORMAT PATTERNS above
 
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
 Return ONLY this JSON, no other text:
 {{
   "option1": "full tweet text here",
@@ -3392,6 +3407,16 @@ Return ONLY this JSON, no other text:
             for _ok in ["option1", "option2"]:
                 if build_data.get(_ok):
                     build_data[_ok] = _sanitize_output(build_data[_ok])
+            # Critical voice: force pick to period-ending option
+            if voice == "Critical" and build_data.get("option1") and build_data.get("option2"):
+                _o1p = build_data["option1"].rstrip().endswith(".")
+                _o2p = build_data["option2"].rstrip().endswith(".")
+                _o1q = build_data["option1"].rstrip().endswith("?")
+                _o2q = build_data["option2"].rstrip().endswith("?")
+                if _o1p and _o2q:
+                    build_data["pick"] = "1"
+                elif _o2p and _o1q:
+                    build_data["pick"] = "2"
             st.session_state["ci_banger_data"] = build_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
@@ -3451,6 +3476,8 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 - No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
 Return ONLY this JSON, no other text:
 {{
   "option1": "full tweet text here",
@@ -3466,6 +3493,16 @@ Return ONLY this JSON, no other text:
             for _ok in ["option1", "option2"]:
                 if rw_data.get(_ok):
                     rw_data[_ok] = _sanitize_output(rw_data[_ok])
+            # Critical voice: force pick to period-ending option
+            if voice == "Critical" and rw_data.get("option1") and rw_data.get("option2"):
+                _o1p = rw_data["option1"].rstrip().endswith(".")
+                _o2p = rw_data["option2"].rstrip().endswith(".")
+                _o1q = rw_data["option1"].rstrip().endswith("?")
+                _o2q = rw_data["option2"].rstrip().endswith("?")
+                if _o1p and _o2q:
+                    rw_data["pick"] = "1"
+                elif _o2p and _o1q:
+                    rw_data["pick"] = "2"
             st.session_state["ci_banger_data"] = rw_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
