@@ -1905,61 +1905,69 @@ def _detect_sports_entities(text: str) -> dict:
 
 
 def _fetch_live_stats(entities: dict) -> str:
-    """Calls ESPN API to get current stats for detected entities. Returns formatted string or empty."""
-    try:
-        import sys as _sys2
-        _sys2.path.insert(0, os.path.expanduser("~/.openclaw"))
-        from apis.espn import espn
-    except ImportError:
-        return ""
+    """Calls ESPN API directly to get current stats for detected entities."""
+    import urllib.request
     stat_lines = []
-    _team_sport = {
-        "nuggets": "nba", "lakers": "nba", "celtics": "nba", "warriors": "nba",
-        "thunder": "nba", "wolves": "nba", "timberwolves": "nba", "clippers": "nba",
-        "suns": "nba", "heat": "nba",
-        "broncos": "nfl", "chiefs": "nfl", "raiders": "nfl", "chargers": "nfl",
-        "cowboys": "nfl", "eagles": "nfl", "49ers": "nfl", "ravens": "nfl",
-        "bills": "nfl", "packers": "nfl",
-        "avalanche": "nhl", "avs": "nhl", "blues": "nhl", "stars": "nhl",
-        "jets": "nhl", "wild": "nhl",
-    }
-    _team_abbr = {
-        "nuggets": "den", "broncos": "den", "avalanche": "col", "avs": "col",
-        "lakers": "lal", "celtics": "bos", "warriors": "gsw", "thunder": "okc",
-        "wolves": "min", "timberwolves": "min", "clippers": "lac", "suns": "phx",
-        "heat": "mia", "chiefs": "kc", "raiders": "lv", "chargers": "lac",
-        "cowboys": "dal", "eagles": "phi", "49ers": "sf", "ravens": "bal",
-        "bills": "buf", "packers": "gb", "blues": "stl", "stars": "dal",
-        "jets": "wpg", "wild": "min",
+    _team_map = {
+        "nuggets": ("basketball", "nba", "den"), "lakers": ("basketball", "nba", "lal"),
+        "celtics": ("basketball", "nba", "bos"), "warriors": ("basketball", "nba", "gsw"),
+        "thunder": ("basketball", "nba", "okc"), "wolves": ("basketball", "nba", "min"),
+        "timberwolves": ("basketball", "nba", "min"), "clippers": ("basketball", "nba", "lac"),
+        "suns": ("basketball", "nba", "phx"), "heat": ("basketball", "nba", "mia"),
+        "broncos": ("football", "nfl", "den"), "chiefs": ("football", "nfl", "kc"),
+        "raiders": ("football", "nfl", "lv"), "chargers": ("football", "nfl", "lac"),
+        "cowboys": ("football", "nfl", "dal"), "eagles": ("football", "nfl", "phi"),
+        "49ers": ("football", "nfl", "sf"), "ravens": ("football", "nfl", "bal"),
+        "bills": ("football", "nfl", "buf"), "packers": ("football", "nfl", "gb"),
+        "avalanche": ("hockey", "nhl", "col"), "avs": ("hockey", "nhl", "col"),
     }
     for team in entities.get("teams", []):
+        mapping = _team_map.get(team)
+        if not mapping:
+            continue
+        sport, league, abbr = mapping
         try:
-            sport = _team_sport.get(team, "nfl")
-            abbr = _team_abbr.get(team, team[:3])
-            info = espn.team(sport, abbr)
-            if info and info.get("record"):
-                stat_lines.append(f"{info.get('name', team)}: {info['record']}" +
-                    (f" | Next: {info['next_event']}" if info.get("next_event") else ""))
+            url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/teams/{abbr}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read())
+            t = data.get("team", {})
+            records = t.get("record", {}).get("items", [])
+            overall = records[0].get("summary", "") if records else ""
+            name = t.get("displayName", team.title())
+            next_ev = t.get("nextEvent", [])
+            next_game = next_ev[0].get("name", "") if next_ev else ""
+            line = f"{name}: {overall}" if overall else ""
+            if next_game:
+                line += f" | Next: {next_game}"
+            if line:
+                stat_lines.append(line)
         except Exception:
             pass
     # Get today's scores for relevant sports
     _sports_seen = set()
     for team in entities.get("teams", []):
-        sport = _team_sport.get(team)
-        if sport and sport not in _sports_seen:
-            _sports_seen.add(sport)
+        mapping = _team_map.get(team)
+        if not mapping:
+            continue
+        sport, league, _ = mapping
+        if league not in _sports_seen:
+            _sports_seen.add(league)
             try:
-                summary = espn.scoreboard_summary(sport)
+                import sys as _s3
+                _s3.path.insert(0, os.path.expanduser("~/.openclaw"))
+                from apis.espn import espn
+                summary = espn.scoreboard_summary(league)
                 if summary:
-                    stat_lines.append(f"Today's {sport.upper()} scores:\n{summary}")
+                    stat_lines.append(f"Today's {league.upper()} scores:\n{summary}")
             except Exception:
                 pass
     if not stat_lines:
         return ""
     return (
-        "\n\n=== LIVE STATS FROM ESPN (USE THESE — DO NOT INVENT NUMBERS) ===\n"
+        "\n\n=== LIVE STATS FROM ESPN — USE THESE EXACT NUMBERS ===\n"
         + "\n".join(stat_lines)
-        + "\n=== END LIVE STATS ===\n"
+        + "\n=== DO NOT INVENT ANY STATS NOT LISTED ABOVE ===\n"
     )
 
 
@@ -2214,6 +2222,9 @@ WRONG ENDINGS:
   — editorial conclusion
 - "I've been in enough winning locker rooms to know what
   this feels like. This Broncos team has it." — states
+- "How does the most dominant player in basketball not drag
+  this roster over the line?" — This is Default voice. Homer
+  never asks questions. Homer states what's already happening.
   credentials directly, violates core rule
 
 RIGHT ENDINGS:
