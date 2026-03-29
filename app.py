@@ -1576,6 +1576,12 @@ _sidebar_html = f"""
         <line x1="16" y1="13" x2="8" y2="13" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
       </svg>
     </a>
+    <a href="/?page=Signals+%26+Prompts" class="mp-ico {_act('Signals & Prompts')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+      </svg>
+    </a>
     <div class="mp-panel">
       <div class="mp-panel-header">CREATE</div>
       <a href="/?page=Creator+Studio" class="mp-panel-item {_act('Creator Studio')}" target="_self">
@@ -1593,6 +1599,10 @@ _sidebar_html = f"""
       <a href="/?page=Article+Writer" class="mp-panel-item {_act('Article Writer')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#6B8AAA" stroke-width="1.5"/><line x1="16" y1="13" x2="8" y2="13" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Article Writer
+      </a>
+      <a href="/?page=Signals+%26+Prompts" class="mp-panel-item {_act('Signals & Prompts')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Signals & Prompts
       </a>
     </div>
   </div>
@@ -2078,12 +2088,12 @@ def _parse_banger_json(raw):
     except Exception:
         pass
     out = {}
-    for k in ["option1", "option1_pattern", "option2", "option2_pattern", "pick", "pick_reason"]:
+    for k in ["option1", "option1_pattern", "option2", "option2_pattern", "option3", "option3_pattern", "pick", "pick_reason"]:
         m = re.search(rf'"{k}"\s*:\s*"((?:[^"\\]|\\.)*)"', clean, re.DOTALL)
         if m:
             out[k] = m.group(1).replace('\\n', '\n')
         elif k == "pick":
-            m2 = re.search(r'"pick"\s*:\s*([12])', clean)
+            m2 = re.search(r'"pick"\s*:\s*([123])', clean)
             if m2:
                 out[k] = m2.group(1)
     return out if out.get("option1") else None
@@ -3452,10 +3462,16 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             if _fmt_pats_b:
                 _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
         _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching Tyler's voice exactly"
+        # Parse structured brief if delimiters present
+        _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
+        _has_brief = any(d in tweet_text for d in _brief_delimiters)
+        if _has_brief:
+            _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
+        else:
+            _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
         build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
-CONCEPT/ANGLE:
-\"{tweet_text}\"
+{_brief_block}
 
 {format_mod}{_sports_ctx_b}{_fmt_inject_b}{_live_stats_block}
 
@@ -3481,13 +3497,15 @@ Return ONLY this JSON, no other text:
   "option1_pattern": "angle/structure this version takes",
   "option2": "full tweet text here",
   "option2_pattern": "angle/structure this version takes",
-  "pick": "1 or 2 — just the number, no explanation"
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
+  "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
-        _max_tok_b = 2000 if fmt == "Thread" else 400
+        _max_tok_b = 2000 if fmt == "Thread" else 700
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         build_data = _parse_banger_json(raw)
         if build_data and build_data.get("option1"):
-            for _ok in ["option1", "option2"]:
+            for _ok in ["option1", "option2", "option3"]:
                 if build_data.get(_ok):
                     build_data[_ok] = _sanitize_output(build_data[_ok])
             # Critical voice: force pick to period-ending option
@@ -3642,7 +3660,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
         _ai_pick = str(bd.get("pick", "1")).strip()
-        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2] if bd.get(f"option{i}")]
+        opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
             _is_pick = _ai_pick == str(ti + 1)
@@ -6738,6 +6756,192 @@ def page_rd_council():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PAGE: SIGNALS & PROMPTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+_BEAT_REPORTERS = "from:mikeklis OR from:evansidery OR from:PeterRBaugh"
+_NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs") (from:espn OR from:stephenasmith OR from:adamschefter OR from:wojespn OR from:TheAthletic) -is:retweet'
+_SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0}
+
+
+def _fetch_signals(query, count=30):
+    """Fetch tweets via TwitterAPI.io advanced_search."""
+    if not TWITTER_API_IO_KEY:
+        return []
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/tweet/advanced_search",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("tweets", [])
+    except Exception:
+        pass
+    return []
+
+
+def _get_trend_pill(topic_keywords):
+    """Check tweet volume for timing indicator: Rising / Peak / Fading."""
+    if not topic_keywords or not TWITTER_API_IO_KEY:
+        return "peak", "Peak"
+    try:
+        recent = _fetch_signals(topic_keywords, count=10)
+        if not recent:
+            return "fading", "Fading"
+        # Check how many tweets are < 1hr old vs total
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        recent_count = 0
+        for t in recent[:10]:
+            try:
+                created = datetime.fromisoformat(t.get("createdAt", "").replace("Z", "+00:00"))
+                if (now - created).total_seconds() < 3600:
+                    recent_count += 1
+            except Exception:
+                pass
+        ratio = recent_count / max(len(recent[:10]), 1)
+        if ratio > 0.5:
+            return "rising", "Rising"
+        elif ratio > 0.2:
+            return "peak", "Peak"
+        else:
+            return "fading", "Fading"
+    except Exception:
+        return "peak", "Peak"
+
+
+def _build_signal_brief(tweet):
+    """Auto-generate a structured brief from a tweet signal."""
+    author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
+    text = tweet.get("text", "")
+    replies = tweet.get("replyCount", 0)
+    rts = tweet.get("retweetCount", 0)
+    likes = tweet.get("likeCount", 0)
+
+    # Extract topic from tweet text (first sentence or first 80 chars)
+    topic = text.split(".")[0].strip() if "." in text[:100] else text[:80].strip()
+
+    brief = f"""TOPIC: {topic}
+TENSION: @{author} take generating {replies} replies — active debate in mentions
+KEY STATS: {replies} replies, {rts} RTs, {likes} likes
+ANGLE: Tyler's insider lens as former NFL OL and Denver media host — push back, add context, or amplify what the casual fan is missing"""
+    return brief
+
+
+def page_signals_prompts():
+    st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
+
+    # ── Refresh button ──
+    if st.button("↻ Refresh Signals", use_container_width=False, key="sig_refresh"):
+        _SIGNALS_CACHE["ts"] = 0
+
+    # ── Fetch signals (cache 5 min) ──
+    if time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
+        with st.spinner("Scanning Twitter signals..."):
+            _SIGNALS_CACHE["beat"] = _fetch_signals(_BEAT_REPORTERS, count=30)
+            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=30)
+            _SIGNALS_CACHE["ts"] = time.time()
+
+    beat_tweets = _SIGNALS_CACHE.get("beat", [])
+    national_tweets = _SIGNALS_CACHE.get("national", [])
+
+    # Sort by reply count (replies = controversy = prompt gold)
+    beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
+    national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:5]
+
+    col1, col2 = st.columns(2)
+
+    # ── Signal 1: Beat Reporter Heat Map ──
+    with col1:
+        st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Klis, Sidery, Baugh — ranked by reply count</div>', unsafe_allow_html=True)
+        if not beat_sorted:
+            st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No signals found — check API key or try refreshing.</div>', unsafe_allow_html=True)
+        for idx, tw in enumerate(beat_sorted):
+            author = tw.get("author", {}).get("userName", "") or "unknown"
+            text = tw.get("text", "")[:200]
+            replies = tw.get("replyCount", 0)
+            rts = tw.get("retweetCount", 0)
+            # Timing pill
+            keywords = " ".join(text.split()[:4])
+            trend_key, trend_label = _get_trend_pill(keywords) if idx == 0 else ("peak", "Peak")  # Only check timing for top signal to save API calls
+            pill_colors = {"rising": ("#10B981", "rgba(16,185,129,0.12)"), "peak": ("#FBBF24", "rgba(251,191,36,0.12)"), "fading": ("#EF4444", "rgba(239,68,68,0.12)")}
+            pc, pbg = pill_colors.get(trend_key, pill_colors["peak"])
+            st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}</span>
+                    <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
+                </div>
+                <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs</div>
+            </div>''', unsafe_allow_html=True)
+            if st.button("Use Signal", key=f"sig_beat_{idx}", use_container_width=True):
+                st.session_state["sig_selected"] = tw
+                st.session_state["sig_brief"] = _build_signal_brief(tw)
+
+    # ── Signal 2: National Take Detector ──
+    with col2:
+        st.markdown('<div style="font-size:13px;font-weight:700;color:#C49E3C;letter-spacing:1px;margin-bottom:10px;">NATIONAL TAKE DETECTOR</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">ESPN, Schefter, Smith, Woj, Athletic — ranked by RT+QT</div>', unsafe_allow_html=True)
+        if not national_sorted:
+            st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No national takes about Denver teams found.</div>', unsafe_allow_html=True)
+        for idx, tw in enumerate(national_sorted):
+            author = tw.get("author", {}).get("userName", "") or "unknown"
+            text = tw.get("text", "")[:200]
+            rts = tw.get("retweetCount", 0)
+            qts = tw.get("quoteCount", 0)
+            replies = tw.get("replyCount", 0)
+            st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
+                    <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span>
+                </div>
+                <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
+            </div>''', unsafe_allow_html=True)
+            if st.button("Use Signal", key=f"sig_nat_{idx}", use_container_width=True):
+                st.session_state["sig_selected"] = tw
+                st.session_state["sig_brief"] = _build_signal_brief(tw)
+
+    # ── Prompt Generator ──
+    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+    st.markdown('<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:12px;">Prompt Generator</div>', unsafe_allow_html=True)
+
+    brief = st.session_state.get("sig_brief", "")
+    if brief:
+        st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
+        edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
+
+        _custom_voices = load_json("voice_styles.json", [])
+        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+        vc1, vc2 = st.columns(2)
+        with vc1:
+            sig_voice = st.selectbox("Voice", _voice_opts, key="sig_voice")
+        with vc2:
+            sig_fmt = st.selectbox("Format", _fmt_opts, index=1, key="sig_fmt")
+
+        bc1, bc2 = st.columns(2)
+        with bc1:
+            if st.button("Send to Build", use_container_width=True, key="sig_send", type="primary"):
+                final_brief = st.session_state.get("sig_brief_edit", edited_brief)
+                st.session_state["_ci_text_stage"] = final_brief
+                st.session_state["ci_voice"] = sig_voice
+                st.session_state["ci_format"] = sig_fmt
+                st.query_params["page"] = "Creator Studio"
+                st.rerun()
+        with bc2:
+            if st.button("Copy Brief", use_container_width=True, key="sig_copy"):
+                st.code(st.session_state.get("sig_brief_edit", edited_brief), language=None)
+                st.info("Text displayed above — copy from there.")
+    else:
+        st.markdown('<div style="color:#3a5070;font-style:italic;font-size:13px;padding:20px;text-align:center;">Click "Use Signal" on any tweet above to generate a structured brief.</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 page_map = {
@@ -6753,6 +6957,7 @@ page_map = {
     "Reply Mode": page_reply_guy,
     "Idea Bank": page_inspiration,
     "R&D Council": page_rd_council,
+    "Signals & Prompts": page_signals_prompts,
 }
 
 # Sync strategy:
