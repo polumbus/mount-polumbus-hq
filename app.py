@@ -2261,6 +2261,14 @@ WRONG: "Does Denver take him or let a rival solve their biggest need?"
 RIGHT: "Stowers at 30 is real value. Other draft rooms already know it."
 — signal sentence 1, outside party already acted sentence 2
 
+STAT INTEGRITY RULE FOR HOMER:
+If no live stats are provided, do NOT invent player stat lines
+like "dropped 30, 13, and 10" or "shooting 52% from three."
+Homer's authority comes from the signal and the outside reaction,
+not fabricated numbers. Use team records if available. If no
+player stats exist, describe the observation without specific
+figures. A tweet without stats is better than one with wrong stats.
+
 TONE RULES:
 - "We" throughout — Tyler and the fanbase together
 - Confidence without arrogance — earned not performed
@@ -3280,7 +3288,7 @@ STAT INTEGRITY RULE:
 - If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
 - If NO stats are provided and none can be implied from the input, write the tweet using the observation only — do not fabricate specific numbers.
 - A tweet without stats is better than a tweet with wrong stats.
-{"- SARCASTIC VOICE STAT WARNING: Do NOT fabricate stats like '30-9-13' or '28th in pass protection' unless those exact numbers appear in LIVE STATS above. Sarcastic voice builds humor from observations and framing, not invented numbers. Real stats are funnier than fake ones." if voice == "Sarcastic" else ""}
+{"- SARCASTIC VOICE STAT WARNING: Do NOT fabricate stats like '30-9-13' or '28th in pass protection' unless those exact numbers appear in LIVE STATS above. Sarcastic voice builds humor from observations and framing, not invented numbers. Real stats are funnier than fake ones." if voice == "Sarcastic" else ""}{"- HOMER VOICE STAT WARNING: Do NOT invent player stat lines like 'dropped 30, 13, and 10' or 'shooting 52% from three' unless those exact numbers appear in LIVE STATS above. Homer voice builds from the SIGNAL and the OUTSIDE REACTION — the authority comes from specificity of observation, not fabricated numbers. Use team records if available. If no player stats are provided, describe what you see without citing specific figures." if voice == "Homer" else ""}
 
 Rules:
 - Reading Level (7th-9th grade)
