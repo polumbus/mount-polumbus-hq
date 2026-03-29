@@ -2525,13 +2525,90 @@ has no answer for the high post read..."
 def _build_article_voice_mod(voice: str) -> str:
     """Return article-specific voice overlay (layered on top of _build_voice_mod)."""
     base = _build_voice_mod(voice)
-    article_overlay = """
+    if voice == "Sarcastic":
+        article_overlay = """
+=== SARCASTIC ARTICLE — THE COLUMN ===
+
+This is not a long-form analytical piece. This is a short column.
+400-600 words maximum. Not one word more.
+
+Tyler's sarcastic article is a bit. One implied real story, fully
+developed, then it walks away. The joke lands harder when it stops
+before you expect it to.
+
+MANDATORY STRUCTURE:
+
+HEADLINE:
+Short. Declarative. Slightly absurd. Should make the reader
+think "wait, is he serious?" for exactly one second.
+Example: "Turns out the Offensive Line Was Fine Actually"
+Example: "The Nuggets Front Office Would Like to Remind You Jokic Is Not Their Problem"
+
+OPENING PARAGRAPH — THE SETUP (2-3 sentences):
+State the surface story completely straight. No jokes.
+No winking. Treat the absurd situation as settled fact.
+The straighter the setup, the harder the landing.
+Example: "The Denver Broncos finished last season 28th in pass protection. They addressed this in the offseason by keeping the same offensive line intact and adding a wide receiver."
+
+BODY — THE DEVELOPMENT (3-4 paragraphs, 4-5 sentences each):
+Develop the implied real story underneath the surface story.
+Never state the real story directly. Let the facts do it.
+Each paragraph adds one more layer of evidence that something
+is obviously wrong — without ever saying it is wrong.
+The tone stays completely neutral throughout. Bored, almost.
+Like Tyler is simply reporting facts that happen to be
+increasingly damning.
+
+Use Tyler's insider lens here — the specific detail that only
+someone who has been in an NFL building would notice.
+That specificity is what makes the implied real story land
+as diagnosis rather than fan complaint.
+
+CLOSER — THE WALK AWAY (1-2 sentences max):
+Stop before the obvious conclusion. The reader should be
+mid-thought when the piece ends.
+Do NOT summarize. Do NOT state the real story.
+Do NOT explain the joke.
+The silence after the last sentence IS the punchline.
+Example: "Anyway. Camp opens in July."
+Example: "Should be a really interesting training camp."
+Example: "The schedule comes out next week."
+
+COMPANION TWEET:
+One sentence. Implied Real Story mode.
+States the surface story. Implies everything underneath.
+Walks away completely.
+Example: "The Broncos studied the offensive line situation all offseason and concluded the problem was the receivers."
+
+TONE RULES:
+- Completely straight face throughout. Zero winking.
+- Never use: "lol" "obviously" "somehow" "bizarrely" "inexplicably" — these signal the joke and kill it
+- Never state what's wrong. Let the facts state it.
+- The shorter each sentence the better in the closer
+- Authority implied through specificity, never stated
+- Absurdist/ironic framing distributes wider than combative sarcasm — keep it bored not angry
+
+LENGTH RULE — NON-NEGOTIABLE:
+400 words minimum. 600 words maximum.
+If you hit 600 words and haven't written the closer yet,
+cut from the body. The closer is mandatory.
+A 400-word column that lands is better than a 600-word
+column that explains itself.
+
+WRONG (explains the joke):
+"The Broncos inexplicably decided not to fix their offensive line, which is obviously going to be a huge problem for Bo Nix this season. You can't expect a young quarterback to succeed without protection. This decision is baffling."
+
+RIGHT (implies everything, states nothing):
+"The Broncos spent the offseason studying what held Bo Nix back in Year 1. The conclusion, after months of film review and personnel evaluation, was Jaylen Waddle. The offensive line returns intact. Nix enters Year 2 with the same five blockers and 30 percent more receiving options. Sean Payton has noted the pass protection was actually fine. The tape will confirm that starting in September."
+=== END SARCASTIC ARTICLE ==="""
+    else:
+        article_overlay = """
 === ARTICLE VOICE OVERLAY ===
 For long-form X Articles, adapt the voice mode above to full article structure:
 - Apply the voice mode's TONE throughout (not just the opener)
 - Each section subheading should carry the same energy as the opener
 - The conclusion should land with the same punch as a standalone tweet
-- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Homer, dry observation for Sarcastic) in the final line
+- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Homer) in the final line
 === END ARTICLE OVERLAY ==="""
     return base + article_overlay
 
@@ -3062,15 +3139,9 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
             try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant):\n{get_sports_context()}"
             except Exception: pass
         article_voice_mod = _build_article_voice_mod(voice)
-        article_prompt = f"""Write a complete X Article based on this seed:
-
-"{tweet_text}"
-
-FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-{_sports_ctx}{_live_stats_block}
-
-CONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost.
-
+        _is_sarcastic = voice == "Sarcastic"
+        _article_length = "400-600 words. Short column format. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
+        _article_structure = "" if _is_sarcastic else """
 STRUCTURE:
 - HEADLINE: 50-75 chars, include a number or specific claim, take a position.
 - [IMAGE: Hero image placeholder]
@@ -3090,13 +3161,21 @@ RULES:
 - Tyler's voice: direct, no hedging, former-player authority
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers where supporting visuals should go
-- End with debate invitation to drive replies
+- End with debate invitation to drive replies"""
+        article_prompt = f"""Write {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} based on this seed:
+
+"{tweet_text}"
+
+FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
+{_sports_ctx}{_live_stats_block}
+{_article_structure}
 
 {article_voice_mod}
 
 Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         _sys_prompt = get_system_for_voice(voice, voice_mod)
-        raw = call_claude(article_prompt, system=_sys_prompt, max_tokens=3000)
+        _max_tok = 1200 if _is_sarcastic else 3000
+        raw = call_claude(article_prompt, system=_sys_prompt, max_tokens=_max_tok)
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "banger" and tweet_text.strip():
@@ -3232,14 +3311,9 @@ Return ONLY this JSON, no other text:
             try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
             except Exception: pass
         article_voice_mod = _build_article_voice_mod(voice)
-        build_article_prompt = f"""Tyler Polumbus has a concept he wants turned into a full X Article.
-
-CONCEPT/ANGLE:
-\"{tweet_text}\"
-{_sports_ctx_b}{_live_stats_block}
-
-FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
+        _is_sarcastic = voice == "Sarcastic"
+        _article_length = "400-600 words. Short column format. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
+        _article_structure = "" if _is_sarcastic else """
 STRUCTURE:
 - HEADLINE: 50-75 chars, include a number or specific claim
 - [IMAGE: Hero image placeholder]
@@ -3254,12 +3328,21 @@ RULES:
 - Tyler's voice: direct, no hedging, former-player authority
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers for visuals
-- End with debate invitation
+- End with debate invitation"""
+        build_article_prompt = f"""Tyler Polumbus has a concept he wants turned into {'a short sarcastic column' if _is_sarcastic else 'a full X Article'}.
+
+CONCEPT/ANGLE:
+\"{tweet_text}\"
+{_sports_ctx_b}{_live_stats_block}
+
+FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
+{_article_structure}
 
 {article_voice_mod}
 
 Return the article as plain text. Do NOT wrap in JSON or code blocks."""
-        raw = call_claude(build_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=3000)
+        _max_tok = 1200 if _is_sarcastic else 3000
+        raw = call_claude(build_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok)
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "build" and tweet_text.strip():
@@ -3322,13 +3405,9 @@ Return ONLY this JSON, no other text:
     elif action == "rewrite" and tweet_text.strip() and fmt == "Article":
         # Article format: rewrite as full article
         article_voice_mod = _build_article_voice_mod(voice)
-        rewrite_article_prompt = f"""Rewrite this content as a full X Article in Tyler Polumbus's voice.
-
-Original content: "{tweet_text}"
-{_live_stats_block}
-
-FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
+        _is_sarcastic = voice == "Sarcastic"
+        _article_length = "400-600 words. Short column format. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
+        _article_structure = "" if _is_sarcastic else """
 STRUCTURE:
 - HEADLINE: 50-75 chars, include a number or specific claim
 - [IMAGE: Hero image placeholder]
@@ -3343,12 +3422,20 @@ RULES:
 - Tyler's voice: direct, no hedging, former-player authority
 - Do NOT copy original phrasing — completely new execution
 - Specific players/schemes/numbers only
-- Include [IMAGE] markers for visuals
+- Include [IMAGE] markers for visuals"""
+        rewrite_article_prompt = f"""Rewrite this content as {'a short sarcastic column' if _is_sarcastic else 'a full X Article'} in Tyler Polumbus's voice.
+
+Original content: "{tweet_text}"
+{_live_stats_block}
+
+FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
+{_article_structure}
 
 {article_voice_mod}
 
 Return the article as plain text. Do NOT wrap in JSON or code blocks."""
-        raw = call_claude(rewrite_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=3000)
+        _max_tok = 1200 if _is_sarcastic else 3000
+        raw = call_claude(rewrite_article_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok)
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
@@ -4511,9 +4598,9 @@ Your coaching style:
 def _aw_create_new_dialog():
     """Popup for writing a new article from scratch."""
     _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Homer"] + [s["name"] for s in _custom_voices]
+    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
     voice_pick = st.selectbox("Voice", _voice_opts, key="aw_dialog_voice",
-        help="Default = natural | Critical = tough love | Homer = ultra positive")
+        help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = short column, implied story")
     freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
         placeholder="Paste a topic, tweet, or start writing your article...")
     fc1, fc2, fc3 = st.columns(3)
@@ -4533,8 +4620,12 @@ def _aw_create_new_dialog():
                 with st.spinner("Writing article..."):
                     voice_mod = _build_article_voice_mod(voice_pick)
                     voice_system = get_system_for_voice(voice_pick, voice_mod)
-                    prompt = f"""Write a complete X Article based on this seed:\n\n\"{freeform.strip()}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.\n\n{voice_mod}"""
-                    result = call_claude(prompt, system=voice_system, max_tokens=3000)
+                    _is_sarcastic = voice_pick == "Sarcastic"
+                    _article_length = "400-600 words. Short column. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
+                    _structure = "" if _is_sarcastic else "\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only."
+                    prompt = f"""Write {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} based on this seed:\n\n\"{freeform.strip()}\"\n\nFORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length}){_structure}\n\n{voice_mod}\n\nReturn the article as plain text. Do NOT wrap in JSON or code blocks."""
+                    _max_tok = 1200 if _is_sarcastic else 3000
+                    result = call_claude(prompt, system=voice_system, max_tokens=_max_tok)
                     st.session_state["aw_result"] = result
                     st.rerun()
             else:
