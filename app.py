@@ -748,6 +748,54 @@ def auto_height(text, min_h=80, chars_per_line=55, line_h=22):
     return max(min_h, total * line_h)
 
 
+_VOICE_LABELS = {"Default": "Film Room", "Critical": "Diagnosis", "Homer": "Don't Sleep", "Sarcastic": "Layered"}
+
+
+def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
+    """Render thread text as X-native tweet cards HTML."""
+    # Split on ---TWEET--- (raw) or ── TWEET N ── (display) variants
+    tweets = re.split(r'(?:---TWEET---|[-\u2500-\u257F\u2014]+\s*TWEET\s*\d*\s*[-\u2500-\u257F\u2014]*)', thread_text, flags=re.IGNORECASE)
+    tweets = [t.strip() for t in tweets if t.strip()]
+    if not tweets:
+        return ""
+    total = len(tweets)
+    voice_label = _VOICE_LABELS.get(voice, voice)
+    cards = []
+    for i, tweet in enumerate(tweets):
+        # Separate text lines from [IMAGE: ...] lines
+        text_parts = []
+        image_tags = []
+        for line in tweet.split('\n'):
+            m = re.match(r'\[IMAGE:\s*(.+?)\]', line.strip(), re.IGNORECASE)
+            if m:
+                image_tags.append(m.group(1).strip())
+            else:
+                text_parts.append(line)
+        tweet_body = '\n'.join(text_parts).strip()
+        char_count = len(tweet_body)
+        # Escape HTML in tweet body
+        tweet_body_html = tweet_body.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        # Build image placeholders
+        image_html = ""
+        for img_desc in image_tags:
+            image_html += f'''<div style="margin-top:10px;height:52px;border-radius:8px;background:rgba(255,255,255,0.04);border:0.5px dashed rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;gap:8px;"><div style="width:16px;height:16px;background:rgba(255,255,255,0.1);border-radius:3px;flex-shrink:0;"></div><span style="font-size:11px;color:rgba(255,255,255,0.35);">{img_desc}</span></div>'''
+        card = f'''<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:0;">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+<div style="width:32px;height:32px;border-radius:50%;background:#0C1630;border:1.5px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2DD4BF;flex-shrink:0;">TP</div>
+<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">Tyler Polumbus</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@tyler_polumbus</div></div>
+<div style="font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(45,212,191,0.12);color:#2DD4BF;border:0.5px solid rgba(45,212,191,0.25);white-space:nowrap;">{i+1}/{total} · {voice_label}</div>
+</div>
+<div style="font-size:13px;color:rgba(255,255,255,0.82);line-height:1.65;white-space:pre-wrap;">{tweet_body_html}</div>
+{image_html}
+<div style="display:flex;align-items:center;gap:16px;margin-top:10px;border-top:0.5px solid rgba(255,255,255,0.06);padding-top:8px;">
+<span style="font-size:11px;color:rgba(255,255,255,0.3);">{char_count} chars</span>
+</div>
+</div>'''
+        cards.append(card)
+    connector = '<div style="text-align:center;color:rgba(255,255,255,0.12);font-size:18px;line-height:1;margin:2px 0 4px;">·</div>'
+    return f'<div style="font-family:sans-serif;">{connector.join(cards)}</div>'
+
+
 OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -3599,14 +3647,20 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
-            # Thread format: replace markers with clean separators for display
+            # Thread format: render as X-native cards + editable text area
             _display_text = opt_text
-            if "---TWEET---" in _display_text:
+            _is_thread = "---TWEET---" in _display_text
+            if _is_thread:
                 _parts = [t.strip() for t in _display_text.split("---TWEET---") if t.strip()]
+                # Show visual card preview
+                _card_html = render_thread_cards(_display_text, voice)
+                if _card_html:
+                    st.markdown(_card_html, unsafe_allow_html=True)
+                    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
                 _display_text = "\n\n".join([f"── TWEET {i+1} ──\n{t}" for i, t in enumerate(_parts)])
             # Use content-based key to prevent Streamlit serving stale session_state values
             _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
-            edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed")
+            edited_opt = st.text_area("Edit" if not _is_thread else "Edit raw thread", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed" if not _is_thread else "visible")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
