@@ -3469,7 +3469,8 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
         else:
             _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
-        build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
+        _build_opening = "Tyler provided this structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
+        build_prompt = f"""{_build_opening}
 
 {_brief_block}
 
