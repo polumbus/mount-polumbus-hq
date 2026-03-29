@@ -3028,7 +3028,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     for _clear_key in [
         "ci_banger_data", "ci_result", "ci_repurposed", "ci_preview",
         "ci_grades", "ci_banger_opt_1", "ci_banger_opt_2", "ci_banger_opt_3",
-        "_verify_1", "_verify_2", "_verify_3"
+        "_verify_1", "_verify_2", "_verify_3", "_verify_result"
     ]:
         st.session_state.pop(_clear_key, None)
 
@@ -3657,7 +3657,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         _val = st.session_state[_rkey]
         _edit_key = f"modal_edit_{hash(_val) & 0xFFFFFF}"
         edited = st.text_area("", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
-        r1, r2 = st.columns(2)
+        r1, r2, r3 = st.columns(3)
         with r1:
             if st.button("↓ Save", key="modal_result_save", use_container_width=True):
                 ideas = load_json("saved_ideas.json", [])
@@ -3670,6 +3670,23 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 if v:
                     st.session_state["ci_text"] = v
                 st.rerun(scope="app")
+        with r3:
+            if pplx_available() and st.button("Verify", key="modal_result_verify", use_container_width=True):
+                _v_text = st.session_state.get(_edit_key, _val)
+                with st.spinner("Fact-checking..."):
+                    _fc = pplx_fact_check(_v_text)
+                if _fc.get("answer"):
+                    st.session_state["_verify_result"] = _fc
+                else:
+                    st.warning("Couldn't verify — check API key.")
+        _vr = st.session_state.get("_verify_result")
+        if _vr:
+            _va = _vr["answer"]
+            _vc = _vr.get("citations", [])
+            _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
+            st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
+            if _vc:
+                st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
 
     # ── Bottom action bar ──
     st.divider()
@@ -4499,7 +4516,7 @@ def _aw_create_new_dialog():
         help="Default = natural | Critical = tough love | Homer = ultra positive")
     freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
         placeholder="Paste a topic, tweet, or start writing your article...")
-    fc1, fc2 = st.columns(2)
+    fc1, fc2, fc3 = st.columns(3)
     with fc1:
         if st.button("↓ Save Article", use_container_width=True, key="aw_dialog_save"):
             if freeform.strip():
@@ -4522,6 +4539,25 @@ def _aw_create_new_dialog():
                     st.rerun()
             else:
                 st.warning("Type something first.")
+    with fc3:
+        if pplx_available() and st.button("Verify", use_container_width=True, key="aw_dialog_verify"):
+            if freeform.strip():
+                with st.spinner("Fact-checking..."):
+                    _fc = pplx_fact_check(freeform.strip())
+                if _fc.get("answer"):
+                    st.session_state["_aw_verify"] = _fc
+                else:
+                    st.warning("Couldn't verify — check API key.")
+            else:
+                st.warning("Write something first.")
+    _vr = st.session_state.get("_aw_verify")
+    if _vr:
+        _va = _vr["answer"]
+        _vc = _vr.get("citations", [])
+        _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
+        st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
+        if _vc:
+            st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
 
 
 def page_article_writer():
@@ -4668,7 +4704,7 @@ def page_article_writer():
         if st.session_state.get("aw_result"):
             st.markdown(f'<div class="output-box">{st.session_state["aw_result"]}</div>', unsafe_allow_html=True)
             edited = st.text_area("Edit article:", value=st.session_state["aw_result"], height=300, key="aw_editor")
-            bc1, bc2, bc3 = st.columns(3)
+            bc1, bc2, bc3, bc4 = st.columns(4)
             with bc1:
                 if st.button("↓ Save Article", use_container_width=True, key="aw_save"):
                     articles = load_json("saved_articles.json", [])
@@ -4680,8 +4716,24 @@ def page_article_writer():
                     st.code(edited, language=None)
                     st.info("Text displayed above -- copy from there.")
             with bc3:
+                if pplx_available() and st.button("Verify", use_container_width=True, key="aw_verify"):
+                    with st.spinner("Fact-checking..."):
+                        _fc = pplx_fact_check(edited)
+                    if _fc.get("answer"):
+                        st.session_state["_aw_page_verify"] = _fc
+                    else:
+                        st.warning("Couldn't verify — check API key.")
+            with bc4:
                 if st.button("↺ New", use_container_width=True, key="aw_new"):
                     _aw_create_new_dialog()
+            _vr = st.session_state.get("_aw_page_verify")
+            if _vr:
+                _va = _vr["answer"]
+                _vc = _vr.get("citations", [])
+                _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
+                st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
+                if _vc:
+                    st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
 
     # ── Right 1/3: My Articles ────────────────────────────────────────
     with col_saved:
