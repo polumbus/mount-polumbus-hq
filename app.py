@@ -3647,20 +3647,20 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.markdown(f'''<div style="font-size:11px;color:#2DD4BF;font-weight:700;letter-spacing:2px;margin:20px 0 4px;">OPTION {ti + 1}</div>''', unsafe_allow_html=True)
             if pattern:
                 st.markdown(f'''<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{pattern}</div>''', unsafe_allow_html=True)
-            # Thread format: render as X-native cards + editable text area
+            # Thread format: render as X-native cards (no raw text area)
             _display_text = opt_text
             _is_thread = "---TWEET---" in _display_text
             if _is_thread:
-                _parts = [t.strip() for t in _display_text.split("---TWEET---") if t.strip()]
-                # Show visual card preview
                 _card_html = render_thread_cards(_display_text, voice)
                 if _card_html:
                     st.markdown(_card_html, unsafe_allow_html=True)
-                    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-                _display_text = "\n\n".join([f"── TWEET {i+1} ──\n{t}" for i, t in enumerate(_parts)])
-            # Use content-based key to prevent Streamlit serving stale session_state values
-            _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
-            edited_opt = st.text_area("Edit" if not _is_thread else "Edit raw thread", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed" if not _is_thread else "visible")
+                # Store raw text for Save/Use buttons without displaying it
+                _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
+                edited_opt = _display_text
+            else:
+                # Non-thread: show editable text area as before
+                _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
+                edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
