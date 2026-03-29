@@ -3814,13 +3814,19 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
     # ── Bottom action bar ──
     st.divider()
-    _b1, _b2, _b3 = st.columns(3)
-    with _b1:
-        if st.button("↺ Redo", use_container_width=True, key="modal_redo"):
-            st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": fmt, "voice": voice}
+    _custom_voices = load_json("voice_styles.json", [])
+    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _vc1, _vc2 = st.columns([1, 2])
+    with _vc1:
+        _new_voice = st.selectbox("Voice", _voice_opts, index=_voice_opts.index(voice) if voice in _voice_opts else 0, key="modal_voice_pick", label_visibility="collapsed")
+    with _vc2:
+        if st.button(f"↺ Redo{' as ' + _new_voice if _new_voice != voice else ''}", use_container_width=True, key="modal_redo", type="primary" if _new_voice != voice else "secondary"):
+            st.session_state["ci_voice"] = _new_voice
+            st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": fmt, "voice": _new_voice}
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
             st.rerun(scope="app")
+    _b2, _b3 = st.columns(2)
     with _b2:
         import urllib.parse as _urlparse
         _post_text = (st.session_state.get("ci_result") or st.session_state.get("ci_repurposed") or tweet_text or "")[:280]
