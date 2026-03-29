@@ -316,6 +316,124 @@ def pplx_available() -> bool:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# THE ODDS API — Betting lines, spreads, totals
+# ═══════════════════════════════════════════════════════════════════════
+
+_ODDS_BASE = "https://api.the-odds-api.com/v4"
+_ODDS_SPORT_MAP = {
+    "nfl": "americanfootball_nfl", "nba": "basketball_nba",
+    "ncaam": "basketball_ncaab", "ncaaf": "americanfootball_ncaaf",
+    "nhl": "icehockey_nhl", "mlb": "baseball_mlb",
+}
+_ODDS_TEAM_ALIASES = {
+    "broncos": "Denver Broncos", "nuggets": "Denver Nuggets",
+    "avalanche": "Colorado Avalanche", "avs": "Colorado Avalanche",
+    "rockies": "Colorado Rockies", "buffs": "Colorado Buffaloes",
+    "denver": "Denver", "colorado": "Colorado",
+}
+
+
+def _odds_key() -> str:
+    """Get Odds API key from Streamlit secrets or env."""
+    try:
+        import streamlit as st
+        key = st.secrets.get("ODDS_API_KEY", "")
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.environ.get("ODDS_API_KEY", "")
+
+
+def odds_available() -> bool:
+    """Check if Odds API key is configured."""
+    return bool(_odds_key())
+
+
+def odds_game(sport: str, team: str) -> Optional[dict]:
+    """Get betting lines for a team's next/current game. Returns None if no game found."""
+    key = _odds_key()
+    if not key:
+        return None
+    sport_key = _ODDS_SPORT_MAP.get(sport.lower(), sport)
+    try:
+        resp = requests.get(
+            f"{_ODDS_BASE}/sports/{sport_key}/odds",
+            params={"apiKey": key, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "american"},
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        events = resp.json()
+    except Exception:
+        return None
+
+    # Find the team's game
+    team_lower = _ODDS_TEAM_ALIASES.get(team.lower().strip(), team).lower()
+    event = None
+    for e in events:
+        if team_lower in e.get("home_team", "").lower() or team_lower in e.get("away_team", "").lower():
+            event = e
+            break
+    if not event:
+        return None
+
+    home = event["home_team"]
+    away = event["away_team"]
+    start = event.get("commence_time", "")
+
+    # Extract consensus from first bookmaker
+    result = {"home": home, "away": away, "start": start}
+    bms = event.get("bookmakers", [])
+    if bms:
+        bm = bms[0]
+        result["source"] = bm.get("title", "")
+        for market in bm.get("markets", []):
+            mkey = market.get("key", "")
+            outcomes = {o.get("name", ""): o for o in market.get("outcomes", [])}
+            if mkey == "h2h":
+                h_odds = outcomes.get(home, {}).get("price", 0)
+                a_odds = outcomes.get(away, {}).get("price", 0)
+                result["moneyline_home"] = f"+{h_odds}" if h_odds > 0 else str(h_odds)
+                result["moneyline_away"] = f"+{a_odds}" if a_odds > 0 else str(a_odds)
+            elif mkey == "spreads":
+                h_spread = outcomes.get(home, {})
+                result["spread"] = h_spread.get("point", "")
+                result["spread_odds"] = h_spread.get("price", "")
+            elif mkey == "totals":
+                over = outcomes.get("Over", {})
+                result["over_under"] = over.get("point", "")
+                result["over_odds"] = over.get("price", "")
+    return result
+
+
+def odds_format_block(team: str, sport: str) -> str:
+    """Get formatted odds block for prompt injection. Returns empty string if unavailable."""
+    data = odds_game(sport, team)
+    if not data:
+        return ""
+    parts = [f"BETTING LINES ({data.get('source', 'consensus')}):"]
+    parts.append(f"  {data['away']} @ {data['home']}")
+    if data.get("spread"):
+        parts.append(f"  Spread: {data['home']} {data['spread']}")
+    if data.get("moneyline_home"):
+        parts.append(f"  Moneyline: {data['home']} {data['moneyline_home']} / {data['away']} {data['moneyline_away']}")
+    if data.get("over_under"):
+        parts.append(f"  Over/Under: {data['over_under']}")
+    return "\n".join(parts)
+
+
+def odds_denver_lines() -> str:
+    """Get all Denver team lines as a text block."""
+    lines = []
+    for team, sport in [("Denver Broncos", "nfl"), ("Denver Nuggets", "nba"),
+                        ("Colorado Avalanche", "nhl")]:
+        block = odds_format_block(team, sport)
+        if block:
+            lines.append(block)
+    return "\n".join(lines) if lines else ""
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # COMBINED: Sports Context Builder
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -420,6 +538,15 @@ def get_sports_context(force: bool = False) -> str:
         state = sleeper_nfl_state()
         if state.get("season"):
             lines.append(f"NFL: {state['season']} season, {state['phase']} phase, week {state.get('week', 'N/A')}")
+    except Exception:
+        pass
+
+    # Betting lines for Denver teams
+    try:
+        if odds_available():
+            denver_odds = odds_denver_lines()
+            if denver_odds:
+                lines.append(denver_odds)
     except Exception:
         pass
 

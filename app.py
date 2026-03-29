@@ -12,7 +12,8 @@ import tomli
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
-                  get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores)
+                  get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores,
+                  odds_available, odds_format_block)
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1962,10 +1963,36 @@ def _fetch_live_stats(entities: dict) -> str:
                     stat_lines.append(f"Today's {league.upper()} scores:\n{summary}")
             except Exception:
                 pass
+    # Betting lines from The Odds API
+    _odds_sport_map = {
+        "nuggets": ("nba", "Denver Nuggets"), "lakers": ("nba", "Los Angeles Lakers"),
+        "celtics": ("nba", "Boston Celtics"), "warriors": ("nba", "Golden State Warriors"),
+        "thunder": ("nba", "Oklahoma City Thunder"), "wolves": ("nba", "Minnesota Timberwolves"),
+        "timberwolves": ("nba", "Minnesota Timberwolves"), "suns": ("nba", "Phoenix Suns"),
+        "heat": ("nba", "Miami Heat"), "clippers": ("nba", "Los Angeles Clippers"),
+        "broncos": ("nfl", "Denver Broncos"), "chiefs": ("nfl", "Kansas City Chiefs"),
+        "raiders": ("nfl", "Las Vegas Raiders"), "chargers": ("nfl", "Los Angeles Chargers"),
+        "cowboys": ("nfl", "Dallas Cowboys"), "eagles": ("nfl", "Philadelphia Eagles"),
+        "49ers": ("nfl", "San Francisco 49ers"), "ravens": ("nfl", "Baltimore Ravens"),
+        "bills": ("nfl", "Buffalo Bills"), "packers": ("nfl", "Green Bay Packers"),
+        "avalanche": ("nhl", "Colorado Avalanche"), "avs": ("nhl", "Colorado Avalanche"),
+    }
+    if odds_available():
+        for team in entities.get("teams", []):
+            odds_mapping = _odds_sport_map.get(team)
+            if not odds_mapping:
+                continue
+            try:
+                odds_block = odds_format_block(odds_mapping[1], odds_mapping[0])
+                if odds_block:
+                    stat_lines.append(odds_block)
+            except Exception:
+                pass
+
     if not stat_lines:
         return ""
     return (
-        "\n\n=== LIVE STATS FROM ESPN — USE THESE EXACT NUMBERS ===\n"
+        "\n\n=== LIVE STATS FROM ESPN + ODDS — USE THESE EXACT NUMBERS ===\n"
         + "\n".join(stat_lines)
         + "\n=== DO NOT INVENT ANY STATS NOT LISTED ABOVE ===\n"
     )
