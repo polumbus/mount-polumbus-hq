@@ -4381,9 +4381,9 @@ Your coaching style:
 def _aw_create_new_dialog():
     """Popup for writing a new article from scratch."""
     _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _voice_opts = ["Default", "Critical", "Homer"] + [s["name"] for s in _custom_voices]
     voice_pick = st.selectbox("Voice", _voice_opts, key="aw_dialog_voice",
-        help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
+        help="Default = natural | Critical = tough love | Homer = ultra positive")
     freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
         placeholder="Paste a topic, tweet, or start writing your article...")
     fc1, fc2 = st.columns(2)
