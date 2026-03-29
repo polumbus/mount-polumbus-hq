@@ -3833,9 +3833,13 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         if st.button(_redo_label, use_container_width=True, key="modal_redo", type="primary" if _changed else "secondary"):
             st.session_state["ci_voice"] = _new_voice
             st.session_state["ci_format"] = _new_fmt
-            st.session_state["ci_dialog_pending"] = {"action": action, "tweet_text": tweet_text, "fmt": _new_fmt, "voice": _new_voice}
             for _k in _RESULT_KEYS:
                 st.session_state.pop(_k, None)
+            with st.spinner("Regenerating..."):
+                _run_ci_ai(action, tweet_text, _new_fmt, _new_voice)
+            # Reopen dialog with fresh results — skip AI run on main page
+            st.session_state["_ci_pending"] = (action, tweet_text, _new_fmt, _new_voice)
+            st.session_state["_ci_pending_skip_ai"] = True
             st.rerun(scope="app")
     _b2, _b3 = st.columns(2)
     with _b2:
@@ -4395,13 +4399,15 @@ def page_compose_ideas():
 
     if _pending:
         _action, _txt, _fmt, _voice = _pending
-        if _action in ("banger", "build", "rewrite"):
-            _clear_banger()
-        elif _action == "grades":
-            st.session_state.pop("ci_grades", None)
-        # Run AI BEFORE opening dialog — dialog is display-only
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _run_ci_ai(_action, _txt, _fmt, _voice)
+        _skip_ai = st.session_state.pop("_ci_pending_skip_ai", False)
+        if not _skip_ai:
+            if _action in ("banger", "build", "rewrite"):
+                _clear_banger()
+            elif _action == "grades":
+                st.session_state.pop("ci_grades", None)
+            # Run AI BEFORE opening dialog — dialog is display-only
+            with st.spinner("Mount Polumbus AI is reaching the summit..."):
+                _run_ci_ai(_action, _txt, _fmt, _voice)
         _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
 
     if st.session_state.pop("_ci_show_inspiration", False):
