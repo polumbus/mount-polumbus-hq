@@ -4378,6 +4378,12 @@ Your coaching style:
 # PAGE: ARTICLE WRITER
 # ═══════════════════════════════════════════════════════════════════════════
 def page_article_writer():
+    # Handle Create New reset at top, before any rendering
+    if st.session_state.pop("aw_create_new", False):
+        for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump", "aw_autogen", "aw_research_data"]:
+            st.session_state.pop(k, None)
+        st.session_state["aw_show_editor"] = True
+
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
 
@@ -4473,16 +4479,16 @@ def page_article_writer():
         # Section 3 — Generation buttons
         ac1, ac2, ac3 = st.columns(3)
         with ac3:
-            if pplx_available() and st.button("Research", use_container_width=True, key="aw_research"):
+            if pplx_available() and st.button("Research", use_container_width=True, key="aw_research_btn"):
                 if seed_text:
                     with st.spinner("Researching with Perplexity..."):
                         _research = pplx_research(seed_text)
                         if _research.get("answer"):
-                            st.session_state["aw_research"] = _research
+                            st.session_state["aw_research_data"] = _research
                         else:
                             st.warning("Research failed — check API key.")
-        if st.session_state.get("aw_research"):
-            _rr = st.session_state["aw_research"]
+        if st.session_state.get("aw_research_data"):
+            _rr = st.session_state["aw_research_data"]
             st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
             if _rr.get("citations"):
                 st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
@@ -4499,8 +4505,8 @@ def page_article_writer():
                         try: _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
                         except Exception: pass
                         _aw_research = ""
-                        if st.session_state.get("aw_research", {}).get("answer"):
-                            _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research']['answer'][:1500]}"
+                        if st.session_state.get("aw_research_data", {}).get("answer"):
+                            _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research_data']['answer'][:1500]}"
                         prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
                         st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
         with ac2:
@@ -4528,20 +4534,41 @@ def page_article_writer():
                     st.info("Text displayed above -- copy from there.")
             with bc3:
                 if st.button("↺ New", use_container_width=True, key="aw_new"):
-                    for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
-                        st.session_state.pop(k, None)
+                    st.session_state["aw_create_new"] = True
                     st.rerun()
+        elif st.session_state.pop("aw_show_editor", False):
+            st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+            st.markdown("#### Write from scratch")
+            freeform = st.text_area("Write or paste your article here:", height=300, key="aw_freeform",
+                placeholder="Start writing your article...")
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                if st.button("↓ Save Article", use_container_width=True, key="aw_freeform_save"):
+                    if freeform.strip():
+                        articles = load_json("saved_articles.json", [])
+                        articles.append({"content": freeform.strip(), "seed": "", "saved_at": datetime.now().isoformat()})
+                        save_json("saved_articles.json", articles)
+                        st.success("Article saved.")
+                        st.rerun()
+                    else:
+                        st.warning("Write something first.")
+            with fc2:
+                if st.button("Generate with AI", use_container_width=True, key="aw_freeform_gen", type="primary"):
+                    if freeform.strip():
+                        st.session_state["aw_autogen"] = freeform.strip()
+                        st.rerun()
+                    elif seed_text:
+                        st.session_state["aw_autogen"] = seed_text
+                        st.rerun()
+                    else:
+                        st.warning("Type something or select a tweet above first.")
 
     # ── Right 1/3: My Articles ────────────────────────────────────────
     with col_saved:
-        sc1, sc2 = st.columns([2, 1])
-        with sc1:
-            st.markdown("### My Articles")
-        with sc2:
-            if st.button("↺ Create New", key="aw_side_new", use_container_width=True):
-                for k in ["aw_result", "aw_sel_tweet", "aw_sel_dump"]:
-                    st.session_state.pop(k, None)
-                st.rerun()
+        st.markdown("### My Articles")
+        if st.button("↺ Create New", key="aw_side_new", use_container_width=True):
+            st.session_state["aw_create_new"] = True
+            st.rerun()
         articles = load_json("saved_articles.json", [])
         if not articles:
             st.markdown('<div style="padding:20px;border-radius:10px;background:#0d1929;border:1px solid rgba(0,229,204,0.13);color:#3a5070;text-align:center;font-style:italic;line-height:1.6;">No saved articles yet.<br>Select a tweet above, generate an article, then click Save Article.</div>', unsafe_allow_html=True)
