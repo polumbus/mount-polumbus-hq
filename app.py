@@ -342,6 +342,57 @@ input[type="number"] { background: #0D1117 !important; border: 1px solid #30363d
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
 
 /* ═══════════════════════════════════════════════
+   CREATOR STUDIO — Clean Dock
+═══════════════════════════════════════════════ */
+/* Format/Voice pill rows — compact rounded pills */
+.cs-fmt-row button, .cs-voice-row button {
+  padding: 6px 14px !important; border-radius: 20px !important;
+  font-size: 11px !important; font-weight: 600 !important;
+  min-height: 0 !important; height: auto !important; line-height: 1.3 !important;
+  width: auto !important; min-width: 0 !important;
+}
+.cs-fmt-row [data-testid="stHorizontalBlock"],
+.cs-voice-row [data-testid="stHorizontalBlock"] {
+  gap: 6px !important; justify-content: flex-start !important; flex-wrap: wrap !important;
+}
+.cs-fmt-row [data-testid="stColumn"], .cs-voice-row [data-testid="stColumn"],
+.cs-fmt-row [data-testid="stLayoutWrapper"], .cs-voice-row [data-testid="stLayoutWrapper"] {
+  width: auto !important; flex: 0 0 auto !important; min-width: 0 !important; max-width: none !important;
+}
+.cs-fmt-row [data-testid="stElementContainer"], .cs-voice-row [data-testid="stElementContainer"] {
+  width: auto !important;
+}
+.cs-fmt-row button[kind="secondary"] {
+  background: transparent !important; border: 1px solid #1a2a45 !important; color: #5a7090 !important;
+}
+.cs-fmt-row button[kind="secondary"]:hover { border-color: rgba(45,212,191,0.4) !important; color: #8ab0c8 !important; }
+.cs-fmt-row button[kind="primary"] {
+  background: rgba(45,212,191,0.1) !important; border: 1px solid rgba(45,212,191,0.4) !important; color: #2DD4BF !important;
+}
+.cs-voice-row button[kind="secondary"] {
+  background: transparent !important; border: 1px solid rgba(196,158,60,0.2) !important; color: #5a7090 !important;
+}
+.cs-voice-row button[kind="secondary"]:hover { border-color: rgba(196,158,60,0.4) !important; color: #c0a050 !important; }
+.cs-voice-row button[kind="primary"] {
+  background: rgba(196,158,60,0.1) !important; border: 1px solid rgba(196,158,60,0.4) !important; color: #C49E3C !important;
+}
+/* Action dock — centered, constrained width */
+.cs-dock-row { max-width: 500px !important; margin: 0 auto !important; }
+.cs-dock-row button {
+  border-radius: 14px !important; min-height: 48px !important; font-size: 13px !important;
+}
+.cs-dock-row [data-testid="stHorizontalBlock"] { gap: 8px !important; justify-content: center !important; }
+.cs-dock-row button[kind="primary"] {
+  background: linear-gradient(135deg, #1fb8a8, #2DD4BF) !important; color: #060A12 !important;
+}
+/* Bottom bar — centered, constrained */
+.cs-bottom-row { max-width: 500px !important; margin: 0 auto !important; }
+.cs-bottom-row button {
+  border-radius: 10px !important; font-size: 11px !important; font-weight: 600 !important;
+}
+.cs-bottom-row [data-testid="stHorizontalBlock"] { gap: 8px !important; justify-content: center !important; }
+
+/* ═══════════════════════════════════════════════
    TABS
 ═══════════════════════════════════════════════ */
 .stTabs [data-baseweb="tab-list"] { background: #161B22 !important; border: 1px solid rgba(45,212,191,0.1); border-radius: 12px; gap: 2px; padding: 4px; }
@@ -1815,6 +1866,33 @@ _stc.html("""<script>
     });
   }
   setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
+
+  /* ── Creator Studio: tag button rows with CSS classes ── */
+  function tagCS(){
+    var btns=doc.querySelectorAll('button');
+    var labels=['Punchy','Normal','Long','Thread','Article'];
+    var voiceLabels=['Default','Critical','Homer','Sarcastic'];
+    var dockLabels=['⚡ Go Viral','⊞ Build','↩ Repurpose','≋ Grades'];
+    var bottomLabels=['↓ Save','Bank',"What's Hot",'𝕏 Post'];
+    function findRow(textList){
+      for(var i=0;i<btns.length;i++){
+        if(textList.indexOf(btns[i].textContent.trim())!==-1){
+          var block=btns[i].closest('[data-testid="stHorizontalBlock"]');
+          if(block) return block.parentElement;
+        }
+      }
+      return null;
+    }
+    var fmtRow=findRow(labels);
+    if(fmtRow&&!fmtRow.classList.contains('cs-fmt-row')){fmtRow.classList.add('cs-fmt-row');}
+    var voiceRow=findRow(voiceLabels);
+    if(voiceRow&&!voiceRow.classList.contains('cs-voice-row')){voiceRow.classList.add('cs-voice-row');}
+    var dockRow=findRow(dockLabels);
+    if(dockRow&&!dockRow.classList.contains('cs-dock-row')){dockRow.classList.add('cs-dock-row');}
+    var bottomRow=findRow(bottomLabels);
+    if(bottomRow&&!bottomRow.classList.contains('cs-bottom-row')){bottomRow.classList.add('cs-bottom-row');}
+  }
+  setTimeout(tagCS,900);setTimeout(tagCS,2100);setTimeout(tagCS,4100);
 })();
 </script>""", height=0)
 
@@ -4486,12 +4564,89 @@ def _ci_output_panel(_nonce, action, tweet_text, fmt, voice):
     _ci_output_panel_impl(action, tweet_text, fmt, voice)
 
 
+@st.dialog("Idea Bank", width="large")
+def _ci_bank_dialog():
+    """Idea Bank as a popup modal."""
+    _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
+    _all_folders = load_json("saved_ideas_folders.json", _default_folders)
+    _folder_opts = ["Idea Bank Vault"] + _all_folders + ["All Ideas", "Rewrite Queue"]
+
+    if "ci_folder" not in st.session_state:
+        st.session_state["ci_folder"] = "Idea Bank Vault"
+    folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
+
+    if folder in ("Idea Bank Vault", "Rewrite Queue"):
+        gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
+        try:
+            gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+            resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+            gist_data = resp.json()
+            inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
+        except Exception:
+            inspo_items = []
+        if not inspo_items:
+            st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
+        else:
+            for ii, item in enumerate(reversed(inspo_items[-30:])):
+                orig_text = item.get("repurposed_text") or item.get("text", "")
+                author = item.get("author", "") or item.get("handle", "")
+                ts = item.get("saved_at", "")[:10]
+                st.markdown(f"""<div class="tweet-card">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span class="tweet-num">{author}</span>
+                        <span style="font-size:11px;color:#444466;">{ts}</span>
+                    </div>
+                    <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
+                </div>""", unsafe_allow_html=True)
+                _vb1, _vb2 = st.columns(2)
+                with _vb1:
+                    if st.button("Use This", key=f"ci_inspo_use_{ii}", use_container_width=True, type="primary"):
+                        st.session_state["_ci_text_stage"] = item.get("text", orig_text)
+                        st.rerun(scope="app")
+                with _vb2:
+                    if st.button("Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
+                        st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
+                        st.session_state["ci_auto_repurpose"] = True
+                        st.rerun(scope="app")
+    else:
+        ideas = load_json("saved_ideas.json", [])
+        if folder == "All Ideas":
+            inspo_as_ideas = []
+            try:
+                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+                gist_data = resp.json()
+                raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
+                inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
+            except Exception:
+                pass
+            filtered = ideas + inspo_as_ideas
+            filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
+        else:
+            filtered = [i for i in ideas if i.get("category") == folder]
+        if not filtered:
+            st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
+        else:
+            for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
+                ts = idea.get("saved_at", "")[:10]
+                cat = idea.get("category", "")
+                st.markdown(f"""<div class="tweet-card">
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="tweet-num">{idea.get('format','')}</span>
+                        <span style="font-size:11px;color:#444466;">{ts} <span class="tag">{cat}</span></span>
+                    </div>
+                    <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
+                </div>""", unsafe_allow_html=True)
+                if st.button("Use This", key=f"bank_use_{i}", use_container_width=True):
+                    st.session_state["_ci_text_stage"] = idea.get("text", "")
+                    st.rerun(scope="app")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
 
     # Consume staging key FIRST — before any widget is registered
-    # Both "Use This" buttons and the URL ?idea= param funnel through here
     _idea_from_url = st.query_params.get("idea", "")
     if _idea_from_url:
         st.session_state["ci_text"] = _idea_from_url
@@ -4511,93 +4666,106 @@ def page_compose_ideas():
         _ci_output_panel(str(time.time()), "rewrite", seed, _fmt, _vc)
         return
 
-    # Redo pending from modal "↺ Redo" button
+    # Redo pending from modal
     _pending_redo = st.session_state.pop("ci_dialog_pending", None)
 
-    # ── 2-COLUMN LAYOUT ──
-    col_left, col_right = st.columns([1, 2.5])
+    # ── Init format/voice in session state ──
+    if "ci_format" not in st.session_state:
+        st.session_state["ci_format"] = "Normal Tweet"
+    if "ci_voice" not in st.session_state:
+        st.session_state["ci_voice"] = "Default"
 
-    # ═══════════════════════════════════════════════════════════════════
-    # LEFT — Format Guide + Quick Links
-    # ═══════════════════════════════════════════════════════════════════
-    with col_left:
-        _fmt_display = st.session_state.get("ci_format", "Normal Tweet")
-        _fg = _FORMAT_GUIDES.get(_fmt_display, _FORMAT_GUIDES["Normal Tweet"])
-        st.markdown('<div class="cs-panel-label">FORMAT GUIDE</div>', unsafe_allow_html=True)
-        st.markdown(
-            f'''<div style="font-size:13px;color:#2DD4BF;font-weight:700;margin-bottom:4px;">{_fg["icon"]} {_fmt_display.upper()}''' +
-            f''' &nbsp;<span style="font-size:11px;color:#666888;font-weight:400;">{_fg["chars"]}</span></div>''',
-            unsafe_allow_html=True)
-        with st.expander("📋 Format Tips", expanded=False):
-            _rules_html = "".join([f'<div class="fg-rule">{r}</div>' for r in _fg["rules"]])
-            st.markdown(f'<div class="format-guide" style="border-top:none;margin:0;">{_rules_html}</div>', unsafe_allow_html=True)
-
-
-    # ═══════════════════════════════════════════════════════════════════
-    # RIGHT — Parameter Suite
-    # ═══════════════════════════════════════════════════════════════════
-    with col_right:
-        st.markdown('<div class="cs-panel-label">PARAMETER SUITE</div>', unsafe_allow_html=True)
-
-        tweet_text = st.text_area("Your concept", height=220, key="ci_text",
-            placeholder="Drop the raw concept, angle, or draft here...")
+    # ── CENTERED SINGLE-COLUMN LAYOUT ──
+    _spacer_l, _center, _spacer_r = st.columns([0.5, 4, 0.5])
+    with _center:
+        # ── Text area ──
+        tweet_text = st.text_area("Your concept", height=200, key="ci_text",
+            placeholder="Drop your concept, angle, or raw thought...", label_visibility="collapsed")
         char_len = len(tweet_text)
-        _cc = "#E8441A" if char_len >= 280 else "#C49E3C" if char_len >= 250 else "#3a5070"
-        st.markdown(f'<div style="text-align:right;font-size:11px;color:{_cc};margin-top:-8px;margin-bottom:8px;">{char_len}/280</div>', unsafe_allow_html=True)
 
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            fmt = st.selectbox("Format", ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="ci_format")
-        with fc2:
-            _custom_voices = load_json("voice_styles.json", [])
-            _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
-            voice = st.selectbox("Voice", _voice_opts, key="ci_voice",
-                help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = dry wit")
+        # ── Circular character counter ──
+        _pct = min(char_len / 280 * 100, 100)
+        _offset = 100 - _pct
+        _cc = "#E8441A" if char_len >= 280 else "#C49E3C" if char_len >= 250 else "#2DD4BF"
+        st.markdown(f'''<div style="display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:8px;">
+          <div style="width:32px;height:32px;position:relative;">
+            <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:32px;height:32px;">
+              <circle cx="18" cy="18" r="16" fill="none" stroke="#1a2a45" stroke-width="3"/>
+              <circle cx="18" cy="18" r="16" fill="none" stroke="{_cc}" stroke-width="3"
+                stroke-dasharray="100" stroke-dashoffset="{_offset}" stroke-linecap="round"/>
+            </svg>
+            <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#5a7090;font-weight:600;">{char_len}</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
 
-        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+        # ── Format pills (real Streamlit buttons, CSS makes them compact) ──
+        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+        _fmt_short = {"Punchy Tweet": "Punchy", "Normal Tweet": "Normal", "Long Tweet": "Long", "Thread": "Thread", "Article": "Article"}
+        _cur_fmt = st.session_state.get("ci_format", "Normal Tweet")
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Format</div>', unsafe_allow_html=True)
+        _fc = st.columns(len(_fmt_opts))
+        for _i, _fo in enumerate(_fmt_opts):
+            with _fc[_i]:
+                if st.button(_fmt_short[_fo], key=f"cs_fmt_{_i}",
+                             type="primary" if _fo == _cur_fmt else "secondary"):
+                    st.session_state["ci_format"] = _fo
+                    st.rerun()
 
-        # Row 1: primary CTA
-        def _click_banger():
+        # ── Voice pills ──
+        _custom_voices = load_json("voice_styles.json", [])
+        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _cur_voice = st.session_state.get("ci_voice", "Default")
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
+        _vc = st.columns(len(_voice_opts))
+        for _i, _vo in enumerate(_voice_opts):
+            with _vc[_i]:
+                if st.button(_vo, key=f"cs_voice_{_i}",
+                             type="primary" if _vo == _cur_voice else "secondary"):
+                    st.session_state["ci_voice"] = _vo
+                    st.rerun()
+
+        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+
+        # ── Action dock: Go Viral | Build | Repurpose | Grades ──
+        def _click_action(action):
             if st.session_state.get("ci_text", "").strip():
-                st.session_state["_ci_pending"] = ("banger", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-        st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary", on_click=_click_banger)
+                st.session_state["_ci_pending"] = (action, st.session_state.get("ci_text", ""),
+                    st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
 
-        # Row 2: Build + Repurpose
-        sr2, sr3 = st.columns(2)
-        with sr2:
-            def _click_build():
-                if st.session_state.get("ci_text", "").strip():
-                    st.session_state["_ci_pending"] = ("build", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-            st.button("⊞ Build", key="ci_build", use_container_width=True, on_click=_click_build)
-        with sr3:
-            def _click_repurpose():
-                if st.session_state.get("ci_text", "").strip():
-                    st.session_state["_ci_pending"] = ("rewrite", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-            st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True, on_click=_click_repurpose)
+        _d1, _d2, _d3, _d4 = st.columns(4)
+        with _d1:
+            st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary",
+                      on_click=_click_action, args=("banger",))
+        with _d2:
+            st.button("⊞ Build", key="ci_build", use_container_width=True,
+                      on_click=_click_action, args=("build",))
+        with _d3:
+            st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True,
+                      on_click=_click_action, args=("rewrite",))
+        with _d4:
+            st.button("≋ Grades", key="ci_engage", use_container_width=True,
+                      on_click=_click_action, args=("grades",))
 
-        # Row 3: Grades
-        def _click_engage():
-            if st.session_state.get("ci_text", "").strip():
-                st.session_state["_ci_pending"] = ("grades", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-        st.button("≋ Grades", key="ci_engage", use_container_width=True, on_click=_click_engage)
+        # ── Divider ──
+        st.markdown('<div style="height:1px;background:#1a2a45;margin:16px 0 12px;"></div>', unsafe_allow_html=True)
 
-        st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
-        if st.button("What's Hot", key="ci_inspiration", use_container_width=True):
-            st.session_state["_ci_show_inspiration"] = True
-
-        st.divider()
-        sc_col, sb_col, sp_col = st.columns([2.5, 1, 1])
-        with sc_col:
-            sc_cat = st.selectbox("Save to", ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"],
-                key="ci_cat", label_visibility="collapsed")
-        with sb_col:
-            if st.button("↓ Save Post", key="ci_save", use_container_width=True):
+        # ── Bottom bar: Save | Bank | What's Hot | Post to X ──
+        _b1, _b2, _b3, _b4 = st.columns(4)
+        with _b1:
+            if st.button("↓ Save", key="ci_save", use_container_width=True):
                 if tweet_text.strip():
                     ideas = load_json("saved_ideas.json", [])
-                    ideas.append({"text": tweet_text, "format": fmt, "category": sc_cat, "saved_at": datetime.now().isoformat()})
+                    ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
+                                  "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
-        with sp_col:
+        with _b2:
+            if st.button("Bank", key="ci_bank_btn", use_container_width=True):
+                st.session_state["_ci_show_bank"] = True
+        with _b3:
+            if st.button("What's Hot", key="ci_inspiration", use_container_width=True):
+                st.session_state["_ci_show_inspiration"] = True
+        with _b4:
             if st.button("𝕏 Post", key="ci_post_direct", use_container_width=True, type="primary"):
                 if tweet_text.strip():
                     with st.spinner("Posting..."):
@@ -4607,12 +4775,11 @@ def page_compose_ideas():
                     else:
                         st.error(f"Post failed — {_err}")
 
-    # ── Modal triggers — driven by one-shot session state, never by button return values ──
+    # ── Modal triggers ──
     def _clear_banger():
         for _k in ["ci_banger_data"] + [f"ci_banger_opt_{i}" for i in [1, 2, 3]]:
             st.session_state.pop(_k, None)
 
-    # _pending_redo comes from modal Redo button (already popped above)
     _ci_pending_raw = st.session_state.pop("_ci_pending", None)
     _is_redo = st.session_state.pop("_ci_pending_is_redo", False)
     if _ci_pending_raw:
@@ -4631,7 +4798,6 @@ def page_compose_ideas():
                 _clear_banger()
             elif _action == "grades":
                 st.session_state.pop("ci_grades", None)
-            # Run AI BEFORE opening dialog — dialog is display-only
             with st.spinner("Mount Polumbus AI is reaching the summit..."):
                 _run_ci_ai(_action, _txt, _fmt, _voice)
         _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
@@ -4639,96 +4805,8 @@ def page_compose_ideas():
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
 
-    # ── Bank ──
-    with st.expander("Bank", expanded=False):
-
-        _default_folders = ["Uncategorized", "Evergreen", "Timely", "Thread Ideas", "Video Ideas"]
-        _all_folders = load_json("saved_ideas_folders.json", _default_folders)
-        _folder_opts = ["Idea Bank Vault"] + _all_folders + ["All Ideas", "Rewrite Queue"]
-
-        if "ci_folder" not in st.session_state:
-            st.session_state["ci_folder"] = "Idea Bank Vault"
-        folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
-
-        with st.expander("Manage Folders"):
-            new_folder_name = st.text_input("New folder name:", key="ci_new_folder", placeholder="e.g. Hot Takes")
-            if st.button("+ Add Folder", key="ci_add_folder") and new_folder_name.strip():
-                fname = new_folder_name.strip()
-                if fname not in _all_folders:
-                    _all_folders.append(fname)
-                    save_json("saved_ideas_folders.json", _all_folders)
-                    st.rerun()
-            for cf in list(_all_folders):
-                if st.button(f"✕ {cf}", key=f"ci_del_{cf}"):
-                    _all_folders = [f for f in _all_folders if f != cf]
-                    save_json("saved_ideas_folders.json", _all_folders)
-                    st.rerun()
-
-        if folder in ("Idea Bank Vault", "Rewrite Queue"):
-            gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
-            try:
-                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-                gist_data = resp.json()
-                inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
-            except Exception:
-                inspo_items = []
-            if not inspo_items:
-                st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
-            else:
-                for ii, item in enumerate(reversed(inspo_items[-30:])):
-                    orig_text = item.get("repurposed_text") or item.get("text", "")
-                    author = item.get("author", "") or item.get("handle", "")
-                    ts = item.get("saved_at", "")[:10]
-                    st.markdown(f"""<div class="tweet-card">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                            <span class="tweet-num">{author}</span>
-                            <span style="font-size:11px;color:#444466;">{ts}</span>
-                        </div>
-                        <div style="color:#d8d8e8;font-size:13px;line-height:1.5;">{orig_text[:200]}{'...' if len(orig_text)>200 else ''}</div>
-                    </div>""", unsafe_allow_html=True)
-                    _vb1, _vb2 = st.columns(2)
-                    with _vb1:
-                        if st.button("Use This", key=f"ci_inspo_use_{ii}", use_container_width=True, type="primary"):
-                            st.session_state["_ci_text_stage"] = item.get("text", orig_text)
-                            st.rerun()
-                    with _vb2:
-                        if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
-                            st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
-                            st.session_state["ci_auto_repurpose"] = True
-                            st.rerun()
-        else:
-            ideas = load_json("saved_ideas.json", [])
-            if folder == "All Ideas":
-                inspo_as_ideas = []
-                try:
-                    gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-                    resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-                    gist_data = resp.json()
-                    raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
-                    inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
-                except Exception:
-                    pass
-                filtered = ideas + inspo_as_ideas
-                filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
-            else:
-                filtered = [i for i in ideas if i.get("category") == folder]
-            if not filtered:
-                st.markdown('<div class="output-box">No saved ideas yet.</div>', unsafe_allow_html=True)
-            else:
-                for i, idea in enumerate(reversed(filtered[-30:]) if folder != "All Ideas" else filtered[:30]):
-                    ts = idea.get("saved_at", "")[:10]
-                    cat = idea.get("category", "")
-                    st.markdown(f"""<div class="tweet-card">
-                        <div style="display:flex;justify-content:space-between;">
-                            <span class="tweet-num">{idea.get('format','')}</span>
-                            <span style="font-size:11px;color:#444466;">{ts} <span class="tag">{cat}</span></span>
-                        </div>
-                        <div style="color:#d8d8e8;font-size:13px;">{idea.get('text','')[:150]}{'...' if len(idea.get('text',''))>150 else ''}</div>
-                    </div>""", unsafe_allow_html=True)
-                    if st.button("Use This", key=f"bank_use_{i}", use_container_width=True):
-                        st.session_state["_ci_text_stage"] = idea.get("text", "")
-                        st.rerun()
+    if st.session_state.pop("_ci_show_bank", False):
+        _ci_bank_dialog()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: CONTENT COACH
