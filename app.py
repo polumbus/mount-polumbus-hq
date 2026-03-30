@@ -2022,24 +2022,23 @@ def page_brain_dump():
         _remaining = max(0, st.session_state.bd_timer_end - time.time())
         _tm, _ts = divmod(int(_remaining), 60)
         if _remaining > 0:
-            _timer_display = f'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#2DD4BF;margin-left:12px;">{_tm:02d}:{_ts:02d}</span>'
+            _timer_display = f'<span style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#2DD4BF;margin-left:12px;">{_tm:02d}:{_ts:02d}</span>'
         else:
             st.session_state.bd_timer_end = None
-            _timer_display = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#22c55e;margin-left:12px;">DONE</span>'
+            _timer_display = '<span style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#22c55e;margin-left:12px;">DONE</span>'
 
-    def _pill_cls(mins):
-        if mins == _timer_active:
-            return "padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-block;"
-        return "padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-block;"
+    _pill_base = "height:44px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;"
+    _pill_on = _pill_base + "background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;"
+    _pill_off = _pill_base + "background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;"
 
-    st.markdown(f'''<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
-      <span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-right:4px;">Timer</span>
-      <span class="cs-bot" data-bot="timer_5" style="{_pill_cls(5)}">5 min</span>
-      <span class="cs-bot" data-bot="timer_10" style="{_pill_cls(10)}">10 min</span>
-      <span class="cs-bot" data-bot="timer_15" style="{_pill_cls(15)}">15 min</span>
-      <span class="cs-bot" data-bot="timer_30" style="{_pill_cls(30)}">30 min</span>
-      {_timer_display}
-    </div>''', unsafe_allow_html=True)
+    _timer_html = f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+    _timer_html += '<span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-right:4px;">Timer</span>'
+    for _mins in [5, 10, 15, 30]:
+        _cls = _pill_on if _mins == _timer_active else _pill_off
+        _timer_html += f'<span class="cs-bot" data-bot="timer_{_mins}" style="{_cls}">{_mins} min</span>'
+    _timer_html += _timer_display
+    _timer_html += '</div>'
+    st.markdown(_timer_html, unsafe_allow_html=True)
 
     # Hidden timer buttons
     for mins in [5, 10, 15, 30]:
