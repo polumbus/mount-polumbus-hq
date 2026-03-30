@@ -2249,7 +2249,9 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
 
-EXAMPLE TWEETS — copy this exact energy:
+EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+(these stats were real at the time — do NOT reuse them,
+only use numbers from LIVE STATS in the prompt):
 - "We passed on 52% of third downs last year and went 8-9.
   Meanwhile Kansas City ran on 3rd-and-short 74% of the
   time and won the Super Bowl. That gap is a choice.
@@ -2257,9 +2259,16 @@ EXAMPLE TWEETS — copy this exact energy:
 - "The Broncos have had 5 different offensive coordinators
   in 8 years. And we keep wondering why the offense looks
   confused. That's on the front office. Connect the dots."
-- "Bo Nix threw for 3,000 yards last season. Good. But 18
-  of those touchdowns came against bottom-10 defenses.
-  Payton needs to answer for that schedule construction."
+
+EXAMPLE WITHOUT DETAILED STATS (use this pattern when
+LIVE STATS only provide team records, not player/unit stats):
+- "The Broncos went 14-3 and the offensive line was still
+  the weakest unit on the roster every single week.
+  That kind of record hides problems until January exposes
+  them. Paton owns the next move."
+- Notice: uses team record (from LIVE STATS) + observable
+  fact (line was weak) + named accountability. No invented
+  percentages or rankings.
 
 WRONG ENDINGS:
 - "Someone has to say what the standard is." — editorial
@@ -3401,11 +3410,12 @@ TOO FAR (don't do this): "Denver dominated Golden State 116-93. Is this team fin
 {format_mod}
 {patterns_ctx}{_sports_ctx}{_fmt_inject}
 
-STAT INTEGRITY RULE:
-- If LIVE STATS are provided above, use ONLY those exact numbers. Do not invent or adjust them.
-- If NO stats are provided, write the tweet using Tyler's observations only — do not fabricate specific numbers.
-- A tweet without stats is better than a tweet with wrong stats.
-{"- SARCASTIC VOICE STAT WARNING: Do NOT fabricate stats like '30-9-13' or '28th in pass protection' unless those exact numbers appear in LIVE STATS above. Sarcastic voice builds humor from observations and framing, not invented numbers. Real stats are funnier than fake ones." if voice == "Sarcastic" else ""}{"- HOMER VOICE STAT WARNING: Do NOT invent player stat lines like 'dropped 30, 13, and 10' or 'shooting 52% from three' unless those exact numbers appear in LIVE STATS above. Homer voice builds from the SIGNAL and the OUTSIDE REACTION — the authority comes from specificity of observation, not fabricated numbers. Use team records if available. If no player stats are provided, describe what you see without citing specific figures." if voice == "Homer" else ""}
+STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
+- ONLY use stats that appear in LIVE STATS above or in Tyler's draft. Do not invent, estimate, or round any numbers.
+- If LIVE STATS provide a team record (e.g. 48-28), use it. If they don't provide player averages, PFF grades, or rankings — you CANNOT use those.
+- A tweet with a concrete observation is ALWAYS better than a tweet with a fabricated stat.
+- If a voice rule asks for a "specific number" and no real one is available, use a named event, a team record, or a concrete observation instead. Never invent a number to fill the slot.
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. 'The Broncos offensive line is the reason Bo Nix ran for his life in December' is a valid symptom. 'Bottom-10 in pass protection' is NOT valid unless that ranking appears in LIVE STATS." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Sarcastic voice builds humor from observations and framing, not invented numbers." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available. If no player stats exist, describe what you see without citing specific figures." if voice == "Homer" else ""}
 
 Rules:
 - Reading Level (7th-9th grade)
@@ -6889,31 +6899,39 @@ _NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs" OR "Bo Nix" OR
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0}
 
 
-def _fetch_signals(query, count=30, max_age_hours=48):
-    """Fetch tweets via TwitterAPI.io advanced_search, filtering out stale results."""
+def _fetch_signals(query, count=30, max_age_hours=48, pages=1):
+    """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results."""
     if not TWITTER_API_IO_KEY:
         return []
     try:
         from datetime import timedelta, timezone
-        resp = requests.get(
-            "https://api.twitterapi.io/twitter/tweet/advanced_search",
-            headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            tweets = resp.json().get("tweets", [])
-            # Filter to recent tweets only
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
-            fresh = []
-            for t in tweets:
-                try:
-                    created = datetime.strptime(t.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
-                    if created >= cutoff:
-                        fresh.append(t)
-                except (ValueError, TypeError):
-                    pass
-            return fresh
+        all_tweets = []
+        cursor = ""
+        for _ in range(pages):
+            resp = requests.get(
+                "https://api.twitterapi.io/twitter/tweet/advanced_search",
+                headers={"X-API-Key": TWITTER_API_IO_KEY},
+                params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": cursor},
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            all_tweets.extend(data.get("tweets", []))
+            cursor = data.get("next_cursor", "")
+            if not cursor:
+                break
+        # Filter to recent tweets only
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        fresh = []
+        for t in all_tweets:
+            try:
+                created = datetime.strptime(t.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
+                if created >= cutoff:
+                    fresh.append(t)
+            except (ValueError, TypeError):
+                pass
+        return fresh
     except Exception:
         pass
     return []
@@ -7228,16 +7246,16 @@ def page_signals_prompts():
     # ── Fetch signals (cache 5 min) ──
     if time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
         with st.spinner("Scanning Twitter signals..."):
-            _SIGNALS_CACHE["beat"] = _fetch_signals(_BEAT_REPORTERS, count=30)
-            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=30, max_age_hours=72)
+            _SIGNALS_CACHE["beat"] = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3)
+            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168)
             _SIGNALS_CACHE["ts"] = time.time()
 
     beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
     national_tweets = _dedup_signals(_SIGNALS_CACHE.get("national", []))
 
     # Sort by reply count (replies = controversy = prompt gold)
-    beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
-    national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:5]
+    beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
+    national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
 
     tab_beat, tab_national = st.tabs(["Beat Reporter Heat Map", "National Take Detector"])
 
