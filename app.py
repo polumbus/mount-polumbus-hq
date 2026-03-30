@@ -1439,20 +1439,21 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
-# Always sync page from query params (enables HTML link navigation)
-# _nav_override flag lets button-driven navigation skip the query param override
+# Sidebar uses <a href="/?page=X"> links. On click, browser navigates to that
+# URL (full reload, session state wiped). We read ?page=, set current_page,
+# then clear() the query params. clear() triggers a Streamlit rerun (NOT a
+# full reload), so session state survives. On the rerun, ?page= is gone and
+# current_page is already set. On a real browser refresh, session state IS
+# wiped and ?page= is gone too, so it defaults to Creator Studio.
 _qp_page = st.query_params.get("page", "")
 if st.session_state.pop("_nav_override", False):
-    pass  # session_state.current_page already set by the button handler — keep it
+    pass  # session_state.current_page already set by the button handler
 elif _qp_page:
     st.session_state.current_page = _qp_page
-else:
+    st.query_params.clear()  # strips ?page= from URL, triggers rerun
+    st.stop()  # halt this run — the rerun will render the correct page
+elif "current_page" not in st.session_state:
     st.session_state.current_page = "Creator Studio"
-# Clear ?page= from browser URL so refresh always lands on Creator Studio
-# st.markdown strips <script> tags — must use components.html for JS execution
-if _qp_page:
-    import streamlit.components.v1 as _components
-    _components.html('<script>window.parent.history.replaceState(null,"",window.parent.location.pathname)</script>', height=0)
 
 _cur_pg = st.session_state.current_page
 
