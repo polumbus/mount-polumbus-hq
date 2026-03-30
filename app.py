@@ -6964,31 +6964,37 @@ def _build_signal_brief(tweet):
     _thread_ctx = _get_thread_context(tweet)
     _thread_text = " ".join(_thread_ctx)
 
-    # Detect sport from tweet content + thread context combined
+    # Detect sport from tweet content + thread context — score each sport
     _all_text = (text + " " + _thread_text).lower()
-    _nba_signals = ["nuggets", "jokic", "murray", "gordon", "nba", "basketball", "warriors", "lakers", "celtics", "game tonight", "playoff", "seeds", "western conference", "halftime", "quarter"]
-    _nhl_signals = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup", "power play", "period"]
-    _cfb_signals = ["buffs", "cu buffs", "deion", "shedeur", "colorado buffaloes"]
-    # Check what Denver teams are playing today via ESPN
-    _today_playing = _get_denver_games_today()
+    _sport_signals = {
+        "NFL": ["broncos", "nfl", "bo nix", "sean payton", "paton", "football", "draft pick", "free agent", "wide receiver", "quarterback", "offensive line", "defensive", "owners meetings", "combine", "roster", "courtland sutton", "waddle", "dobbins", "touchdown", "super bowl"],
+        "NBA": ["nuggets", "jokic", "jamal murray", "aaron gordon", "nba", "basketball", "three pointer", "dunk", "western conference", "halftime", "tipoff"],
+        "NHL": ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup", "power play", "goalie"],
+        "CFB": ["buffs", "cu buffs", "deion", "shedeur", "colorado buffaloes", "big 12"],
+    }
+    _sport_scores = {}
+    for league, signals in _sport_signals.items():
+        _sport_scores[league] = sum(1 for s in signals if s in _all_text)
 
-    if any(s in _all_text for s in _nba_signals):
-        _sport = "NBA"
-        _angle = "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily"
-    elif any(s in _all_text for s in _nhl_signals):
-        _sport = "NHL"
-        _angle = "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely"
-    elif any(s in _all_text for s in _cfb_signals):
-        _sport = "CFB"
-        _angle = "Tyler's lens as a former professional athlete and Colorado insider"
+    _today_playing = _get_denver_games_today()
+    _best_sport = max(_sport_scores, key=_sport_scores.get) if max(_sport_scores.values()) > 0 else None
+
+    _angles = {
+        "NFL": "Tyler's lens as a former professional athlete and Denver media host",
+        "NBA": "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily",
+        "NHL": "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely",
+        "CFB": "Tyler's lens as a former professional athlete and Colorado insider",
+    }
+
+    if _best_sport:
+        _sport = _best_sport
+        _angle = _angles[_sport]
+    elif _today_playing:
+        _sport = _today_playing[0]["league"]
+        _angle = f"{_angles.get(_sport, _angles['NFL'])} — {_today_playing[0]['team']} playing today"
     else:
-        # If no sport detected, infer from today's games
-        if _today_playing:
-            _sport = _today_playing[0]["league"]
-            _angle = f"Tyler's lens as a former professional athlete and Denver media host — {_today_playing[0]['team']} playing today"
-        else:
-            _sport = "NFL"
-            _angle = "Tyler's lens as a former professional athlete and Denver media host"
+        _sport = "NFL"
+        _angle = _angles["NFL"]
 
     # Build game context line
     _game_ctx = ""
