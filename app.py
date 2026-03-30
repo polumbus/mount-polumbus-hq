@@ -1878,9 +1878,25 @@ _stc.html("""<script>
   }
   setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
 
-  /* ── Creator Studio: tag pill rows + wire icon dock + bottom bar ── */
-  function tagCS(){
+  /* ── Global: MutationObserver that hides hidden buttons + wires docks/bottoms + tags pill rows ── */
+  /* Runs on EVERY DOM change so it works on reruns (not just full page loads) */
+  var _hidePrefixes=['dock_','bot_','bd_','cc_','aw_','th_','aa_','hc_','ap_','ar_','rg_','ib_','rdc_','sig_'];
+  function processDOM(){
     var btns=doc.querySelectorAll('button');
+    /* Hide all hidden buttons (any button whose text starts with a known prefix) */
+    for(var i=0;i<btns.length;i++){
+      var t=btns[i].textContent.trim();
+      for(var p=0;p<_hidePrefixes.length;p++){
+        if(t.indexOf(_hidePrefixes[p])===0){
+          var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
+          if(el&&el.style.opacity!=='0'){
+            el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
+          }
+          break;
+        }
+      }
+    }
+    /* Tag pill rows */
     var labels=['Punchy','Normal','Long','Thread','Article'];
     var voiceLabels=['Default','Critical','Homer','Sarcastic'];
     function findRow(textList){
@@ -1893,53 +1909,38 @@ _stc.html("""<script>
       return null;
     }
     var fmtRow=findRow(labels);
-    if(fmtRow&&!fmtRow.classList.contains('cs-fmt-row')){fmtRow.classList.add('cs-fmt-row');}
+    if(fmtRow&&!fmtRow.classList.contains('cs-fmt-row')) fmtRow.classList.add('cs-fmt-row');
     var voiceRow=findRow(voiceLabels);
-    if(voiceRow&&!voiceRow.classList.contains('cs-voice-row')){voiceRow.classList.add('cs-voice-row');}
-
-    /* Wire icon dock clicks to hidden buttons */
+    if(voiceRow&&!voiceRow.classList.contains('cs-voice-row')) voiceRow.classList.add('cs-voice-row');
+    /* Wire all icon dock buttons — try both with and without prefix */
     doc.querySelectorAll('.cs-idock-btn').forEach(function(d){
-      if(d._wired) return;
-      d._wired=true;
+      if(d._wired) return; d._wired=true;
       d.addEventListener('click',function(){
-        var action='dock_'+d.dataset.dock;
+        var raw=d.dataset.dock;
+        var prefixed='dock_'+raw;
         for(var i=0;i<btns.length;i++){
-          if(btns[i].textContent.trim()===action){
-            btns[i].removeAttribute('disabled');
-            btns[i].click();
-            return;
-          }
+          var t=btns[i].textContent.trim();
+          if(t===raw||t===prefixed){btns[i].removeAttribute('disabled');btns[i].click();return;}
         }
       });
     });
-
-    /* Hide all hidden dock/bottom buttons — collapse completely */
-    var hideLabels=['dock_banger','dock_build','dock_rewrite','dock_grades','bot_save','bot_bank','bot_hot','bot_post',
-      'bd_subject','bd_ideas','bd_gen_tweets','bd_gen_long','bd_gen_video','bd_save','bd_new','bd_saved'];
-    for(var i=0;i<btns.length;i++){
-      if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
-        var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
-        el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
-      }
-    }
-
-    /* Wire bottom bar clicks to hidden buttons */
+    /* Wire all bottom bar buttons — try both with and without prefix */
     doc.querySelectorAll('.cs-bot').forEach(function(b){
-      if(b._wired) return;
-      b._wired=true;
+      if(b._wired) return; b._wired=true;
       b.addEventListener('click',function(){
-        var action='bot_'+b.dataset.bot;
+        var raw=b.dataset.bot;
+        var prefixed='bot_'+raw;
         for(var i=0;i<btns.length;i++){
-          if(btns[i].textContent.trim()===action){
-            btns[i].removeAttribute('disabled');
-            btns[i].click();
-            return;
-          }
+          var t=btns[i].textContent.trim();
+          if(t===raw||t===prefixed){btns[i].removeAttribute('disabled');btns[i].click();return;}
         }
       });
     });
   }
-  setTimeout(tagCS,900);setTimeout(tagCS,2100);setTimeout(tagCS,4100);
+  /* Run immediately + on every DOM change */
+  setTimeout(processDOM,300);setTimeout(processDOM,800);setTimeout(processDOM,2000);
+  var _observer=new MutationObserver(function(){processDOM();});
+  _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
 </script>""", height=0)
 
@@ -2147,41 +2148,6 @@ def page_brain_dump():
         _bd_saved_dialog()
 
     # ── JS: hide hidden buttons + wire dock/bottom clicks ──
-    import streamlit.components.v1 as _bd_stc
-    _bd_stc.html("""<script>
-    (function(){
-      var doc=window.parent.document;
-      function wire(){
-        var btns=doc.querySelectorAll('button');
-        var hideLabels=['bd_subject','bd_ideas','bd_gen_tweets','bd_gen_long','bd_gen_video','bd_save','bd_new','bd_saved'];
-        for(var i=0;i<btns.length;i++){
-          if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
-            var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
-            el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
-          }
-        }
-        doc.querySelectorAll('.cs-bd-dock .cs-idock-btn').forEach(function(d){
-          if(d._w2) return; d._w2=true;
-          d.addEventListener('click',function(){
-            var action=d.dataset.dock;
-            for(var i=0;i<btns.length;i++){
-              if(btns[i].textContent.trim()===action){btns[i].removeAttribute('disabled');btns[i].click();return;}
-            }
-          });
-        });
-        doc.querySelectorAll('.cs-bd-bottom .cs-bot').forEach(function(b){
-          if(b._w2) return; b._w2=true;
-          b.addEventListener('click',function(){
-            var action=b.dataset.bot;
-            for(var i=0;i<btns.length;i++){
-              if(btns[i].textContent.trim()===action){btns[i].removeAttribute('disabled');btns[i].click();return;}
-            }
-          });
-        });
-      }
-      setTimeout(wire,500);setTimeout(wire,1500);setTimeout(wire,3000);
-    })();
-    </script>""", height=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5024,75 +4990,101 @@ Your coaching style:
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
 
-    # --- Layout: 3 columns ---
-    col_left, col_center, col_right = st.columns([1, 3, 1])
-
-    with col_left:
-        st.markdown("##### Conversations")
-        if st.button("+ New", use_container_width=True, key="coach_new"):
-            st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
-            st.rerun()
-        for conv in reversed(st.session_state.coach_conversations[-20:]):
-            label = conv.get("title", "Untitled")[:18]
-            is_active = conv.get("id") == st.session_state.coach_current.get("id")
-            if st.button((">> " if is_active else "") + label, key=f"cv_{conv['id']}", use_container_width=True):
-                st.session_state.coach_current = json.loads(json.dumps(conv))
-                st.rerun()
-        if st.session_state.coach_conversations:
-            if st.button("⊘ Clear", key="coach_clear_all", use_container_width=True):
-                st.session_state.coach_conversations = []
+    # --- Conversations pill row ---
+    _convs = st.session_state.coach_conversations[-8:]
+    if _convs or st.session_state.coach_current.get("messages"):
+        _conv_cols = st.columns(min(len(_convs) + 2, 10))
+        with _conv_cols[0]:
+            if st.button("+ New", key="coach_new", type="secondary"):
                 st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
-                save_json("coach_conversations.json", [])
                 st.rerun()
+        for _ci, conv in enumerate(reversed(_convs)):
+            if _ci + 1 < len(_conv_cols) - 1:
+                with _conv_cols[_ci + 1]:
+                    label = conv.get("title", "Untitled")[:16]
+                    is_active = conv.get("id") == st.session_state.coach_current.get("id")
+                    if st.button(label, key=f"cv_{conv['id']}", type="primary" if is_active else "secondary"):
+                        st.session_state.coach_current = json.loads(json.dumps(conv))
+                        st.rerun()
+        with _conv_cols[-1]:
+            if st.session_state.coach_conversations:
+                if st.button("Clear All", key="coach_clear_all", type="secondary"):
+                    st.session_state.coach_conversations = []
+                    st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
+                    save_json("coach_conversations.json", [])
+                    st.rerun()
 
-    with col_right:
-        st.markdown("##### Output Format")
-        coach_fmt = st.selectbox("Format", ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed", help="General Advice = strategy tips. Tweet Ideas = ready-to-post content. Thread = multi-part breakdown.")
-        st.markdown("---")
-        st.markdown("##### Send to Creator Studio")
-        save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste Amplifier advice here...")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("↓ Save Post", use_container_width=True, key="coach_save_idea") and save_text.strip():
-                ideas = load_json("saved_ideas.json", [])
-                ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Amplifier", "created_at": datetime.now().isoformat()})
-                save_json("saved_ideas.json", ideas)
-                st.success("Saved!")
-        with c2:
-            if st.button("↩ Remix", use_container_width=True, key="coach_repurpose") and save_text.strip():
-                with st.spinner("Repurposing..."):
-                    repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
-                    st.session_state.coach_save_text_result = repurposed
-        if "coach_save_text_result" in st.session_state:
-            st.markdown(f"**Repurposed:**\n\n{st.session_state.coach_save_text_result}")
-
-    with col_center:
-        include_history = st.toggle("Include Post History", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle", help="Feed recent tweet history to the advisor for personalized advice")
-
-        # Demo questions dropdown
-        if not st.session_state.coach_current["messages"]:
-            demo_pick = st.selectbox("Demo questions:", ["-- Pick a question --"] + DEMO_QUESTIONS, key="coach_demo")
-            if demo_pick != "-- Pick a question --":
-                with st.spinner("Mount Polumbus AI is reaching the summit..."):
-                    _send_message(demo_pick, include_history, coach_fmt)
+    # --- Output Format pills ---
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Output Format</div>', unsafe_allow_html=True)
+    _fmt_opts = ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+    if "coach_fmt_sel" not in st.session_state:
+        st.session_state.coach_fmt_sel = "General Advice"
+    _fc = st.columns(len(_fmt_opts))
+    for _fi, _fo in enumerate(_fmt_opts):
+        with _fc[_fi]:
+            if st.button(_fo, key=f"cc_fmt_{_fi}", type="primary" if st.session_state.coach_fmt_sel == _fo else "secondary"):
+                st.session_state.coach_fmt_sel = _fo
                 st.rerun()
+    coach_fmt = st.session_state.coach_fmt_sel
 
-        # Chat display
-        for msg in st.session_state.coach_current.get("messages", []):
-            if msg["role"] == "user":
-                role_label = "Tyler"
-                cls = "chat-user"
-            else:
-                role_label = f'{AMPLIFIER_IMG} <span style="color:#2DD4BF;">Amplifier</span>'
-                cls = "chat-ai"
-            st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:16px;line-height:1.8;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
+    include_history = st.toggle("Include Post History", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle", help="Feed recent tweet history to the advisor for personalized advice")
 
-        # Input
-        user_input = st.text_area("Ask Amplifier:", height=80, key="coach_input", placeholder="What should I write about today?")
-        if st.button("↗ Send", use_container_width=True, key="coach_send") and user_input.strip():
+    # Demo questions dropdown
+    if not st.session_state.coach_current["messages"]:
+        demo_pick = st.selectbox("Demo questions:", ["-- Pick a question --"] + DEMO_QUESTIONS, key="coach_demo", label_visibility="collapsed")
+        if demo_pick != "-- Pick a question --":
+            with st.spinner("Mount Polumbus AI is reaching the summit..."):
+                _send_message(demo_pick, include_history, coach_fmt)
+            st.rerun()
+
+    # Chat display
+    for msg in st.session_state.coach_current.get("messages", []):
+        if msg["role"] == "user":
+            role_label = "Tyler"
+            cls = "chat-user"
+        else:
+            role_label = f'{AMPLIFIER_IMG} <span style="color:#2DD4BF;">Amplifier</span>'
+            cls = "chat-ai"
+        st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:16px;line-height:1.8;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
+
+    # Input
+    user_input = st.text_area("Ask Amplifier:", height=80, key="coach_input", placeholder="What should I write about today?", label_visibility="collapsed")
+
+    # --- Bottom bar ---
+    st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+    <div class="cs-bottom-bar cs-cc-bottom" style="display:flex;gap:8px;justify-content:center;">
+      <span class="cs-bot cs-idock-primary" data-bot="cc_send" style="height:52px;padding:0 24px;border-radius:14px;font-size:11px;font-weight:600;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Send</span>
+      <span class="cs-bot" data-bot="cc_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save Post</span>
+      <span class="cs-bot" data-bot="cc_remix" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Remix</span>
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden buttons for bottom bar
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("cc_send", key="coach_send"):
+        if user_input.strip():
             with st.spinner("Amplifier is thinking..."):
                 _send_message(user_input.strip(), include_history, coach_fmt)
             st.rerun()
+    if st.button("cc_save", key="coach_save_idea"):
+        # Save last assistant message to ideas
+        _last_ai = next((m["content"] for m in reversed(st.session_state.coach_current.get("messages", [])) if m["role"] == "assistant"), "")
+        if _last_ai.strip():
+            ideas = load_json("saved_ideas.json", [])
+            ideas.append({"id": str(uuid.uuid4()), "text": _last_ai.strip(), "category": "From Amplifier", "created_at": datetime.now().isoformat()})
+            save_json("saved_ideas.json", ideas)
+            st.success("Saved!")
+    if st.button("cc_remix", key="coach_repurpose"):
+        _last_ai = next((m["content"] for m in reversed(st.session_state.coach_current.get("messages", [])) if m["role"] == "assistant"), "")
+        if _last_ai.strip():
+            with st.spinner("Repurposing..."):
+                repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{_last_ai.strip()}", max_tokens=600)
+                st.session_state.coach_save_text_result = repurposed
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if "coach_save_text_result" in st.session_state:
+        st.markdown(f'<div class="output-box">{st.session_state.coach_save_text_result}</div>', unsafe_allow_html=True)
+
+    # ── JS: hide hidden buttons + wire bottom bar clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5165,19 +5157,28 @@ def page_article_writer():
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
 
-    col_main, col_saved = st.columns([2, 1])
+    # --- Source pills ---
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Source</div>', unsafe_allow_html=True)
+    if "aw_source" not in st.session_state:
+        st.session_state.aw_source = "Tweets"
+    _src_opts = ["Tweets", "Raw Thoughts", "Scratch"]
+    _src_cols = st.columns(len(_src_opts))
+    for _si, _so in enumerate(_src_opts):
+        with _src_cols[_si]:
+            if st.button(_so, key=f"aw_src_{_si}", type="primary" if st.session_state.aw_source == _so else "secondary"):
+                st.session_state.aw_source = _so
+                st.rerun()
 
-    # ── Left 2/3: Tweet / Raw Thoughts selectors + generation ──────────────
-    with col_main:
-        # Section 1 — Choose a Tweet
-        st.markdown("#### Choose a Tweet to Expand")
-        st.caption("Select a tweet to expand into an article")
-        tweets = load_json("tweet_history.json", [])
-        top_tweets = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:8] if tweets else []
+    tweets = load_json("tweet_history.json", [])
+    top_tweets = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:8] if tweets else []
+    dumps = load_json("brain_dumps.json", [])
 
-        if "aw_sel_tweet" not in st.session_state:
-            st.session_state.aw_sel_tweet = None
+    if "aw_sel_tweet" not in st.session_state:
+        st.session_state.aw_sel_tweet = None
+    if "aw_sel_dump" not in st.session_state:
+        st.session_state.aw_sel_dump = None
 
+    if st.session_state.aw_source == "Tweets":
         for i, tw in enumerate(top_tweets):
             txt = tw.get("text", "")
             dt = tw.get("createdAt", "")[:10]
@@ -5192,33 +5193,15 @@ def page_article_writer():
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
                 <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
             </div>""", unsafe_allow_html=True)
-            if st.button("→ Select", key=f"aw_tw_{i}", use_container_width=True):
+            if st.button("Select", key=f"aw_tw_{i}", use_container_width=True):
                 st.session_state.aw_sel_tweet = i
                 st.session_state.aw_sel_dump = None
                 st.session_state["aw_autogen"] = tw.get("text", "")
                 st.rerun()
-
         if not top_tweets:
             st.info("No tweet history yet. Sync tweets in Post History first.")
 
-        # Auto-generate when tweet is selected
-        if st.session_state.get("aw_autogen"):
-            seed_text = st.session_state.pop("aw_autogen")
-            with st.spinner("Writing article..."):
-                voice = get_voice_context()
-                pp = analyze_personal_patterns()
-                pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
-                prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
-                st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
-
-        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-        # Section 2 — Choose a Raw Thoughts
-        st.markdown("#### Or Choose a Raw Thoughts")
-        dumps = load_json("brain_dumps.json", [])
-        if "aw_sel_dump" not in st.session_state:
-            st.session_state.aw_sel_dump = None
-
+    elif st.session_state.aw_source == "Raw Thoughts":
         if not dumps:
             st.markdown('<div class="output-box">No brain dumps yet. Create one in Raw Thoughts tool first.</div>', unsafe_allow_html=True)
         else:
@@ -5231,124 +5214,167 @@ def page_article_writer():
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
                 </div>""", unsafe_allow_html=True)
-                if st.button("→ Select", key=f"aw_bd_{j}", use_container_width=True):
+                if st.button("Select", key=f"aw_bd_{j}", use_container_width=True):
                     st.session_state.aw_sel_dump = j
                     st.session_state.aw_sel_tweet = None
                     st.session_state["aw_autogen"] = d.get("text", "")
                     st.rerun()
 
-        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+    # Auto-generate when tweet/dump is selected
+    if st.session_state.get("aw_autogen"):
+        seed_text = st.session_state.pop("aw_autogen")
+        with st.spinner("Writing article..."):
+            voice = get_voice_context()
+            pp = analyze_personal_patterns()
+            pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
+            prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
+            st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
 
-        # Resolve seed text
-        seed_text = ""
-        if st.session_state.aw_sel_tweet is not None and top_tweets:
-            seed_text = top_tweets[st.session_state.aw_sel_tweet].get("text", "")
-        elif st.session_state.aw_sel_dump is not None and dumps:
-            idx = st.session_state.aw_sel_dump
-            rev = list(reversed(dumps[-6:]))
-            if idx < len(rev):
-                seed_text = rev[idx].get("text", "")
+    st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
 
-        manual = st.text_area("Or type / paste your own seed:", height=80, key="aw_manual",
-            placeholder="Paste a tweet, idea, or topic to expand...")
+    # Resolve seed text
+    seed_text = ""
+    if st.session_state.aw_sel_tweet is not None and top_tweets:
+        seed_text = top_tweets[st.session_state.aw_sel_tweet].get("text", "")
+    elif st.session_state.aw_sel_dump is not None and dumps:
+        idx = st.session_state.aw_sel_dump
+        rev = list(reversed(dumps[-6:]))
+        if idx < len(rev):
+            seed_text = rev[idx].get("text", "")
+
+    if st.session_state.aw_source == "Scratch" or not seed_text:
+        manual = st.text_area("Type / paste your own seed:", height=80, key="aw_manual",
+            placeholder="Paste a tweet, idea, or topic to expand...", label_visibility="collapsed")
         if manual.strip():
             seed_text = manual.strip()
 
-        # Section 3 — Generation buttons
-        ac1, ac2, ac3 = st.columns(3)
-        with ac3:
-            if pplx_available() and st.button("Research", use_container_width=True, key="aw_research_btn"):
-                if seed_text:
-                    with st.spinner("Researching with Perplexity..."):
-                        _research = pplx_research(seed_text)
-                        if _research.get("answer"):
-                            st.session_state["aw_research_data"] = _research
-                        else:
-                            st.warning("Research failed — check API key.")
-        if st.session_state.get("aw_research_data"):
-            _rr = st.session_state["aw_research_data"]
-            st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
-            if _rr.get("citations"):
-                st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
-        with ac1:
-            if st.button("↺ Scratch", use_container_width=True, key="aw_scratch", type="primary"):
-                if seed_text:
-                    with st.spinner("Writing full article..."):
-                        voice = get_voice_context()
-                        pp = analyze_personal_patterns()
-                        pp_note = ""
-                        if pp:
-                            pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
-                        _aw_sports = ""
-                        try: _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
-                        except Exception: pass
-                        _aw_research = ""
-                        if st.session_state.get("aw_research_data", {}).get("answer"):
-                            _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research_data']['answer'][:1500]}"
-                        prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
-                        st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
-        with ac2:
-            if st.button("⚡ Outline", use_container_width=True, key="aw_outline", type="primary"):
-                if seed_text:
-                    with st.spinner("Generating outline..."):
-                        voice = get_voice_context()
-                        prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
-                        st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
+    # Research data display
+    if st.session_state.get("aw_research_data"):
+        _rr = st.session_state["aw_research_data"]
+        st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
+        if _rr.get("citations"):
+            st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
 
-        # Section 4 — Output + editor
-        if st.session_state.get("aw_result"):
-            st.markdown(f'<div class="output-box">{st.session_state["aw_result"]}</div>', unsafe_allow_html=True)
-            edited = st.text_area("Edit article:", value=st.session_state["aw_result"], height=300, key="aw_editor")
-            bc1, bc2, bc3, bc4 = st.columns(4)
-            with bc1:
-                if st.button("↓ Save Article", use_container_width=True, key="aw_save"):
-                    articles = load_json("saved_articles.json", [])
-                    articles.append({"content": edited, "seed": seed_text[:200], "saved_at": datetime.now().isoformat()})
-                    save_json("saved_articles.json", articles)
-                    st.success("Article saved.")
-            with bc2:
-                if st.button("⎘ Copy", use_container_width=True, key="aw_copy"):
-                    st.code(edited, language=None)
-                    st.info("Text displayed above -- copy from there.")
-            with bc3:
-                if pplx_available() and st.button("Verify", use_container_width=True, key="aw_verify"):
-                    with st.spinner("Fact-checking..."):
-                        _fc = pplx_fact_check(edited)
-                    if _fc.get("answer"):
-                        st.session_state["_aw_page_verify"] = _fc
-                    else:
-                        st.warning("Couldn't verify — check API key.")
-            with bc4:
-                if st.button("↺ New", use_container_width=True, key="aw_new"):
-                    _aw_create_new_dialog()
-            _vr = st.session_state.get("_aw_page_verify")
-            if _vr:
-                _va = _vr["answer"]
-                _vc = _vr.get("citations", [])
-                _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
-                st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
-                if _vc:
-                    st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
+    # --- Icon dock: Write, Outline, Research ---
+    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:12px 0 8px;">ACTIONS</div>
+    <div class="cs-icon-dock cs-aw-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="aw_write" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#060A12" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">WRITE</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="aw_outline" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="12" x2="21" y2="12" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="18" x2="21" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">OUTLINE</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="aw_research" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#5a7090" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">RESEARCH</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
 
-    # ── Right 1/3: My Articles ────────────────────────────────────────
-    with col_saved:
-        st.markdown("### My Articles")
-        if st.button("↺ Create New", key="aw_side_new", use_container_width=True):
-            _aw_create_new_dialog()
-        articles = load_json("saved_articles.json", [])
-        if not articles:
-            st.markdown('<div style="padding:20px;border-radius:10px;background:#0d1929;border:1px solid rgba(0,229,204,0.13);color:#3a5070;text-align:center;font-style:italic;line-height:1.6;">No saved articles yet.<br>Select a tweet above, generate an article, then click Save Article.</div>', unsafe_allow_html=True)
-        else:
-            for idx, a in enumerate(reversed(articles[-10:])):
-                ts = a.get("saved_at", "")[:10]
-                preview = a.get("content", "")[:100]
-                st.markdown(f"""<div class="tweet-card">
-                    <div class="tweet-num">{ts}</div>
-                    <div style="color:#d8d8e8; font-size:13px;">{preview}...</div>
-                </div>""", unsafe_allow_html=True)
-                if st.button("Load", key=f"aw_load_{idx}", use_container_width=True):
-                    st.session_state["aw_result"] = a.get("content", "")
-                    st.rerun()
+    # Hidden buttons for dock
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("aw_write", key="aw_scratch"):
+        if seed_text:
+            with st.spinner("Writing full article..."):
+                voice = get_voice_context()
+                pp = analyze_personal_patterns()
+                pp_note = ""
+                if pp:
+                    pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
+                _aw_sports = ""
+                try: _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
+                except Exception: pass
+                _aw_research = ""
+                if st.session_state.get("aw_research_data", {}).get("answer"):
+                    _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research_data']['answer'][:1500]}"
+                prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
+                st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
+    if st.button("aw_outline", key="aw_outline"):
+        if seed_text:
+            with st.spinner("Generating outline..."):
+                voice = get_voice_context()
+                prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
+                st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
+    if st.button("aw_research", key="aw_research_btn"):
+        if seed_text and pplx_available():
+            with st.spinner("Researching with Perplexity..."):
+                _research = pplx_research(seed_text)
+                if _research.get("answer"):
+                    st.session_state["aw_research_data"] = _research
+                else:
+                    st.warning("Research failed — check API key.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Output + editor
+    if st.session_state.get("aw_result"):
+        st.markdown(f'<div class="output-box">{st.session_state["aw_result"]}</div>', unsafe_allow_html=True)
+        edited = st.text_area("Edit article:", value=st.session_state["aw_result"], height=300, key="aw_editor", label_visibility="collapsed")
+
+        # --- Bottom bar ---
+        st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+        <div class="cs-bottom-bar cs-aw-bottom" style="display:flex;gap:8px;justify-content:center;">
+          <span class="cs-bot" data-bot="aw_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save</span>
+          <span class="cs-bot" data-bot="aw_articles" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">My Articles</span>
+          <span class="cs-bot" data-bot="aw_copy" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Copy</span>
+          <span class="cs-bot" data-bot="aw_verify" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Verify</span>
+        </div>''', unsafe_allow_html=True)
+
+        # Hidden buttons for bottom bar
+        st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+        if st.button("aw_save", key="aw_save"):
+            articles = load_json("saved_articles.json", [])
+            articles.append({"content": edited, "seed": seed_text[:200], "saved_at": datetime.now().isoformat()})
+            save_json("saved_articles.json", articles)
+            st.success("Article saved.")
+        if st.button("aw_articles", key="aw_show_articles"):
+            st.session_state["_aw_show_articles"] = True
+        if st.button("aw_copy", key="aw_copy"):
+            st.code(edited, language=None)
+            st.info("Text displayed above -- copy from there.")
+        if st.button("aw_verify", key="aw_verify"):
+            if pplx_available():
+                with st.spinner("Fact-checking..."):
+                    _fc = pplx_fact_check(edited)
+                if _fc.get("answer"):
+                    st.session_state["_aw_page_verify"] = _fc
+                else:
+                    st.warning("Couldn't verify — check API key.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        _vr = st.session_state.get("_aw_page_verify")
+        if _vr:
+            _va = _vr["answer"]
+            _vc = _vr.get("citations", [])
+            _color = "#2DD4BF" if "accurate" in _va.lower() or "correct" in _va.lower() else "#FBBF24"
+            st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_color};padding:10px 14px;border-radius:6px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.6;">{_va}</div>', unsafe_allow_html=True)
+            if _vc:
+                st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-top:4px;">Sources: {", ".join(str(c) for c in _vc[:3])}</div>', unsafe_allow_html=True)
+
+    # ── My Articles modal ──
+    if st.session_state.pop("_aw_show_articles", False):
+        @st.dialog("My Articles", width="large")
+        def _aw_articles_dialog():
+            if st.button("Create New", key="aw_dlg_new", use_container_width=True, type="primary"):
+                st.session_state["aw_create_new"] = True
+                st.rerun()
+            articles = load_json("saved_articles.json", [])
+            if not articles:
+                st.markdown('<div class="output-box">No saved articles yet.</div>', unsafe_allow_html=True)
+            else:
+                for idx, a in enumerate(reversed(articles[-10:])):
+                    ts = a.get("saved_at", "")[:10]
+                    preview = a.get("content", "")[:100]
+                    st.markdown(f"""<div class="tweet-card">
+                        <div class="tweet-num">{ts}</div>
+                        <div style="color:#d8d8e8; font-size:13px;">{preview}...</div>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button("Load", key=f"aw_load_{idx}", use_container_width=True):
+                        st.session_state["aw_result"] = a.get("content", "")
+                        st.rerun(scope="app")
+        _aw_articles_dialog()
+
+    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5596,41 +5622,70 @@ def page_tweet_history():
         return
 
     # Search
-    search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search")
+    search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search", label_visibility="collapsed")
 
-    # Filter buttons as columns
-    filters = ["All Posts", "Punchy Tweet", "Normal Posts", "Long Posts", "High Engagement",
-               "Viral Posts", "Conversation Starters", "Evergreen", "Hot", "Original"]
-    filter_type = st.selectbox("Filter", filters, key="th_filter")
+    # Filter pills
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Filter</div>', unsafe_allow_html=True)
+    _th_filters = ["All", "Punchy", "Normal", "Long", "Hot"]
+    _th_filter_map = {"All": "All Posts", "Punchy": "Punchy Tweet", "Normal": "Normal Posts", "Long": "Long Posts", "Hot": "High Engagement"}
+    if "th_filter_sel" not in st.session_state:
+        st.session_state.th_filter_sel = "All"
+    _thf_cols = st.columns(len(_th_filters))
+    for _tfi, _tf in enumerate(_th_filters):
+        with _thf_cols[_tfi]:
+            if st.button(_tf, key=f"th_filt_{_tfi}", type="primary" if st.session_state.th_filter_sel == _tf else "secondary"):
+                st.session_state.th_filter_sel = _tf
+                st.rerun()
+    filter_type = _th_filter_map.get(st.session_state.th_filter_sel, "All Posts")
 
-    # AI filter buttons inline
-    ac1, ac2, ac3, ac4 = st.columns(4)
-    with ac1:
-        if st.button("↑ Best Hooks", key="th_ai_hooks", use_container_width=True):
-            top = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
-            hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
-            st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
-    with ac2:
-        if st.button("↓ Missed Shots", key="th_ai_worst", use_container_width=True):
-            worst = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
-            st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
-    with ac3:
-        if st.button("⊙ Style Report", key="th_ai_voice", use_container_width=True):
-            sample = [t.get("text", "") for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
-            with st.spinner("Analyzing your voice..."):
-                result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
-                st.session_state["th_ai_result"] = result
-    with ac4:
-        if st.button("≋ Top Subjects", key="th_ai_topics", use_container_width=True):
-            sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
-            with st.spinner("Analyzing topics..."):
-                result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
-                st.session_state["th_ai_result"] = result
+    # AI action icon dock
+    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:12px 0 8px;">AI ANALYSIS</div>
+    <div class="cs-icon-dock cs-th-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="th_hooks" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 22h20L12 2z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">HOOKS</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="th_missed" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M2 12h20" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">MISSED</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="th_style" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">STYLE</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="th_subjects" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="9" x2="21" y2="9" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="9" y2="9" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">SUBJECTS</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden buttons for AI dock
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("th_hooks", key="th_ai_hooks"):
+        top = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
+        hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
+        st.session_state["th_ai_result"] = "Your best-performing opening hooks:\n\n" + "\n".join([f"{i+1}. {h}" for i, h in enumerate(hooks)])
+    if st.button("th_missed", key="th_ai_worst"):
+        worst = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("viewCount", 0) if t.get("viewCount", 0) > 0 else 999999)[:10]
+        st.session_state["th_ai_result"] = "Lowest performing tweets (by views):\n\n" + "\n".join([f"- {t.get('text','')[:80]}... ({t.get('viewCount',0):,} views)" for t in worst])
+    if st.button("th_style", key="th_ai_voice"):
+        sample = [t.get("text", "") for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
+        with st.spinner("Analyzing your voice..."):
+            result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
+            st.session_state["th_ai_result"] = result
+    if st.button("th_subjects", key="th_ai_topics"):
+        sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
+        with st.spinner("Analyzing topics..."):
+            result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
+            st.session_state["th_ai_result"] = result
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.get("th_ai_result"):
         st.markdown(f'<div class="output-box">{st.session_state["th_ai_result"]}</div>', unsafe_allow_html=True)
 
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+    st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
+
+    # ── JS: hide hidden buttons + wire dock clicks ──
 
     # ── Hall of Fame ──
     def _eng_score(t):
@@ -5788,30 +5843,31 @@ def page_algo_analyzer():
     st.markdown('<div class="main-header">ALGORITHM <span>SCORE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Run your content through the algorithm lens before you post.</div>', unsafe_allow_html=True)
 
-    ideas = load_json("saved_ideas.json", [])
-    if ideas:
-        col_ideas, col_analyze = st.columns([1, 2])
-        with col_ideas:
-            st.markdown('<div style="font-size:9px;color:#3a5070;letter-spacing:2px;font-weight:700;margin-bottom:8px;">SAVED IDEAS</div>', unsafe_allow_html=True)
-            for i, idea in enumerate(reversed(ideas[-15:])):
-                if st.button(idea.get("text", "")[:60] + "...", key=f"aa_idea_{i}", use_container_width=True):
-                    st.session_state["aa_text"] = idea.get("text", "")
-    else:
-        col_analyze = st.container()
+    st.markdown('<div style="background:#0d1929;border-left:3px solid #00E5CC;border-radius:8px;padding:14px 16px;font-size:12px;color:#5a8090;margin-bottom:16px;"><strong style="color:#00E5CC;">Example output:</strong> Score 72/100 — Strong hook, weak payoff. Opens with a bold claim but the final line doesn\'t land. Suggestion: End with a question to drive replies.</div>', unsafe_allow_html=True)
+    content = st.text_area("Content to Analyze:", height=160, key="aa_input",
+        value=st.session_state.get("aa_text", ""),
+        placeholder="Paste or type content to analyze against the algorithm...", label_visibility="collapsed")
+    char_len = len(content)
+    cls = "char-over" if char_len > 280 else ""
+    st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
 
-    with col_analyze:
-        st.markdown('<div style="background:#0d1929;border-left:3px solid #00E5CC;border-radius:8px;padding:14px 16px;font-size:12px;color:#5a8090;margin-bottom:16px;"><strong style="color:#00E5CC;">Example output:</strong> Score 72/100 — Strong hook, weak payoff. Opens with a bold claim but the final line doesn\'t land. Suggestion: End with a question to drive replies.</div>', unsafe_allow_html=True)
-        content = st.text_area("Content to Analyze:", height=160, key="aa_input",
-            value=st.session_state.get("aa_text", ""),
-            placeholder="Paste or type content to analyze against the algorithm...")
-        char_len = len(content)
-        cls = "char-over" if char_len > 280 else ""
-        st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
+    # --- Analyze button as primary dock style ---
+    st.markdown('''<div class="cs-icon-dock cs-algo-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="aa_analyze" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">ANALYZE</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
 
-        if st.button("⚡ Analyze", use_container_width=True, key="aa_run"):
-            if content.strip():
-                with st.spinner("Analyzing against the algorithm..."):
-                    prompt = f"""Analyze this content for X algorithm performance:
+    # Hidden button
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    _aa_run = st.button("aa_analyze", key="aa_run")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if _aa_run:
+        if content.strip():
+            with st.spinner("Analyzing against the algorithm..."):
+                prompt = f"""Analyze this content for X algorithm performance:
 
 "{content}"
 
@@ -5831,40 +5887,42 @@ Then give:
 
 Return as JSON:
 {{"scores": {{"Hook Strength": {{"score": 7, "note": "..."}}, ...}}, "overall": 72, "improvement": "...", "rewrite": "..."}}"""
-                    raw = call_claude(prompt, max_tokens=800)
-                    try:
-                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                        data = json.loads(json_match.group()) if json_match else None
-                    except Exception:
-                        data = None
+                raw = call_claude(prompt, max_tokens=800)
+                try:
+                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                    data = json.loads(json_match.group()) if json_match else None
+                except Exception:
+                    data = None
 
-                    if data and "scores" in data:
-                        overall = data.get("overall", 0)
-                        color = "#22c55e" if overall >= 75 else "#2DD4BF" if overall >= 55 else "#ef4444"
-                        st.markdown(f"""<div style="text-align:center; padding:20px 0;">
-                            <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{overall}</div>
-                            <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Algorithm Score / 100</div>
+                if data and "scores" in data:
+                    overall = data.get("overall", 0)
+                    color = "#22c55e" if overall >= 75 else "#2DD4BF" if overall >= 55 else "#ef4444"
+                    st.markdown(f"""<div style="text-align:center; padding:20px 0;">
+                        <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{overall}</div>
+                        <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Algorithm Score / 100</div>
+                    </div>""", unsafe_allow_html=True)
+
+                    for metric, val in data["scores"].items():
+                        score = val.get("score", 0) if isinstance(val, dict) else val
+                        note = val.get("note", "") if isinstance(val, dict) else ""
+                        bar_color = "#22c55e" if score >= 8 else "#2DD4BF" if score >= 6 else "#ef4444"
+                        st.markdown(f"""<div style="margin-bottom:12px;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span class="metric-label">{metric}</span>
+                                <span class="metric-score">{score}/10</span>
+                            </div>
+                            <div class="score-bar-wrap"><div class="score-bar-fill" style="width:{score*10}%; background:{bar_color};"></div></div>
+                            <div style="font-size:12px; color:#888899;">{note}</div>
                         </div>""", unsafe_allow_html=True)
 
-                        for metric, val in data["scores"].items():
-                            score = val.get("score", 0) if isinstance(val, dict) else val
-                            note = val.get("note", "") if isinstance(val, dict) else ""
-                            bar_color = "#22c55e" if score >= 8 else "#2DD4BF" if score >= 6 else "#ef4444"
-                            st.markdown(f"""<div style="margin-bottom:12px;">
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span class="metric-label">{metric}</span>
-                                    <span class="metric-score">{score}/10</span>
-                                </div>
-                                <div class="score-bar-wrap"><div class="score-bar-fill" style="width:{score*10}%; background:{bar_color};"></div></div>
-                                <div style="font-size:12px; color:#888899;">{note}</div>
-                            </div>""", unsafe_allow_html=True)
+                    if data.get("improvement"):
+                        st.markdown(f'**Top Improvement:** {data["improvement"]}')
+                    if data.get("rewrite"):
+                        st.markdown(f'<div class="output-box"><strong>Optimized Version:</strong>\n\n{data["rewrite"]}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
 
-                        if data.get("improvement"):
-                            st.markdown(f'**Top Improvement:** {data["improvement"]}')
-                        if data.get("rewrite"):
-                            st.markdown(f'<div class="output-box"><strong>Optimized Version:</strong>\n\n{data["rewrite"]}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+    # ── JS: hide hidden buttons + wire dock clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5901,13 +5959,26 @@ def page_health_check():
     else:
         st.caption("Never run — click below to get your health score.")
 
-    hcb1, hcb2 = st.columns([2, 1])
-    with hcb1:
-        run_check = st.button("⚡ Run Account Audit", use_container_width=True, key="hc_run", type="primary")
-    with hcb2:
-        if hc_cache.get("data") and st.button("Clear Results", use_container_width=True, key="hc_clear"):
+    # --- Audit dock ---
+    st.markdown('''<div class="cs-icon-dock cs-hc-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="hc_run" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">AUDIT</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="hc_clear" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">CLEAR</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden buttons for dock
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    run_check = st.button("hc_run", key="hc_run")
+    if st.button("hc_clear", key="hc_clear"):
+        if hc_cache.get("data"):
             save_json("health_check_cache.json", {})
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if run_check:
         with st.spinner("Pulling tweets and analyzing..."):
@@ -5981,6 +6052,8 @@ Return as JSON:
             for r in data["recommendations"]:
                 st.markdown(f"- {r}")
 
+    # ── JS: hide hidden buttons + wire dock clicks ──
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: ACCOUNT PULSE
@@ -5997,13 +6070,23 @@ def page_account_pulse():
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
 
-    if st.button("↺ Refresh", use_container_width=True, key="ap_load", type="primary"):
+    # --- Refresh as primary dock button ---
+    st.markdown('''<div class="cs-icon-dock cs-ap-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="ap_refresh" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#060A12" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REFRESH</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("ap_refresh", key="ap_load"):
         with st.spinner("Refreshing..."):
             user = fetch_user_info(TYLER_HANDLE)
             tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     user = st.session_state.get("ap_user", {})
     tweets = st.session_state.get("ap_tweets", [])
@@ -6047,19 +6130,33 @@ def page_account_pulse():
             eng_rate = round((total_likes / max(total_views, 1)) * 100, 2)
             st.markdown(f'<div class="stat-card"><div class="stat-num">{eng_rate}%</div><div class="stat-label">Engagement Rate</div></div>', unsafe_allow_html=True)
 
-        # Top 5 tweets
-        _ts1, _ts2 = st.columns([3, 1])
-        with _ts1:
-            st.markdown("### Top Tweets")
-        with _ts2:
-            _sort_by = st.selectbox("Sort", ["Likes", "Views", "Replies", "RTs"], label_visibility="collapsed", key="stats_sort")
+        # Top 5 tweets - sort pills
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Sort By</div>', unsafe_allow_html=True)
+        _sort_opts = ["Likes", "Views", "Replies", "RTs"]
+        if "stats_sort_sel" not in st.session_state:
+            st.session_state.stats_sort_sel = "Likes"
+        _sort_cols = st.columns(len(_sort_opts))
+        for _si, _so in enumerate(_sort_opts):
+            with _sort_cols[_si]:
+                if st.button(_so, key=f"ap_sort_{_si}", type="primary" if st.session_state.stats_sort_sel == _so else "secondary"):
+                    st.session_state.stats_sort_sel = _so
+                    st.rerun()
+        _sort_by = st.session_state.stats_sort_sel
         _sort_map = {"Likes": "likeCount", "Views": "viewCount", "Replies": "replyCount", "RTs": "retweetCount"}
         top5 = sorted(tweets, key=lambda t: t.get(_sort_map[_sort_by], 0), reverse=True)[:5]
         for t in top5:
             render_tweet_card(t)
 
-        # AI analysis
-        if st.button("⚡ Pulse", key="ap_ai"):
+        # AI analysis — Pulse dock button
+        st.markdown('''<div class="cs-icon-dock cs-ap-pulse-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="ap_pulse" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#060A12" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">PULSE</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
+
+        st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+        if st.button("ap_pulse", key="ap_ai"):
             with st.spinner("Analyzing patterns..."):
                 tweet_summary = "\n".join([f"- {t.get('text','')[:100]} (Likes:{t.get('likeCount',0)}, Views:{t.get('viewCount',0)})" for t in tweets[:20]])
                 result = call_claude(f"""Analyze Tyler's recent posting patterns:
@@ -6076,6 +6173,9 @@ Give:
 3. CONTENT MIX ASSESSMENT - What should he post more/less of?
 4. AVERAGE DAILY GROWTH ESTIMATE - Based on current trajectory""", max_tokens=800)
                 st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── JS: hide hidden buttons + wire dock clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6085,26 +6185,33 @@ def page_account_researcher():
     st.markdown('<div class="main-header">PROFILE <span>ANALYZER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Research any X account. Understand their strategy.</div>', unsafe_allow_html=True)
 
-    col_left, col_right = st.columns([1, 1])
+    handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input", label_visibility="collapsed")
 
-    with col_left:
-        handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input")
-        if st.button("⚡ Research", use_container_width=True, key="ar_run", type="primary"):
-            if handle.strip():
-                handle_clean = handle.strip().lstrip("@")
-                with st.spinner(f"Researching @{handle_clean}..."):
-                    tweets = fetch_tweets(f"from:{handle_clean}", count=30)
-                    user_info = fetch_user_info(handle_clean)
-                    recent = load_json("recent_searches.json", [])
-                    if handle_clean not in [r.get("handle") for r in recent]:
-                        recent.append({"handle": handle_clean, "searched_at": datetime.now().isoformat()})
-                        save_json("recent_searches.json", recent[-20:])
-                    if tweets:
-                        st.session_state["ar_tweets"] = tweets
-                        st.session_state["ar_user"] = user_info
-                        st.session_state["ar_handle"] = handle_clean
-                        tweet_texts = "\n---\n".join([f"{t.get('text','')}\nLikes:{t.get('likeCount',0)} RTs:{t.get('retweetCount',0)} Views:{t.get('viewCount',0)}" for t in tweets[:20]])
-                        raw = call_claude(f"""Analyze @{handle_clean}'s X account. Return ONLY a JSON object, no markdown, no explanation.
+    # --- Research dock ---
+    st.markdown('''<div class="cs-icon-dock cs-ar-dock" style="display:flex;gap:8px;justify-content:center;margin:12px 0 16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="ar_research" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#060A12" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">RESEARCH</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("ar_research", key="ar_run"):
+        if handle.strip():
+            handle_clean = handle.strip().lstrip("@")
+            with st.spinner(f"Researching @{handle_clean}..."):
+                tweets = fetch_tweets(f"from:{handle_clean}", count=30)
+                user_info = fetch_user_info(handle_clean)
+                recent = load_json("recent_searches.json", [])
+                if handle_clean not in [r.get("handle") for r in recent]:
+                    recent.append({"handle": handle_clean, "searched_at": datetime.now().isoformat()})
+                    save_json("recent_searches.json", recent[-20:])
+                if tweets:
+                    st.session_state["ar_tweets"] = tweets
+                    st.session_state["ar_user"] = user_info
+                    st.session_state["ar_handle"] = handle_clean
+                    tweet_texts = "\n---\n".join([f"{t.get('text','')}\nLikes:{t.get('likeCount',0)} RTs:{t.get('retweetCount',0)} Views:{t.get('viewCount',0)}" for t in tweets[:20]])
+                    raw = call_claude(f"""Analyze @{handle_clean}'s X account. Return ONLY a JSON object, no markdown, no explanation.
 
 Tweets:
 {tweet_texts}
@@ -6122,101 +6229,110 @@ Return this exact JSON structure:
   "tylers_edge": "one sentence on where Tyler's former-player credibility beats this account",
   "steal_worthy": ["tactic to steal 1", "tactic to steal 2"]
 }}""", max_tokens=1200)
-                        try:
-                            raw_clean = raw.strip()
-                            if raw_clean.startswith("```"):
-                                raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
-                            st.session_state["ar_analysis"] = json.loads(raw_clean)
-                        except Exception:
-                            st.session_state["ar_analysis"] = {"summary": raw}
-                    else:
-                        st.warning(f"Could not fetch tweets for @{handle_clean}")
+                    try:
+                        raw_clean = raw.strip()
+                        if raw_clean.startswith("```"):
+                            raw_clean = raw_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                        st.session_state["ar_analysis"] = json.loads(raw_clean)
+                    except Exception:
+                        st.session_state["ar_analysis"] = {"summary": raw}
+                else:
+                    st.warning(f"Could not fetch tweets for @{handle_clean}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        # Recent searches
-        st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-        st.markdown("**Recent Searches**")
-        recent = load_json("recent_searches.json", [])
-        for r in reversed(recent[-8:]):
-            if st.button(f"@{r.get('handle','')}  ·  {r.get('searched_at','')[:10]}", key=f"ar_recent_{r.get('handle')}", use_container_width=True):
-                st.session_state["ar_handle_prefill"] = r.get("handle", "")
+    # Recent searches as pills
+    recent = load_json("recent_searches.json", [])
+    _recent_rev = list(reversed(recent[-8:]))
+    if _recent_rev:
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Recent</div>', unsafe_allow_html=True)
+        _rc = st.columns(min(len(_recent_rev), 6))
+        for _ri, r in enumerate(_recent_rev[:6]):
+            with _rc[_ri]:
+                if st.button(f"@{r.get('handle','')}", key=f"ar_recent_{r.get('handle')}", type="secondary"):
+                    st.session_state["ar_handle_input"] = r.get("handle", "")
+                    st.rerun()
 
-        # Top recent tweets
-        tweets = st.session_state.get("ar_tweets", [])
-        if tweets:
-            hdl = st.session_state.get("ar_handle", "")
-            ui = st.session_state.get("ar_user", {})
-            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-            st.markdown(f"**@{hdl}** — {ui.get('followersCount',0):,} followers")
-            for t in tweets[:8]:
+    st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
+
+    # Analysis results inline
+    analysis = st.session_state.get("ar_analysis")
+    if not analysis:
+        st.markdown('<div style="color:#555577; text-align:center; padding:40px 20px; font-size:14px;">Enter a handle and click Research</div>', unsafe_allow_html=True)
+    else:
+        hdl = st.session_state.get("ar_handle", "")
+        ui = st.session_state.get("ar_user", {})
+        st.markdown(f'<div style="font-size:11px; letter-spacing:2px; color:#2DD4BF; font-weight:700; margin-bottom:4px;">ACCOUNT ANALYSIS — @{hdl}</div>', unsafe_allow_html=True)
+        if ui.get("followersCount"):
+            st.markdown(f'<div style="font-size:12px;color:#666888;margin-bottom:16px;">{ui.get("followersCount",0):,} followers</div>', unsafe_allow_html=True)
+
+        def ar_section(title, content):
+            st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
+            if isinstance(content, list):
+                items = "".join([f'<li style="color:#c0c0d8; font-size:13px; margin-bottom:4px;">{i}</li>' for i in content])
+                st.markdown(f'<ul style="margin:0; padding-left:18px;">{items}</ul>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="color:#c0c0d8; font-size:13px; line-height:1.6;">{content}</div>', unsafe_allow_html=True)
+
+        if analysis.get("summary"):
+            ar_section("Content Strategy Summary", analysis["summary"])
+        if analysis.get("content_themes"):
+            ar_section("Content Themes", analysis["content_themes"])
+        if analysis.get("tone") or analysis.get("voice") or analysis.get("formatting"):
+            st.markdown('<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">Writing Style</div>', unsafe_allow_html=True)
+            for label, key in [("Tone", "tone"), ("Voice", "voice"), ("Formatting", "formatting")]:
+                if analysis.get(key):
+                    st.markdown(f'<div style="color:#c0c0d8; font-size:13px; margin-bottom:6px;"><span style="color:#888899;">{label}:</span> {analysis[key]}</div>', unsafe_allow_html=True)
+        if analysis.get("engagement_tactics"):
+            ar_section("Engagement Tactics", analysis["engagement_tactics"])
+        if analysis.get("unique_characteristics"):
+            ar_section("Unique Characteristics", analysis["unique_characteristics"])
+        if analysis.get("content_patterns"):
+            ar_section("Content Patterns", analysis["content_patterns"])
+        if analysis.get("tylers_edge"):
+            ar_section("Tyler's Edge", analysis["tylers_edge"])
+        if analysis.get("steal_worthy"):
+            ar_section("Steal-Worthy Tactics", analysis["steal_worthy"])
+
+        # Save Voice Style bottom bar
+        st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
+        hdl_for_save = st.session_state.get("ar_handle", "")
+        existing_styles = load_json("voice_styles.json", [])
+        already_saved = any(s.get("handle") == hdl_for_save for s in existing_styles)
+        if already_saved:
+            st.markdown(f'<div style="color:#4ade80;font-size:13px;margin-bottom:8px;">Voice saved -- available in Creator Studio</div>', unsafe_allow_html=True)
+            if st.button("Remove Voice Style", key="ar_remove_voice", type="secondary"):
+                existing_styles = [s for s in existing_styles if s.get("handle") != hdl_for_save]
+                save_json("voice_styles.json", existing_styles)
+                st.rerun()
+        else:
+            st.markdown('''<div class="cs-bottom-bar cs-ar-bottom" style="display:flex;gap:8px;justify-content:center;">
+              <span class="cs-bot" data-bot="ar_save_voice" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save as Voice Style</span>
+            </div>''', unsafe_allow_html=True)
+            st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+            if st.button("ar_save_voice", key="ar_save_voice"):
+                tweets_sample = [t.get("text", "") for t in st.session_state.get("ar_tweets", [])[:15] if not t.get("text","").startswith("@") and len(t.get("text","")) > 30]
+                style_entry = {
+                    "name": f"@{hdl_for_save}",
+                    "handle": hdl_for_save,
+                    "summary": analysis.get("summary", "") + " Tone: " + analysis.get("tone", "") + " Voice: " + analysis.get("voice", ""),
+                    "tweets": tweets_sample,
+                    "saved_at": datetime.now().isoformat(),
+                }
+                existing_styles.append(style_entry)
+                save_json("voice_styles.json", existing_styles)
+                st.success(f"@{hdl_for_save} voice style saved! Now available in Creator Studio.")
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Top tweets as cards
+        _ar_tweets = st.session_state.get("ar_tweets", [])
+        if _ar_tweets:
+            st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:8px;">TOP TWEETS</div>', unsafe_allow_html=True)
+            for t in _ar_tweets[:6]:
                 render_tweet_card(t)
 
-    with col_right:
-        analysis = st.session_state.get("ar_analysis")
-        if not analysis:
-            st.markdown('<div style="color:#555577; text-align:center; padding:60px 20px; font-size:14px;">Enter a handle and click Research Account</div>', unsafe_allow_html=True)
-        else:
-            hdl = st.session_state.get("ar_handle", "")
-            st.markdown(f"""<div style="font-size:11px; letter-spacing:2px; color:#2DD4BF; font-weight:700; margin-bottom:16px;">ACCOUNT ANALYSIS — @{hdl}</div>""", unsafe_allow_html=True)
-
-            def ar_section(title, content):
-                st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
-                if isinstance(content, list):
-                    items = "".join([f'<li style="color:#c0c0d8; font-size:13px; margin-bottom:4px;">{i}</li>' for i in content])
-                    st.markdown(f'<ul style="margin:0; padding-left:18px;">{items}</ul>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div style="color:#c0c0d8; font-size:13px; line-height:1.6;">{content}</div>', unsafe_allow_html=True)
-
-            if analysis.get("summary"):
-                ar_section("Content Strategy Summary", analysis["summary"])
-
-            if analysis.get("content_themes"):
-                ar_section("Content Themes", analysis["content_themes"])
-
-            if analysis.get("tone") or analysis.get("voice") or analysis.get("formatting"):
-                st.markdown('<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">Writing Style</div>', unsafe_allow_html=True)
-                for label, key in [("Tone", "tone"), ("Voice", "voice"), ("Formatting", "formatting")]:
-                    if analysis.get(key):
-                        st.markdown(f'<div style="color:#c0c0d8; font-size:13px; margin-bottom:6px;"><span style="color:#888899;">{label}:</span> {analysis[key]}</div>', unsafe_allow_html=True)
-
-            if analysis.get("engagement_tactics"):
-                ar_section("Engagement Tactics", analysis["engagement_tactics"])
-
-            if analysis.get("unique_characteristics"):
-                ar_section("Unique Characteristics", analysis["unique_characteristics"])
-
-            if analysis.get("content_patterns"):
-                ar_section("Content Patterns", analysis["content_patterns"])
-
-            if analysis.get("tylers_edge"):
-                ar_section("Tyler's Edge", analysis["tylers_edge"])
-
-            if analysis.get("steal_worthy"):
-                ar_section("Steal-Worthy Tactics", analysis["steal_worthy"])
-
-            st.markdown("---")
-            hdl_for_save = st.session_state.get("ar_handle", "")
-            existing_styles = load_json("voice_styles.json", [])
-            already_saved = any(s.get("handle") == hdl_for_save for s in existing_styles)
-            if already_saved:
-                st.markdown(f'<div style="color:#4ade80;font-size:13px;">✓ @{hdl_for_save} voice saved — available in Creator Studio</div>', unsafe_allow_html=True)
-                if st.button("✕ Remove Voice Style", key="ar_remove_voice"):
-                    existing_styles = [s for s in existing_styles if s.get("handle") != hdl_for_save]
-                    save_json("voice_styles.json", existing_styles)
-                    st.rerun()
-            else:
-                if st.button("➕ Save as Voice Style", key="ar_save_voice", use_container_width=True):
-                    tweets_sample = [t.get("text", "") for t in st.session_state.get("ar_tweets", [])[:15] if not t.get("text","").startswith("@") and len(t.get("text","")) > 30]
-                    style_entry = {
-                        "name": f"@{hdl_for_save}",
-                        "handle": hdl_for_save,
-                        "summary": analysis.get("summary", "") + " Tone: " + analysis.get("tone", "") + " Voice: " + analysis.get("voice", ""),
-                        "tweets": tweets_sample,
-                        "saved_at": datetime.now().isoformat(),
-                    }
-                    existing_styles.append(style_entry)
-                    save_json("voice_styles.json", existing_styles)
-                    st.success(f"@{hdl_for_save} voice style saved! Now available in Creator Studio → Voice dropdown.")
-                    st.rerun()
+    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6294,26 +6410,45 @@ def page_reply_guy():
             _rg_actions["replied"] = replied_tweets[-500:]
             _save_actions_gist(_rg_actions)
 
-    # ── Top Controls: Engagement Targets + My Tweet Replies (merged) ──
-    _rg_col_left, _rg_col_right = st.columns([3, 2])
-    with _rg_col_left:
-        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#2DD4BF;font-weight:700;opacity:0.7;margin-bottom:6px;">ENGAGEMENT TARGETS</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 1.2, 0.9])
-        with c1:
-            list_source = st.selectbox("List", list(st.session_state.custom_lists.keys()),
-                                       key="rg_source", label_visibility="collapsed")
-        with c2:
-            do_load = st.button("↓ Load Feed", key="rg_load_posts", use_container_width=True, type="primary")
-        with c3:
-            if st.button("+ New", key="rg_new_list_btn", use_container_width=True):
-                st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
-    with _rg_col_right:
-        st.markdown('<div style="font-size:10px;letter-spacing:2px;color:#2DD4BF;font-weight:700;opacity:0.7;margin-bottom:6px;">MY TWEET REPLIES</div>', unsafe_allow_html=True)
-        c4, c5 = st.columns(2)
-        with c4:
-            load_all = st.button("↓ My Replies", key="rg_load_all", use_container_width=True)
-        with c5:
-            load_verified = st.button("↓ Verified Only", key="rg_load_verified", use_container_width=True, type="primary")
+    # ── List selection as pills ──
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Engagement List</div>', unsafe_allow_html=True)
+    _list_keys = list(st.session_state.custom_lists.keys())
+    if "rg_source_sel" not in st.session_state:
+        st.session_state.rg_source_sel = _list_keys[0] if _list_keys else ""
+    _lc = st.columns(min(len(_list_keys) + 1, 8))
+    for _li, _lk in enumerate(_list_keys[:7]):
+        with _lc[_li]:
+            if st.button(_lk, key=f"rg_list_{_li}", type="primary" if st.session_state.rg_source_sel == _lk else "secondary"):
+                st.session_state.rg_source_sel = _lk
+                st.rerun()
+    with _lc[min(len(_list_keys), 7)]:
+        if st.button("+ New", key="rg_new_list_btn", type="secondary"):
+            st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
+    list_source = st.session_state.rg_source_sel
+
+    # --- Action dock: Load Feed, My Replies, Verified ---
+    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:12px 0 8px;">ACTIONS</div>
+    <div class="cs-icon-dock cs-rg-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="rg_load" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">LOAD</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="rg_replies" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REPLIES</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="rg_verified" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="#5a7090" stroke-width="2"/><polyline points="22 4 12 14.01 9 11.01" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">VERIFIED</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden buttons for dock
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    do_load = st.button("rg_load", key="rg_load_posts")
+    load_all = st.button("rg_replies", key="rg_load_all")
+    load_verified = st.button("rg_verified", key="rg_load_verified")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.get("rg_show_new_list"):
         st.markdown("**Add X List**")
@@ -6796,6 +6931,8 @@ def page_reply_guy():
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
+    # ── JS: hide hidden buttons + wire dock clicks ──
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: INSPIRATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6805,85 +6942,127 @@ def page_inspiration():
 
     inspo = load_inspiration_gist()
 
-    col_add, col_view = st.columns([1, 1])
+    # Search + Add at top
+    search = st.text_input("Search:", placeholder="Filter by keyword or tag...", key="insp_search", label_visibility="collapsed")
 
-    with col_add:
-        st.markdown("### Save to Vault")
-        inspo_text = st.text_area("Tweet text:", height=100, key="insp_text",
-            placeholder="Paste the tweet that caught your eye...")
-        inspo_author = st.text_input("Author:", placeholder="@username", key="insp_author")
-        inspo_tags = st.text_input("Tags (comma-separated):", placeholder="hook, thread, broncos", key="insp_tags")
-        inspo_likes = st.text_input("Likes (optional):", value="", placeholder="e.g. 1200", key="insp_likes")
-        inspo_views = st.text_input("Views (optional):", value="", placeholder="e.g. 45000", key="insp_views")
+    # --- Add button as bottom bar style ---
+    st.markdown('''<div class="cs-bottom-bar cs-ib-bottom" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
+      <span class="cs-bot cs-idock-primary" data-bot="ib_add" style="height:52px;padding:0 24px;border-radius:14px;font-size:11px;font-weight:600;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">+ Add to Vault</span>
+    </div>''', unsafe_allow_html=True)
 
-        if st.button("↓ Bank It", use_container_width=True, key="insp_save", type="primary"):
-            if inspo_text.strip():
-                inspo.append({
-                    "text": inspo_text,
-                    "author": inspo_author,
-                    "tags": [t.strip() for t in inspo_tags.split(",") if t.strip()],
-                    "likes": int(inspo_likes) if str(inspo_likes).strip().isdigit() else 0,
-                    "views": int(inspo_views) if str(inspo_views).strip().isdigit() else 0,
-                    "saved_at": datetime.now().isoformat(),
-                })
-                save_inspiration_gist(inspo)
-                st.success("Saved to vault.")
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("ib_add", key="insp_show_add"):
+        st.session_state["_ib_show_add"] = True
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Add form as modal
+    if st.session_state.pop("_ib_show_add", False):
+        @st.dialog("Add to Vault", width="large")
+        def _ib_add_dialog():
+            inspo_text = st.text_area("Tweet text:", height=100, key="insp_text",
+                placeholder="Paste the tweet that caught your eye...")
+            inspo_author = st.text_input("Author:", placeholder="@username", key="insp_author")
+            inspo_tags = st.text_input("Tags (comma-separated):", placeholder="hook, thread, broncos", key="insp_tags")
+            _mc1, _mc2 = st.columns(2)
+            with _mc1:
+                inspo_likes = st.text_input("Likes:", value="", placeholder="e.g. 1200", key="insp_likes")
+            with _mc2:
+                inspo_views = st.text_input("Views:", value="", placeholder="e.g. 45000", key="insp_views")
+            if st.button("Bank It", use_container_width=True, key="insp_save", type="primary"):
+                if inspo_text.strip():
+                    _inspo = load_inspiration_gist()
+                    _inspo.append({
+                        "text": inspo_text,
+                        "author": inspo_author,
+                        "tags": [t.strip() for t in inspo_tags.split(",") if t.strip()],
+                        "likes": int(inspo_likes) if str(inspo_likes).strip().isdigit() else 0,
+                        "views": int(inspo_views) if str(inspo_views).strip().isdigit() else 0,
+                        "saved_at": datetime.now().isoformat(),
+                    })
+                    save_inspiration_gist(_inspo)
+                    st.success("Saved to vault.")
+                    st.rerun(scope="app")
+        _ib_add_dialog()
+
+    # Filter tags as pills
+    _all_tags = set()
+    for item in inspo:
+        for t in item.get("tags", []):
+            _all_tags.add(t)
+    _all_tags = sorted(_all_tags)[:8]
+    if _all_tags:
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Tags</div>', unsafe_allow_html=True)
+        if "insp_tag_sel" not in st.session_state:
+            st.session_state.insp_tag_sel = ""
+        _tc = st.columns(min(len(_all_tags) + 1, 9))
+        with _tc[0]:
+            if st.button("All", key="insp_tag_all", type="primary" if not st.session_state.insp_tag_sel else "secondary"):
+                st.session_state.insp_tag_sel = ""
                 st.rerun()
+        for _ti, _tg in enumerate(_all_tags[:7]):
+            with _tc[_ti + 1]:
+                if st.button(_tg, key=f"insp_tag_{_ti}", type="primary" if st.session_state.insp_tag_sel == _tg else "secondary"):
+                    st.session_state.insp_tag_sel = _tg
+                    st.rerun()
+        tag_filter = st.session_state.insp_tag_sel
+    else:
+        tag_filter = ""
 
-    with col_view:
-        st.markdown(f"### Vault ({len(inspo)} saved)")
-        search = st.text_input("Search:", placeholder="Filter by keyword or tag...", key="insp_search")
-        tag_filter = st.text_input("Filter by tag:", placeholder="e.g. hook", key="insp_tag_filter")
+    st.markdown('<div style="height:1px;background:#1a2a45;margin:16px 0 14px;"></div>', unsafe_allow_html=True)
 
-        filtered = inspo
-        if search:
-            filtered = [i for i in filtered if search.lower() in i.get("text", "").lower() or search.lower() in i.get("author", "").lower()]
-        if tag_filter:
-            filtered = [i for i in filtered if tag_filter.lower() in [t.lower() for t in i.get("tags", [])]]
+    # Vault display
+    st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:8px;">Vault ({len(inspo)} saved)</div>', unsafe_allow_html=True)
 
-        # Handle delete via query param
-        del_idx = st.query_params.get("del_inspo")
-        if del_idx is not None:
-            try:
-                inspo.pop(int(del_idx))
-                save_inspiration_gist(inspo)
-            except Exception:
-                pass
-            st.query_params.pop("del_inspo", None)
-            st.rerun()
+    filtered = inspo
+    if search:
+        filtered = [i for i in filtered if search.lower() in i.get("text", "").lower() or search.lower() in i.get("author", "").lower()]
+    if tag_filter:
+        filtered = [i for i in filtered if tag_filter.lower() in [t.lower() for t in i.get("tags", [])]]
 
-        if not filtered:
-            st.markdown('<div class="output-box">No inspiration saved yet. Start collecting posts that hit different.</div>', unsafe_allow_html=True)
-        else:
-            real_indices = list(range(len(inspo)))
-            filtered_with_idx = [(inspo.index(item) if item in inspo else -1, item) for item in reversed(filtered[-20:])]
-            for real_idx, item in filtered_with_idx:
-                tags_html = " ".join([f'<span class="tag">{t}</span>' for t in item.get("tags", [])])
-                metrics = ""
-                if item.get("likes"):
-                    metrics += f"Likes: {item['likes']:,} "
-                if item.get("views"):
-                    metrics += f"Views: {item['views']:,}"
-                st.markdown(f"""<div class="tweet-card" style="position:relative;">
-                    <a href="?page=Idea Bank&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">✕</a>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; padding-right:20px;">
-                        <span class="tweet-num">{item.get('author','')}</span>
-                        <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
-                    </div>
-                    <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
-                    <div style="margin-bottom:4px;">{tags_html}</div>
-                    <div style="font-size:11px; color:#666688;">{metrics}</div>
-                </div>""", unsafe_allow_html=True)
-                import urllib.parse as _urlparse
-                _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
-                st.markdown(
-                    f'<a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" '
-                    f'style="display:block;width:100%;padding:8px 12px;background:#1e3a5f;'
-                    f'border:1px solid #2d5a8e;border-radius:4px;color:#7eb8f7;text-align:center;'
-                    f'text-decoration:none;font-size:14px;font-weight:600;margin-top:4px;">'
-                    f'→ Use in Creator Studio</a>',
-                    unsafe_allow_html=True
-                )
+    # Handle delete via query param
+    del_idx = st.query_params.get("del_inspo")
+    if del_idx is not None:
+        try:
+            inspo.pop(int(del_idx))
+            save_inspiration_gist(inspo)
+        except Exception:
+            pass
+        st.query_params.pop("del_inspo", None)
+        st.rerun()
+
+    if not filtered:
+        st.markdown('<div class="output-box">No inspiration saved yet. Start collecting posts that hit different.</div>', unsafe_allow_html=True)
+    else:
+        filtered_with_idx = [(inspo.index(item) if item in inspo else -1, item) for item in reversed(filtered[-20:])]
+        for real_idx, item in filtered_with_idx:
+            tags_html = " ".join([f'<span class="tag">{t}</span>' for t in item.get("tags", [])])
+            metrics = ""
+            if item.get("likes"):
+                metrics += f"Likes: {item['likes']:,} "
+            if item.get("views"):
+                metrics += f"Views: {item['views']:,}"
+            st.markdown(f"""<div class="tweet-card" style="position:relative;">
+                <a href="?page=Idea Bank&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">x</a>
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px; padding-right:20px;">
+                    <span class="tweet-num">{item.get('author','')}</span>
+                    <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
+                </div>
+                <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
+                <div style="margin-bottom:4px;">{tags_html}</div>
+                <div style="font-size:11px; color:#666688;">{metrics}</div>
+            </div>""", unsafe_allow_html=True)
+            import urllib.parse as _urlparse
+            _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
+            st.markdown(
+                f'<a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" '
+                f'style="display:block;width:100%;padding:8px 12px;background:#1e3a5f;'
+                f'border:1px solid #2d5a8e;border-radius:4px;color:#7eb8f7;text-align:center;'
+                f'text-decoration:none;font-size:14px;font-weight:600;margin-top:4px;">'
+                f'Use in Creator Studio</a>',
+                unsafe_allow_html=True
+            )
+
+    # ── JS: hide hidden buttons + wire bottom bar clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7048,14 +7227,25 @@ def page_rd_council():
 
     _sessions = _load_council_sessions()
 
-    # ── Action bar ──
-    _c1, _c2, _c3 = st.columns([1, 1, 2])
-    with _c1:
-        _run_m = st.button("Run Morning Session", key="rdc_morning", use_container_width=True, type="primary")
-    with _c2:
-        _run_e = st.button("Run Evening Session", key="rdc_evening", use_container_width=True)
-    with _c3:
-        st.markdown(f'<div style="font-size:12px;color:#3a5070;padding-top:10px;">Auto-scheduled 9 AM + 5 PM MST &middot; {len(_RD_AGENTS)} agents &middot; {len(_sessions)} sessions logged</div>', unsafe_allow_html=True)
+    # ── Action dock ──
+    st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;text-align:center;">Auto-scheduled 9 AM + 5 PM MST -- {len(_RD_AGENTS)} agents -- {len(_sessions)} sessions logged</div>', unsafe_allow_html=True)
+    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:8px 0 8px;">SESSIONS</div>
+    <div class="cs-icon-dock cs-rd-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="rdc_morning" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="#060A12" stroke-width="2"/><line x1="12" y1="1" x2="12" y2="3" stroke="#060A12" stroke-width="2"/><line x1="12" y1="21" x2="12" y2="23" stroke="#060A12" stroke-width="2"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="#060A12" stroke-width="2"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="#060A12" stroke-width="2"/><line x1="1" y1="12" x2="3" y2="12" stroke="#060A12" stroke-width="2"/><line x1="21" y1="12" x2="23" y2="12" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">MORNING</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="rdc_evening" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">EVENING</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden buttons for dock
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    _run_m = st.button("rdc_morning", key="rdc_morning")
+    _run_e = st.button("rdc_evening", key="rdc_evening")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if _run_m or _run_e:
         _stype = "morning" if _run_m else "evening"
@@ -7090,6 +7280,8 @@ def page_rd_council():
             _label = f"{_s.get('date','')} &middot; {_s.get('session','').upper()} &middot; Proposed by {_s.get('proposer',{}).get('name','')}"
             with st.expander(_label):
                 _render_council_session(_s)
+
+    # ── JS: hide hidden buttons + wire dock clicks ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7465,10 +7657,19 @@ def page_signals_prompts():
     if st.session_state.pop("_sig_reopen_result", False):
         _signal_result_dialog(str(time.time()))
 
-    # ── Next Page button ──
+    # ── Next Page as dock button ──
+    st.markdown('''<div class="cs-icon-dock cs-sig-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
+      <div class="cs-idock-btn" data-dock="sig_next" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#5a7090" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">NEXT</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
+
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     _force_refresh = False
-    if st.button("↻ Next Page", use_container_width=False, key="sig_refresh"):
+    if st.button("sig_next", key="sig_refresh"):
         _force_refresh = True
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Fetch signals — all state in session_state, not module dict ──
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
@@ -7492,10 +7693,22 @@ def page_signals_prompts():
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
 
-    tab_beat, tab_national = st.tabs(["Beat Reporter Heat Map", "National Take Detector"])
+    # Tab pills
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Signal Source</div>', unsafe_allow_html=True)
+    if "sig_tab" not in st.session_state:
+        st.session_state.sig_tab = "Beat"
+    _stab_cols = st.columns(2)
+    with _stab_cols[0]:
+        if st.button("Beat Reporters", key="sig_tab_beat", type="primary" if st.session_state.sig_tab == "Beat" else "secondary"):
+            st.session_state.sig_tab = "Beat"
+            st.rerun()
+    with _stab_cols[1]:
+        if st.button("National Takes", key="sig_tab_nat", type="primary" if st.session_state.sig_tab == "National" else "secondary"):
+            st.session_state.sig_tab = "National"
+            st.rerun()
 
     # ── Signal 1: Beat Reporter Heat Map ──
-    with tab_beat:
+    if st.session_state.sig_tab == "Beat":
         st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
         st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">35 Denver beat reporters — ranked by reply count</div>', unsafe_allow_html=True)
         if not beat_sorted:
@@ -7532,7 +7745,7 @@ def page_signals_prompts():
                 _signal_brief_dialog(str(time.time()))
 
     # ── Signal 2: National Take Detector ──
-    with tab_national:
+    if st.session_state.sig_tab == "National":
         st.markdown('<div style="font-size:13px;font-weight:700;color:#C49E3C;letter-spacing:1px;margin-bottom:10px;">NATIONAL TAKE DETECTOR</div>', unsafe_allow_html=True)
         st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Schefter, Rapoport, Pelissero, Shams, ESPN + 20 more — ranked by RT+QT</div>', unsafe_allow_html=True)
         if not national_sorted:
@@ -7564,6 +7777,33 @@ def page_signals_prompts():
                     st.session_state.pop(_k, None)
                 _signal_brief_dialog(str(time.time()))
 
+    # ── JS: hide hidden buttons + wire dock clicks ──
+    import streamlit.components.v1 as _sig_stc
+    _sig_stc.html("""<script>
+    (function(){
+      var doc=window.parent.document;
+      function wire(){
+        var btns=doc.querySelectorAll('button');
+        var hideLabels=['sig_next'];
+        for(var i=0;i<btns.length;i++){
+          if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
+            var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
+            el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
+          }
+        }
+        doc.querySelectorAll('.cs-sig-dock .cs-idock-btn').forEach(function(d){
+          if(d._w2) return; d._w2=true;
+          d.addEventListener('click',function(){
+            var action=d.dataset.dock;
+            for(var i=0;i<btns.length;i++){
+              if(btns[i].textContent.trim()===action){btns[i].removeAttribute('disabled');btns[i].click();return;}
+            }
+          });
+        });
+      }
+      setTimeout(wire,500);setTimeout(wire,1500);setTimeout(wire,3000);
+    })();
+    </script>""", height=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
