@@ -381,6 +381,26 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
 /* Bottom bar hover */
 .cs-bot:hover { opacity:0.85; transition:all 0.2s; }
+/* Mobile: force pill rows horizontal, not stacked */
+@media (max-width: 768px) {
+  .cs-fmt-row [data-testid="stHorizontalBlock"],
+  .cs-voice-row [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important;
+  }
+  .cs-fmt-row [data-testid="stColumn"],
+  .cs-voice-row [data-testid="stColumn"] {
+    width: auto !important; flex: 0 0 auto !important; min-width: 0 !important; max-width: none !important;
+  }
+  .cs-fmt-row button, .cs-voice-row button {
+    padding: 5px 10px !important; font-size: 10px !important;
+  }
+  /* Dock icons stay horizontal on mobile */
+  .cs-icon-dock { gap: 6px !important; flex-wrap: nowrap !important; }
+  .cs-idock-btn { width: 44px !important; height: 44px !important; }
+  /* Bottom bar wraps to 2 rows on very small screens */
+  .cs-bottom-bar { flex-wrap: wrap !important; gap: 6px !important; }
+  .cs-bot { padding: 6px 12px !important; font-size: 10px !important; }
+}
 
 /* ═══════════════════════════════════════════════
    TABS
@@ -1799,9 +1819,10 @@ _stc.html("""<script>
   var doc=window.parent.document;
   var win=window.parent;
 
-  /* ── Desktop flyout panels ── */
-  if(win.innerWidth<=768) return;
+  /* ── Desktop flyout panels (skip on mobile) ── */
+  var _isDesktop=win.innerWidth>768;
   function init(){
+    if(!_isDesktop) return;
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
       if(zone._mpReady) return;
       zone._mpReady=true;
