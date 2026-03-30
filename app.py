@@ -6760,8 +6760,8 @@ def page_rd_council():
 # PAGE: SIGNALS & PROMPTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-_BEAT_REPORTERS = '(Broncos OR Nuggets OR Avalanche) (trade OR signing OR injury OR roster OR draft OR "free agency") -is:retweet min_replies:5'
-_NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs") (from:espn OR from:stephenasmith OR from:adamschefter OR from:wojespn OR from:TheAthletic) -is:retweet'
+_BEAT_REPORTERS = 'from:mikeklis OR from:evansidery OR from:PeterRBaugh'
+_NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs" OR "Bo Nix" OR "Sean Payton" OR "Nikola Jokic" OR "Nathan MacKinnon") (from:espn OR from:stephenasmith OR from:adamschefter OR from:wojespn OR from:ShamsCharania OR from:RapSheet OR from:TomPelissero) -is:retweet'
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0}
 
 
@@ -6873,13 +6873,20 @@ ANGLE: Tyler's insider lens as former NFL OL and Denver media host — push back
 
 @st.dialog("Signal Brief", width="large")
 def _signal_build_dialog(_nonce):
-    """Popup for editing a signal brief and building tweets from it."""
+    """Popup showing signal brief, build controls, and AI results."""
     brief = st.session_state.get("sig_brief", "")
     if not brief:
         st.warning("No signal selected.")
         return
 
-    # Show the raw brief
+    # If AI already ran, show results
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+        _ci_output_panel_impl("build", brief,
+                              st.session_state.get("sig_fmt", "Normal Tweet"),
+                              st.session_state.get("sig_voice", "Default"))
+        return
+
+    # Show the brief + build controls
     st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
     edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
 
@@ -6896,14 +6903,7 @@ def _signal_build_dialog(_nonce):
         final_brief = st.session_state.get("sig_brief_edit", edited_brief)
         with st.spinner("Mount Polumbus AI is reaching the summit..."):
             _run_ci_ai("build", final_brief, sig_fmt, sig_voice)
-        st.session_state["_sig_built"] = True
         st.rerun()
-
-    # After build completes, show results in this same dialog
-    if st.session_state.pop("_sig_built", False):
-        _ci_output_panel_impl("build", st.session_state.get("sig_brief_edit", brief),
-                              st.session_state.get("sig_fmt", "Normal Tweet"),
-                              st.session_state.get("sig_voice", "Default"))
 
 
 def page_signals_prompts():
@@ -6935,9 +6935,9 @@ def page_signals_prompts():
     # ── Signal 1: Beat Reporter Heat Map ──
     with col1:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Denver sports insider chatter — ranked by reply count</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Klis, Sidery, Baugh — ranked by reply count</div>', unsafe_allow_html=True)
         if not beat_sorted:
-            st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No signals found — check API key or try refreshing.</div>', unsafe_allow_html=True)
+            st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No recent tweets from beat reporters.</div>', unsafe_allow_html=True)
         for idx, tw in enumerate(beat_sorted):
             author = tw.get("author", {}).get("userName", "") or "unknown"
             text = tw.get("text", "")[:200]
@@ -6960,7 +6960,8 @@ def page_signals_prompts():
             if st.button("Use Signal", key=f"sig_beat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
-                st.session_state.pop("_sig_built", None)
+                for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
                 _signal_build_dialog(str(time.time()))
 
     # ── Signal 2: National Take Detector ──
@@ -6987,7 +6988,8 @@ def page_signals_prompts():
             if st.button("Use Signal", key=f"sig_nat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
-                st.session_state.pop("_sig_built", None)
+                for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+                    st.session_state.pop(_k, None)
                 _signal_build_dialog(str(time.time()))
 
 
