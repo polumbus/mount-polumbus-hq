@@ -6888,13 +6888,28 @@ def _build_signal_brief(tweet):
     rts = tweet.get("retweetCount", 0)
     likes = tweet.get("likeCount", 0)
 
-    # Extract topic from tweet text (first sentence or first 80 chars)
-    topic = text.split(".")[0].strip() if "." in text[:100] else text[:80].strip()
+    # Detect sport from tweet content
+    _lower = text.lower()
+    _nba_signals = ["nuggets", "jokic", "murray", "gordon", "nba", "basketball", "warriors", "lakers", "celtics", "game tonight", "playoff", "seeds", "western conference"]
+    _nhl_signals = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup"]
+    _cfb_signals = ["buffs", "cu buffs", "deion", "shedeur", "colorado buffaloes"]
+    if any(s in _lower for s in _nba_signals):
+        _sport = "NBA"
+        _angle = "Tyler's lens as a Denver media host and daily Nuggets watcher — push back, add context, or amplify what the casual fan is missing"
+    elif any(s in _lower for s in _nhl_signals):
+        _sport = "NHL"
+        _angle = "Tyler's lens as a Denver media host and Avalanche follower — push back, add context, or amplify what the casual fan is missing"
+    elif any(s in _lower for s in _cfb_signals):
+        _sport = "CFB"
+        _angle = "Tyler's lens as a former pro athlete and Colorado insider — push back, add context, or amplify what the casual fan is missing"
+    else:
+        _sport = "NFL"
+        _angle = "Tyler's insider lens as a former NFL OL and Denver media host — push back, add context, or amplify what the casual fan is missing"
 
-    brief = f"""TOPIC: {topic}
-TENSION: @{author} take generating {replies} replies — active debate in mentions
+    brief = f"""TOPIC: {text[:280]}
+TENSION: @{author} {_sport} take generating {replies} replies — active debate in mentions
 KEY STATS: {replies} replies, {rts} RTs, {likes} likes
-ANGLE: Tyler's insider lens as former NFL OL and Denver media host — push back, add context, or amplify what the casual fan is missing"""
+ANGLE: {_angle}"""
     return brief
 
 
