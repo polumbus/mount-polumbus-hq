@@ -118,9 +118,10 @@ function openRepurposeModal(tweetData) {
       </div>
       <div class="hq-modal-label" style="margin-top:14px;">YOUR VERSION</div>
       <textarea class="hq-modal-textarea" placeholder="Write your repurposed version..." rows="5"></textarea>
-      <div class="hq-modal-actions">
+      <div class="hq-modal-actions" style="gap:8px;">
         <button class="hq-modal-btn hq-modal-ai" id="hq-ai-btn">⚡ Generate with AI</button>
-        <button class="hq-modal-btn hq-modal-save" id="hq-save-draft-btn">Save Draft</button>
+        <button class="hq-modal-btn" id="hq-save-draft-btn" style="background:#1a1a2e;border:1px solid #22c55e;color:#22c55e;">Save Draft</button>
+        <button class="hq-modal-btn hq-modal-save" id="hq-post-btn">𝕏 Post</button>
       </div>
       <div class="hq-modal-status" id="hq-modal-status"></div>
     </div>
@@ -132,6 +133,7 @@ function openRepurposeModal(tweetData) {
   const textarea = modal.querySelector(".hq-modal-textarea");
   const aiBtn = modal.querySelector("#hq-ai-btn");
   const saveBtn = modal.querySelector("#hq-save-draft-btn");
+  const postBtn = modal.querySelector("#hq-post-btn");
   const status = modal.querySelector("#hq-modal-status");
 
   function close() { modal.remove(); }
@@ -182,6 +184,38 @@ function openRepurposeModal(tweetData) {
       status.style.color = "#ff4444";
       saveBtn.disabled = false;
       saveBtn.textContent = "Save Draft";
+    }
+  });
+
+  postBtn.addEventListener("click", async () => {
+    const postText = textarea.value.trim();
+    if (!postText) return;
+    postBtn.disabled = true;
+    postBtn.textContent = "Posting...";
+    status.textContent = "";
+    try {
+      const result = await callProxy("/tweet/post", { text: postText });
+      if (result.ok || result.success) {
+        status.textContent = "Posted to X!";
+        status.style.color = "#22c55e";
+        setTimeout(close, 1500);
+      } else {
+        // Fallback: copy to clipboard and open compose
+        await navigator.clipboard.writeText(postText);
+        window.open("https://x.com/compose/tweet", "_blank");
+        status.textContent = "Copied — paste in the compose window";
+        status.style.color = "#FBBF24";
+        postBtn.disabled = false;
+        postBtn.textContent = "𝕏 Post";
+      }
+    } catch (e) {
+      // Fallback: copy and open compose
+      try { await navigator.clipboard.writeText(postText); } catch {}
+      window.open("https://x.com/compose/tweet", "_blank");
+      status.textContent = "Copied — paste in the compose window";
+      status.style.color = "#FBBF24";
+      postBtn.disabled = false;
+      postBtn.textContent = "𝕏 Post";
     }
   });
 }
