@@ -1913,8 +1913,9 @@ _stc.html("""<script>
       });
     });
 
-    /* Hide dock + bottom hidden buttons — collapse completely */
-    var hideLabels=['dock_banger','dock_build','dock_rewrite','dock_grades','bot_save','bot_bank','bot_hot','bot_post'];
+    /* Hide all hidden dock/bottom buttons — collapse completely */
+    var hideLabels=['dock_banger','dock_build','dock_rewrite','dock_grades','bot_save','bot_bank','bot_hot','bot_post',
+      'bd_subject','bd_ideas','bd_gen_tweets','bd_gen_long','bd_gen_video','bd_save','bd_new','bd_saved'];
     for(var i=0;i<btns.length;i++){
       if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
         var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
@@ -2007,14 +2008,16 @@ def page_brain_dump():
     if "bd_timer_mins" not in st.session_state:
         st.session_state.bd_timer_mins = 0
 
-    tcols = st.columns([1, 1, 1, 1, 2])
+    # ── Timer pills ──
+    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Timer</div>', unsafe_allow_html=True)
+    _tc = st.columns([1, 1, 1, 1, 2])
     for i, mins in enumerate([5, 10, 15, 30]):
-        with tcols[i]:
-            if st.button(f"{mins} min", key=f"timer_{mins}", use_container_width=True):
+        with _tc[i]:
+            _active = (st.session_state.bd_timer_mins == mins and st.session_state.bd_timer_end)
+            if st.button(f"{mins} min", key=f"timer_{mins}", type="primary" if _active else "secondary"):
                 st.session_state.bd_timer_end = time.time() + mins * 60
                 st.session_state.bd_timer_mins = mins
-
-    with tcols[4]:
+    with _tc[4]:
         if st.session_state.bd_timer_end:
             remaining = max(0, st.session_state.bd_timer_end - time.time())
             m, s = divmod(int(remaining), 60)
@@ -2026,89 +2029,159 @@ def page_brain_dump():
                 st.session_state.bd_timer_end = None
                 st.markdown('<div class="stat-card"><div class="stat-num" style="color:#22c55e;">DONE</div><div class="stat-label">Time\'s up</div></div>', unsafe_allow_html=True)
 
-    col_main, col_saved = st.columns([2, 1])
+    # ── Text area ──
+    dump_text = st.text_area("Drop your raw thoughts:", height=200,
+        placeholder="Whatever is in your head -- game reaction, hot take, rant, observation...",
+        key="bd_text", label_visibility="collapsed")
 
-    with col_main:
-        dump_text = st.text_area("Drop your raw thoughts:", height=200,
-            placeholder="Whatever is in your head -- game reaction, hot take, rant, observation...",
-            key="bd_text")
+    # ── Action dock: Subject | Ideas | Tweets | Long-form | Video ──
+    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:12px 0 8px;">ACTIONS</div>
+    <div class="cs-icon-dock cs-bd-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="bd_subject" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">SUBJECT</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="bd_ideas" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 01-1 1h-6a1 1 0 01-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="15" y2="21" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">IDEAS</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="bd_gen_tweets" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 3a10.9 10.9 0 01-3.14 1.53A4.48 4.48 0 0012 7.5v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">TWEETS</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="bd_gen_long" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#5a7090" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">LONG-FORM</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="bd_gen_video" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="#5a7090" stroke-width="2"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">VIDEO</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
 
-        bc1, bc2, bc3, bc4 = st.columns(4)
-        with bc1:
-            if st.button("⚡ Subject", use_container_width=True, key="bd_subject", type="primary"):
-                with st.spinner("Thinking..."):
-                    result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
-                    st.session_state["bd_subject_result"] = result
-        with bc2:
-            if st.button("⚡ Ideas", use_container_width=True, key="bd_ideas", type="primary"):
-                if dump_text.strip():
-                    with st.spinner("Generating ideas..."):
-                        result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
-                        st.session_state["bd_ideas_result"] = result
-        with bc3:
-            if st.button("↓ Save", use_container_width=True, key="bd_save"):
-                if dump_text.strip():
-                    dumps = load_json("brain_dumps.json", [])
-                    dumps.append({"text": dump_text, "saved_at": datetime.now().isoformat(), "timer_mins": st.session_state.bd_timer_mins})
-                    save_json("brain_dumps.json", dumps)
-                    st.success("Saved.")
-        with bc4:
-            if st.button("↺ New", use_container_width=True, key="bd_new"):
-                st.session_state.bd_timer_end = None
-                st.session_state.bd_timer_mins = 0
-                for k in ["bd_subject_result", "bd_ideas_result", "bd_tweets", "bd_longform", "bd_video"]:
-                    st.session_state.pop(k, None)
-                st.rerun()
+    # Hidden Streamlit buttons for dock actions
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("bd_subject", key="bd_subject"):
+        with st.spinner("Thinking..."):
+            result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
+            st.session_state["bd_subject_result"] = result
+    if st.button("bd_ideas", key="bd_ideas"):
+        if dump_text.strip():
+            with st.spinner("Generating ideas..."):
+                result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
+                st.session_state["bd_ideas_result"] = result
+    if st.button("bd_gen_tweets", key="bd_gen_tweets"):
+        if dump_text.strip():
+            with st.spinner("Generating tweets..."):
+                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
+                st.session_state["bd_tweets"] = result
+    if st.button("bd_gen_long", key="bd_gen_long"):
+        if dump_text.strip():
+            with st.spinner("Generating..."):
+                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
+                st.session_state["bd_longform"] = result
+    if st.button("bd_gen_video", key="bd_gen_video"):
+        if dump_text.strip():
+            with st.spinner("Generating..."):
+                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
+                st.session_state["bd_video"] = result
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.session_state.get("bd_subject_result"):
-            st.markdown(f'<div class="output-box">{st.session_state["bd_subject_result"]}</div>', unsafe_allow_html=True)
-        if st.session_state.get("bd_ideas_result"):
-            st.markdown(f'<div class="output-box">{st.session_state["bd_ideas_result"]}</div>', unsafe_allow_html=True)
+    # ── Bottom bar ──
+    st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+    <div class="cs-bottom-bar cs-bd-bottom" style="display:flex;gap:8px;justify-content:center;">
+      <span class="cs-bot" data-bot="bd_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+      <span class="cs-bot" data-bot="bd_new" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↺ New</span>
+      <span class="cs-bot" data-bot="bd_saved" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Saved Thoughts</span>
+    </div>''', unsafe_allow_html=True)
 
-        st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
+    # Hidden buttons for bottom bar
+    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
+    if st.button("bd_save", key="bd_save"):
+        if dump_text.strip():
+            dumps = load_json("brain_dumps.json", [])
+            dumps.append({"text": dump_text, "saved_at": datetime.now().isoformat(), "timer_mins": st.session_state.bd_timer_mins})
+            save_json("brain_dumps.json", dumps)
+            st.success("Saved.")
+    if st.button("bd_new", key="bd_new"):
+        st.session_state.bd_timer_end = None
+        st.session_state.bd_timer_mins = 0
+        for k in ["bd_subject_result", "bd_ideas_result", "bd_tweets", "bd_longform", "bd_video"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+    if st.button("bd_saved", key="bd_saved"):
+        st.session_state["_bd_show_saved"] = True
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        # Generation sections — open by default so they're discoverable
-        with st.expander("Tweet Ideas", expanded=True):
-            if st.button("⚡ Generate Tweets", key="bd_gen_tweets", type="primary"):
-                if dump_text.strip():
-                    with st.spinner("Generating tweets..."):
-                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
-                        st.session_state["bd_tweets"] = result
-            if st.session_state.get("bd_tweets"):
-                st.markdown(f'<div class="output-box">{st.session_state["bd_tweets"]}</div>', unsafe_allow_html=True)
+    # ── Results display ──
+    if st.session_state.get("bd_subject_result"):
+        st.markdown(f'<div class="output-box">{st.session_state["bd_subject_result"]}</div>', unsafe_allow_html=True)
+    if st.session_state.get("bd_ideas_result"):
+        st.markdown(f'<div class="output-box">{st.session_state["bd_ideas_result"]}</div>', unsafe_allow_html=True)
+    if st.session_state.get("bd_tweets"):
+        st.markdown(f'<div class="output-box">{st.session_state["bd_tweets"]}</div>', unsafe_allow_html=True)
+    if st.session_state.get("bd_longform"):
+        st.markdown(f'<div class="output-box">{st.session_state["bd_longform"]}</div>', unsafe_allow_html=True)
+    if st.session_state.get("bd_video"):
+        st.markdown(f'<div class="output-box">{st.session_state["bd_video"]}</div>', unsafe_allow_html=True)
 
-        with st.expander("Long-form Post Idea", expanded=True):
-            if st.button("⚡ Generate Long-form", key="bd_gen_long", type="primary"):
-                if dump_text.strip():
-                    with st.spinner("Generating..."):
-                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
-                        st.session_state["bd_longform"] = result
-            if st.session_state.get("bd_longform"):
-                st.markdown(f'<div class="output-box">{st.session_state["bd_longform"]}</div>', unsafe_allow_html=True)
+    # ── Saved thoughts modal ──
+    if st.session_state.pop("_bd_show_saved", False):
+        @st.dialog("Saved Thoughts", width="large")
+        def _bd_saved_dialog():
+            dumps = load_json("brain_dumps.json", [])
+            if not dumps:
+                st.markdown('<div class="output-box">No saved thoughts yet.</div>', unsafe_allow_html=True)
+            else:
+                for i, d in enumerate(reversed(dumps[-20:])):
+                    ts = d.get("saved_at", "")[:16].replace("T", " ")
+                    preview = d.get("text", "")[:200]
+                    timer_info = f" ({d.get('timer_mins', '?')}m)" if d.get('timer_mins') else ""
+                    st.markdown(f"""<div class="tweet-card">
+                        <div class="tweet-num">{ts}{timer_info}</div>
+                        <div style="color:#d8d8e8; font-size:13px;">{preview}{'...' if len(d.get('text','')) > 200 else ''}</div>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button("Use This", key=f"bd_use_{i}", use_container_width=True):
+                        st.session_state["bd_text"] = d.get("text", "")
+                        st.rerun(scope="app")
+        _bd_saved_dialog()
 
-        with st.expander("Video Script Outline", expanded=True):
-            if st.button("⚡ Generate Outline", key="bd_gen_video", type="primary"):
-                if dump_text.strip():
-                    with st.spinner("Generating..."):
-                        result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
-                        st.session_state["bd_video"] = result
-            if st.session_state.get("bd_video"):
-                st.markdown(f'<div class="output-box">{st.session_state["bd_video"]}</div>', unsafe_allow_html=True)
-
-    with col_saved:
-        st.markdown("### Saved Thoughts")
-        dumps = load_json("brain_dumps.json", [])
-        if not dumps:
-            st.markdown('<div style="padding:16px;border-radius:8px;background:#0d1929;border:1px solid #1a2540;color:#3a5070;font-style:italic;text-align:center;">No saved thoughts yet.</div>', unsafe_allow_html=True)
-        else:
-            for i, d in enumerate(reversed(dumps[-20:])):
-                ts = d.get("saved_at", "")[:16].replace("T", " ")
-                preview = d.get("text", "")[:120]
-                timer_info = f" ({d.get('timer_mins', '?')}m)" if d.get('timer_mins') else ""
-                st.markdown(f"""<div class="tweet-card">
-                    <div class="tweet-num">{ts}{timer_info}</div>
-                    <div style="color:#d8d8e8; font-size:13px;">{preview}{'...' if len(d.get('text','')) > 120 else ''}</div>
-                </div>""", unsafe_allow_html=True)
+    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
+    import streamlit.components.v1 as _bd_stc
+    _bd_stc.html("""<script>
+    (function(){
+      var doc=window.parent.document;
+      function wire(){
+        var btns=doc.querySelectorAll('button');
+        var hideLabels=['bd_subject','bd_ideas','bd_gen_tweets','bd_gen_long','bd_gen_video','bd_save','bd_new','bd_saved'];
+        for(var i=0;i<btns.length;i++){
+          if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
+            var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
+            el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
+          }
+        }
+        doc.querySelectorAll('.cs-bd-dock .cs-idock-btn').forEach(function(d){
+          if(d._w2) return; d._w2=true;
+          d.addEventListener('click',function(){
+            var action=d.dataset.dock;
+            for(var i=0;i<btns.length;i++){
+              if(btns[i].textContent.trim()===action){btns[i].removeAttribute('disabled');btns[i].click();return;}
+            }
+          });
+        });
+        doc.querySelectorAll('.cs-bd-bottom .cs-bot').forEach(function(b){
+          if(b._w2) return; b._w2=true;
+          b.addEventListener('click',function(){
+            var action=b.dataset.bot;
+            for(var i=0;i<btns.length;i++){
+              if(btns[i].textContent.trim()===action){btns[i].removeAttribute('disabled');btns[i].click();return;}
+            }
+          });
+        });
+      }
+      setTimeout(wire,500);setTimeout(wire,1500);setTimeout(wire,3000);
+    })();
+    </script>""", height=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
