@@ -6770,10 +6770,12 @@ def _fetch_signals(query, count=30):
     if not TWITTER_API_IO_KEY:
         return []
     try:
+        from datetime import timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(hours=6)).strftime('%Y-%m-%dT%H:%M:%SZ')
         resp = requests.get(
             "https://api.twitterapi.io/twitter/tweet/advanced_search",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
+            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": "", "since": since},
             timeout=30,
         )
         if resp.status_code == 200:
@@ -6781,6 +6783,23 @@ def _fetch_signals(query, count=30):
     except Exception:
         pass
     return []
+
+
+def _relative_time(created_at_str):
+    """Convert createdAt ISO string to '2m ago', '1h ago', etc."""
+    try:
+        from datetime import timezone
+        created = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+        delta = datetime.now(timezone.utc) - created
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return f"{secs}s ago"
+        elif secs < 3600:
+            return f"{secs // 60}m ago"
+        else:
+            return f"{secs // 3600}h ago"
+    except Exception:
+        return "time unknown"
 
 
 def _get_trend_pill(topic_keywords):
@@ -6837,6 +6856,8 @@ def page_signals_prompts():
 
     # ── Refresh button ──
     if st.button("↻ Refresh Signals", use_container_width=False, key="sig_refresh"):
+        _SIGNALS_CACHE["beat"] = None
+        _SIGNALS_CACHE["national"] = None
         _SIGNALS_CACHE["ts"] = 0
 
     # ── Fetch signals (cache 5 min) ──
@@ -6866,6 +6887,7 @@ def page_signals_prompts():
             text = tw.get("text", "")[:200]
             replies = tw.get("replyCount", 0)
             rts = tw.get("retweetCount", 0)
+            _ago = _relative_time(tw.get("createdAt", ""))
             # Timing pill
             keywords = " ".join(text.split()[:4])
             trend_key, trend_label = _get_trend_pill(keywords) if idx == 0 else ("peak", "Peak")  # Only check timing for top signal to save API calls
@@ -6877,7 +6899,7 @@ def page_signals_prompts():
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
             </div>''', unsafe_allow_html=True)
             if st.button("Use Signal", key=f"sig_beat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
@@ -6895,13 +6917,14 @@ def page_signals_prompts():
             rts = tw.get("retweetCount", 0)
             qts = tw.get("quoteCount", 0)
             replies = tw.get("replyCount", 0)
+            _ago = _relative_time(tw.get("createdAt", ""))
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span>
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
             </div>''', unsafe_allow_html=True)
             if st.button("Use Signal", key=f"sig_nat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
