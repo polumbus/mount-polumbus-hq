@@ -1882,7 +1882,7 @@ _stc.html("""<script>
 
   /* ── Global: MutationObserver that hides hidden buttons + wires docks/bottoms + tags pill rows ── */
   /* Runs on EVERY DOM change so it works on reruns (not just full page loads) */
-  var _hidePrefixes=['dock_','bot_','bd_','cc_','aw_','th_','aa_','hc_','ap_','ar_','rg_','ib_','rdc_','sig_'];
+  var _hidePrefixes=['dock_','bot_','bd_','cc_','aw_','th_','aa_','hc_','ap_','ar_','rg_','ib_','rdc_','sig_','timer_'];
   function processDOM(){
     var btns=doc.querySelectorAll('button');
     /* Hide all hidden buttons (any button whose text starts with a known prefix) */
@@ -2015,26 +2015,43 @@ def page_brain_dump():
     if "bd_timer_mins" not in st.session_state:
         st.session_state.bd_timer_mins = 0
 
-    # ── Timer pills ──
-    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Timer</div>', unsafe_allow_html=True)
-    _tc = st.columns([1, 1, 1, 1, 2])
-    for i, mins in enumerate([5, 10, 15, 30]):
-        with _tc[i]:
-            _active = (st.session_state.bd_timer_mins == mins and st.session_state.bd_timer_end)
-            if st.button(f"{mins} min", key=f"timer_{mins}", type="primary" if _active else "secondary"):
-                st.session_state.bd_timer_end = time.time() + mins * 60
-                st.session_state.bd_timer_mins = mins
-    with _tc[4]:
-        if st.session_state.bd_timer_end:
-            remaining = max(0, st.session_state.bd_timer_end - time.time())
-            m, s = divmod(int(remaining), 60)
-            if remaining > 0:
-                st.markdown(f'<div class="stat-card"><div class="stat-num">{m:02d}:{s:02d}</div><div class="stat-label">Remaining</div></div>', unsafe_allow_html=True)
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.session_state.bd_timer_end = None
-                st.markdown('<div class="stat-card"><div class="stat-num" style="color:#22c55e;">DONE</div><div class="stat-label">Time\'s up</div></div>', unsafe_allow_html=True)
+    # ── Timer as inline HTML pills + countdown ──
+    _timer_active = st.session_state.bd_timer_mins if st.session_state.bd_timer_end else 0
+    _timer_display = ""
+    if st.session_state.bd_timer_end:
+        _remaining = max(0, st.session_state.bd_timer_end - time.time())
+        _tm, _ts = divmod(int(_remaining), 60)
+        if _remaining > 0:
+            _timer_display = f'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#2DD4BF;margin-left:12px;">{_tm:02d}:{_ts:02d}</span>'
+        else:
+            st.session_state.bd_timer_end = None
+            _timer_display = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#22c55e;margin-left:12px;">DONE</span>'
+
+    def _pill_cls(mins):
+        if mins == _timer_active:
+            return "padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-block;"
+        return "padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-block;"
+
+    st.markdown(f'''<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+      <span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-right:4px;">Timer</span>
+      <span class="cs-bot" data-bot="timer_5" style="{_pill_cls(5)}">5 min</span>
+      <span class="cs-bot" data-bot="timer_10" style="{_pill_cls(10)}">10 min</span>
+      <span class="cs-bot" data-bot="timer_15" style="{_pill_cls(15)}">15 min</span>
+      <span class="cs-bot" data-bot="timer_30" style="{_pill_cls(30)}">30 min</span>
+      {_timer_display}
+    </div>''', unsafe_allow_html=True)
+
+    # Hidden timer buttons
+    for mins in [5, 10, 15, 30]:
+        if st.button(f"timer_{mins}", key=f"timer_{mins}"):
+            st.session_state.bd_timer_end = time.time() + mins * 60
+            st.session_state.bd_timer_mins = mins
+            st.rerun()
+
+    # Auto-refresh for countdown
+    if st.session_state.bd_timer_end and (st.session_state.bd_timer_end - time.time()) > 0:
+        time.sleep(1)
+        st.rerun()
 
     # ── Text area ──
     dump_text = st.text_area("Drop your raw thoughts:", height=200,
