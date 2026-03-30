@@ -6880,6 +6880,42 @@ def _dedup_signals(tweets, min_overlap=3):
     return [tw for tw, _ in kept]
 
 
+_DENVER_GAMES_CACHE = {"games": None, "ts": 0}
+
+def _get_denver_games_today():
+    """Check ESPN for Denver teams playing today. Cached 30 min."""
+    if _DENVER_GAMES_CACHE["games"] is not None and (time.time() - _DENVER_GAMES_CACHE["ts"]) < 1800:
+        return _DENVER_GAMES_CACHE["games"]
+    games = []
+    _denver_teams = {
+        "nba": {"DEN": "Nuggets"},
+        "nhl": {"COL": "Avalanche"},
+        "nfl": {"DEN": "Broncos"},
+    }
+    for league, teams in _denver_teams.items():
+        try:
+            scores = espn_scores(league, limit=15)
+            for g in (scores or []):
+                h_abbr = g.get("home", {}).get("abbr", "")
+                a_abbr = g.get("away", {}).get("abbr", "")
+                for abbr, name in teams.items():
+                    if abbr in (h_abbr, a_abbr):
+                        opp_abbr = a_abbr if h_abbr == abbr else h_abbr
+                        games.append({
+                            "league": league.upper(),
+                            "team": name,
+                            "opponent": opp_abbr,
+                            "home": h_abbr == abbr,
+                            "completed": g.get("completed", False),
+                            "score": f"{g.get('away',{}).get('score','')}-{g.get('home',{}).get('score','')}" if g.get("completed") else None,
+                        })
+        except Exception:
+            pass
+    _DENVER_GAMES_CACHE["games"] = games
+    _DENVER_GAMES_CACHE["ts"] = time.time()
+    return games
+
+
 def _build_signal_brief(tweet):
     """Auto-generate a structured brief from a tweet signal."""
     author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
@@ -6893,22 +6929,39 @@ def _build_signal_brief(tweet):
     _nba_signals = ["nuggets", "jokic", "murray", "gordon", "nba", "basketball", "warriors", "lakers", "celtics", "game tonight", "playoff", "seeds", "western conference"]
     _nhl_signals = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup"]
     _cfb_signals = ["buffs", "cu buffs", "deion", "shedeur", "colorado buffaloes"]
+    # Check what Denver teams are playing today via ESPN
+    _today_playing = _get_denver_games_today()
+
     if any(s in _lower for s in _nba_signals):
         _sport = "NBA"
-        _angle = "Tyler's lens as a Denver media host and daily Nuggets watcher — push back, add context, or amplify what the casual fan is missing"
+        _angle = "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily"
     elif any(s in _lower for s in _nhl_signals):
         _sport = "NHL"
-        _angle = "Tyler's lens as a Denver media host and Avalanche follower — push back, add context, or amplify what the casual fan is missing"
+        _angle = "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely"
     elif any(s in _lower for s in _cfb_signals):
         _sport = "CFB"
-        _angle = "Tyler's lens as a former pro athlete and Colorado insider — push back, add context, or amplify what the casual fan is missing"
+        _angle = "Tyler's lens as a former professional athlete and Colorado insider"
     else:
-        _sport = "NFL"
-        _angle = "Tyler's insider lens as a former NFL OL and Denver media host — push back, add context, or amplify what the casual fan is missing"
+        # If no sport detected, infer from today's games
+        if _today_playing:
+            _sport = _today_playing[0]["league"]
+            _angle = f"Tyler's lens as a former professional athlete and Denver media host — {_today_playing[0]['team']} playing today"
+        else:
+            _sport = "NFL"
+            _angle = "Tyler's lens as a former professional athlete and Denver media host"
+
+    # Build game context line
+    _game_ctx = ""
+    if _today_playing:
+        _game_lines = []
+        for g in _today_playing:
+            _status = f"Final {g['score']}" if g["completed"] else ("vs" if g["home"] else "@")
+            _game_lines.append(f"{g['team']} {_status} {g['opponent']} ({g['league']})")
+        _game_ctx = f"\nGAMES TODAY: {', '.join(_game_lines)}"
 
     brief = f"""TOPIC: {text[:280]}
 TENSION: @{author} {_sport} take generating {replies} replies — active debate in mentions
-KEY STATS: {replies} replies, {rts} RTs, {likes} likes
+KEY STATS: {replies} replies, {rts} RTs, {likes} likes{_game_ctx}
 ANGLE: {_angle}"""
     return brief
 
