@@ -2096,9 +2096,9 @@ def page_brain_dump():
     # ── Bottom bar ──
     st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
     <div class="cs-bottom-bar cs-bd-bottom" style="display:flex;gap:8px;justify-content:center;">
-      <span class="cs-bot" data-bot="bd_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
-      <span class="cs-bot" data-bot="bd_new" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↺ New</span>
-      <span class="cs-bot" data-bot="bd_saved" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Saved Thoughts</span>
+      <span class="cs-bot" data-bot="bd_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+      <span class="cs-bot" data-bot="bd_new" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↺ New</span>
+      <span class="cs-bot" data-bot="bd_saved" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Saved Thoughts</span>
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for bottom bar
@@ -4853,10 +4853,10 @@ def page_compose_ideas():
         # ── Divider + Bottom bar as HTML ──
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
         <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
-          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
-          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
-          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
+          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
+          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
+          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for bottom bar
@@ -5059,8 +5059,8 @@ Your coaching style:
     st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
     <div class="cs-bottom-bar cs-cc-bottom" style="display:flex;gap:8px;justify-content:center;">
       <span class="cs-bot cs-idock-primary" data-bot="cc_send" style="height:52px;padding:0 24px;border-radius:14px;font-size:11px;font-weight:600;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Send</span>
-      <span class="cs-bot" data-bot="cc_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save Post</span>
-      <span class="cs-bot" data-bot="cc_remix" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Remix</span>
+      <span class="cs-bot" data-bot="cc_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save Post</span>
+      <span class="cs-bot" data-bot="cc_remix" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Remix</span>
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for bottom bar
@@ -5319,10 +5319,10 @@ def page_article_writer():
         # --- Bottom bar ---
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
         <div class="cs-bottom-bar cs-aw-bottom" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="aw_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save</span>
-          <span class="cs-bot" data-bot="aw_articles" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">My Articles</span>
-          <span class="cs-bot" data-bot="aw_copy" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Copy</span>
-          <span class="cs-bot" data-bot="aw_verify" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Verify</span>
+          <span class="cs-bot" data-bot="aw_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save</span>
+          <span class="cs-bot" data-bot="aw_articles" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">My Articles</span>
+          <span class="cs-bot" data-bot="aw_copy" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Copy</span>
+          <span class="cs-bot" data-bot="aw_verify" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Verify</span>
         </div>''', unsafe_allow_html=True)
 
         # Hidden buttons for bottom bar
@@ -6311,7 +6311,7 @@ Return this exact JSON structure:
                 st.rerun()
         else:
             st.markdown('''<div class="cs-bottom-bar cs-ar-bottom" style="display:flex;gap:8px;justify-content:center;">
-              <span class="cs-bot" data-bot="ar_save_voice" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save as Voice Style</span>
+              <span class="cs-bot" data-bot="ar_save_voice" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save as Voice Style</span>
             </div>''', unsafe_allow_html=True)
             st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
             if st.button("ar_save_voice", key="ar_save_voice"):
