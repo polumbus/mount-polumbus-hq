@@ -1512,7 +1512,8 @@ elif _qp_page:
 else:
     st.session_state.current_page = "Creator Studio"
 # Sync URL bar with current page so refresh preserves it
-if st.query_params.get("page", "") != st.session_state.current_page:
+# Only sync if a page param already exists (avoid triggering rerun on fresh load)
+if _qp_page and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
 
 _cur_pg = st.session_state.current_page
@@ -1937,9 +1938,13 @@ _stc.html("""<script>
       });
     });
   }
-  /* Run immediately + on every DOM change */
+  /* Run immediately + debounced on DOM changes (not every mutation) */
   setTimeout(processDOM,300);setTimeout(processDOM,800);setTimeout(processDOM,2000);
-  var _observer=new MutationObserver(function(){processDOM();});
+  var _pdTimer=null;
+  var _observer=new MutationObserver(function(){
+    if(_pdTimer) clearTimeout(_pdTimer);
+    _pdTimer=setTimeout(processDOM,150);
+  });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
 </script>""", height=0)
@@ -2040,23 +2045,23 @@ def page_brain_dump():
     <div class="cs-icon-dock cs-bd-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="bd_subject" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">SUBJECT</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">SUBJECT</span>
       </div>
       <div class="cs-idock-btn" data-dock="bd_ideas" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 01-1 1h-6a1 1 0 01-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="15" y2="21" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">IDEAS</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">IDEAS</span>
       </div>
       <div class="cs-idock-btn" data-dock="bd_gen_tweets" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 3a10.9 10.9 0 01-3.14 1.53A4.48 4.48 0 0012 7.5v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">TWEETS</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">TWEETS</span>
       </div>
       <div class="cs-idock-btn" data-dock="bd_gen_long" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#5a7090" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">LONG-FORM</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">LONG-FORM</span>
       </div>
       <div class="cs-idock-btn" data-dock="bd_gen_video" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="#5a7090" stroke-width="2"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">VIDEO</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">VIDEO</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -4821,19 +4826,19 @@ def page_compose_ideas():
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
           <div class="cs-idock-btn cs-idock-primary" data-dock="banger" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">GO VIRAL</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
           </div>
           <div class="cs-idock-btn" data-dock="build" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">BUILD</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
           </div>
           <div class="cs-idock-btn" data-dock="rewrite" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REPURPOSE</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span>
           </div>
           <div class="cs-idock-btn" data-dock="grades" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">GRADES</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
           </div>
         </div>''', unsafe_allow_html=True)
 
@@ -5260,15 +5265,15 @@ def page_article_writer():
     <div class="cs-icon-dock cs-aw-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="aw_write" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#060A12" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">WRITE</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">WRITE</span>
       </div>
       <div class="cs-idock-btn" data-dock="aw_outline" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="12" x2="21" y2="12" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="18" x2="21" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">OUTLINE</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">OUTLINE</span>
       </div>
       <div class="cs-idock-btn" data-dock="aw_research" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#5a7090" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">RESEARCH</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">RESEARCH</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -5643,19 +5648,19 @@ def page_tweet_history():
     <div class="cs-icon-dock cs-th-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="th_hooks" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 22h20L12 2z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">HOOKS</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">HOOKS</span>
       </div>
       <div class="cs-idock-btn" data-dock="th_missed" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M2 12h20" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">MISSED</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">MISSED</span>
       </div>
       <div class="cs-idock-btn" data-dock="th_style" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">STYLE</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">STYLE</span>
       </div>
       <div class="cs-idock-btn" data-dock="th_subjects" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="9" x2="21" y2="9" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="9" y2="9" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">SUBJECTS</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">SUBJECTS</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -5855,7 +5860,7 @@ def page_algo_analyzer():
     st.markdown('''<div class="cs-icon-dock cs-algo-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="aa_analyze" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">ANALYZE</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">ANALYZE</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -5963,11 +5968,11 @@ def page_health_check():
     st.markdown('''<div class="cs-icon-dock cs-hc-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="hc_run" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">AUDIT</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">AUDIT</span>
       </div>
       <div class="cs-idock-btn" data-dock="hc_clear" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">CLEAR</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">CLEAR</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -6074,7 +6079,7 @@ def page_account_pulse():
     st.markdown('''<div class="cs-icon-dock cs-ap-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="ap_refresh" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#060A12" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REFRESH</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REFRESH</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -6151,7 +6156,7 @@ def page_account_pulse():
         st.markdown('''<div class="cs-icon-dock cs-ap-pulse-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
           <div class="cs-idock-btn cs-idock-primary" data-dock="ap_pulse" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#060A12" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">PULSE</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">PULSE</span>
           </div>
         </div>''', unsafe_allow_html=True)
 
@@ -6191,7 +6196,7 @@ def page_account_researcher():
     st.markdown('''<div class="cs-icon-dock cs-ar-dock" style="display:flex;gap:8px;justify-content:center;margin:12px 0 16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="ar_research" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#060A12" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">RESEARCH</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">RESEARCH</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -6431,15 +6436,15 @@ def page_reply_guy():
     <div class="cs-icon-dock cs-rg-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="rg_load" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">LOAD</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">LOAD</span>
       </div>
       <div class="cs-idock-btn" data-dock="rg_replies" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REPLIES</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPLIES</span>
       </div>
       <div class="cs-idock-btn" data-dock="rg_verified" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="#5a7090" stroke-width="2"/><polyline points="22 4 12 14.01 9 11.01" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">VERIFIED</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">VERIFIED</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -7233,11 +7238,11 @@ def page_rd_council():
     <div class="cs-icon-dock cs-rd-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="rdc_morning" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="#060A12" stroke-width="2"/><line x1="12" y1="1" x2="12" y2="3" stroke="#060A12" stroke-width="2"/><line x1="12" y1="21" x2="12" y2="23" stroke="#060A12" stroke-width="2"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="#060A12" stroke-width="2"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="#060A12" stroke-width="2"/><line x1="1" y1="12" x2="3" y2="12" stroke="#060A12" stroke-width="2"/><line x1="21" y1="12" x2="23" y2="12" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">MORNING</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">MORNING</span>
       </div>
       <div class="cs-idock-btn" data-dock="rdc_evening" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">EVENING</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">EVENING</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -7661,7 +7666,7 @@ def page_signals_prompts():
     st.markdown('''<div class="cs-icon-dock cs-sig-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
       <div class="cs-idock-btn" data-dock="sig_next" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#5a7090" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">NEXT</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">NEXT</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
