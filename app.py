@@ -1576,7 +1576,7 @@ _sidebar_html = f"""
         <path d="M12 8v4l3 3" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
       </svg>
     </a>
-    <a href="/?page=Amplifier" class="mp-ico {_act('Amplifier')}" target="_self">
+    <a href="/?page=Content Coach" class="mp-ico {_act('Content Coach')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#00E5CC" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>
@@ -1606,9 +1606,9 @@ _sidebar_html = f"""
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#6B8AAA" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Raw Thoughts
       </a>
-      <a href="/?page=Amplifier" class="mp-panel-item {_act('Amplifier')}" target="_self">
+      <a href="/?page=Content Coach" class="mp-panel-item {_act('Content Coach')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/></svg>
-        Amplifier
+        Content Coach
       </a>
       <a href="/?page=Article+Writer" class="mp-panel-item {_act('Article Writer')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#6B8AAA" stroke-width="1.5"/><line x1="16" y1="13" x2="8" y2="13" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -1795,7 +1795,7 @@ st.markdown(f"""
   <div style="{_sec}">CREATE</div>
   <a href="/?page=Creator+Studio" target="_self" style="{_lnk}">Creator Studio</a>
   <a href="/?page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
-  <a href="/?page=Amplifier" target="_self" style="{_lnk}">Amplifier</a>
+  <a href="/?page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   <a href="/?page=Signals+%26+Prompts" target="_self" style="{_lnk}">Signals & Prompts</a>
   <div style="{_sec}">INTERACT</div>
@@ -4754,8 +4754,8 @@ def page_compose_ideas():
 # PAGE: CONTENT COACH
 # ═══════════════════════════════════════════════════════════════════════════
 def page_content_coach():
-    st.markdown('<div class="main-header">CONTENT <span>ADVISOR</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Amplifier is your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
 
     # --- Initialize session state ---
     if "coach_conversations" not in st.session_state:
@@ -4768,7 +4768,7 @@ def page_content_coach():
     except Exception: pass
     COACH_SYSTEM = get_voice_context() + f"""
 
-You are Tyler's personal social media coach. You are an EXPERT on:
+You are Amplifier, Tyler's personal social media coach. You are an EXPERT on:
 - X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
 - Content strategy: hook formulas, thread structures, engagement tactics, audience growth
 - Tyler's specific data: his top performing tweets, patterns, optimal character length, question/ellipsis usage rates, what topics work for him
@@ -4826,7 +4826,7 @@ Your coaching style:
         if coach_fmt != "General Advice":
             sys_prompt += f"\n\nFormat your actionable suggestions as: {coach_fmt}"
         history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in msgs])
-        reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as the coach.", system=sys_prompt, max_tokens=1200)
+        reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as Amplifier.", system=sys_prompt, max_tokens=1200)
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
 
@@ -7366,7 +7366,7 @@ def page_signals_prompts():
 page_map = {
     "Raw Thoughts": page_brain_dump,
     "Creator Studio": page_compose_ideas,
-    "Amplifier": page_content_coach,
+    "Content Coach": page_content_coach,
     "Article Writer": page_article_writer,
     "Post History": page_tweet_history,
     "Algorithm Score": page_algo_analyzer,
