@@ -6760,7 +6760,7 @@ def page_rd_council():
 # PAGE: SIGNALS & PROMPTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-_BEAT_REPORTERS = 'from:mikeklis OR from:evansidery OR from:PeterRBaugh'
+_BEAT_REPORTERS = 'from:mikeklis OR from:bylucaevans OR from:ZacStevensDNVR OR from:AllbrightNFL OR from:TroyRenck OR from:MaseDenver OR from:christomasson OR from:KyleNewmanDP OR from:CodyRoarkNFL OR from:NickOehlerTV OR from:JamieLynchTV OR from:markkiszla OR from:ParkerJGabriel OR from:HarrisonWind OR from:BennettDurando OR from:VBenedetto OR from:chrisadempsey OR from:katywinge OR from:VicLombardi OR from:esidery OR from:TJMcBrideNBA OR from:msinger OR from:MooseColorado OR from:DNVR_Nuggets OR from:PeterRBaugh OR from:evanrawal OR from:cmasisak22 OR from:adater OR from:megangley OR from:Jack_Carlough OR from:BrianHowell33 OR from:adamcm777 OR from:SeanKeeler OR from:Danny_Penza OR from:buffzone'
 _NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs" OR "Bo Nix" OR "Sean Payton" OR "Nikola Jokic" OR "Nathan MacKinnon") (from:espn OR from:stephenasmith OR from:adamschefter OR from:wojespn OR from:ShamsCharania OR from:RapSheet OR from:TomPelissero) -is:retweet'
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0}
 
