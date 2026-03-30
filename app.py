@@ -6916,6 +6916,42 @@ def _get_denver_games_today():
     return games
 
 
+def _fetch_parent_tweet(tweet_id):
+    """Fetch a single tweet by ID for reply context."""
+    if not tweet_id or not TWITTER_API_IO_KEY:
+        return None
+    try:
+        resp = requests.get(
+            "https://api.twitterapi.io/twitter/tweets",
+            headers={"X-API-Key": TWITTER_API_IO_KEY},
+            params={"tweet_ids": str(tweet_id)},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            tweets = resp.json().get("tweets", [])
+            return tweets[0] if tweets else None
+    except Exception:
+        pass
+    return None
+
+
+def _get_thread_context(tweet):
+    """Pull parent tweet and quoted tweet text for sport inference."""
+    context_texts = []
+    # Quoted tweet — already embedded
+    qt = tweet.get("quoted_tweet")
+    if qt and qt.get("text"):
+        qt_author = qt.get("author", {}).get("userName", "")
+        context_texts.append(f"@{qt_author}: {qt['text'][:200]}")
+    # Reply parent — fetch if needed
+    if tweet.get("isReply") and tweet.get("inReplyToId"):
+        parent = _fetch_parent_tweet(tweet["inReplyToId"])
+        if parent and parent.get("text"):
+            p_author = parent.get("author", {}).get("userName", "")
+            context_texts.append(f"@{p_author}: {parent['text'][:200]}")
+    return context_texts
+
+
 def _build_signal_brief(tweet):
     """Auto-generate a structured brief from a tweet signal."""
     author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
@@ -6924,21 +6960,25 @@ def _build_signal_brief(tweet):
     rts = tweet.get("retweetCount", 0)
     likes = tweet.get("likeCount", 0)
 
-    # Detect sport from tweet content
-    _lower = text.lower()
-    _nba_signals = ["nuggets", "jokic", "murray", "gordon", "nba", "basketball", "warriors", "lakers", "celtics", "game tonight", "playoff", "seeds", "western conference"]
-    _nhl_signals = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup"]
+    # Pull thread context (parent tweet, quoted tweet) for better sport inference
+    _thread_ctx = _get_thread_context(tweet)
+    _thread_text = " ".join(_thread_ctx)
+
+    # Detect sport from tweet content + thread context combined
+    _all_text = (text + " " + _thread_text).lower()
+    _nba_signals = ["nuggets", "jokic", "murray", "gordon", "nba", "basketball", "warriors", "lakers", "celtics", "game tonight", "playoff", "seeds", "western conference", "halftime", "quarter"]
+    _nhl_signals = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey", "stanley cup", "power play", "period"]
     _cfb_signals = ["buffs", "cu buffs", "deion", "shedeur", "colorado buffaloes"]
     # Check what Denver teams are playing today via ESPN
     _today_playing = _get_denver_games_today()
 
-    if any(s in _lower for s in _nba_signals):
+    if any(s in _all_text for s in _nba_signals):
         _sport = "NBA"
         _angle = "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily"
-    elif any(s in _lower for s in _nhl_signals):
+    elif any(s in _all_text for s in _nhl_signals):
         _sport = "NHL"
         _angle = "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely"
-    elif any(s in _lower for s in _cfb_signals):
+    elif any(s in _all_text for s in _cfb_signals):
         _sport = "CFB"
         _angle = "Tyler's lens as a former professional athlete and Colorado insider"
     else:
@@ -6959,9 +6999,14 @@ def _build_signal_brief(tweet):
             _game_lines.append(f"{g['team']} {_status} {g['opponent']} ({g['league']})")
         _game_ctx = f"\nGAMES TODAY: {', '.join(_game_lines)}"
 
+    # Thread context block for the brief
+    _ctx_block = ""
+    if _thread_ctx:
+        _ctx_block = "\nCONTEXT: " + " → ".join(_thread_ctx)
+
     brief = f"""TOPIC: {text[:280]}
 TENSION: @{author} {_sport} take generating {replies} replies — active debate in mentions
-KEY STATS: {replies} replies, {rts} RTs, {likes} likes{_game_ctx}
+KEY STATS: {replies} replies, {rts} RTs, {likes} likes{_game_ctx}{_ctx_block}
 ANGLE: {_angle}"""
     return brief
 
