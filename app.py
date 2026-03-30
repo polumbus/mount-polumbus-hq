@@ -6996,14 +6996,17 @@ def _build_signal_brief(tweet):
         _sport = "NFL"
         _angle = _angles["NFL"]
 
-    # Build game context line
+    # Build game context line — only show games matching detected sport
     _game_ctx = ""
     if _today_playing:
-        _game_lines = []
-        for g in _today_playing:
-            _status = f"Final {g['score']}" if g["completed"] else ("vs" if g["home"] else "@")
-            _game_lines.append(f"{g['team']} {_status} {g['opponent']} ({g['league']})")
-        _game_ctx = f"\nGAMES TODAY: {', '.join(_game_lines)}"
+        _league_map = {"NFL": "NFL", "NBA": "NBA", "NHL": "NHL", "CFB": "NCAAF"}
+        _relevant = [g for g in _today_playing if g["league"] == _league_map.get(_sport, _sport)]
+        if _relevant:
+            _game_lines = []
+            for g in _relevant:
+                _status = f"Final {g['score']}" if g["completed"] else ("vs" if g["home"] else "@")
+                _game_lines.append(f"{g['team']} {_status} {g['opponent']}")
+            _game_ctx = f"\nGAME TODAY: {', '.join(_game_lines)}"
 
     # Thread context block for the brief
     _ctx_block = ""
