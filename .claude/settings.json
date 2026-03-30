@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if git -C /home/polfam/mount_polumbus_hq diff --quiet HEAD 2>/dev/null; then echo ''; else echo 'REMINDER: Uncommitted changes detected. Run /review before committing.'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
