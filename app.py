@@ -1783,6 +1783,7 @@ st.markdown(f"""
   <a href="/?page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?page=Content+Advisor" target="_self" style="{_lnk}">Content Advisor</a>
   <a href="/?page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
+  <a href="/?page=Signals+%26+Prompts" target="_self" style="{_lnk}">Signals & Prompts</a>
   <div style="{_sec}">INTERACT</div>
   <a href="/?page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
