@@ -4770,7 +4770,7 @@ Your coaching style:
             st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
             st.rerun()
         for conv in reversed(st.session_state.coach_conversations[-20:]):
-            label = conv.get("title", "Untitled")[:30]
+            label = conv.get("title", "Untitled")[:18]
             is_active = conv.get("id") == st.session_state.coach_current.get("id")
             if st.button((">> " if is_active else "") + label, key=f"cv_{conv['id']}", use_container_width=True):
                 st.session_state.coach_current = json.loads(json.dumps(conv))
