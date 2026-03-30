@@ -1447,9 +1447,10 @@ elif _qp_page:
 else:
     st.session_state.current_page = "Creator Studio"
 # Clear ?page= from browser URL so refresh always lands on Creator Studio
-# Uses JS history.replaceState to avoid triggering a Streamlit rerun
+# st.markdown strips <script> tags — must use components.html for JS execution
 if _qp_page:
-    st.markdown('<script>history.replaceState(null,"",location.pathname)</script>', unsafe_allow_html=True)
+    import streamlit.components.v1 as _components
+    _components.html('<script>window.parent.history.replaceState(null,"",window.parent.location.pathname)</script>', height=0)
 
 _cur_pg = st.session_state.current_page
 
