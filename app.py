@@ -1171,8 +1171,11 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             if data.get("ok", False):
                 return True, ""
             return False, data.get("error", "Proxy returned not ok")
+        except urllib.request.HTTPError as e:
+            _err = e.read().decode("utf-8", errors="replace")[:200]
+            return False, f"Proxy HTTP {e.code}: {_err}"
         except Exception as e:
-            pass  # fall through to local xurl
+            return False, f"Proxy error: {e}"
     if os.path.exists(XURL):
         result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=15)
         if result.returncode == 0:
