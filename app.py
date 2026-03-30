@@ -6973,10 +6973,10 @@ def page_signals_prompts():
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:5]
 
-    col1, col2 = st.columns(2)
+    tab_beat, tab_national = st.tabs(["Beat Reporter Heat Map", "National Take Detector"])
 
     # ── Signal 1: Beat Reporter Heat Map ──
-    with col1:
+    with tab_beat:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
         st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Klis, Sidery, Baugh — ranked by reply count</div>', unsafe_allow_html=True)
         if not beat_sorted:
@@ -7008,7 +7008,7 @@ def page_signals_prompts():
                 _signal_brief_dialog(str(time.time()))
 
     # ── Signal 2: National Take Detector ──
-    with col2:
+    with tab_national:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#C49E3C;letter-spacing:1px;margin-bottom:10px;">NATIONAL TAKE DETECTOR</div>', unsafe_allow_html=True)
         st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">ESPN, Schefter, Smith, Woj, Athletic — ranked by RT+QT</div>', unsafe_allow_html=True)
         if not national_sorted:
