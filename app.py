@@ -399,7 +399,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
   .cs-idock-btn { width: 44px !important; height: 44px !important; }
   /* Bottom bar wraps to 2 rows on very small screens */
   .cs-bottom-bar { flex-wrap: wrap !important; gap: 6px !important; }
-  .cs-bot { padding: 6px 12px !important; font-size: 10px !important; }
+  .cs-bot { height: 44px !important; padding: 0 12px !important; font-size: 10px !important; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -1913,12 +1913,12 @@ _stc.html("""<script>
       });
     });
 
-    /* Hide dock + bottom hidden buttons */
+    /* Hide dock + bottom hidden buttons — collapse completely */
     var hideLabels=['dock_banger','dock_build','dock_rewrite','dock_grades','bot_save','bot_bank','bot_hot','bot_post'];
     for(var i=0;i<btns.length;i++){
       if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
         var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
-        el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+        el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
       }
     }
 
@@ -4809,10 +4809,10 @@ def page_compose_ideas():
         # ── Divider + Bottom bar as HTML ──
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
         <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="save" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
-          <span class="cs-bot" data-bot="bank" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
-          <span class="cs-bot" data-bot="hot" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
-          <span class="cs-bot" data-bot="post" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
+          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
+          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
+          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for bottom bar
