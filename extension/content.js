@@ -253,11 +253,11 @@ async function openReplyModal(tweetElement) {
       <div class="hq-reply-option" id="hq-reply-a" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;color:#e8e8f0;font-size:14px;line-height:1.5;cursor:pointer;transition:border-color 0.15s;margin-bottom:8px;min-height:40px;">Generating...</div>
       <div class="hq-modal-label">OPTION B — PUSH BACK</div>
       <div class="hq-reply-option" id="hq-reply-b" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;color:#e8e8f0;font-size:14px;line-height:1.5;cursor:pointer;transition:border-color 0.15s;margin-bottom:8px;min-height:40px;">Generating...</div>
-      <div class="hq-modal-label" style="margin-top:14px;">SELECTED REPLY (edit before posting)</div>
+      <div class="hq-modal-label" style="margin-top:14px;">YOUR REPLY (edit and copy)</div>
       <textarea class="hq-modal-textarea" placeholder="Click an option above or write your own..." rows="3"></textarea>
       <div class="hq-modal-actions">
         <button class="hq-modal-btn hq-modal-ai" id="hq-reply-regen-btn">⚡ Regenerate</button>
-        <button class="hq-modal-btn hq-modal-save" id="hq-reply-post-btn">↗ Post Reply</button>
+        <button class="hq-modal-btn hq-modal-save" id="hq-reply-copy-btn">📋 Copy</button>
       </div>
       <div class="hq-modal-status" id="hq-reply-status"></div>
     </div>
@@ -270,7 +270,7 @@ async function openReplyModal(tweetElement) {
   const optionB = modal.querySelector("#hq-reply-b");
   const textarea = modal.querySelector(".hq-modal-textarea");
   const regenBtn = modal.querySelector("#hq-reply-regen-btn");
-  const postBtn = modal.querySelector("#hq-reply-post-btn");
+  const copyBtn = modal.querySelector("#hq-reply-copy-btn");
   const status = modal.querySelector("#hq-reply-status");
 
   function close() { modal.remove(); }
@@ -339,33 +339,20 @@ async function openReplyModal(tweetElement) {
   generateReplies();
   regenBtn.addEventListener("click", generateReplies);
 
-  postBtn.addEventListener("click", async () => {
+  copyBtn.addEventListener("click", async () => {
     const replyText = textarea.value.trim();
     if (!replyText) return;
-
-    // Click X's native reply button to open compose box
-    const nativeReplyBtn = tweetElement.querySelector('[data-testid="reply"]');
-    if (nativeReplyBtn) {
-      nativeReplyBtn.click();
-      let attempts = 0;
-      const inject = setInterval(() => {
-        attempts++;
-        const composeBox = document.querySelector('[data-testid="tweetTextarea_0"]');
-        if (composeBox) {
-          clearInterval(inject);
-          composeBox.focus();
-          document.execCommand("selectAll", false, null);
-          document.execCommand("insertText", false, replyText);
-          close();
-        } else if (attempts > 30) {
-          clearInterval(inject);
-          status.textContent = "Could not find X's compose box";
-          status.style.color = "#ff4444";
-        }
-      }, 100);
-    } else {
-      status.textContent = "Could not find reply button on tweet";
-      status.style.color = "#ff4444";
+    try {
+      await navigator.clipboard.writeText(replyText);
+      copyBtn.textContent = "Copied!";
+      status.textContent = "Copied to clipboard — paste into your reply";
+      status.style.color = "#22c55e";
+      setTimeout(() => { copyBtn.textContent = "📋 Copy"; }, 2000);
+    } catch (e) {
+      // Fallback: select the textarea text
+      textarea.select();
+      status.textContent = "Text selected — Ctrl+C to copy";
+      status.style.color = "#FBBF24";
     }
   });
 }
