@@ -611,7 +611,9 @@ IMPORTANT: Write in @{handle}'s STYLE as described above."""
 
 @st.cache_data(ttl=3600)
 def analyze_personal_patterns():
-    """Analyze Tyler's tweet history to build personal scoring benchmarks."""
+    """Analyze Tyler's tweet history to build personal scoring benchmarks. Cached per session."""
+    if "_pp_cache" in st.session_state:
+        return st.session_state["_pp_cache"]
     tweets = load_json("tweet_history.json", [])
     if len(tweets) < 20:
         return None
@@ -693,6 +695,7 @@ def analyze_personal_patterns():
         {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
     ]
 
+    st.session_state["_pp_cache"] = patterns
     return patterns
 
 
@@ -3311,23 +3314,28 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
 
     result = None
 
-    # --- STAT INJECTION: fetch real stats when input has no numbers ---
+    # --- PARALLEL FETCH: stats + sports context at the same time ---
     _live_stats_block = ""
-    if action in ("banger", "build", "rewrite") and tweet_text.strip() and not _input_has_stats(tweet_text):
+    _sports_ctx = ""
+    if action in ("banger", "build", "rewrite") and tweet_text.strip():
         _entities = _detect_sports_entities(tweet_text)
-        if _entities["players"] or _entities["teams"]:
-            _betting_level = _tweet_wants_betting(tweet_text)
-            try:
-                _live_stats_block = _fetch_live_stats(_entities, betting_level=_betting_level)
-            except Exception:
-                pass
+        _needs_stats = not _input_has_stats(tweet_text) and (_entities["players"] or _entities["teams"])
+        _needs_sports = _sports_context_relevant(tweet_text)
+        if _needs_stats or _needs_sports:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
+                _fut_stats = _ex.submit(
+                    lambda: _fetch_live_stats(_entities, betting_level=_tweet_wants_betting(tweet_text))
+                ) if _needs_stats else None
+                _fut_sports = _ex.submit(get_sports_context) if _needs_sports else None
+                if _fut_stats:
+                    try: _live_stats_block = _fut_stats.result(timeout=15)
+                    except Exception: pass
+                if _fut_sports:
+                    try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{_fut_sports.result(timeout=15)}"
+                    except Exception: pass
 
     if action == "banger" and tweet_text.strip() and fmt == "Article":
         # Article format: single long-form article, NOT two-option JSON
-        _sports_ctx = ""
-        if _sports_context_relevant(tweet_text):
-            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant):\n{get_sports_context()}"
-            except Exception: pass
         article_voice_mod = _build_article_voice_mod(voice)
         _is_sarcastic = voice == "Sarcastic"
         _article_length = "400-600 words. Short column format. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
@@ -3375,10 +3383,6 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         if _char_limit:
             _opt_range = (_opt_range[0], min(_opt_range[1], _char_limit))
         _char_rule = f"- CHARACTER LIMIT: Every option MUST be under {_char_limit} characters total — count carefully, no exceptions." if _char_limit else (f"- Optimal character range: {_opt_range[0]}-{_opt_range[1]} characters" if pp else "")
-        _sports_ctx = ""
-        if _sports_context_relevant(tweet_text):
-            try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{get_sports_context()}"
-            except Exception: pass
         _fmt_inject = ""
         if voice == "Default":
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
@@ -3529,10 +3533,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "build" and tweet_text.strip() and fmt == "Article":
         # Article format: single long-form article from concept
-        _sports_ctx_b = ""
-        if _sports_context_relevant(tweet_text):
-            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
-            except Exception: pass
+        _sports_ctx_b = _sports_ctx
         article_voice_mod = _build_article_voice_mod(voice)
         _is_sarcastic = voice == "Sarcastic"
         _article_length = "400-600 words. Short column format. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
@@ -3569,10 +3570,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "build" and tweet_text.strip():
-        _sports_ctx_b = ""
-        if _sports_context_relevant(tweet_text):
-            try: _sports_ctx_b = f"\n\nLIVE SPORTS CONTEXT (reference if relevant):\n{get_sports_context()}"
-            except Exception: pass
+        _sports_ctx_b = _sports_ctx
         _fmt_inject_b = ""
         if voice == "Default":
             _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
@@ -5154,7 +5152,7 @@ def page_article_writer():
 # ═══════════════════════════════════════════════════════════════════════════
 def sync_tweet_history(quick=False):
     """Fetch tweets and merge into local knowledge base.
-    quick=True: fetch latest ~25 tweets (fast, every page load).
+    quick=True: fetch latest ~10 tweets (fast, every page load).
     quick=False: sliding 2-week windows going back 6 months to collect up to 500 tweets.
                  Bypasses cursor pagination depth limits.
     """
@@ -5190,7 +5188,7 @@ def sync_tweet_history(quick=False):
         return window_tweets
 
     if quick:
-        all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:25]
+        all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:10]
     else:
         # Slide backwards in 7-day windows for up to 2 years (104 windows) until 500 tweets collected
         # Smaller windows = fewer tweets per window = less pagination cutoff risk
