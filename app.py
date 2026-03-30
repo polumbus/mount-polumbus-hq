@@ -376,21 +376,11 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .cs-voice-row button[kind="primary"] {
   background: rgba(196,158,60,0.1) !important; border: 1px solid rgba(196,158,60,0.4) !important; color: #C49E3C !important;
 }
-/* Action dock — centered, constrained width */
-.cs-dock-row { max-width: 500px !important; margin: 0 auto !important; }
-.cs-dock-row button {
-  border-radius: 14px !important; min-height: 48px !important; font-size: 13px !important;
-}
-.cs-dock-row [data-testid="stHorizontalBlock"] { gap: 8px !important; justify-content: center !important; }
-.cs-dock-row button[kind="primary"] {
-  background: linear-gradient(135deg, #1fb8a8, #2DD4BF) !important; color: #060A12 !important;
-}
-/* Bottom bar — centered, constrained */
-.cs-bottom-row { max-width: 500px !important; margin: 0 auto !important; }
-.cs-bottom-row button {
-  border-radius: 10px !important; font-size: 11px !important; font-weight: 600 !important;
-}
-.cs-bottom-row [data-testid="stHorizontalBlock"] { gap: 8px !important; justify-content: center !important; }
+/* Icon dock hover effect */
+.cs-idock-btn:hover { opacity:0.85; transform:translateY(-2px); transition:all 0.2s; }
+.cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
+/* Bottom bar hover */
+.cs-bot:hover { opacity:0.85; transition:all 0.2s; }
 
 /* ═══════════════════════════════════════════════
    TABS
@@ -1867,13 +1857,11 @@ _stc.html("""<script>
   }
   setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
 
-  /* ── Creator Studio: tag button rows with CSS classes ── */
+  /* ── Creator Studio: tag pill rows + wire icon dock + bottom bar ── */
   function tagCS(){
     var btns=doc.querySelectorAll('button');
     var labels=['Punchy','Normal','Long','Thread','Article'];
     var voiceLabels=['Default','Critical','Homer','Sarcastic'];
-    var dockLabels=['⚡ Go Viral','⊞ Build','↩ Repurpose','≋ Grades'];
-    var bottomLabels=['↓ Save','Bank',"What's Hot",'𝕏 Post'];
     function findRow(textList){
       for(var i=0;i<btns.length;i++){
         if(textList.indexOf(btns[i].textContent.trim())!==-1){
@@ -1887,10 +1875,47 @@ _stc.html("""<script>
     if(fmtRow&&!fmtRow.classList.contains('cs-fmt-row')){fmtRow.classList.add('cs-fmt-row');}
     var voiceRow=findRow(voiceLabels);
     if(voiceRow&&!voiceRow.classList.contains('cs-voice-row')){voiceRow.classList.add('cs-voice-row');}
-    var dockRow=findRow(dockLabels);
-    if(dockRow&&!dockRow.classList.contains('cs-dock-row')){dockRow.classList.add('cs-dock-row');}
-    var bottomRow=findRow(bottomLabels);
-    if(bottomRow&&!bottomRow.classList.contains('cs-bottom-row')){bottomRow.classList.add('cs-bottom-row');}
+
+    /* Wire icon dock clicks to hidden buttons */
+    doc.querySelectorAll('.cs-idock-btn').forEach(function(d){
+      if(d._wired) return;
+      d._wired=true;
+      d.addEventListener('click',function(){
+        var action='dock_'+d.dataset.dock;
+        for(var i=0;i<btns.length;i++){
+          if(btns[i].textContent.trim()===action){
+            btns[i].removeAttribute('disabled');
+            btns[i].click();
+            return;
+          }
+        }
+      });
+    });
+
+    /* Hide dock + bottom hidden buttons */
+    var hideLabels=['dock_banger','dock_build','dock_rewrite','dock_grades','bot_save','bot_bank','bot_hot','bot_post'];
+    for(var i=0;i<btns.length;i++){
+      if(hideLabels.indexOf(btns[i].textContent.trim())!==-1){
+        var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
+        el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+      }
+    }
+
+    /* Wire bottom bar clicks to hidden buttons */
+    doc.querySelectorAll('.cs-bot').forEach(function(b){
+      if(b._wired) return;
+      b._wired=true;
+      b.addEventListener('click',function(){
+        var action='bot_'+b.dataset.bot;
+        for(var i=0;i<btns.length;i++){
+          if(btns[i].textContent.trim()===action){
+            btns[i].removeAttribute('disabled');
+            btns[i].click();
+            return;
+          }
+        }
+      });
+    });
   }
   setTimeout(tagCS,900);setTimeout(tagCS,2100);setTimeout(tagCS,4100);
 })();
@@ -4726,54 +4751,71 @@ def page_compose_ideas():
 
         st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
-        # ── Action dock: Go Viral | Build | Repurpose | Grades ──
+        # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
         def _click_action(action):
             if st.session_state.get("ci_text", "").strip():
                 st.session_state["_ci_pending"] = (action, st.session_state.get("ci_text", ""),
                     st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
 
-        _d1, _d2, _d3, _d4 = st.columns(4)
-        with _d1:
-            st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary",
-                      on_click=_click_action, args=("banger",))
-        with _d2:
-            st.button("⊞ Build", key="ci_build", use_container_width=True,
-                      on_click=_click_action, args=("build",))
-        with _d3:
-            st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True,
-                      on_click=_click_action, args=("rewrite",))
-        with _d4:
-            st.button("≋ Grades", key="ci_engage", use_container_width=True,
-                      on_click=_click_action, args=("grades",))
+        st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
+        <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">GO VIRAL</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="build" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">BUILD</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="rewrite" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">REPURPOSE</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="grades" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:8px;color:#5a7090;white-space:nowrap;letter-spacing:0.06em;font-weight:600;">GRADES</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
 
-        # ── Divider ──
-        st.markdown('<div style="height:1px;background:#1a2a45;margin:16px 0 12px;"></div>', unsafe_allow_html=True)
+        # Hidden Streamlit buttons for dock click handling
+        st.markdown('<div class="cs-hidden-dock" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">', unsafe_allow_html=True)
+        st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
+        st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
+        st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
+        st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── Bottom bar: Save | Bank | What's Hot | Post to X ──
-        _b1, _b2, _b3, _b4 = st.columns(4)
-        with _b1:
-            if st.button("↓ Save", key="ci_save", use_container_width=True):
-                if tweet_text.strip():
-                    ideas = load_json("saved_ideas.json", [])
-                    ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
-                                  "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                    save_json("saved_ideas.json", ideas)
-                    st.success("Saved.")
-        with _b2:
-            if st.button("Bank", key="ci_bank_btn", use_container_width=True):
-                st.session_state["_ci_show_bank"] = True
-        with _b3:
-            if st.button("What's Hot", key="ci_inspiration", use_container_width=True):
-                st.session_state["_ci_show_inspiration"] = True
-        with _b4:
-            if st.button("𝕏 Post", key="ci_post_direct", use_container_width=True, type="primary"):
-                if tweet_text.strip():
-                    with st.spinner("Posting..."):
-                        _ok, _err = _post_tweet(tweet_text.strip())
-                    if _ok:
-                        st.success("Posted to X!")
-                    else:
-                        st.error(f"Post failed — {_err}")
+        # ── Divider + Bottom bar as HTML ──
+        st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+        <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
+          <span class="cs-bot" data-bot="save" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+          <span class="cs-bot" data-bot="bank" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid rgba(196,158,60,0.25);color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
+          <span class="cs-bot" data-bot="hot" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
+          <span class="cs-bot" data-bot="post" style="padding:8px 18px;border-radius:10px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
+        </div>''', unsafe_allow_html=True)
+
+        # Hidden Streamlit buttons for bottom bar
+        st.markdown('<div class="cs-hidden-bottom" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">', unsafe_allow_html=True)
+        if st.button("bot_save", key="ci_save"):
+            if tweet_text.strip():
+                ideas = load_json("saved_ideas.json", [])
+                ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
+                              "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                save_json("saved_ideas.json", ideas)
+                st.success("Saved.")
+        if st.button("bot_bank", key="ci_bank_btn"):
+            st.session_state["_ci_show_bank"] = True
+        if st.button("bot_hot", key="ci_inspiration"):
+            st.session_state["_ci_show_inspiration"] = True
+        if st.button("bot_post", key="ci_post_direct"):
+            if tweet_text.strip():
+                with st.spinner("Posting..."):
+                    _ok, _err = _post_tweet(tweet_text.strip())
+                if _ok:
+                    st.success("Posted to X!")
+                else:
+                    st.error(f"Post failed — {_err}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Modal triggers ──
     def _clear_banger():
