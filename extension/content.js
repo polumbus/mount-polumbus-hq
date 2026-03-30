@@ -252,6 +252,38 @@ async function openReplyModal(tweetElement) {
   });
 }
 
+// ── Use Signal ───────────────────────────────────────────────────────────────
+
+const HQ_APP_URL = "https://polumbus-hq.streamlit.app";
+
+function useSignal(tweetElement) {
+  const data = extractTweetData(tweetElement);
+
+  // Extract reply count from metrics group
+  const metricsGroup = tweetElement.querySelector('[role="group"]');
+  let replies = 0;
+  if (metricsGroup) {
+    const replyBtn = metricsGroup.querySelector('[data-testid="reply"]');
+    if (replyBtn) {
+      const val = parseInt(replyBtn.innerText.replace(/[,K.M]/g, "")) || 0;
+      replies = val;
+    }
+  }
+
+  // Build URL params for Signals & Prompts page
+  const params = new URLSearchParams({
+    page: "Signals & Prompts",
+    sig_text: data.text.substring(0, 500),
+    sig_author: data.handle.replace("@", ""),
+    sig_replies: replies.toString(),
+    sig_rts: data.retweets.toString(),
+    sig_likes: data.likes.toString(),
+    sig_url: data.tweet_url,
+  });
+
+  window.open(`${HQ_APP_URL}/?${params.toString()}`, "_blank");
+}
+
 // ── Buttons ──────────────────────────────────────────────────────────────────
 
 function createHQButtons(tweetElement) {
@@ -301,9 +333,22 @@ function createHQButtons(tweetElement) {
     openReplyModal(tweetElement);
   };
 
+  const signalBtn = document.createElement("button");
+  signalBtn.className = "hq-btn hq-signal";
+  signalBtn.textContent = "Signal";
+  signalBtn.title = "Use as signal in HQ";
+  signalBtn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    signalBtn.textContent = "Opening...";
+    useSignal(tweetElement);
+    setTimeout(() => { signalBtn.textContent = "Signal"; }, 2000);
+  };
+
   container.appendChild(saveBtn);
   container.appendChild(repurposeBtn);
   container.appendChild(replyBtn);
+  container.appendChild(signalBtn);
   metricsGroup.parentElement.appendChild(container);
 }
 

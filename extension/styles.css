@@ -31,6 +31,10 @@
   border-color: #a78bfa;
   color: #a78bfa;
 }
+.hq-signal:hover {
+  border-color: #2DD4BF;
+  color: #2DD4BF;
+}
 .hq-saved {
   border-color: #22c55e !important;
   color: #22c55e !important;

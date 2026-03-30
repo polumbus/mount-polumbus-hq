@@ -7223,6 +7223,31 @@ def page_signals_prompts():
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
 
+    # ── Handle incoming signal from Chrome extension URL params ──
+    _sig_text = st.query_params.get("sig_text", "")
+    if _sig_text:
+        _sig_author = st.query_params.get("sig_author", "unknown")
+        _sig_replies = st.query_params.get("sig_replies", "0")
+        _sig_rts = st.query_params.get("sig_rts", "0")
+        _sig_likes = st.query_params.get("sig_likes", "0")
+        # Clean up URL params
+        for _p in ["sig_text", "sig_author", "sig_replies", "sig_rts", "sig_likes", "sig_url"]:
+            if _p in st.query_params:
+                del st.query_params[_p]
+        # Build a synthetic tweet dict and generate brief
+        _ext_tweet = {
+            "text": _sig_text,
+            "author": {"userName": _sig_author},
+            "replyCount": int(_sig_replies),
+            "retweetCount": int(_sig_rts),
+            "likeCount": int(_sig_likes),
+        }
+        st.session_state["sig_selected"] = _ext_tweet
+        st.session_state["sig_brief"] = _build_signal_brief(_ext_tweet)
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        _signal_brief_dialog(str(time.time()))
+
     # ── Handle pending build (AI runs HERE on main page, visible to user) ──
     _pending = st.session_state.pop("_sig_pending_build", None)
     if _pending:
