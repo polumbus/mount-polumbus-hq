@@ -1440,8 +1440,9 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
-# Single pass: read ?page= from URL, set current_page, render. No clearing,
-# no reruns. Refresh goes to whatever page you were on (normal web behavior).
+# Read ?page= from URL on every render. Sidebar <a> links set ?page= which
+# triggers a Streamlit rerun via WebSocket (not a full page reload).
+# We also write the current page back to query_params so refresh works.
 _qp_page = st.query_params.get("page", "")
 if st.session_state.pop("_nav_override", False):
     pass
@@ -1449,6 +1450,9 @@ elif _qp_page:
     st.session_state.current_page = _qp_page
 else:
     st.session_state.current_page = "Creator Studio"
+# Sync URL bar with current page so refresh preserves it
+if st.query_params.get("page", "") != st.session_state.current_page:
+    st.query_params["page"] = st.session_state.current_page
 
 _cur_pg = st.session_state.current_page
 
