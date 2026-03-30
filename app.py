@@ -6842,14 +6842,15 @@ _NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs" OR "Bo Nix" OR
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0, "beat_cursor": "", "nat_cursor": ""}
 
 
-def _fetch_signals(query, count=30, max_age_hours=48, pages=1):
-    """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results."""
+def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
+    """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results.
+    Returns (tweets, last_cursor) tuple."""
     if not TWITTER_API_IO_KEY:
-        return []
+        return [], ""
     try:
         from datetime import timedelta, timezone
         all_tweets = []
-        cursor = ""
+        cursor = start_cursor
         for _ in range(pages):
             resp = requests.get(
                 "https://api.twitterapi.io/twitter/tweet/advanced_search",
@@ -6874,10 +6875,10 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1):
                     fresh.append(t)
             except (ValueError, TypeError):
                 pass
-        return fresh
+        return fresh, cursor
     except Exception:
         pass
-    return []
+    return [], ""
 
 
 def _relative_time(created_at_str):
@@ -6913,7 +6914,7 @@ def _get_trend_pill(topic_keywords):
     if not topic_keywords or not TWITTER_API_IO_KEY:
         return "peak", "Peak"
     try:
-        recent = _fetch_signals(topic_keywords, count=10)
+        recent, _ = _fetch_signals(topic_keywords, count=10)
         if not recent:
             return "fading", "Fading"
         # Check how many tweets are < 1hr old vs total
@@ -7205,17 +7206,22 @@ def page_signals_prompts():
     if st.session_state.pop("_sig_reopen_result", False):
         _signal_result_dialog(str(time.time()))
 
-    # ── Refresh button ──
-    if st.button("↻ Refresh Signals", use_container_width=False, key="sig_refresh"):
+    # ── Refresh button — paginate forward to get NEW tweets ──
+    if st.button("↻ Next Page", use_container_width=False, key="sig_refresh"):
         _SIGNALS_CACHE["beat"] = None
         _SIGNALS_CACHE["national"] = None
         _SIGNALS_CACHE["ts"] = 0
+        # Keep cursors so next fetch continues from where we left off
 
     # ── Fetch signals (cache 5 min) ──
     if time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
         with st.spinner("Scanning Twitter signals..."):
-            _SIGNALS_CACHE["beat"] = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3)
-            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168)
+            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_SIGNALS_CACHE.get("beat_cursor", ""))
+            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_SIGNALS_CACHE.get("nat_cursor", ""))
+            _SIGNALS_CACHE["beat"] = _beat
+            _SIGNALS_CACHE["national"] = _nat
+            _SIGNALS_CACHE["beat_cursor"] = _beat_cur
+            _SIGNALS_CACHE["nat_cursor"] = _nat_cur
             _SIGNALS_CACHE["ts"] = time.time()
 
     beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
