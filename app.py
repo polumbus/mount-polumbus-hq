@@ -4580,29 +4580,14 @@ def page_compose_ideas():
                     st.session_state["_ci_pending"] = ("rewrite", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
             st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True, on_click=_click_repurpose)
 
-        # Row 3: Grades / Preview / Redo
-        sr4, sr5, sr6 = st.columns(3)
-        with sr4:
-            def _click_engage():
-                if st.session_state.get("ci_text", "").strip():
-                    st.session_state["_ci_pending"] = ("grades", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-            st.button("≋ Grades", key="ci_engage", use_container_width=True, on_click=_click_engage)
-        with sr5:
-            def _click_biz():
-                if st.session_state.get("ci_text", "").strip():
-                    st.session_state["_ci_pending"] = ("preview", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-            st.button("◎ Preview", key="ci_biz", use_container_width=True, on_click=_click_biz)
-        with sr6:
-            def _click_regen():
-                _last = st.session_state.get("ci_last_action", {})
-                if _last.get("text"):
-                    st.session_state["_ci_pending"] = (_last.get("type", "build"), _last.get("text", ""), _last.get("fmt", "Normal Tweet"), _last.get("voice", "Default"))
-                    st.session_state["_ci_pending_is_redo"] = True
-            st.button("↺ Redo", key="ci_regen_top", use_container_width=True, on_click=_click_regen)
+        # Row 3: Grades
+        def _click_engage():
+            if st.session_state.get("ci_text", "").strip():
+                st.session_state["_ci_pending"] = ("grades", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+        st.button("≋ Grades", key="ci_engage", use_container_width=True, on_click=_click_engage)
 
         st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
-        if st.button("🎯 Stuck? What's Hot in Denver Right Now", key="ci_inspiration", use_container_width=True,
-                     help="Pull last 24h from your sports lists and get 5-6 real tweet angles"):
+        if st.button("What's Hot", key="ci_inspiration", use_container_width=True):
             st.session_state["_ci_show_inspiration"] = True
 
         st.divider()
