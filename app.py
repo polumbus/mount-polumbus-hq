@@ -1148,30 +1148,31 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     return data["text"]
 
 
-def _post_tweet(text: str) -> bool:
-    """Post a new tweet via proxy or local xurl."""
-    import urllib.request
-    proxy_url = _get_proxy_url()
-    if proxy_url:
-        try:
-            proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-        except Exception:
-            proxy_key = ""
-        body = json.dumps({"text": text}).encode()
-        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
-        if proxy_key:
-            headers["X-Proxy-Key"] = proxy_key
-        try:
-            req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                data = json.loads(resp.read())
-            return data.get("ok", False)
-        except Exception:
-            pass
-    if os.path.exists(XURL):
-        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=15)
-        return result.returncode == 0
-    return False
+def _post_tweet(text: str) -> tuple[bool, str]:
+    """Post a new tweet via twitterapi.io. Returns (success, error_msg)."""
+    import urllib.request, urllib.error
+    if not TWITTER_API_IO_KEY:
+        return False, "TWITTER_API_IO_KEY not configured"
+    body = json.dumps({"text": text}).encode()
+    headers = {
+        "X-API-Key": TWITTER_API_IO_KEY,
+        "Content-Type": "application/json",
+    }
+    try:
+        req = urllib.request.Request(
+            "https://api.twitterapi.io/twitter/tweet/create",
+            data=body, headers=headers, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        if data.get("status") == "error":
+            return False, data.get("msg", "Unknown API error")
+        return True, ""
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        return False, f"HTTP {e.code}: {err_body[:200]}"
+    except Exception as e:
+        return False, str(e)
 
 
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
@@ -1434,8 +1435,9 @@ if st.session_state.pop("_nav_override", False):
     pass  # session_state.current_page already set by the button handler — keep it
 elif _qp_page:
     st.session_state.current_page = _qp_page
+    # Clear query param so browser refresh always lands on Creator Studio
+    st.query_params.clear()
 else:
-    # No page in URL — default to Creator Studio (fresh load or direct visit)
     st.session_state.current_page = "Creator Studio"
 
 _cur_pg = st.session_state.current_page
@@ -3349,24 +3351,23 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
                 _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
-        banger_prompt = f"""Tyler drafted this tweet concept. Polish it for maximum X algorithm performance while PRESERVING his original words, phrasing, and intent.
+        banger_prompt = f"""Tyler drafted this tweet concept. Make it score 9+ on every X algorithm metric while keeping his voice and point of view.
 
 Draft: "{tweet_text}"
-
-PRESERVATION RULE (THIS IS THE #1 PRIORITY):
-- Tyler's draft IS the tweet. Your job is to tighten, sharpen, and optimize — NOT to replace it.
-- Keep his key phrases, word choices, and sentence structure intact. If he wrote "on a bit of a heater" — that phrase stays.
-- You may: tighten wording, improve the hook/opener, adjust punctuation, add a stronger closer, trim filler words.
-- You may NOT: replace his observations with different ones, swap his framing for a completely new angle, or rebuild the tweet from scratch.
-- If the draft is already strong, minimal changes are correct. Do not change things just to change them.
-- Each option should feel like Tyler's draft at 95% — polished, not rewritten.
+{_live_stats_block}
+HOW TO USE THE DRAFT + STATS:
+- Tyler's draft gives you his TAKE and ANGLE — keep those. This is his tweet, not a new one.
+- LIVE STATS above (if provided) give you the AMMO — records, scores, matchup data. Weave them into his framing to add credibility and specificity.
+- Example: Tyler writes "6 game winning streak" + stats show "48-28" → output: "Won 6 straight. 48-28 on the season." Tyler writes "Warriors aren't a great team" + stats show "36-39" → output: "Golden State is 36-39."
+- Replace vague claims with specific ones using the stats. Add context that makes his point land harder.
+- DO NOT replace his topic, invent a new angle, or ignore the stats. DO sharpen, tighten, enrich, and optimize for engagement.
 
 {format_mod}
-{patterns_ctx}{_sports_ctx}{_fmt_inject}{_live_stats_block}
+{patterns_ctx}{_sports_ctx}{_fmt_inject}
 
 STAT INTEGRITY RULE:
-- If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
-- If NO stats are provided and none can be implied from the input, write the tweet using the observation only — do not fabricate specific numbers.
+- If LIVE STATS are provided above, use ONLY those exact numbers. Do not invent or adjust them.
+- If NO stats are provided, write the tweet using Tyler's observations only — do not fabricate specific numbers.
 - A tweet without stats is better than a tweet with wrong stats.
 {"- SARCASTIC VOICE STAT WARNING: Do NOT fabricate stats like '30-9-13' or '28th in pass protection' unless those exact numbers appear in LIVE STATS above. Sarcastic voice builds humor from observations and framing, not invented numbers. Real stats are funnier than fake ones." if voice == "Sarcastic" else ""}{"- HOMER VOICE STAT WARNING: Do NOT invent player stat lines like 'dropped 30, 13, and 10' or 'shooting 52% from three' unless those exact numbers appear in LIVE STATS above. Homer voice builds from the SIGNAL and the OUTSIDE REACTION — the authority comes from specificity of observation, not fabricated numbers. Use team records if available. If no player stats are provided, describe what you see without citing specific figures." if voice == "Homer" else ""}
 
@@ -3385,10 +3386,10 @@ VOICE-SPECIFIC ENDING OVERRIDE:
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here (must preserve Tyler's core phrasing)",
-  "option1_pattern": "what you tightened or improved from his draft",
-  "option2": "full tweet text here (different polish approach, still his words)",
-  "option2_pattern": "what you tightened or improved from his draft",
+  "option1": "full tweet text here",
+  "option1_pattern": "which top tweet pattern this is modeled after",
+  "option2": "full tweet text here",
+  "option2_pattern": "which top tweet pattern this is modeled after",
   "pick": "1 or 2 — {'MUST be the period-ending option (Critical voice rule overrides all other criteria)' if voice == 'Critical' else 'just the number, no explanation'}",
   "pick_reason": "one sentence — {'why this option matches Critical voice structure (period ending = correct)' if voice == 'Critical' else 'why this option scores higher on the X algorithm'}"
 }}"""
@@ -3646,7 +3647,6 @@ REPURPOSING RULES:
 - Write {_rw_voice} with completely different wording, structure, and angle of attack.
 - Tyler's version should feel like his own original thought — NOT a paraphrase.
 - Change the entry point: if the original leads with a stat, Tyler leads with an observation (or vice versa).
-- Change the structure: if the original is one long sentence, Tyler uses short punchy lines (or vice versa).
 - If the original names a player/team, Tyler can reference the same subject but frame it from his former-player perspective.
 - Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
 
@@ -4517,7 +4517,7 @@ def page_compose_ideas():
                 st.session_state["_ci_pending"] = ("banger", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
         st.button("⚡ Go Viral", key="ci_banger", use_container_width=True, type="primary", on_click=_click_banger)
 
-        # Row 2: Build + Rewrite
+        # Row 2: Build + Repurpose
         sr2, sr3 = st.columns(2)
         with sr2:
             def _click_build():
@@ -4528,7 +4528,7 @@ def page_compose_ideas():
             def _click_repurpose():
                 if st.session_state.get("ci_text", "").strip():
                     st.session_state["_ci_pending"] = ("rewrite", st.session_state.get("ci_text", ""), st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-            st.button("↩ Rewrite", key="ci_repurpose", use_container_width=True, on_click=_click_repurpose)
+            st.button("↩ Repurpose", key="ci_repurpose", use_container_width=True, on_click=_click_repurpose)
 
         # Row 3: Grades / Preview / Redo
         sr4, sr5, sr6 = st.columns(3)
@@ -4571,11 +4571,11 @@ def page_compose_ideas():
             if st.button("𝕏 Post", key="ci_post_direct", use_container_width=True, type="primary"):
                 if tweet_text.strip():
                     with st.spinner("Posting..."):
-                        _ok = _post_tweet(tweet_text.strip())
+                        _ok, _err = _post_tweet(tweet_text.strip())
                     if _ok:
                         st.success("Posted to X!")
                     else:
-                        st.error("Post failed — proxy offline or xurl unavailable.")
+                        st.error(f"Post failed — {_err}")
 
     # ── Modal triggers — driven by one-shot session state, never by button return values ──
     def _clear_banger():
@@ -4663,7 +4663,7 @@ def page_compose_ideas():
                             st.session_state["_ci_text_stage"] = item.get("text", orig_text)
                             st.rerun()
                     with _vb2:
-                        if st.button("↩ Rewrite", key=f"ci_inspo_{ii}", use_container_width=True):
+                        if st.button("↩ Repurpose", key=f"ci_inspo_{ii}", use_container_width=True):
                             st.session_state["ci_repurpose_seed"] = item.get("text", orig_text)
                             st.session_state["ci_auto_repurpose"] = True
                             st.rerun()
@@ -4820,7 +4820,7 @@ Your coaching style:
                     repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{save_text.strip()}", max_tokens=600)
                     st.session_state.coach_save_text_result = repurposed
         if "coach_save_text_result" in st.session_state:
-            st.markdown(f"**Rewrited:**\n\n{st.session_state.coach_save_text_result}")
+            st.markdown(f"**Repurposed:**\n\n{st.session_state.coach_save_text_result}")
 
     with col_center:
         include_history = st.toggle("Include Post History", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle", help="Feed recent tweet history to the advisor for personalized advice")
