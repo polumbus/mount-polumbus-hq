@@ -3880,7 +3880,8 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\nReturn ONLY the updated tweet text, nothing else.'
             _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
-                st.session_state["ci_text"] = _updated.strip()
+                # Use staging key — widget-owned "ci_text" gets overwritten on rerun
+                st.session_state["_ci_text_stage"] = _updated.strip()
             for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
                 st.session_state.pop(_k, None)
             st.rerun(scope="app")
@@ -3984,13 +3985,14 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                     # Apply + Skip buttons
                     if not _is_accepted and not _is_skipped:
                         if st.button("Apply this fix", key=f"ci_gapply_{sel_idx}", use_container_width=True, type="primary"):
-                            accepted.add(sel_idx)
-                            st.session_state["ci_grade_accepted"] = accepted
+                            with st.spinner("Applying fix..."):
+                                _apply_fix(_sfix)
                         if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
                             skipped.add(sel_idx)
                             st.session_state["ci_grade_skipped"] = skipped
+                            st.rerun()
                     elif _is_accepted:
-                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Queued for application</div>', unsafe_allow_html=True)
+                        st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Applied</div>', unsafe_allow_html=True)
 
                 else:
                     # No fix needed
