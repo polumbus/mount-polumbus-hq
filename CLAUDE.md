@@ -2,7 +2,7 @@
 
 ## Mandatory Review Before Commit
 
-EVERY time you finish making code changes and are about to commit, you MUST run `/review` first. Do not commit without running the review skill. This is non-negotiable.
+EVERY time you finish making code changes and are about to commit, you MUST run `/hq-review` first. Do not commit without running the review skill. This is non-negotiable.
 
 If the review returns FAIL, fix the issues before committing. If it returns WARN, mention the warnings to the user before committing.
 
