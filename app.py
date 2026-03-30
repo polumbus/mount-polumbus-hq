@@ -6872,21 +6872,13 @@ ANGLE: Tyler's insider lens as former NFL OL and Denver media host — push back
 
 
 @st.dialog("Signal Brief", width="large")
-def _signal_build_dialog(_nonce):
-    """Popup showing signal brief, build controls, and AI results."""
+def _signal_brief_dialog(_nonce):
+    """Popup for editing a signal brief and choosing voice/format before building."""
     brief = st.session_state.get("sig_brief", "")
     if not brief:
         st.warning("No signal selected.")
         return
 
-    # If AI already ran, show results
-    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
-        _ci_output_panel_impl("build", brief,
-                              st.session_state.get("sig_fmt", "Normal Tweet"),
-                              st.session_state.get("sig_voice", "Default"))
-        return
-
-    # Show the brief + build controls
     st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
     edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
 
@@ -6900,15 +6892,38 @@ def _signal_build_dialog(_nonce):
         sig_fmt = st.selectbox("Format", _fmt_opts, index=1, key="sig_fmt")
 
     if st.button("⊞ Build", use_container_width=True, key="sig_build", type="primary"):
-        final_brief = st.session_state.get("sig_brief_edit", edited_brief)
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _run_ci_ai("build", final_brief, sig_fmt, sig_voice)
+        # Store pending build — AI will run on the main page OUTSIDE this dialog
+        st.session_state["_sig_pending_build"] = {
+            "brief": st.session_state.get("sig_brief_edit", edited_brief),
+            "fmt": sig_fmt,
+            "voice": sig_voice,
+        }
         st.rerun()
+
+
+@st.dialog("Signal Build", width="large")
+def _signal_result_dialog(_nonce):
+    """Display-only dialog showing AI build results from a signal brief."""
+    brief = st.session_state.get("sig_brief", "")
+    fmt = st.session_state.get("sig_fmt", "Normal Tweet")
+    voice = st.session_state.get("sig_voice", "Default")
+    _ci_output_panel_impl("build", brief, fmt, voice)
 
 
 def page_signals_prompts():
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
+
+    # ── Handle pending build (AI runs HERE on main page, not inside dialog) ──
+    _pending = st.session_state.pop("_sig_pending_build", None)
+    if _pending:
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _run_ci_ai("build", _pending["brief"], _pending["fmt"], _pending["voice"])
+        st.session_state["sig_fmt"] = _pending["fmt"]
+        st.session_state["sig_voice"] = _pending["voice"]
+        _signal_result_dialog(str(time.time()))
 
     # ── Refresh button ──
     if st.button("↻ Refresh Signals", use_container_width=False, key="sig_refresh"):
@@ -6962,7 +6977,7 @@ def page_signals_prompts():
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
                 for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-                _signal_build_dialog(str(time.time()))
+                _signal_brief_dialog(str(time.time()))
 
     # ── Signal 2: National Take Detector ──
     with col2:
@@ -6990,7 +7005,7 @@ def page_signals_prompts():
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
                 for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
-                _signal_build_dialog(str(time.time()))
+                _signal_brief_dialog(str(time.time()))
 
 
 
