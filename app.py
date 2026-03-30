@@ -3699,7 +3699,10 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 if st.button("↗ Use", key=f"modal_buse_{ti+1}", use_container_width=True, type="primary"):
                     v = st.session_state.get(_widget_key, opt_text)
                     if v:
-                        st.session_state["ci_text"] = v
+                        st.session_state["_ci_text_stage"] = v
+                    _current_page = st.query_params.get("page", "Creator Studio")
+                    if _current_page != "Creator Studio":
+                        st.query_params["page"] = "Creator Studio"
                     st.rerun(scope="app")
             with b3:
                 if pplx_available() and st.button("Verify", key=f"modal_bverify_{ti+1}", use_container_width=True):
@@ -6937,13 +6940,15 @@ def page_signals_prompts():
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
 
-    # ── Handle pending build (AI runs HERE on main page, not inside dialog) ──
+    # ── Handle pending build (AI runs HERE on main page, visible to user) ──
     _pending = st.session_state.pop("_sig_pending_build", None)
     if _pending:
         for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
             st.session_state.pop(_k, None)
-        with st.spinner("Mount Polumbus AI is reaching the summit..."):
-            _run_ci_ai("build", _pending["brief"], _pending["fmt"], _pending["voice"])
+        _status = st.empty()
+        _status.markdown('<div style="text-align:center;padding:40px 0;"><div style="font-size:15px;font-weight:600;color:#2DD4BF;margin-bottom:8px;">Building your tweets...</div><div style="font-size:12px;color:#666888;">AI is generating 3 options from your signal brief</div></div>', unsafe_allow_html=True)
+        _run_ci_ai("build", _pending["brief"], _pending["fmt"], _pending["voice"])
+        _status.empty()
         st.session_state["sig_fmt"] = _pending["fmt"]
         st.session_state["sig_voice"] = _pending["voice"]
         _signal_result_dialog(str(time.time()))
