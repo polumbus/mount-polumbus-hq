@@ -363,14 +363,14 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
   width: auto !important;
 }
 .cs-fmt-row button[kind="secondary"] {
-  background: transparent !important; border: 1px solid #1a2a45 !important; color: #5a7090 !important;
+  background: #0a1220 !important; border: 1px solid #1a2a45 !important; color: #5a7090 !important;
 }
 .cs-fmt-row button[kind="secondary"]:hover { border-color: rgba(45,212,191,0.4) !important; color: #8ab0c8 !important; }
 .cs-fmt-row button[kind="primary"] {
   background: rgba(45,212,191,0.1) !important; border: 1px solid rgba(45,212,191,0.4) !important; color: #2DD4BF !important;
 }
 .cs-voice-row button[kind="secondary"] {
-  background: transparent !important; border: 1px solid rgba(196,158,60,0.2) !important; color: #5a7090 !important;
+  background: #0a1220 !important; border: 1px solid rgba(196,158,60,0.2) !important; color: #5a7090 !important;
 }
 .cs-voice-row button[kind="secondary"]:hover { border-color: rgba(196,158,60,0.4) !important; color: #c0a050 !important; }
 .cs-voice-row button[kind="primary"] {
