@@ -376,6 +376,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .cs-voice-row button[kind="primary"] {
   background: rgba(196,158,60,0.1) !important; border: 1px solid rgba(196,158,60,0.4) !important; color: #C49E3C !important;
 }
+/* Hidden button containers are collapsed by JS MutationObserver */
 /* Icon dock hover effect */
 .cs-idock-btn:hover { opacity:0.85; transform:translateY(-2px); transition:all 0.2s; }
 .cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
@@ -1943,7 +1944,7 @@ _stc.html("""<script>
   var _pdTimer=null;
   var _observer=new MutationObserver(function(){
     if(_pdTimer) clearTimeout(_pdTimer);
-    _pdTimer=setTimeout(processDOM,150);
+    _pdTimer=setTimeout(processDOM,50);
   });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
@@ -2066,7 +2067,6 @@ def page_brain_dump():
     </div>''', unsafe_allow_html=True)
 
     # Hidden Streamlit buttons for dock actions
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("bd_subject", key="bd_subject"):
         with st.spinner("Thinking..."):
             result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
@@ -2091,7 +2091,6 @@ def page_brain_dump():
             with st.spinner("Generating..."):
                 result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
                 st.session_state["bd_video"] = result
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Bottom bar ──
     st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
@@ -2102,7 +2101,6 @@ def page_brain_dump():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for bottom bar
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("bd_save", key="bd_save"):
         if dump_text.strip():
             dumps = load_json("brain_dumps.json", [])
@@ -2117,7 +2115,6 @@ def page_brain_dump():
         st.rerun()
     if st.button("bd_saved", key="bd_saved"):
         st.session_state["_bd_show_saved"] = True
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Results display ──
     if st.session_state.get("bd_subject_result"):
@@ -4842,13 +4839,11 @@ def page_compose_ideas():
           </div>
         </div>''', unsafe_allow_html=True)
 
-        # Hidden Streamlit buttons for dock click handling
-        st.markdown('<div class="cs-hidden-dock" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">', unsafe_allow_html=True)
+        # Hidden Streamlit buttons for dock click handling (inside real container)
         st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
         st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
         st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
         st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
-        st.markdown('</div>', unsafe_allow_html=True)
 
         # ── Divider + Bottom bar as HTML ──
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
@@ -4859,8 +4854,7 @@ def page_compose_ideas():
           <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
         </div>''', unsafe_allow_html=True)
 
-        # Hidden Streamlit buttons for bottom bar
-        st.markdown('<div class="cs-hidden-bottom" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">', unsafe_allow_html=True)
+        # Hidden Streamlit buttons for bottom bar (inside real container)
         if st.button("bot_save", key="ci_save"):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
@@ -4880,7 +4874,6 @@ def page_compose_ideas():
                     st.success("Posted to X!")
                 else:
                     st.error(f"Post failed — {_err}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Modal triggers ──
     def _clear_banger():
@@ -5064,7 +5057,6 @@ Your coaching style:
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for bottom bar
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("cc_send", key="coach_send"):
         if user_input.strip():
             with st.spinner("Amplifier is thinking..."):
@@ -5084,7 +5076,6 @@ Your coaching style:
             with st.spinner("Repurposing..."):
                 repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{_last_ai.strip()}", max_tokens=600)
                 st.session_state.coach_save_text_result = repurposed
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if "coach_save_text_result" in st.session_state:
         st.markdown(f'<div class="output-box">{st.session_state.coach_save_text_result}</div>', unsafe_allow_html=True)
@@ -5278,7 +5269,6 @@ def page_article_writer():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for dock
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("aw_write", key="aw_scratch"):
         if seed_text:
             with st.spinner("Writing full article..."):
@@ -5309,7 +5299,6 @@ def page_article_writer():
                     st.session_state["aw_research_data"] = _research
                 else:
                     st.warning("Research failed — check API key.")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Output + editor
     if st.session_state.get("aw_result"):
@@ -5326,7 +5315,6 @@ def page_article_writer():
         </div>''', unsafe_allow_html=True)
 
         # Hidden buttons for bottom bar
-        st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
         if st.button("aw_save", key="aw_save"):
             articles = load_json("saved_articles.json", [])
             articles.append({"content": edited, "seed": seed_text[:200], "saved_at": datetime.now().isoformat()})
@@ -5345,7 +5333,6 @@ def page_article_writer():
                     st.session_state["_aw_page_verify"] = _fc
                 else:
                     st.warning("Couldn't verify — check API key.")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         _vr = st.session_state.get("_aw_page_verify")
         if _vr:
@@ -5665,7 +5652,6 @@ def page_tweet_history():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for AI dock
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("th_hooks", key="th_ai_hooks"):
         top = sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:20]
         hooks = [t.get("text", "").split(".")[0].split("...")[0].split("\n")[0][:100] for t in top]
@@ -5683,7 +5669,6 @@ def page_tweet_history():
         with st.spinner("Analyzing topics..."):
             result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
             st.session_state["th_ai_result"] = result
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.get("th_ai_result"):
         st.markdown(f'<div class="output-box">{st.session_state["th_ai_result"]}</div>', unsafe_allow_html=True)
@@ -5865,9 +5850,7 @@ def page_algo_analyzer():
     </div>''', unsafe_allow_html=True)
 
     # Hidden button
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     _aa_run = st.button("aa_analyze", key="aa_run")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if _aa_run:
         if content.strip():
@@ -5977,13 +5960,11 @@ def page_health_check():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for dock
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     run_check = st.button("hc_run", key="hc_run")
     if st.button("hc_clear", key="hc_clear"):
         if hc_cache.get("data"):
             save_json("health_check_cache.json", {})
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if run_check:
         with st.spinner("Pulling tweets and analyzing..."):
@@ -6083,7 +6064,6 @@ def page_account_pulse():
       </div>
     </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("ap_refresh", key="ap_load"):
         with st.spinner("Refreshing..."):
             user = fetch_user_info(TYLER_HANDLE)
@@ -6091,7 +6071,6 @@ def page_account_pulse():
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     user = st.session_state.get("ap_user", {})
     tweets = st.session_state.get("ap_tweets", [])
@@ -6160,7 +6139,6 @@ def page_account_pulse():
           </div>
         </div>''', unsafe_allow_html=True)
 
-        st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
         if st.button("ap_pulse", key="ap_ai"):
             with st.spinner("Analyzing patterns..."):
                 tweet_summary = "\n".join([f"- {t.get('text','')[:100]} (Likes:{t.get('likeCount',0)}, Views:{t.get('viewCount',0)})" for t in tweets[:20]])
@@ -6178,7 +6156,6 @@ Give:
 3. CONTENT MIX ASSESSMENT - What should he post more/less of?
 4. AVERAGE DAILY GROWTH ESTIMATE - Based on current trajectory""", max_tokens=800)
                 st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── JS: hide hidden buttons + wire dock clicks ──
 
@@ -6200,7 +6177,6 @@ def page_account_researcher():
       </div>
     </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("ar_research", key="ar_run"):
         if handle.strip():
             handle_clean = handle.strip().lstrip("@")
@@ -6243,7 +6219,6 @@ Return this exact JSON structure:
                         st.session_state["ar_analysis"] = {"summary": raw}
                 else:
                     st.warning(f"Could not fetch tweets for @{handle_clean}")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Recent searches as pills
     recent = load_json("recent_searches.json", [])
@@ -6313,7 +6288,6 @@ Return this exact JSON structure:
             st.markdown('''<div class="cs-bottom-bar cs-ar-bottom" style="display:flex;gap:8px;justify-content:center;">
               <span class="cs-bot" data-bot="ar_save_voice" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save as Voice Style</span>
             </div>''', unsafe_allow_html=True)
-            st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
             if st.button("ar_save_voice", key="ar_save_voice"):
                 tweets_sample = [t.get("text", "") for t in st.session_state.get("ar_tweets", [])[:15] if not t.get("text","").startswith("@") and len(t.get("text","")) > 30]
                 style_entry = {
@@ -6327,7 +6301,6 @@ Return this exact JSON structure:
                 save_json("voice_styles.json", existing_styles)
                 st.success(f"@{hdl_for_save} voice style saved! Now available in Creator Studio.")
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # Top tweets as cards
         _ar_tweets = st.session_state.get("ar_tweets", [])
@@ -6449,11 +6422,9 @@ def page_reply_guy():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for dock
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     do_load = st.button("rg_load", key="rg_load_posts")
     load_all = st.button("rg_replies", key="rg_load_all")
     load_verified = st.button("rg_verified", key="rg_load_verified")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.get("rg_show_new_list"):
         st.markdown("**Add X List**")
@@ -6955,10 +6926,8 @@ def page_inspiration():
       <span class="cs-bot cs-idock-primary" data-bot="ib_add" style="height:52px;padding:0 24px;border-radius:14px;font-size:11px;font-weight:600;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">+ Add to Vault</span>
     </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     if st.button("ib_add", key="insp_show_add"):
         st.session_state["_ib_show_add"] = True
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Add form as modal
     if st.session_state.pop("_ib_show_add", False):
@@ -7247,10 +7216,8 @@ def page_rd_council():
     </div>''', unsafe_allow_html=True)
 
     # Hidden buttons for dock
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     _run_m = st.button("rdc_morning", key="rdc_morning")
     _run_e = st.button("rdc_evening", key="rdc_evening")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if _run_m or _run_e:
         _stype = "morning" if _run_m else "evening"
@@ -7670,11 +7637,9 @@ def page_signals_prompts():
       </div>
     </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;">', unsafe_allow_html=True)
     _force_refresh = False
     if st.button("sig_next", key="sig_refresh"):
         _force_refresh = True
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Fetch signals — all state in session_state, not module dict ──
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
