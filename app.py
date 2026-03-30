@@ -1436,10 +1436,12 @@ if st.session_state.pop("_nav_override", False):
     pass  # session_state.current_page already set by the button handler — keep it
 elif _qp_page:
     st.session_state.current_page = _qp_page
-    # Clear query param so browser refresh always lands on Creator Studio
-    st.query_params.clear()
 else:
     st.session_state.current_page = "Creator Studio"
+# Clear ?page= from browser URL so refresh always lands on Creator Studio
+# Uses JS history.replaceState to avoid triggering a Streamlit rerun
+if _qp_page:
+    st.markdown('<script>history.replaceState(null,"",location.pathname)</script>', unsafe_allow_html=True)
 
 _cur_pg = st.session_state.current_page
 
