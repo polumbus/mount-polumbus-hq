@@ -24,6 +24,8 @@ st.set_page_config(
 )
 
 # ─── Constants ──────────────────────────────────────────────────────────────
+AMPLIFIER_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAR0klEQVR42p1ZaZRdVZXe+5w7vXmoV6/GV1WpSqqSykAGMkAIw2qXqMEQF0RQu1sbRUFxQFfT2oNi+0NRWluW2korKtrayCA2Q4MNSpgyB0KSSqoqNY9vnt+749n941ZVisAS9P16775z7vnOt/fZw3eQiOCtPoKIhOCcuz8HTg29cOD4kRMDQ9Mz88Vy2dAtIQBBYiyoKM2hUG+ibev6Nbsu3dK/rted4jgOImMM33It/NOACEA4jgtlemruwUeeevyFg0O5TE1B7tckWWEEKAhJAAAxJIYCyDItp2Z4DeqNxq7ZtWPf+65OdLS6sBjnfxoUCiEQ33yMEIIxBgCjY5Pfuefnjx4+XPLL3mhQsoSZKhm5ilXRHdMmRwAQEAACcsZlSfJ71Aa/3Bi0VV7NlUIl89ptWz//6Q/39HQuf+2fx5DjOJxz23G+cdePfvjo4/XWYDAU0Mcz5YmUVTOQM5Qk5IjIAACRAIAIgIAISAhhWSBI9qr+zkats7FcLqvTxVv2XvOlf/iELEnOIutvF5BtO5LET54a/PjtXztNlcYVLeXT06WReUBkqoyMARAJQHStCkTnOUZAAgIEREYkHN0EolB3U2BtIjM+twa99377KxvW97lLvC2TuUMfePDJT37t255NK3muljw8BIiSJgsCIEQXhTt/YUe46HKIC9tE9wFyQAS7bgFRfNsq0eCtHxv7/j/ffuP7d78ppgsZcgfd8/37//6H93VcsSH30mBpKq0GvEQLC7vWcddCBEQgAQvvQEJg4DoU0SJKQCRARASzVPMnYg07+yb3n7rrEx/53G0ffiOm1wFaQvP5e+/r2bVh+onjjmFJmkyCAJAAgQhxwSqO7TiODYRcYoxzQHAsW9gCELnEmcRoCdAiocjQ1i1Jldt3bxl58bW7P/Z3n73tby/AdB6Q62i/eejJv/7qN1dcsWHq0cOAyCSJBC0zEAKAY1mCY6CzMdjVxBS5MDxTHU8Bgb87Hupptap68dxsfS4vc4bIibmYgAgBCREdWyCJzr3bR/af+MWX77hh33uW+/gCIPconjw1uOsDn2y8fO3cE8cch5jEyFkgHhHJEbZlgYThNe1tV62Xwv5aviaFtEg8MvCT3wPA6g9dlUsWOJEW9pYHpyeeHzCKFVV3kDFa8LAFxoRNjGPb7i2p50+/8OsfrF/XtxQLkIiISAiybXvn7g/PJfz6KxPVVIGrCgly34KItmnziDe+qSfS2yq3RirJYvr4qBrxa7GQcEQw4JU8Km46U53NEoEvEWu8an1rZxtM5v/vG/dbw0lJlhhn590DwTEsbzzk2dTVOlV98YmfSbLEEBGR33nnnUIIzvnX77330ZEzfhuyA1OyTyMhFueC5ThNl61efcPlerlWLlawIVQ4MRFqjSgepTKWVsJ+aYyMly1OZlq6Wpo2rIRmf7gpXJ7L2qW6axgiACImS3qmHIwGJq0aS5Wv3LXNJQkdx0HEycmZrdffHNjQOfPEMe5RwSFCWkQjuq6/JLK6febQECksuKEr1NlSPDVhTKZKYylZkwMbu6LtjUK38smconnqs5nsqyPB5qgGatqadp+iOTU90hw5+8s/VgZnJYnTIlHI0KmbbbsvLp8YP/LQf3Z0thERE0SI+K17fma2BisD08CQSCygQbQsu+XKteGe1sEHXzJms5HuptzgTKcWWLttXWZwCip1YQmuyCgx2a/5miOZo4M84Gl/x6ZKuoC5SuX50+VcoTSdzSQLq/ZdxkMesUg8ABARMFY+PWW2Bb/1vZ8jIhExifO52eQjBw6GQ/7iWJKr8oLzIZAj5FigZefq8T+8yixbCngqE2k5VTrxzIFj//OCz+NRA14UNsoSBjxmQCVAqtRlhlZZl30qC3jU5tgV112tdTTWU3nwax3v2GRZNizlfAKuSqWxZDgYePjlA3OzSc45A4AHHnmqFJCNiezSUXBjjUmie8/2SrpsFipywIOI3qaoXdHzh4Zz+09VZ7LFiZQwbM6RN0f7168D3bIKtXO/fK58elzmUnUqowW0/Mx85cykMZ4qZ8tte7drbVFhOcvKCQJEfSJd9kkPPPIUADAieuy5l72RQHkizVR56SDYlr1y32VqW0Pm5IQW9CEiEDnlum070roEi/o9sWDLVet5LFg5N1s7PVnK5IxCRYv6Q11N2BrRdvQGE7Hk/pP7/+1XckWvjqWmH325Wq5d/E83YFBzkx8CEAFTpcpkxhcLPbb/ABGxobOjZ7NpxSKrZqBLJoLjCP/OvqZ3b0kPTnOGAECChGHVRuZ5U+Smuz679rb3+rsaDcu+7Nb36amyNZUeevawNZuvZ8u2xi/64Dvfd9sHiqYNjMdXdzkSi2/pId3MHBk2OXTv2WY7DizmIGRo1QxJt8+kk0NnR9n+l45WFbAyZWToJke0BcQDH/zXT5pFvTKesku60G2rWDOzVeTMyhSPHHgleXgwPzTNZen004fMQoVxrggsjM713XAlWTR1eOD4/qOiWFPiobZ3bCXOpKA3unmVVahM7z8d6mnTYkFhO+eNxpidrdRVtv/lo7ypq3+wXrSm845pAyIgki3UeKjp3Ztmjw/rk0k9U6xNpsxCzdcSZkEPWM70iyfNdMmYK5Rt11J5AAh2xBExPzqvtMckjuVzs9PHznTt6Leq9ey5GYkzyzCDXU3BFS3p0xOh9lhlIqUni0xiy0sWqSUUrAvua1lZVLE+llooHBAt04qsbof2iCjpJPOmK9bxsN/IliJrExj0IQOsmShxpnJPe8zf3SKFfYpXJSBbYtV8Jb6zv5LKt21aSY5Dfm99Ltd+9ZbqdCZ9cNDXFDGqtVBHTNSNwtkZSZaWkq6wHC3RAPkaV1u6nYBWG00yibuAHMcJrW7zJ+IOoi8ayI/Pt75zc2x7r163OONMldGjiroRWtflaQhWkqXwph417A3EQtEN3f54JNgWi/Z3GnO52WPnAqvbAytaynNZrSFYeHXEqeje1obG7WuYZWdeHUNBSzlbmJavI27mKqxkGCCEcMRisQAIaBZrit/jMCBFdrKVsV88KzPWtHFl9syEYzq+voS8riOwoas4m2deJdzdHN+0KlM3yrny/OGh4ccOZedx6Xq94ar1akOQy7w8PMs8cmhNwqrUoVCvzRdDF3VrsQA5C0UnIAiHkKik61xpXakEPdXxNFMkt1BnyMy6sWLP9nqpNvW7A8jAqpu518ZDzSF/awMw5l2d6H3Xjnql7pe5z6dNP3+ybDtbr9w+evh0/ewUVetSW3TXx/YYJM7d/+zc08dkBoJx/5o2WzetTGnm6NlVN+5KHzhbm87yRbMIy/Z3xPRilV3YcRAgZ0amNPvCKTtf1VNFye+98e7PMc6P3fVw4cQ4U7ivLbyhowMte/LZV07d90zptXGWLuqpXHVwWk8WFFWiqu43QaRL3LEbVjRrkUD5tRHSlI03v9dCCnc1VWYzatgvxAXlPCIAD3b0sZC3PpnhMl9MesAIa9lSx19tNBjjEktOzcsNfi0eET5F7Wz0B3zPPfRs4eUBf2ssciaBtl2bzh65/+mmFc1KyGfkq+Z4evDEmdzxc1Q20KuAI6SgN9LfueOSzSOTs061HmptKA/OlEbmuSwtMiS8XY1YMVhAUYizhSC0SBKTeXk0WRqc3X3Hh+R4KDs6Y5l2dGOnEg2EPVryuVPlJw5LNaOezOUHJpWGoNCt9r4Oq2oIR1Tmc1o0UD88wnOVeqrYtKHHsm1fPJw9NPjgTx/y+FVZU2zdMsv6UnNBBIwjcAyoCu/feElGcuy5Ai3VwAAAIHGWH50fOzLg96nRnhbVo5iFaufmldmxueTLpyVVi6zrDK/tRInZhYoU8JXnc5njo0rI23X1xaWppGWTtDYBYT9xDK5sN0tVM1PyIjcyBbUxFIyFJp48Crq1lGiZxOW2aAf3Sqs72gemhmS/xyhUkbPlBqViLf/imexLZ7hXlXyqbTpGrsR8mjCc8OpmJ+zffev7//dXj889kVWDSmxbX8tl6w3LXrNzc/L0uHdz13X/eFPKrGfmUoWhGds0TYssBL1mhrxa+uiwniwqiuy2S8IRSthnW/bqji6898f/fccDD6iGKA7OMk2ixWzvlmcIbiITAGDrVmRLd+LqTVMHBhUJLWBSPCJZlq85Uh5PoVeLb+2t6nVRrnscYBFfKNFcmM/nhydD7TEt4AVBxAFrpj6VGfz1ftStBZMhOroZ6m01PfyufTewy3de7LGIN/hJOLjYAy62WeBW3IAIDGWvWjgzbeaqiZ1rhCQ7pbo1n+PNIfCoDeu7/N1NtmW1dTb5Q/7CbDr1yujEkTP5V4cpWcoeHJx7/lRxKh1pikw+dfTMz59F3XKTq7ttEiTHAh5TXL7zYqm3r7uvoXGA12WfJmihh3LdiV4fDgiIEw398s9Nu9YktvYZtqOuafdH/cVXxwONIQNw/A8n8sPTbZet1ZxOn0+VPGppcKaUn6aqYeXKUkDLvjaWPjCoSBItDzZCyF7VUqX+aLxvdbeEiHsuv/TI478LdMbzg7NclYCcxcYYz5vP/YLIHJp7+kTq0LmmHauUqfTYwFRpPMUC2rqPvyvQGKzXjUhrQ2F4dur5U7IsybKkKnItXya/p6m/Y/S3Bxi53e5S0gBHt8N9bZV0/r179qJbxs7OJDdfd5O2qjn5zGtcU0g4y4PVErJl7o4khG3aJIhxxmVOguSWUM8Nl0sh/9TRs10X984PTFcnUowzJR6O9idiK5snHz048dgRWZKWakB0e9ma2fzOi/ShueOP/KS1rRlt2+acf+r2r/3X6Ek1XSuNJZkquTtYhuNNBCREdNlznYxsx5ZZ7wd28XhDrVBp7mshAfVClauSU6xO/f6VwslJ91i5mgQAMUTHsINdcSPm+eDKDT/4zr84jrPQBk1MzGy97mOBjV1zTxzjHonEkpXcOvNtSHGIwnLk9siGT10zPzTt8Wp6qpA+Mky6VU8WUICkSBcIG4yhXTfbdm8uvjJ+5OEfd3W1ExFjjAkhurraP3P9tcnRmfi2VWbZwIVO290OLmcJARAI38AbETGZ61PZqWdeibY3CIaSxCvD81aqJEvScjQLczkzy/WmbavmRmc/ff2eFSsSbqPIAIAx5jjiji98dA33WxFPINHo6DYuqG70BtXR5Zze+B8RybI09+IZNG2QMLomoTYGABeix7I+g5CBUzf8iZgd9fSj/4tfuNlxFnp7V5BDRFAV5af/fmf16Gj00l5Jk4XlACICLfFxXjABRrDcv84DI0Rm2MMPH2jqbilOpoRh4aLhlwYjIllC0pSGnb3lI6P3ffdOVVUQF6SVC+WYBx588m/uvKv7qoumfnfItYIrDsGyyIRv5A2WyVMAgkhrixr5KlQNeF2BQ8hAWASIHdduHfnDiV/ceceN79+9XI45n7w457bt3LDvPd+69aaR519L7N3OFcXRrcUER2+E4ap2LotL/xIAIqtPZqBmIFvaBbl+Y+s2U3jHtVvPPXfi7ltvcoW95QLom0t63/3e/Xf88L6OK9bnDw6VJ5JywEdEQIKAvQHT0kNalgOBcCHmLxgUOSKY5XqgozF6ae/EH09885aPfu7TbyXpLcf0mwefvPWrd2tbVkgFPXV4GAC4JhEhvH4CLgARtBgj8HVHAd3WytYtBhDf3uuE1PrRse9/5QtvV/S8QBa++bNfHaBKY09bZWC6ODIPAFyVkaGr8cCbnkNYzDiIIIRt2AAQ7m7297elR2b6efDe73z5T8nCbyWc21+/60f/8fBjRnvIHw6Yk7nKeMqs6siQSRw5Q8TXHUL3iDtC2A4Ikn1aoCuuJqLlYlmdKd2yd/eXvnjLXyKcX3i1MDr57Xt+9tuDh4pB2RcLyRbY6ZKRLVuVujAsIWgh1SAyxrjqXi0EpMaAzbGWKwVL1t4d227/zEd6ujv+8quFN718+c0jTz2+/8BQLl1VkPk1RZU5MBQCCFwnFgwJwDIsp1L3mtQbbbzm8h37rnt3ItHydi9f3tb1lCCi89dTZ04Pv3jg2OETZwYnp5OlYknXTccGAIVzv6o1h0K9ifZtF/Vfdsnmv+B66v8BQ0TjWPySRpIAAAAASUVORK5CYII="
+AMPLIFIER_IMG = f'<img src="data:image/png;base64,{AMPLIFIER_B64}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:4px;">'
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
@@ -3309,9 +3311,6 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     import sys
     print(f"[AI-CALL] action={action} voice={voice} fmt={fmt} text={tweet_text[:80]!r}", file=sys.stderr, flush=True)
 
-    if action == "preview":
-        return
-
     voice_mod = _build_voice_mod(voice)
     pp = analyze_personal_patterns()
     format_mod = _build_format_mod(fmt, pp, voice)
@@ -3768,22 +3767,6 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     st.markdown(
         f'<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:400;margin-bottom:12px;">{fmt} · {voice} · v3.29 · sep:{_has_sep} · [{_debug_hash}]</div>',
         unsafe_allow_html=True)
-    # ── Display results ──
-    if action == "preview":
-        truncated = tweet_text[:280]
-        show_more = len(tweet_text) > 280
-        now_str = datetime.now().strftime("%b %d, %Y, %-I:%M %p")
-        st.markdown(f"""<div style="background:#0d0d18;border:1px solid #2e2e45;border-radius:16px;padding:18px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2DD4BF,#1fb8a8);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">T</div>
-                <div style="font-size:14px;"><span style="font-weight:700;">Tyler Polumbus</span><br><span style="color:#666688;font-size:12px;">@{TYLER_HANDLE}</span></div>
-            </div>
-            <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#e8e8f0;">{truncated}{'<span style="color:#1d9bf0;"> Show more</span>' if show_more else ''}</div>
-            <div style="color:#666688;font-size:12px;margin-top:12px;">{now_str} · X</div>
-        </div>
-        {'<div style="font-size:11px;color:#4a5160;margin-top:8px;">Hook lands before Show more cutoff — good.</div>' if not show_more else '<div style="font-size:11px;color:#2DD4BF;margin-top:8px;">280 char cutoff above. Ensure hook is before it.</div>'}""", unsafe_allow_html=True)
-        return
-
     # ── Results from session state (AI already ran before dialog opened) ──
     if st.session_state.get("ci_banger_data"):
         bd = st.session_state["ci_banger_data"]
@@ -4054,39 +4037,6 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
     # ── Bottom action bar ──
     st.divider()
-    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
-    _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
-    _fc1, _fc2, _fc3 = st.columns([1, 1, 1.5])
-    with _fc1:
-        _new_fmt = st.selectbox("Format", _fmt_opts, index=_fmt_opts.index(fmt) if fmt in _fmt_opts else 1, key="modal_fmt_pick", label_visibility="collapsed")
-    with _fc2:
-        _new_voice = st.selectbox("Voice", _voice_opts, index=_voice_opts.index(voice) if voice in _voice_opts else 0, key="modal_voice_pick", label_visibility="collapsed")
-    _changed = _new_voice != voice or _new_fmt != fmt
-    _label_parts = []
-    if _new_fmt != fmt:
-        _label_parts.append(_new_fmt)
-    if _new_voice != voice:
-        _label_parts.append(_new_voice)
-    _redo_label = f"↺ Redo as {' / '.join(_label_parts)}" if _label_parts else "↺ Redo"
-    with _fc3:
-        if st.button(_redo_label, use_container_width=True, key="modal_redo", type="primary" if _changed else "secondary"):
-            st.session_state["ci_voice"] = _new_voice
-            st.session_state["ci_format"] = _new_fmt
-            for _k in _RESULT_KEYS:
-                st.session_state.pop(_k, None)
-            with st.spinner("Regenerating..."):
-                _run_ci_ai(action, tweet_text, _new_fmt, _new_voice)
-            # Route back to correct page's dialog
-            _current_page = st.query_params.get("page", "Creator Studio")
-            if _current_page == "Signals & Prompts":
-                st.session_state["sig_fmt"] = _new_fmt
-                st.session_state["sig_voice"] = _new_voice
-                st.session_state["_sig_reopen_result"] = True
-            else:
-                st.session_state["_ci_pending"] = (action, tweet_text, _new_fmt, _new_voice)
-                st.session_state["_ci_pending_skip_ai"] = True
-            st.rerun(scope="app")
     _b2, _b3 = st.columns(2)
     with _b2:
         import urllib.parse as _urlparse
@@ -4740,7 +4690,7 @@ def page_compose_ideas():
 # ═══════════════════════════════════════════════════════════════════════════
 def page_content_coach():
     st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Amplifier is your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="tool-desc">{AMPLIFIER_IMG} <strong style="color:#2DD4BF;">Amplifier</strong> is your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
 
     # --- Initialize session state ---
     if "coach_conversations" not in st.session_state:
@@ -4810,7 +4760,7 @@ Your coaching style:
                 sys_prompt += build_patterns_context(patterns)
         if coach_fmt != "General Advice":
             sys_prompt += f"\n\nFormat your actionable suggestions as: {coach_fmt}"
-        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Coach'}: {m['content']}" for m in msgs])
+        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Amplifier'}: {m['content']}" for m in msgs])
         reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as Amplifier.", system=sys_prompt, max_tokens=1200)
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
@@ -4841,12 +4791,12 @@ Your coaching style:
         coach_fmt = st.selectbox("Format", ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"], key="coach_fmt", label_visibility="collapsed", help="General Advice = strategy tips. Tweet Ideas = ready-to-post content. Thread = multi-part breakdown.")
         st.markdown("---")
         st.markdown("##### Send to Creator Studio")
-        save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste coach advice here...")
+        save_text = st.text_area("Save to Creator Studio:", height=100, key="coach_save_text", placeholder="Paste Amplifier advice here...")
         c1, c2 = st.columns(2)
         with c1:
             if st.button("↓ Save Post", use_container_width=True, key="coach_save_idea") and save_text.strip():
                 ideas = load_json("saved_ideas.json", [])
-                ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Coach", "created_at": datetime.now().isoformat()})
+                ideas.append({"id": str(uuid.uuid4()), "text": save_text.strip(), "category": "From Amplifier", "created_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
                 st.success("Saved!")
         with c2:
@@ -4870,14 +4820,18 @@ Your coaching style:
 
         # Chat display
         for msg in st.session_state.coach_current.get("messages", []):
-            role_label = "Tyler" if msg["role"] == "user" else "Coach"
-            cls = "chat-user" if msg["role"] == "user" else "chat-ai"
+            if msg["role"] == "user":
+                role_label = "Tyler"
+                cls = "chat-user"
+            else:
+                role_label = f'{AMPLIFIER_IMG} <span style="color:#2DD4BF;">Amplifier</span>'
+                cls = "chat-ai"
             st.markdown(f'<div class="chat-msg {cls}"><div class="chat-role">{role_label}</div><div style="color:#d8d8e8;font-size:16px;line-height:1.8;white-space:pre-wrap;">{msg["content"]}</div></div>', unsafe_allow_html=True)
 
         # Input
-        user_input = st.text_area("Ask your coach:", height=80, key="coach_input", placeholder="What should I write about today?")
+        user_input = st.text_area("Ask Amplifier:", height=80, key="coach_input", placeholder="What should I write about today?")
         if st.button("↗ Send", use_container_width=True, key="coach_send") and user_input.strip():
-            with st.spinner("Coach is thinking..."):
+            with st.spinner("Amplifier is thinking..."):
                 _send_message(user_input.strip(), include_history, coach_fmt)
             st.rerun()
 
