@@ -6760,44 +6760,65 @@ def page_rd_council():
 # PAGE: SIGNALS & PROMPTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-_BEAT_REPORTERS = "from:mikeklis OR from:evansidery OR from:PeterRBaugh"
+_BEAT_REPORTERS = '(Broncos OR Nuggets OR Avalanche) (trade OR signing OR injury OR roster OR draft OR "free agency") -is:retweet min_replies:5'
 _NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs") (from:espn OR from:stephenasmith OR from:adamschefter OR from:wojespn OR from:TheAthletic) -is:retweet'
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0}
 
 
-def _fetch_signals(query, count=30):
-    """Fetch tweets via TwitterAPI.io advanced_search."""
+def _fetch_signals(query, count=30, max_age_hours=48):
+    """Fetch tweets via TwitterAPI.io advanced_search, filtering out stale results."""
     if not TWITTER_API_IO_KEY:
         return []
     try:
         from datetime import timedelta, timezone
-        since = (datetime.now(timezone.utc) - timedelta(hours=6)).strftime('%Y-%m-%dT%H:%M:%SZ')
         resp = requests.get(
             "https://api.twitterapi.io/twitter/tweet/advanced_search",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": "", "since": since},
+            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
             timeout=30,
         )
         if resp.status_code == 200:
-            return resp.json().get("tweets", [])
+            tweets = resp.json().get("tweets", [])
+            # Filter to recent tweets only
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+            fresh = []
+            for t in tweets:
+                try:
+                    created = datetime.strptime(t.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
+                    if created >= cutoff:
+                        fresh.append(t)
+                except (ValueError, TypeError):
+                    pass
+            return fresh
     except Exception:
         pass
     return []
 
 
 def _relative_time(created_at_str):
-    """Convert createdAt ISO string to '2m ago', '1h ago', etc."""
+    """Convert createdAt to '2m ago', '1h ago', '3d ago'. Handles both Twitter format and ISO."""
+    if not created_at_str:
+        return "time unknown"
     try:
         from datetime import timezone
-        created = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+        # Twitter format: "Thu Nov 23 03:31:24 +0000 2023"
+        try:
+            created = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+        except ValueError:
+            # ISO fallback: "2026-03-29T12:00:00Z"
+            created = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
         delta = datetime.now(timezone.utc) - created
         secs = int(delta.total_seconds())
-        if secs < 60:
+        if secs < 0:
+            return "just now"
+        elif secs < 60:
             return f"{secs}s ago"
         elif secs < 3600:
             return f"{secs // 60}m ago"
-        else:
+        elif secs < 86400:
             return f"{secs // 3600}h ago"
+        else:
+            return f"{secs // 86400}d ago"
     except Exception:
         return "time unknown"
 
@@ -6879,7 +6900,7 @@ def page_signals_prompts():
     # ── Signal 1: Beat Reporter Heat Map ──
     with col1:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Klis, Sidery, Baugh — ranked by reply count</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Denver sports insider chatter — ranked by reply count</div>', unsafe_allow_html=True)
         if not beat_sorted:
             st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No signals found — check API key or try refreshing.</div>', unsafe_allow_html=True)
         for idx, tw in enumerate(beat_sorted):
