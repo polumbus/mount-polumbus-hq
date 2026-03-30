@@ -6871,6 +6871,41 @@ ANGLE: Tyler's insider lens as former NFL OL and Denver media host — push back
     return brief
 
 
+@st.dialog("Signal Brief", width="large")
+def _signal_build_dialog(_nonce):
+    """Popup for editing a signal brief and building tweets from it."""
+    brief = st.session_state.get("sig_brief", "")
+    if not brief:
+        st.warning("No signal selected.")
+        return
+
+    # Show the raw brief
+    st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
+    edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
+
+    _custom_voices = load_json("voice_styles.json", [])
+    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        sig_voice = st.selectbox("Voice", _voice_opts, key="sig_voice")
+    with vc2:
+        sig_fmt = st.selectbox("Format", _fmt_opts, index=1, key="sig_fmt")
+
+    if st.button("⊞ Build", use_container_width=True, key="sig_build", type="primary"):
+        final_brief = st.session_state.get("sig_brief_edit", edited_brief)
+        with st.spinner("Mount Polumbus AI is reaching the summit..."):
+            _run_ci_ai("build", final_brief, sig_fmt, sig_voice)
+        st.session_state["_sig_built"] = True
+        st.rerun()
+
+    # After build completes, show results in this same dialog
+    if st.session_state.pop("_sig_built", False):
+        _ci_output_panel_impl("build", st.session_state.get("sig_brief_edit", brief),
+                              st.session_state.get("sig_fmt", "Normal Tweet"),
+                              st.session_state.get("sig_voice", "Default"))
+
+
 def page_signals_prompts():
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
@@ -6925,6 +6960,8 @@ def page_signals_prompts():
             if st.button("Use Signal", key=f"sig_beat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
+                st.session_state.pop("_sig_built", None)
+                _signal_build_dialog(str(time.time()))
 
     # ── Signal 2: National Take Detector ──
     with col2:
@@ -6950,40 +6987,9 @@ def page_signals_prompts():
             if st.button("Use Signal", key=f"sig_nat_{idx}", use_container_width=True):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
+                st.session_state.pop("_sig_built", None)
+                _signal_build_dialog(str(time.time()))
 
-    # ── Prompt Generator ──
-    st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-    st.markdown('<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:12px;">Prompt Generator</div>', unsafe_allow_html=True)
-
-    brief = st.session_state.get("sig_brief", "")
-    if brief:
-        st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
-        edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
-
-        _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
-        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
-        vc1, vc2 = st.columns(2)
-        with vc1:
-            sig_voice = st.selectbox("Voice", _voice_opts, key="sig_voice")
-        with vc2:
-            sig_fmt = st.selectbox("Format", _fmt_opts, index=1, key="sig_fmt")
-
-        bc1, bc2 = st.columns(2)
-        with bc1:
-            if st.button("Send to Build", use_container_width=True, key="sig_send", type="primary"):
-                final_brief = st.session_state.get("sig_brief_edit", edited_brief)
-                st.session_state["_ci_text_stage"] = final_brief
-                st.session_state["ci_voice"] = sig_voice
-                st.session_state["ci_format"] = sig_fmt
-                st.query_params["page"] = "Creator Studio"
-                st.rerun()
-        with bc2:
-            if st.button("Copy Brief", use_container_width=True, key="sig_copy"):
-                st.code(st.session_state.get("sig_brief_edit", edited_brief), language=None)
-                st.info("Text displayed above — copy from there.")
-    else:
-        st.markdown('<div style="color:#3a5070;font-style:italic;font-size:13px;padding:20px;text-align:center;">Click "Use Signal" on any tweet above to generate a structured brief.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
