@@ -1149,31 +1149,33 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet via twitterapi.io. Returns (success, error_msg)."""
-    import urllib.request, urllib.error
-    if not TWITTER_API_IO_KEY:
-        return False, "TWITTER_API_IO_KEY not configured"
-    body = json.dumps({"text": text}).encode()
-    headers = {
-        "X-API-Key": TWITTER_API_IO_KEY,
-        "Content-Type": "application/json",
-        "User-Agent": "MountPolumbusHQ/1.0",
-    }
-    try:
-        req = urllib.request.Request(
-            "https://api.twitterapi.io/twitter/tweet/create",
-            data=body, headers=headers, method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-        if data.get("status") == "error":
-            return False, data.get("msg", "Unknown API error")
-        return True, ""
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        return False, f"HTTP {e.code}: {err_body[:200]}"
-    except Exception as e:
-        return False, str(e)
+    """Post a new tweet via proxy or local xurl. Returns (success, error_msg)."""
+    import urllib.request
+    proxy_url = _get_proxy_url()
+    if proxy_url:
+        try:
+            proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+        except Exception:
+            proxy_key = ""
+        body = json.dumps({"text": text}).encode()
+        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        try:
+            req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read())
+            if data.get("ok", False):
+                return True, ""
+            return False, data.get("error", "Proxy returned not ok")
+        except Exception as e:
+            pass  # fall through to local xurl
+    if os.path.exists(XURL):
+        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            return True, ""
+        return False, result.stderr.strip() or result.stdout.strip() or "xurl failed"
+    return False, "No proxy available and xurl not found"
 
 
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
@@ -2184,6 +2186,14 @@ exact structural failure others are missing.
 MANDATORY STRUCTURE:
 LINE 1 — THE SYMPTOM: One specific number, stat, or named
 failure. Not an opinion. A fact that cannot be disputed.
+CRITICAL: Only use stats that appear in LIVE STATS provided
+in the prompt. If no detailed stats are available, use the
+team record, a named event, or a specific observable failure
+(e.g. "The Broncos gave up 3 sacks in the first half" is
+fine IF it happened — "bottom-10 in pass protection" is NOT
+fine unless that exact ranking appears in LIVE STATS).
+When in doubt, lead with an observation that is obviously
+true rather than inventing a number that sounds credible.
 
 LINE 2 — THE DIAGNOSIS: Why this is happening structurally.
 Root cause — not "they need to be better." Identify the
@@ -2277,6 +2287,11 @@ LINE 1 — THE SIGNAL: One specific overlooked thing
 happening right now. A player, stat, matchup, trend,
 or move the casual fan is undervaluing. Concrete only.
 Not "this team is good." Point at something specific.
+STAT RULE: Only use stats from LIVE STATS in the prompt.
+If no player stats are available, use team records, named
+events, or specific observations. Do NOT invent stat lines
+like "dropped 30, 13, and 10" or "shooting 52% from three"
+unless those exact numbers appear in LIVE STATS.
 
 LINE 2 — WHY IT MATTERS: What this signal actually means.
 The authority is in the specificity — not in announcing
@@ -2415,7 +2430,9 @@ Every contender in the West built their defensive scheme around
 stopping him this offseason. They don't scheme for players who
 aren't problems."
 
-EXAMPLE TWEETS — copy this exact energy:
+EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+(but only use stats from LIVE STATS — these example numbers
+are from real games, do not reuse or invent similar ones):
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
   The team drawing Denver in round 2 just changed their
   entire defensive game plan."
@@ -2425,6 +2442,10 @@ EXAMPLE TWEETS — copy this exact energy:
 - "MacKinnon and Makar both locked in at the same time
   in April for the first time in three years. The rest
   of the West is recalculating everything."
+NOTE: The third example above uses NO stats — just a named
+observation. When LIVE STATS don't provide player numbers,
+follow that pattern: name the player + what they're doing +
+outside reaction. That is always better than a fabricated stat.
 === END HOMER VOICE ==="""
 
     elif voice == "Sarcastic":
@@ -3358,15 +3379,24 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
 
 Draft: "{tweet_text}"
 
-START from Tyler's draft. His phrases, his observations, his personality — that is the foundation. Then layer in stats from LIVE STATS below to back up what he's already saying. The tweet should still sound like Tyler talking, not a stat sheet.
+Tyler's draft is a CONCEPT — his take, his angle, his topic. Your job is to turn that concept into a polished, high-performing tweet. Keep his point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below.
 
-GOOD example of what to do:
-- Tyler writes: "Nuggets are on a bit of a heater right now. Warriors aren't a great team but that game last night was a blast. 6 game winning streak and they are starting to figure some things out..."
+EXAMPLE WITH STATS:
+- Tyler's draft: "Nuggets are on a bit of a heater right now. Warriors aren't a great team but that game last night was a blast. 6 game winning streak and they are starting to figure some things out..."
 - Stats available: Denver Nuggets 48-28, Golden State Warriors 36-39
-- GOOD output: "Nuggets are on a bit of a heater right now. 48-28 on the season. Warriors are 36-39 and they still had to fight to stay in that game last night. 6 straight wins and this team is starting to figure some things out..."
-- Notice: Tyler's voice and phrasing stayed. Stats slid IN to his existing sentences. Not rebuilt.
+- GOOD output: "48-28. 6 straight wins. Nuggets just beat a Warriors team fighting for their playoff lives and it wasn't even close. This team is on a heater and they're starting to figure some things out..."
+- Why it works: Stronger hook (opens with the record), Tyler's personality is still there ("on a heater", "figure some things out"), stats add credibility, tighter structure.
 
-BAD output (do not do this): "Nuggets beat Golden State 116-93 last night. 48-28 on the season. 6 straight wins. Warriors are 36-39. Is this team finally clicking at the right time?" — This is a stat recap, not Tyler's tweet.
+EXAMPLE WITHOUT STATS:
+- Tyler's draft: "Bo Nix is getting better every single week. The arm talent was always there but something changed mentally this offseason"
+- No stats available
+- GOOD output: "Bo Nix is getting better every single week. The arm talent was always there. Something changed mentally this offseason and the rest of the AFC West is going to find out..."
+- Why it works: Kept Tyler's observation, sharpened the closer into something that creates intrigue and drives replies, added competitive context that invites debate.
+- GOOD output (alternate): "The arm talent was never the question with Bo Nix. Something changed mentally this offseason. He's getting better every single week and it's starting to show..."
+- Why it works: Reordered for a stronger hook (the contrarian "never the question" opener stops the scroll), same observations, ellipsis closer.
+
+TOO SAFE (don't do this): "Bo Nix is getting better every single week. The arm talent was always there. But something changed mentally this offseason..." — This is just Tyler's draft with a period and "But" added. Not an improvement.
+TOO FAR (don't do this): "Denver dominated Golden State 116-93. Is this team finally clicking at the right time?" — This replaced Tyler's voice with a generic recap.
 {_live_stats_block}
 {format_mod}
 {patterns_ctx}{_sports_ctx}{_fmt_inject}
