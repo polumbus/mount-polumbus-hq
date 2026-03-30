@@ -7208,23 +7208,24 @@ def page_signals_prompts():
     if st.session_state.pop("_sig_reopen_result", False):
         _signal_result_dialog(str(time.time()))
 
-    # ── Refresh button — paginate forward to get NEW tweets ──
+    # ── Next Page button — paginate forward to get NEW tweets ──
+    _force_refresh = False
     if st.button("↻ Next Page", use_container_width=False, key="sig_refresh"):
-        _SIGNALS_CACHE["beat"] = None
-        _SIGNALS_CACHE["national"] = None
-        _SIGNALS_CACHE["ts"] = 0
-        # Keep cursors so next fetch continues from where we left off
+        _force_refresh = True
 
-    # ── Fetch signals (cache 5 min) ──
-    if time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
+    # ── Fetch signals (cache 5 min, or force on Next Page) ──
+    if _force_refresh or time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
         with st.spinner("Scanning Twitter signals..."):
-            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_SIGNALS_CACHE.get("beat_cursor", ""))
-            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_SIGNALS_CACHE.get("nat_cursor", ""))
+            _start_beat = st.session_state.get("_sig_beat_cursor", "")
+            _start_nat = st.session_state.get("_sig_nat_cursor", "")
+            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat if _force_refresh else "")
+            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat if _force_refresh else "")
             _SIGNALS_CACHE["beat"] = _beat
             _SIGNALS_CACHE["national"] = _nat
-            _SIGNALS_CACHE["beat_cursor"] = _beat_cur
-            _SIGNALS_CACHE["nat_cursor"] = _nat_cur
             _SIGNALS_CACHE["ts"] = time.time()
+            # Store cursors in session_state so they survive across reruns
+            st.session_state["_sig_beat_cursor"] = _beat_cur
+            st.session_state["_sig_nat_cursor"] = _nat_cur
 
     beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
     national_tweets = _dedup_signals(_SIGNALS_CACHE.get("national", []))
