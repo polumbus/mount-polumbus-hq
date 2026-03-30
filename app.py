@@ -1950,6 +1950,38 @@ def _input_has_stats(text: str) -> bool:
     return False
 
 
+def _tweet_wants_betting(text: str) -> str:
+    """Determine if a tweet benefits from betting context.
+    Returns:
+      'explicit' — tweet is about betting/lines/picks → always inject full odds
+      'game'     — tweet is about a specific upcoming game → inject as soft background
+      ''         — no betting relevance → skip odds entirely
+    """
+    _text = text.lower()
+    # Explicit gambling/betting intent
+    _explicit = [
+        "spread", "odds", "line ", "lines", "moneyline", "money line",
+        "over/under", "o/u", "parlay", "bet ", "betting", "lock ",
+        "fade ", "cover", "ats", "points favorite", "point favorite",
+        "point underdog", "points underdog", "favored by", "underdog",
+        "prop ", "props", "pick ", "picks", "teaser", "handicap",
+        "juice", "vig", "sharp ", "square ", "book ", "bookie",
+        "sportsbook", "fanduel", "draftkings", "bovada",
+    ]
+    if any(sig in _text for sig in _explicit):
+        return "explicit"
+    # Game-preview context (upcoming matchup, predictions, who wins)
+    _game_signals = [
+        "tonight", "game tonight", "tomorrow", "this weekend",
+        "who wins", "going to win", "gonna win", "will win",
+        "prediction", "preview", "matchup", "face off",
+        "playoff", "series", "round 1", "round 2", "first round",
+    ]
+    if any(sig in _text for sig in _game_signals):
+        return "game"
+    return ""
+
+
 def _detect_sports_entities(text: str) -> dict:
     """Detects player names and team names in the input."""
     text_lower = text.lower()
@@ -1964,8 +1996,10 @@ def _detect_sports_entities(text: str) -> dict:
     return {"players": found_players, "teams": found_teams}
 
 
-def _fetch_live_stats(entities: dict) -> str:
-    """Calls ESPN API directly to get current stats for detected entities."""
+def _fetch_live_stats(entities: dict, betting_level: str = "") -> str:
+    """Calls ESPN API directly to get current stats for detected entities.
+    betting_level: 'explicit' = full odds block, 'game' = soft background, '' = no odds.
+    """
     import urllib.request
     stat_lines = []
     _team_map = {
@@ -2022,7 +2056,7 @@ def _fetch_live_stats(entities: dict) -> str:
                     stat_lines.append(f"Today's {league.upper()} scores:\n{summary}")
             except Exception:
                 pass
-    # Betting lines from The Odds API
+    # Betting lines from The Odds API — only when tweet intent warrants it
     _odds_sport_map = {
         "nuggets": ("nba", "Denver Nuggets"), "lakers": ("nba", "Los Angeles Lakers"),
         "celtics": ("nba", "Boston Celtics"), "warriors": ("nba", "Golden State Warriors"),
@@ -2036,7 +2070,8 @@ def _fetch_live_stats(entities: dict) -> str:
         "bills": ("nfl", "Buffalo Bills"), "packers": ("nfl", "Green Bay Packers"),
         "avalanche": ("nhl", "Colorado Avalanche"), "avs": ("nhl", "Colorado Avalanche"),
     }
-    if odds_available():
+    _odds_lines = []
+    if betting_level and odds_available():
         for team in entities.get("teams", []):
             odds_mapping = _odds_sport_map.get(team)
             if not odds_mapping:
@@ -2044,17 +2079,42 @@ def _fetch_live_stats(entities: dict) -> str:
             try:
                 odds_block = odds_format_block(odds_mapping[1], odds_mapping[0])
                 if odds_block:
-                    stat_lines.append(odds_block)
+                    _odds_lines.append(odds_block)
             except Exception:
                 pass
 
-    if not stat_lines:
+    if not stat_lines and not _odds_lines:
         return ""
-    return (
-        "\n\n=== LIVE STATS FROM ESPN + ODDS — USE THESE EXACT NUMBERS ===\n"
-        + "\n".join(stat_lines)
-        + "\n=== DO NOT INVENT ANY STATS NOT LISTED ABOVE ===\n"
-    )
+
+    # Build the stats block — always include team records/scores
+    parts = []
+    if stat_lines:
+        parts.append(
+            "\n\n=== LIVE STATS FROM ESPN — USE THESE EXACT NUMBERS ===\n"
+            + "\n".join(stat_lines)
+            + "\n=== DO NOT INVENT ANY STATS NOT LISTED ABOVE ===\n"
+        )
+
+    # Append odds with framing based on intent level
+    if _odds_lines:
+        if betting_level == "explicit":
+            # Tweet is about betting — full injection, treat as core data
+            parts.append(
+                "\n=== BETTING LINES — TWEET IS ABOUT ODDS/LINES, USE THESE ===\n"
+                + "\n".join(_odds_lines)
+                + "\n=== USE EXACT NUMBERS FROM ABOVE ===\n"
+            )
+        elif betting_level == "game":
+            # Game preview — odds as optional color, NOT the focus
+            parts.append(
+                "\n=== OPTIONAL BACKGROUND: BETTING LINES (use ONLY if it strengthens the take — "
+                "e.g. 'favored by 10' adds weight to a point. Do NOT make the tweet about gambling. "
+                "Most tweets should NOT reference odds.) ===\n"
+                + "\n".join(_odds_lines)
+                + "\n=== ODDS ARE BACKGROUND CONTEXT, NOT THE STORY ===\n"
+            )
+
+    return "".join(parts)
 
 
 def _sanitize_output(text: str) -> str:
@@ -3221,8 +3281,9 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     if action in ("banger", "build", "rewrite") and tweet_text.strip() and not _input_has_stats(tweet_text):
         _entities = _detect_sports_entities(tweet_text)
         if _entities["players"] or _entities["teams"]:
+            _betting_level = _tweet_wants_betting(tweet_text)
             try:
-                _live_stats_block = _fetch_live_stats(_entities)
+                _live_stats_block = _fetch_live_stats(_entities, betting_level=_betting_level)
             except Exception:
                 pass
 
@@ -3256,9 +3317,9 @@ RULES:
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers where supporting visuals should go
 - End with debate invitation to drive replies"""
-        article_prompt = f"""Write {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} based on this seed:
+        article_prompt = f"""Tyler wrote this concept. Expand it into {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} — preserve his core take and phrasing as the foundation, then build around it.
 
-"{tweet_text}"
+Tyler's concept: "{tweet_text}"
 
 FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
 {_sports_ctx}{_live_stats_block}
@@ -3288,9 +3349,17 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
                 _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
-        banger_prompt = f"""Tyler drafted this tweet. Rewrite it to score 9+ on every X algorithm metric.
+        banger_prompt = f"""Tyler drafted this tweet concept. Polish it for maximum X algorithm performance while PRESERVING his original words, phrasing, and intent.
 
 Draft: "{tweet_text}"
+
+PRESERVATION RULE (THIS IS THE #1 PRIORITY):
+- Tyler's draft IS the tweet. Your job is to tighten, sharpen, and optimize — NOT to replace it.
+- Keep his key phrases, word choices, and sentence structure intact. If he wrote "on a bit of a heater" — that phrase stays.
+- You may: tighten wording, improve the hook/opener, adjust punctuation, add a stronger closer, trim filler words.
+- You may NOT: replace his observations with different ones, swap his framing for a completely new angle, or rebuild the tweet from scratch.
+- If the draft is already strong, minimal changes are correct. Do not change things just to change them.
+- Each option should feel like Tyler's draft at 95% — polished, not rewritten.
 
 {format_mod}
 {patterns_ctx}{_sports_ctx}{_fmt_inject}{_live_stats_block}
@@ -3316,10 +3385,10 @@ VOICE-SPECIFIC ENDING OVERRIDE:
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "which top tweet pattern this is modeled after",
-  "option2": "full tweet text here",
-  "option2_pattern": "which top tweet pattern this is modeled after",
+  "option1": "full tweet text here (must preserve Tyler's core phrasing)",
+  "option1_pattern": "what you tightened or improved from his draft",
+  "option2": "full tweet text here (different polish approach, still his words)",
+  "option2_pattern": "what you tightened or improved from his draft",
   "pick": "1 or 2 — {'MUST be the period-ending option (Critical voice rule overrides all other criteria)' if voice == 'Critical' else 'just the number, no explanation'}",
   "pick_reason": "one sentence — {'why this option matches Critical voice structure (period ending = correct)' if voice == 'Critical' else 'why this option scores higher on the X algorithm'}"
 }}"""
@@ -3551,9 +3620,9 @@ RULES:
 - Do NOT copy original phrasing — completely new execution
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers for visuals"""
-        rewrite_article_prompt = f"""Rewrite this content as {'a short sarcastic column' if _is_sarcastic else 'a full X Article'} in Tyler Polumbus's voice.
+        rewrite_article_prompt = f"""Someone else wrote this content. Repurpose the underlying idea as {'a short sarcastic column' if _is_sarcastic else 'a full X Article'} in Tyler Polumbus's voice. Do NOT copy any original phrasing or structure — Tyler's version should be completely his own take on the same subject.
 
-Original content: "{tweet_text}"
+Source content (NOT Tyler's): "{tweet_text}"
 {_live_stats_block}
 
 FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
@@ -3568,9 +3637,18 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
 
     elif action == "rewrite" and tweet_text.strip():
         _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
-        repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject {_rw_voice} — do NOT copy any original phrasing. Each takes a different angle.
+        repurpose_prompt = f"""You are helping Tyler repurpose someone else's tweet into his own original content. The goal: take the UNDERLYING IDEA and write it as if Tyler came up with it himself. Nobody should be able to trace it back to the original.
 
-Original tweet (NOT Tyler's): "{tweet_text}"
+Source tweet (NOT Tyler's — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
+
+REPURPOSING RULES:
+- Extract the core IDEA or TAKE — then throw away everything else about the original tweet.
+- Write {_rw_voice} with completely different wording, structure, and angle of attack.
+- Tyler's version should feel like his own original thought — NOT a paraphrase.
+- Change the entry point: if the original leads with a stat, Tyler leads with an observation (or vice versa).
+- Change the structure: if the original is one long sentence, Tyler uses short punchy lines (or vice versa).
+- If the original names a player/team, Tyler can reference the same subject but frame it from his former-player perspective.
+- Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
 
 {format_mod}{_live_stats_block}
 
@@ -3583,10 +3661,10 @@ Original tweet (NOT Tyler's): "{tweet_text}"
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
+  "option1": "full tweet text — Tyler's completely original version",
+  "option1_pattern": "angle Tyler takes on this idea",
+  "option2": "full tweet text — different Tyler angle, also fully original",
+  "option2_pattern": "angle Tyler takes on this idea",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
         _max_tok_r = 2000 if fmt == "Thread" else 400
@@ -3949,9 +4027,15 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 st.session_state.pop(_k, None)
             with st.spinner("Regenerating..."):
                 _run_ci_ai(action, tweet_text, _new_fmt, _new_voice)
-            # Reopen dialog with fresh results — skip AI run on main page
-            st.session_state["_ci_pending"] = (action, tweet_text, _new_fmt, _new_voice)
-            st.session_state["_ci_pending_skip_ai"] = True
+            # Route back to correct page's dialog
+            _current_page = st.query_params.get("page", "Creator Studio")
+            if _current_page == "Signals & Prompts":
+                st.session_state["sig_fmt"] = _new_fmt
+                st.session_state["sig_voice"] = _new_voice
+                st.session_state["_sig_reopen_result"] = True
+            else:
+                st.session_state["_ci_pending"] = (action, tweet_text, _new_fmt, _new_voice)
+                st.session_state["_ci_pending_skip_ai"] = True
             st.rerun(scope="app")
     _b2, _b3 = st.columns(2)
     with _b2:
@@ -6880,6 +6964,25 @@ def _dedup_signals(tweets, min_overlap=3):
     return [tw for tw, _ in kept]
 
 
+def _quick_sport_tag(text):
+    """Fast sport detection from text only — for card display pills."""
+    _l = text.lower()
+    _nfl = ["broncos", "nfl", "bo nix", "sean payton", "paton", "draft", "football", "owners meetings", "waddle", "sutton"]
+    _nba = ["nuggets", "jokic", "jamal murray", "aaron gordon", "nba", "basketball", "halftime", "tipoff"]
+    _nhl = ["avalanche", "avs", "mackinnon", "makar", "nhl", "hockey"]
+    _cfb = ["buffs", "cu buffs", "deion", "shedeur"]
+    scores = {"NFL": sum(1 for s in _nfl if s in _l), "NBA": sum(1 for s in _nba if s in _l),
+              "NHL": sum(1 for s in _nhl if s in _l), "CFB": sum(1 for s in _cfb if s in _l)}
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else None
+
+_SPORT_PILL_COLORS = {
+    "NFL": ("#F97316", "rgba(249,115,22,0.12)"),
+    "NBA": ("#3B82F6", "rgba(59,130,246,0.12)"),
+    "NHL": ("#06B6D4", "rgba(6,182,212,0.12)"),
+    "CFB": ("#A855F7", "rgba(168,85,247,0.12)"),
+}
+
 _DENVER_GAMES_CACHE = {"games": None, "ts": 0}
 
 def _get_denver_games_today():
@@ -7076,6 +7179,10 @@ def page_signals_prompts():
         st.session_state["sig_voice"] = _pending["voice"]
         _signal_result_dialog(str(time.time()))
 
+    # ── Handle Redo from Signal Build dialog ──
+    if st.session_state.pop("_sig_reopen_result", False):
+        _signal_result_dialog(str(time.time()))
+
     # ── Refresh button ──
     if st.button("↻ Refresh Signals", use_container_width=False, key="sig_refresh"):
         _SIGNALS_CACHE["beat"] = None
@@ -7101,7 +7208,7 @@ def page_signals_prompts():
     # ── Signal 1: Beat Reporter Heat Map ──
     with tab_beat:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">BEAT REPORTER HEAT MAP</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Klis, Sidery, Baugh — ranked by reply count</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">35 Denver beat reporters — ranked by reply count</div>', unsafe_allow_html=True)
         if not beat_sorted:
             st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No recent tweets from beat reporters.</div>', unsafe_allow_html=True)
         for idx, tw in enumerate(beat_sorted):
@@ -7115,9 +7222,14 @@ def page_signals_prompts():
             trend_key, trend_label = _get_trend_pill(keywords) if idx == 0 else ("peak", "Peak")  # Only check timing for top signal to save API calls
             pill_colors = {"rising": ("#10B981", "rgba(16,185,129,0.12)"), "peak": ("#FBBF24", "rgba(251,191,36,0.12)"), "fading": ("#EF4444", "rgba(239,68,68,0.12)")}
             pc, pbg = pill_colors.get(trend_key, pill_colors["peak"])
+            _stag = _quick_sport_tag(tw.get("text", ""))
+            _spill = ""
+            if _stag:
+                _sc, _sbg = _SPORT_PILL_COLORS.get(_stag, ("#666888", "rgba(102,104,136,0.12)"))
+                _spill = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;margin-left:6px;">{_stag}</span>'
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}</span>
+                    <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_spill}</span>
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
@@ -7133,7 +7245,7 @@ def page_signals_prompts():
     # ── Signal 2: National Take Detector ──
     with tab_national:
         st.markdown('<div style="font-size:13px;font-weight:700;color:#C49E3C;letter-spacing:1px;margin-bottom:10px;">NATIONAL TAKE DETECTOR</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">ESPN, Schefter, Smith, Woj, Athletic — ranked by RT+QT</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;color:#3a5070;margin-bottom:12px;">Schefter, Rapoport, Pelissero, Shams, ESPN + 20 more — ranked by RT+QT</div>', unsafe_allow_html=True)
         if not national_sorted:
             st.markdown('<div style="color:#3a5070;font-style:italic;font-size:12px;">No national takes about Denver teams found.</div>', unsafe_allow_html=True)
         for idx, tw in enumerate(national_sorted):
@@ -7143,10 +7255,15 @@ def page_signals_prompts():
             qts = tw.get("quoteCount", 0)
             replies = tw.get("replyCount", 0)
             _ago = _relative_time(tw.get("createdAt", ""))
+            _stag_n = _quick_sport_tag(tw.get("text", ""))
+            _spill_n = ""
+            if _stag_n:
+                _sc_n, _sbg_n = _SPORT_PILL_COLORS.get(_stag_n, ("#666888", "rgba(102,104,136,0.12)"))
+                _spill_n = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg_n};color:{_sc_n};font-weight:600;margin-right:6px;">{_stag_n}</span>'
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
-                    <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span>
+                    <div>{_spill_n}<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span></div>
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
