@@ -1771,31 +1771,10 @@ _stc.html("""<script>
   }
   setTimeout(init,600);setTimeout(init,1500);setTimeout(init,3000);
 
-  /* ── Intercept sidebar nav clicks: use Streamlit query params instead of full reload ── */
-  function interceptNav(){
-    doc.querySelectorAll('a[href*="?page="]').forEach(function(a){
-      if(a._mpNav) return;
-      a._mpNav=true;
-      a.addEventListener('click',function(e){
-        e.preventDefault();
-        var url=new URL(a.href,win.location.origin);
-        var page=url.searchParams.get('page');
-        if(page){
-          /* Find Streamlit's stSetQueryValue or use the iframe postMessage approach */
-          var iframes=doc.querySelectorAll('iframe[title="streamlit_app"]');
-          if(iframes.length===0) iframes=doc.querySelectorAll('iframe');
-          /* Update URL and force Streamlit to pick up the change */
-          var newUrl=win.location.pathname+'?page='+encodeURIComponent(page);
-          win.history.pushState(null,'',newUrl);
-          /* Streamlit listens for this custom event */
-          win.dispatchEvent(new Event('streamlit:setQueryParams'));
-          /* Fallback: just reload with the new URL (still faster than target=_self since URL is already set) */
-          win.location.reload();
-        }
-      });
-    });
-  }
-  setTimeout(interceptNav,700);setTimeout(interceptNav,1600);setTimeout(interceptNav,3100);
+  /* ── Eliminate white flash on page navigation ── */
+  var s=doc.createElement('style');
+  s.textContent='html,body{background:#080E1E!important}';
+  doc.head.appendChild(s);
 })();
 </script>""", height=0)
 
