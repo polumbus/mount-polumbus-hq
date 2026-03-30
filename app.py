@@ -1739,6 +1739,17 @@ _sidebar_html = f"""
 
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
+    # Hidden buttons for each page — JS wires sidebar links to click these
+    # instead of doing full page reloads (eliminates white flash)
+    _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
+                  "Signals & Prompts", "Reply Mode", "Idea Bank", "R&D Council",
+                  "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
+    def _nav_to(pg):
+        st.session_state.current_page = pg
+        st.session_state._nav_override = True
+    for _pg in _all_pages:
+        st.button(_pg, key=f"_nav_{_pg}", on_click=_nav_to, args=(_pg,),
+                  type="secondary", use_container_width=True)
 
 # ── Desktop flyout panels (JS, same-origin iframe) ──────────────────────────
 import streamlit.components.v1 as _stc
@@ -1771,10 +1782,39 @@ _stc.html("""<script>
   }
   setTimeout(init,600);setTimeout(init,1500);setTimeout(init,3000);
 
-  /* ── Eliminate white flash on page navigation ── */
-  var s=doc.createElement('style');
-  s.textContent='html,body{background:#080E1E!important}';
-  doc.head.appendChild(s);
+  /* ── Hide nav buttons + wire sidebar links to click them (no reload) ── */
+  function wireNav(){
+    var sidebar=doc.querySelector('section[data-testid="stSidebar"]');
+    if(!sidebar) return;
+    /* Hide nav buttons visually but keep enabled (display:none disables them) */
+    sidebar.querySelectorAll('button[kind="secondary"]').forEach(function(btn){
+      if(btn.textContent.match(/^(Creator Studio|Raw Thoughts|Content Coach|Article Writer|Signals & Prompts|Reply Mode|Idea Bank|R&D Council|Post History|Algorithm Score|Account Audit|My Stats|Profile Analyzer)$/)){
+        var el=btn.closest('[data-testid="element-container"]')||btn.parentElement.parentElement;
+        el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+      }
+    });
+    /* Intercept all sidebar <a> links and click the matching hidden button */
+    doc.querySelectorAll('a[href*="?page="]').forEach(function(a){
+      if(a._wired) return;
+      a._wired=true;
+      a.addEventListener('click',function(e){
+        e.preventDefault();
+        var url=new URL(a.href,win.location.origin);
+        var page=url.searchParams.get('page');
+        if(!page) return;
+        var btns=sidebar.querySelectorAll('button[kind="secondary"]');
+        for(var i=0;i<btns.length;i++){
+          if(btns[i].textContent.trim()===page){
+            btns[i].removeAttribute('disabled');
+            btns[i].click();
+            return;
+          }
+        }
+        win.location.href=a.href;
+      });
+    });
+  }
+  setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
 })();
 </script>""", height=0)
 
