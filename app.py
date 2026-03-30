@@ -6963,7 +6963,7 @@ def page_signals_prompts():
     if time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
         with st.spinner("Scanning Twitter signals..."):
             _SIGNALS_CACHE["beat"] = _fetch_signals(_BEAT_REPORTERS, count=30)
-            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=30, max_age_hours=168)
+            _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=30, max_age_hours=72)
             _SIGNALS_CACHE["ts"] = time.time()
 
     beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
