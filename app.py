@@ -6853,6 +6853,29 @@ def _get_trend_pill(topic_keywords):
         return "peak", "Peak"
 
 
+_STOP_WORDS = {"the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of", "and", "or", "with", "this", "that", "from", "by", "has", "have", "had", "his", "her", "its", "will", "be", "been"}
+
+def _dedup_signals(tweets, min_overlap=3):
+    """Collapse tweets about the same story, keeping the one with most replies."""
+    if not tweets:
+        return tweets
+    kept = []
+    for tw in tweets:
+        words = set(w.lower() for w in re.findall(r'[A-Za-z]+', tw.get("text", "")) if len(w) > 2 and w.lower() not in _STOP_WORDS)
+        is_dup = False
+        for i, (ktw, kwords) in enumerate(kept):
+            overlap = len(words & kwords)
+            if overlap >= min_overlap:
+                # Keep the one with more replies
+                if tw.get("replyCount", 0) > ktw.get("replyCount", 0):
+                    kept[i] = (tw, words | kwords)
+                is_dup = True
+                break
+        if not is_dup:
+            kept.append((tw, words))
+    return [tw for tw, _ in kept]
+
+
 def _build_signal_brief(tweet):
     """Auto-generate a structured brief from a tweet signal."""
     author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
@@ -6938,8 +6961,8 @@ def page_signals_prompts():
             _SIGNALS_CACHE["national"] = _fetch_signals(_NATIONAL_QUERY, count=30)
             _SIGNALS_CACHE["ts"] = time.time()
 
-    beat_tweets = _SIGNALS_CACHE.get("beat", [])
-    national_tweets = _SIGNALS_CACHE.get("national", [])
+    beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
+    national_tweets = _dedup_signals(_SIGNALS_CACHE.get("national", []))
 
     # Sort by reply count (replies = controversy = prompt gold)
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:5]
