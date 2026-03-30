@@ -1157,6 +1157,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
     headers = {
         "X-API-Key": TWITTER_API_IO_KEY,
         "Content-Type": "application/json",
+        "User-Agent": "MountPolumbusHQ/1.0",
     }
     try:
         req = urllib.request.Request(
@@ -3351,17 +3352,20 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
                 _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
-        banger_prompt = f"""Tyler drafted this tweet concept. Make it score 9+ on every X algorithm metric while keeping his voice and point of view.
+        banger_prompt = f"""Tyler drafted this tweet concept. Make it score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
-{_live_stats_block}
-HOW TO USE THE DRAFT + STATS:
-- Tyler's draft gives you his TAKE and ANGLE — keep those. This is his tweet, not a new one.
-- LIVE STATS above (if provided) give you the AMMO — records, scores, matchup data. Weave them into his framing to add credibility and specificity.
-- Example: Tyler writes "6 game winning streak" + stats show "48-28" → output: "Won 6 straight. 48-28 on the season." Tyler writes "Warriors aren't a great team" + stats show "36-39" → output: "Golden State is 36-39."
-- Replace vague claims with specific ones using the stats. Add context that makes his point land harder.
-- DO NOT replace his topic, invent a new angle, or ignore the stats. DO sharpen, tighten, enrich, and optimize for engagement.
 
+START from Tyler's draft. His phrases, his observations, his personality — that is the foundation. Then layer in stats from LIVE STATS below to back up what he's already saying. The tweet should still sound like Tyler talking, not a stat sheet.
+
+GOOD example of what to do:
+- Tyler writes: "Nuggets are on a bit of a heater right now. Warriors aren't a great team but that game last night was a blast. 6 game winning streak and they are starting to figure some things out..."
+- Stats available: Denver Nuggets 48-28, Golden State Warriors 36-39
+- GOOD output: "Nuggets are on a bit of a heater right now. 48-28 on the season. Warriors are 36-39 and they still had to fight to stay in that game last night. 6 straight wins and this team is starting to figure some things out..."
+- Notice: Tyler's voice and phrasing stayed. Stats slid IN to his existing sentences. Not rebuilt.
+
+BAD output (do not do this): "Nuggets beat Golden State 116-93 last night. 48-28 on the season. 6 straight wins. Warriors are 36-39. Is this team finally clicking at the right time?" — This is a stat recap, not Tyler's tweet.
+{_live_stats_block}
 {format_mod}
 {patterns_ctx}{_sports_ctx}{_fmt_inject}
 
