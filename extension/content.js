@@ -188,10 +188,51 @@ function openRepurposeModal(tweetData) {
 
 // ── Reply Modal ───────────────────────────────────────────────────────────────
 
+function buildReplyPrompt(tweetData) {
+  return `Tyler Polumbus needs to reply to this tweet. Goal: engagement farming — Tyler's reply should get likes and replies on its own.
+
+Tweet by ${tweetData.author} (${tweetData.handle}):
+"${tweetData.text}"
+
+STEP 1 — CLASSIFY the tweet:
+- NEWS BREAK: reporter sharing new information
+- HOT TAKE: opinion/argument about a team or player
+- QUESTION: asking the audience something
+- STAT DUMP: sharing numbers or data
+- JOKE/MEME: humor or cultural reference
+- HIGHLIGHT: sharing a play, clip, or moment
+
+STEP 2 — WRITE TWO REPLIES using these angles:
+
+OPTION A — AGREE & AMPLIFY:
+- Co-sign the take, then raise the stakes higher
+- Add insider context the original poster doesn't have
+- Make people who agree with the original tweet ALSO want to like Tyler's reply
+- Strategy: "Yes, and here's what people are missing..."
+
+OPTION B — PUSH BACK:
+- Respectful disagreement with specific reasoning
+- Use former-player authority to challenge the framing
+- Make people who DISAGREE with the original tweet rally behind Tyler's reply
+- Strategy: "I hear you, but from inside the building..."
+
+RULES FOR BOTH:
+- Under 180 characters each — punchy, not wordy
+- First 5 words must hook — people scroll replies fast
+- The reply must work as a standalone tweet if someone only sees Tyler's reply without the parent
+- End with something that makes OTHER people reply to Tyler's reply
+- No hashtags, no emojis, no "great point" filler
+- Tyler's voice: direct, former-player authority, occasionally uses ellipsis
+- Logical connection to the original tweet — don't ignore what they said
+
+Return ONLY this format, no other text:
+AGREE: [reply text]
+PUSH BACK: [reply text]`;
+}
+
 async function openReplyModal(tweetElement) {
   const tweetData = extractTweetData(tweetElement);
 
-  // Remove any existing HQ reply modal
   const existing = document.getElementById("hq-reply-modal");
   if (existing) existing.remove();
 
@@ -208,8 +249,12 @@ async function openReplyModal(tweetElement) {
         <div class="hq-modal-label">REPLYING TO — ${tweetData.author} ${tweetData.handle}</div>
         <div class="hq-modal-source-text">${tweetData.text}</div>
       </div>
-      <div class="hq-modal-label" style="margin-top:14px;">YOUR REPLY</div>
-      <textarea class="hq-modal-textarea" placeholder="Generating reply..." rows="4"></textarea>
+      <div class="hq-modal-label" style="margin-top:14px;">OPTION A — AGREE & AMPLIFY</div>
+      <div class="hq-reply-option" id="hq-reply-a" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;color:#e8e8f0;font-size:14px;line-height:1.5;cursor:pointer;transition:border-color 0.15s;margin-bottom:8px;min-height:40px;">Generating...</div>
+      <div class="hq-modal-label">OPTION B — PUSH BACK</div>
+      <div class="hq-reply-option" id="hq-reply-b" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;color:#e8e8f0;font-size:14px;line-height:1.5;cursor:pointer;transition:border-color 0.15s;margin-bottom:8px;min-height:40px;">Generating...</div>
+      <div class="hq-modal-label" style="margin-top:14px;">SELECTED REPLY (edit before posting)</div>
+      <textarea class="hq-modal-textarea" placeholder="Click an option above or write your own..." rows="3"></textarea>
       <div class="hq-modal-actions">
         <button class="hq-modal-btn hq-modal-ai" id="hq-reply-regen-btn">⚡ Regenerate</button>
         <button class="hq-modal-btn hq-modal-save" id="hq-reply-post-btn">↗ Post Reply</button>
@@ -221,6 +266,8 @@ async function openReplyModal(tweetElement) {
 
   const backdrop = modal.querySelector(".hq-modal-backdrop");
   const closeBtn = modal.querySelector(".hq-modal-close");
+  const optionA = modal.querySelector("#hq-reply-a");
+  const optionB = modal.querySelector("#hq-reply-b");
   const textarea = modal.querySelector(".hq-modal-textarea");
   const regenBtn = modal.querySelector("#hq-reply-regen-btn");
   const postBtn = modal.querySelector("#hq-reply-post-btn");
@@ -230,35 +277,67 @@ async function openReplyModal(tweetElement) {
   backdrop.addEventListener("click", close);
   closeBtn.addEventListener("click", close);
 
-  async function generateReply() {
+  // Click option to select it
+  function selectOption(el) {
+    optionA.style.borderColor = "#2a2a4a";
+    optionB.style.borderColor = "#2a2a4a";
+    el.style.borderColor = "#2DD4BF";
+    textarea.value = el.textContent;
+  }
+  optionA.addEventListener("click", () => selectOption(optionA));
+  optionB.addEventListener("click", () => selectOption(optionB));
+
+  async function generateReplies() {
     regenBtn.disabled = true;
     regenBtn.textContent = "Generating...";
-    textarea.placeholder = "Generating...";
+    optionA.textContent = "Generating...";
+    optionB.textContent = "Generating...";
+    textarea.value = "";
     status.textContent = "";
     try {
       const result = await callProxy("/call", {
-        prompt: `You are Tyler Polumbus — former NFL player turned sports media personality. Write a short reply to this tweet in your voice: direct, conversational, no hashtags, former-player authority, occasionally uses ellipsis. Keep it under 220 characters. Give ONLY the reply text, nothing else.\n\nTweet by ${tweetData.author} (${tweetData.handle}):\n"${tweetData.text}"`
+        prompt: buildReplyPrompt(tweetData),
+        system: TYLER_SYSTEM,
       });
       if (result.text) {
-        textarea.value = result.text;
-        textarea.placeholder = "";
+        const text = result.text.trim();
+        // Parse AGREE: ... and PUSH BACK: ...
+        const agreeMatch = text.match(/AGREE:\s*(.+?)(?=\nPUSH BACK:|$)/s);
+        const pushMatch = text.match(/PUSH BACK:\s*(.+?)$/s);
+        const agreeText = agreeMatch ? agreeMatch[1].trim() : "";
+        const pushText = pushMatch ? pushMatch[1].trim() : "";
+
+        if (agreeText) {
+          optionA.textContent = agreeText;
+        } else {
+          optionA.textContent = "Could not generate — write your own";
+        }
+        if (pushText) {
+          optionB.textContent = pushText;
+        } else {
+          optionB.textContent = "Could not generate — write your own";
+        }
+        // Auto-select option A
+        if (agreeText) selectOption(optionA);
       } else {
-        status.textContent = "AI failed — write it yourself";
+        optionA.textContent = "AI failed — write your own";
+        optionB.textContent = "AI failed — write your own";
+        status.textContent = "AI failed";
         status.style.color = "#ff4444";
-        textarea.placeholder = "Write your reply...";
       }
     } catch (e) {
+      optionA.textContent = "Proxy unreachable";
+      optionB.textContent = "Proxy unreachable";
       status.textContent = "Proxy unreachable";
       status.style.color = "#ff4444";
-      textarea.placeholder = "Write your reply...";
     }
     regenBtn.disabled = false;
     regenBtn.textContent = "⚡ Regenerate";
   }
 
   // Auto-generate on open
-  generateReply();
-  regenBtn.addEventListener("click", generateReply);
+  generateReplies();
+  regenBtn.addEventListener("click", generateReplies);
 
   postBtn.addEventListener("click", async () => {
     const replyText = textarea.value.trim();
@@ -268,7 +347,6 @@ async function openReplyModal(tweetElement) {
     const nativeReplyBtn = tweetElement.querySelector('[data-testid="reply"]');
     if (nativeReplyBtn) {
       nativeReplyBtn.click();
-      // Wait for X's compose box to appear, then inject text
       let attempts = 0;
       const inject = setInterval(() => {
         attempts++;
@@ -276,7 +354,6 @@ async function openReplyModal(tweetElement) {
         if (composeBox) {
           clearInterval(inject);
           composeBox.focus();
-          // Use execCommand to properly trigger React's onChange
           document.execCommand("selectAll", false, null);
           document.execCommand("insertText", false, replyText);
           close();
