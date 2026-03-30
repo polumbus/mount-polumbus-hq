@@ -1770,6 +1770,32 @@ _stc.html("""<script>
     });
   }
   setTimeout(init,600);setTimeout(init,1500);setTimeout(init,3000);
+
+  /* ── Intercept sidebar nav clicks: use Streamlit query params instead of full reload ── */
+  function interceptNav(){
+    doc.querySelectorAll('a[href*="?page="]').forEach(function(a){
+      if(a._mpNav) return;
+      a._mpNav=true;
+      a.addEventListener('click',function(e){
+        e.preventDefault();
+        var url=new URL(a.href,win.location.origin);
+        var page=url.searchParams.get('page');
+        if(page){
+          /* Find Streamlit's stSetQueryValue or use the iframe postMessage approach */
+          var iframes=doc.querySelectorAll('iframe[title="streamlit_app"]');
+          if(iframes.length===0) iframes=doc.querySelectorAll('iframe');
+          /* Update URL and force Streamlit to pick up the change */
+          var newUrl=win.location.pathname+'?page='+encodeURIComponent(page);
+          win.history.pushState(null,'',newUrl);
+          /* Streamlit listens for this custom event */
+          win.dispatchEvent(new Event('streamlit:setQueryParams'));
+          /* Fallback: just reload with the new URL (still faster than target=_self since URL is already set) */
+          win.location.reload();
+        }
+      });
+    });
+  }
+  setTimeout(interceptNav,700);setTimeout(interceptNav,1600);setTimeout(interceptNav,3100);
 })();
 </script>""", height=0)
 
@@ -7206,27 +7232,28 @@ def page_signals_prompts():
     if st.session_state.pop("_sig_reopen_result", False):
         _signal_result_dialog(str(time.time()))
 
-    # ── Next Page button — paginate forward to get NEW tweets ──
+    # ── Next Page button ──
     _force_refresh = False
     if st.button("↻ Next Page", use_container_width=False, key="sig_refresh"):
         _force_refresh = True
 
-    # ── Fetch signals (cache 5 min, or force on Next Page) ──
-    if _force_refresh or time.time() - _SIGNALS_CACHE["ts"] > 300 or not _SIGNALS_CACHE["beat"]:
+    # ── Fetch signals — all state in session_state, not module dict ──
+    _cache_ts = st.session_state.get("_sig_cache_ts", 0)
+    _need_fetch = _force_refresh or (time.time() - _cache_ts > 300) or not st.session_state.get("_sig_beat_tweets")
+    if _need_fetch:
         with st.spinner("Scanning Twitter signals..."):
-            _start_beat = st.session_state.get("_sig_beat_cursor", "")
-            _start_nat = st.session_state.get("_sig_nat_cursor", "")
-            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat if _force_refresh else "")
-            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat if _force_refresh else "")
-            _SIGNALS_CACHE["beat"] = _beat
-            _SIGNALS_CACHE["national"] = _nat
-            _SIGNALS_CACHE["ts"] = time.time()
-            # Store cursors in session_state so they survive across reruns
+            _start_beat = st.session_state.get("_sig_beat_cursor", "") if _force_refresh else ""
+            _start_nat = st.session_state.get("_sig_nat_cursor", "") if _force_refresh else ""
+            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat)
+            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat)
+            st.session_state["_sig_beat_tweets"] = _beat
+            st.session_state["_sig_nat_tweets"] = _nat
             st.session_state["_sig_beat_cursor"] = _beat_cur
             st.session_state["_sig_nat_cursor"] = _nat_cur
+            st.session_state["_sig_cache_ts"] = time.time()
 
-    beat_tweets = _dedup_signals(_SIGNALS_CACHE.get("beat", []))
-    national_tweets = _dedup_signals(_SIGNALS_CACHE.get("national", []))
+    beat_tweets = _dedup_signals(st.session_state.get("_sig_beat_tweets", []))
+    national_tweets = _dedup_signals(st.session_state.get("_sig_nat_tweets", []))
 
     # Sort by reply count (replies = controversy = prompt gold)
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
