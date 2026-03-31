@@ -3870,14 +3870,16 @@ Rules:
 
 {"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that Tyler would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
+
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle/structure this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
+  "option1": "the actual tweet text Tyler would post — written out in full, ready to copy and paste to X",
+  "option1_pattern": "short label describing the angle this version takes",
+  "option2": "the actual tweet text Tyler would post — a different angle, written out in full",
+  "option2_pattern": "short label describing the angle this version takes",
+  "option3": "the actual tweet text Tyler would post — a third angle, written out in full",
+  "option3_pattern": "short label describing the angle this version takes",
   "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
         _max_tok_b = 2000 if fmt == "Thread" else 700
@@ -7776,7 +7778,7 @@ def page_signals_prompts():
                     <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_spill}</span>
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
                 </div>
-                <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
+                <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
                 <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
@@ -7810,7 +7812,7 @@ def page_signals_prompts():
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
                     <div>{_spill_n}<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span></div>
                 </div>
-                <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
+                <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
                 <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
