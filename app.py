@@ -1559,7 +1559,7 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Authentication Gate ───────────────────────────────────────────────────
-import streamlit.components.v1 as _auth_components
+import hashlib as _hl
 
 try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
@@ -1570,29 +1570,20 @@ try:
 except (KeyError, FileNotFoundError):
     _GUEST_PW = ""
 
+# Generate simple tokens from passwords — not for security, just for URL persistence
+_OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
+_GUEST_TOKEN = _hl.sha256(f"mp_guest_{_GUEST_PW}".encode()).hexdigest()[:16] if _GUEST_PW else ""
+
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
 
-# Restore from query param (set by JS from localStorage on page load)
+# Restore from token query param (survives refresh)
 if not st.session_state["auth_role"]:
-    _saved = st.query_params.get("_auth", "")
-    if _saved in ("owner", "guest"):
-        st.session_state["auth_role"] = _saved
-        del st.query_params["_auth"]
-
-# On first load, inject JS to check localStorage and set query param if token exists
-if not st.session_state["auth_role"] and "_auth_checked" not in st.session_state:
-    st.session_state["_auth_checked"] = True
-    _auth_components.html("""<script>
-    (function(){
-        var role = localStorage.getItem('mp_auth_role');
-        if (role && (role === 'owner' || role === 'guest')) {
-            var url = new URL(window.parent.location);
-            url.searchParams.set('_auth', role);
-            window.parent.location.replace(url.toString());
-        }
-    })();
-    </script>""", height=0)
+    _tok = st.query_params.get("token", "")
+    if _tok and _tok == _OWNER_TOKEN:
+        st.session_state["auth_role"] = "owner"
+    elif _tok and _tok == _GUEST_TOKEN:
+        st.session_state["auth_role"] = "guest"
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
@@ -1607,16 +1598,16 @@ if not st.session_state["auth_role"]:
     _pw = st.text_input("Password", type="password", key="login_pw", label_visibility="collapsed", placeholder="Enter password")
     if _pw:
         _role = None
+        _token = ""
         if _OWNER_PW and _pw == _OWNER_PW:
             _role = "owner"
+            _token = _OWNER_TOKEN
         elif _GUEST_PW and _pw == _GUEST_PW:
             _role = "guest"
+            _token = _GUEST_TOKEN
         if _role:
             st.session_state["auth_role"] = _role
-            # Save to localStorage via JS
-            _auth_components.html(f"""<script>
-            localStorage.setItem('mp_auth_role', '{_role}');
-            </script>""", height=0)
+            st.query_params["token"] = _token
             st.rerun()
         else:
             st.error("Invalid password.")
@@ -1632,6 +1623,8 @@ def is_guest() -> bool:
 # Read ?page= from URL on every render. Sidebar <a> links set ?page= which
 # triggers a Streamlit rerun via WebSocket (not a full page reload).
 # We also write the current page back to query_params so refresh works.
+# Auth token prefix for sidebar links — preserves login across page nav
+_auth_qp = f"token={st.query_params.get('token', '')}&" if st.query_params.get("token") else ""
 _qp_page = st.query_params.get("page", "")
 if st.session_state.pop("_nav_override", False):
     pass
@@ -1918,8 +1911,8 @@ with st.sidebar:
         st.markdown('<div style="text-align:center;margin:-10px 0 10px;"><span style="background:rgba(251,191,36,0.15);color:#FBBF24;padding:3px 12px;border-radius:12px;font-size:10px;font-weight:600;letter-spacing:1px;">GUEST ACCESS</span></div>', unsafe_allow_html=True)
     if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
         st.session_state["auth_role"] = None
-        st.session_state.pop("_auth_checked", None)
-        _auth_components.html("""<script>localStorage.removeItem('mp_auth_role');</script>""", height=0)
+        if "token" in st.query_params:
+            del st.query_params["token"]
         st.rerun()
     # Hidden buttons for each page — JS wires sidebar links to click these
     # instead of doing full page reloads (eliminates white flash)
@@ -6226,18 +6219,18 @@ Return ONLY valid JSON, no markdown, no code fences, no explanation before or af
                     <span style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#5a7090;text-transform:uppercase;">{_title}</span>
                     <span style="font-size:14px;font-weight:800;color:{_gc};">{_grade}</span>
                 </div>
-                <div style="font-size:13px;color:#b0c0d0;line-height:1.7;">{_detail}</div>
+                <div style="font-size:14px;color:#b0c0d0;line-height:1.7;">{_detail}</div>
             </div>''', unsafe_allow_html=True)
 
         if data.get("flagged"):
             st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#F87171;text-transform:uppercase;margin:16px 0 8px;">FLAGGED TWEETS</div>', unsafe_allow_html=True)
             for f in data["flagged"]:
-                st.markdown(f'<div style="background:#0a1220;border:1px solid rgba(248,113,113,0.2);border-left:3px solid #F87171;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:#b0c0d0;line-height:1.6;">{f}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#0a1220;border:1px solid rgba(248,113,113,0.2);border-left:3px solid #F87171;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:#b0c0d0;line-height:1.6;">{f}</div>', unsafe_allow_html=True)
 
         if data.get("recommendations"):
             st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#2DD4BF;text-transform:uppercase;margin:16px 0 8px;">RECOMMENDATIONS</div>', unsafe_allow_html=True)
             for r in data["recommendations"]:
-                st.markdown(f'<div style="background:#0a1220;border:1px solid #1a2a45;border-left:3px solid #2DD4BF;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:#b0c0d0;line-height:1.6;">{r}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#0a1220;border:1px solid #1a2a45;border-left:3px solid #2DD4BF;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:#b0c0d0;line-height:1.6;">{r}</div>', unsafe_allow_html=True)
 
     # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
