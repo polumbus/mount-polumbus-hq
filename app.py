@@ -426,7 +426,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-rg_del_list_btn"] button,
 [class*="st-key-rg_ai_fill_all"] button,
 [class*="st-key-rg_nl_save"] button,
-[class*="st-key-rg_nl_cancel"] button {
+[class*="st-key-rg_nl_cancel"] button,
+[class*="st-key-th_sync"] button,
+[class*="st-key-hof_import_btn"] button,
+[class*="st-key-insp_save"] button {
   border-radius: 14px !important; font-size: 12px !important; font-weight: 600 !important;
   min-height: 44px !important; letter-spacing: 0.04em !important;
 }
@@ -5697,6 +5700,7 @@ def page_tweet_history():
         return
 
     # Search
+    st.markdown('<div style="height:16px;"></div>', unsafe_allow_html=True)
     search = st.text_input("Search tweets and notes:", placeholder="Filter by keyword...", key="th_search", label_visibility="collapsed")
 
     # Filter pills
