@@ -1623,8 +1623,10 @@ def is_guest() -> bool:
 # Read ?page= from URL on every render. Sidebar <a> links set ?page= which
 # triggers a Streamlit rerun via WebSocket (not a full page reload).
 # We also write the current page back to query_params so refresh works.
-# Auth token prefix for sidebar links — preserves login across page nav
-_auth_qp = f"token={st.query_params.get('token', '')}&" if st.query_params.get("token") else ""
+# Save auth token to session so it survives page nav (sidebar links drop query params)
+if st.query_params.get("token"):
+    st.session_state["_auth_token"] = st.query_params["token"]
+
 _qp_page = st.query_params.get("page", "")
 if st.session_state.pop("_nav_override", False):
     pass
@@ -1636,6 +1638,9 @@ else:
 # Only sync if a page param already exists (avoid triggering rerun on fresh load)
 if _qp_page and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
+# Re-inject auth token into URL so refresh preserves login
+if st.session_state.get("_auth_token") and not st.query_params.get("token"):
+    st.query_params["token"] = st.session_state["_auth_token"]
 
 _cur_pg = st.session_state.current_page
 
@@ -1911,6 +1916,7 @@ with st.sidebar:
         st.markdown('<div style="text-align:center;margin:-10px 0 10px;"><span style="background:rgba(251,191,36,0.15);color:#FBBF24;padding:3px 12px;border-radius:12px;font-size:10px;font-weight:600;letter-spacing:1px;">GUEST ACCESS</span></div>', unsafe_allow_html=True)
     if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
         st.session_state["auth_role"] = None
+        st.session_state.pop("_auth_token", None)
         if "token" in st.query_params:
             del st.query_params["token"]
         st.rerun()
@@ -6434,81 +6440,85 @@ Return this exact JSON structure:
 
     st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
 
-    # Analysis results inline
+    # Analysis results
     analysis = st.session_state.get("ar_analysis")
     if not analysis:
         st.markdown('<div style="color:#555577; text-align:center; padding:40px 20px; font-size:14px;">Enter a handle and click Research</div>', unsafe_allow_html=True)
     else:
         hdl = st.session_state.get("ar_handle", "")
         ui = st.session_state.get("ar_user", {})
-        st.markdown(f'<div style="font-size:11px; letter-spacing:2px; color:#2DD4BF; font-weight:700; margin-bottom:4px;">ACCOUNT ANALYSIS — @{hdl}</div>', unsafe_allow_html=True)
-        if ui.get("followersCount"):
-            st.markdown(f'<div style="font-size:12px;color:#666888;margin-bottom:16px;">{ui.get("followersCount",0):,} followers</div>', unsafe_allow_html=True)
+        _followers = ui.get("followers", ui.get("followersCount", 0))
 
-        def ar_section(title, content):
-            st.markdown(f'<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">{title}</div>', unsafe_allow_html=True)
-            if isinstance(content, list):
-                items = "".join([f'<li style="color:#c0c0d8; font-size:13px; margin-bottom:4px;">{i}</li>' for i in content])
-                st.markdown(f'<ul style="margin:0; padding-left:18px;">{items}</ul>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div style="color:#c0c0d8; font-size:13px; line-height:1.6;">{content}</div>', unsafe_allow_html=True)
-
-        if analysis.get("summary"):
-            ar_section("Content Strategy Summary", analysis["summary"])
-        if analysis.get("content_themes"):
-            ar_section("Content Themes", analysis["content_themes"])
-        if analysis.get("tone") or analysis.get("voice") or analysis.get("formatting"):
-            st.markdown('<div style="font-size:13px; font-weight:700; color:#e8e8f0; margin-top:20px; margin-bottom:6px;">Writing Style</div>', unsafe_allow_html=True)
-            for label, key in [("Tone", "tone"), ("Voice", "voice"), ("Formatting", "formatting")]:
-                if analysis.get(key):
-                    st.markdown(f'<div style="color:#c0c0d8; font-size:13px; margin-bottom:6px;"><span style="color:#888899;">{label}:</span> {analysis[key]}</div>', unsafe_allow_html=True)
-        if analysis.get("engagement_tactics"):
-            ar_section("Engagement Tactics", analysis["engagement_tactics"])
-        if analysis.get("unique_characteristics"):
-            ar_section("Unique Characteristics", analysis["unique_characteristics"])
-        if analysis.get("content_patterns"):
-            ar_section("Content Patterns", analysis["content_patterns"])
-        if analysis.get("tylers_edge"):
-            ar_section("Tyler's Edge", analysis["tylers_edge"])
-        if analysis.get("steal_worthy"):
-            ar_section("Steal-Worthy Tactics", analysis["steal_worthy"])
-
-        # Save Voice Style bottom bar
-        st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
-        hdl_for_save = st.session_state.get("ar_handle", "")
+        # ── Header + Save Voice at top ──
+        hdl_for_save = hdl
         existing_styles = load_json("voice_styles.json", [])
         already_saved = any(s.get("handle") == hdl_for_save for s in existing_styles)
+
+        _hdr = f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+        _hdr += f'<div><div style="font-size:11px;letter-spacing:2px;color:#2DD4BF;font-weight:700;">ACCOUNT ANALYSIS — @{hdl}</div>'
+        if _followers:
+            _hdr += f'<div style="font-size:12px;color:#666888;margin-top:2px;">{_followers:,} followers</div>'
+        _hdr += '</div>'
         if already_saved:
-            st.markdown(f'<div style="color:#4ade80;font-size:13px;margin-bottom:8px;">Voice saved -- available in Creator Studio</div>', unsafe_allow_html=True)
+            _hdr += '<div style="color:#4ade80;font-size:11px;font-weight:600;">✓ Voice Saved</div>'
+        else:
+            _hdr += '<span class="cs-bot" data-bot="ar_save_voice" style="height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;">SAVE VOICE</span>'
+        _hdr += '</div>'
+        st.markdown(_hdr, unsafe_allow_html=True)
+
+        if already_saved:
             if st.button("Remove Voice Style", key="ar_remove_voice", type="secondary"):
                 existing_styles = [s for s in existing_styles if s.get("handle") != hdl_for_save]
                 save_json("voice_styles.json", existing_styles)
                 st.rerun()
         else:
-            st.markdown('''<div class="cs-bottom-bar cs-ar-bottom" style="display:flex;gap:8px;justify-content:center;">
-              <span class="cs-bot" data-bot="ar_save_voice" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Save as Voice Style</span>
-            </div>''', unsafe_allow_html=True)
             if st.button("ar_save_voice", key="ar_save_voice"):
                 tweets_sample = [t.get("text", "") for t in st.session_state.get("ar_tweets", [])[:15] if not t.get("text","").startswith("@") and len(t.get("text","")) > 30]
-                style_entry = {
-                    "name": f"@{hdl_for_save}",
-                    "handle": hdl_for_save,
+                style_entry = {"name": f"@{hdl_for_save}", "handle": hdl_for_save,
                     "summary": analysis.get("summary", "") + " Tone: " + analysis.get("tone", "") + " Voice: " + analysis.get("voice", ""),
-                    "tweets": tweets_sample,
-                    "saved_at": datetime.now().isoformat(),
-                }
+                    "tweets": tweets_sample, "saved_at": datetime.now().isoformat()}
                 existing_styles.append(style_entry)
                 save_json("voice_styles.json", existing_styles)
-                st.success(f"@{hdl_for_save} voice style saved! Now available in Creator Studio.")
+                st.success(f"@{hdl_for_save} voice style saved!")
                 st.rerun()
 
-        # Top tweets as cards
-        _ar_tweets = st.session_state.get("ar_tweets", [])
-        if _ar_tweets:
-            st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:8px;">TOP TWEETS</div>', unsafe_allow_html=True)
-            for t in _ar_tweets[:6]:
-                render_tweet_card(t)
+        # ── Two columns: Analysis left, Tweets right ──
+        _ar_left, _ar_right = st.columns([3, 2])
+
+        def ar_card(title, content, col):
+            if isinstance(content, list):
+                items = "".join([f'<li style="color:#b0c0d0;font-size:14px;margin-bottom:4px;">{i}</li>' for i in content])
+                body = f'<ul style="margin:0;padding-left:18px;">{items}</ul>'
+            else:
+                body = f'<div style="color:#b0c0d0;font-size:14px;line-height:1.6;">{content}</div>'
+            col.markdown(f'''<div style="background:#0a1220;border:1px solid #1a2a45;border-radius:14px;padding:14px 16px;margin-bottom:10px;">
+                <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#5a7090;text-transform:uppercase;margin-bottom:6px;">{title}</div>
+                {body}
+            </div>''', unsafe_allow_html=True)
+
+        if analysis.get("summary"):
+            ar_card("Strategy", analysis["summary"], _ar_left)
+        if analysis.get("tylers_edge"):
+            ar_card("Tyler's Edge", analysis["tylers_edge"], _ar_left)
+        if analysis.get("steal_worthy"):
+            ar_card("Steal-Worthy", analysis["steal_worthy"], _ar_left)
+        if analysis.get("content_themes"):
+            ar_card("Themes", analysis["content_themes"], _ar_left)
+        if analysis.get("engagement_tactics"):
+            ar_card("Tactics", analysis["engagement_tactics"], _ar_left)
+        if analysis.get("tone") or analysis.get("voice"):
+            _style = ""
+            if analysis.get("tone"): _style += f"<b>Tone:</b> {analysis['tone']}<br>"
+            if analysis.get("voice"): _style += f"<b>Voice:</b> {analysis['voice']}<br>"
+            if analysis.get("formatting"): _style += f"<b>Format:</b> {analysis['formatting']}"
+            ar_card("Writing Style", _style, _ar_left)
+
+        with _ar_right:
+            _ar_tweets = st.session_state.get("ar_tweets", [])
+            if _ar_tweets:
+                st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:8px;">TOP TWEETS</div>', unsafe_allow_html=True)
+                for t in _ar_tweets[:6]:
+                    render_tweet_card(t)
 
     # ── Hidden buttons are CSS-hidden; dock/bottom clicks wired by global MutationObserver ──
 
