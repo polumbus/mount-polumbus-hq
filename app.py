@@ -2094,12 +2094,8 @@ if st.query_params.get("user"):
     st.session_state["auth_username"] = st.query_params["user"]
 
 _qp_page = st.query_params.get("page", "")
-_is_first_load = "_session_started" not in st.session_state
-if _is_first_load:
-    st.session_state["_session_started"] = True
-    st.session_state.current_page = "Creator Studio"
-elif st.session_state.pop("_nav_override", False):
-    pass
+if st.session_state.pop("_nav_override", False):
+    pass  # current_page already set by nav button callback
 elif _qp_page:
     st.session_state.current_page = _qp_page
 else:
@@ -2453,7 +2449,7 @@ _stc.html("""<script>
         if(el) el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
       }
     });
-    /* Intercept all sidebar <a> links and click the matching hidden button */
+    /* Intercept sidebar <a> links — click matching hidden button, or fall back to URL nav */
     doc.querySelectorAll('a[href*="?page="]').forEach(function(a){
       if(a._wired) return;
       a._wired=true;
@@ -2461,18 +2457,25 @@ _stc.html("""<script>
         e.preventDefault();
         var url=new URL(a.href,win.location.origin);
         var page=url.searchParams.get('page');
-        if(!page) return;
-        /* Find matching button anywhere in sidebar */
+        if(!page){ win.location.href=a.href; return; }
+        /* Try clicking the hidden nav button */
+        var clicked=false;
         var btns=sidebar.querySelectorAll('button');
         for(var i=0;i<btns.length;i++){
           if(btns[i].textContent.trim()===page){
             btns[i].removeAttribute('disabled');
             btns[i].click();
-            return;
+            clicked=true;
+            break;
           }
         }
-        /* Fallback: full page nav */
-        win.location.href=a.href;
+        /* If button click didn't work (e.g. hidden by CSS), fall back to URL navigation */
+        if(!clicked){
+          /* Preserve auth token in URL */
+          var tok=url.searchParams.get('token')||new URLSearchParams(win.location.search).get('token')||'';
+          if(tok) url.searchParams.set('token',tok);
+          win.location.href=url.toString();
+        }
       });
     });
   }
@@ -3096,7 +3099,7 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Not enough people are talking about" — same problem
 - "Unpopular opinion" — hot take framing, violates Default voice
 - "Let that sink in" — filler, no analytical value
-- "This is your reminder" — generic, not Tyler's voice
+- "This is your reminder" — generic, overused
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
@@ -3247,7 +3250,7 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Not enough people are talking about" — same problem
 - "Unpopular opinion" — hot take framing, violates Default voice
 - "Let that sink in" — filler, no analytical value
-- "This is your reminder" — generic, not Tyler's voice
+- "This is your reminder" — generic, overused
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
@@ -3417,7 +3420,7 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Not enough people are talking about" — same problem
 - "Unpopular opinion" — hot take framing, violates Default voice
 - "Let that sink in" — filler, no analytical value
-- "This is your reminder" — generic, not Tyler's voice
+- "This is your reminder" — generic, overused
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
@@ -3539,7 +3542,7 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Not enough people are talking about" — same problem
 - "Unpopular opinion" — hot take framing, violates Default voice
 - "Let that sink in" — filler, no analytical value
-- "This is your reminder" — generic, not Tyler's voice
+- "This is your reminder" — generic, overused
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
@@ -3735,8 +3738,8 @@ RULES:
   never a recommendation, never a conclusion
 - If the input contains opinion language reframe it as the
   underlying fact that makes the opinion obvious
-- BANNED first words: "Broncos should" "Broncos need" "Broncos must"
-  "Broncos take" "This is" "No brainer" "Obviously" "Clearly"
+- BANNED first words: "[Subject] should" "[Subject] need" "[Subject] must"
+  "[Subject] take" "This is" "No brainer" "Obviously" "Clearly"
 - The tweet should make the reader reach the conclusion themselves
   not tell them what to conclude
 {_hook_rule}
