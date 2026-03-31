@@ -421,6 +421,16 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
   margin: 0 !important;
   border: 0 !important;
 }
+/* Style remaining visible Streamlit buttons to match theme */
+[class*="st-key-btn_inspiration"] button,
+[class*="st-key-btn_regen_insp"] button,
+[class*="st-key-rg_del_list_btn"] button,
+[class*="st-key-rg_ai_fill_all"] button,
+[class*="st-key-rg_nl_save"] button,
+[class*="st-key-rg_nl_cancel"] button {
+  border-radius: 14px !important; font-size: 12px !important; font-weight: 600 !important;
+  min-height: 44px !important; letter-spacing: 0.04em !important;
+}
 /* Icon dock hover effect */
 .cs-idock-btn:hover { opacity:0.85; transform:translateY(-2px); transition:all 0.2s; }
 .cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
@@ -6820,7 +6830,7 @@ def page_reply_guy():
             _liked_html = f'<div style="width:40px;height:40px;border-radius:12px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);display:flex;align-items:center;justify-content:center;"><span style="color:#4ade80;font-size:16px;">♥</span></div>' if et_already_liked else f'<div class="cs-bot" data-bot="rg_etl_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" stroke="#5a7090" stroke-width="2"/></svg></div>'
             st.markdown(f'''<div style="display:flex;gap:6px;margin-top:6px;">
               <div class="cs-bot" data-bot="rg_etg_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="AI Generate">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 01-1 1h-6a1 1 0 01-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="15" y2="21" stroke="#5a7090" stroke-width="2"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#5a7090" stroke-width="2" stroke-linejoin="round"/></svg>
               </div>
               {_liked_html}
               <div class="cs-bot" data-bot="rg_ets_{i}" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Send Reply">
