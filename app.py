@@ -1559,11 +1559,40 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Authentication Gate ───────────────────────────────────────────────────
-_OWNER_PW = st.secrets.get("OWNER_PASSWORD", "")
-_GUEST_PW = st.secrets.get("GUEST_PASSWORD", "")
+import streamlit.components.v1 as _auth_components
+
+try:
+    _OWNER_PW = st.secrets["OWNER_PASSWORD"]
+except (KeyError, FileNotFoundError):
+    _OWNER_PW = ""
+try:
+    _GUEST_PW = st.secrets["GUEST_PASSWORD"]
+except (KeyError, FileNotFoundError):
+    _GUEST_PW = ""
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
+
+# Restore from query param (set by JS from localStorage on page load)
+if not st.session_state["auth_role"]:
+    _saved = st.query_params.get("_auth", "")
+    if _saved in ("owner", "guest"):
+        st.session_state["auth_role"] = _saved
+        del st.query_params["_auth"]
+
+# On first load, inject JS to check localStorage and set query param if token exists
+if not st.session_state["auth_role"] and "_auth_checked" not in st.session_state:
+    st.session_state["_auth_checked"] = True
+    _auth_components.html("""<script>
+    (function(){
+        var role = localStorage.getItem('mp_auth_role');
+        if (role && (role === 'owner' || role === 'guest')) {
+            var url = new URL(window.parent.location);
+            url.searchParams.set('_auth', role);
+            window.parent.location.replace(url.toString());
+        }
+    })();
+    </script>""", height=0)
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
@@ -1577,11 +1606,17 @@ if not st.session_state["auth_role"]:
     </div></div>""", unsafe_allow_html=True)
     _pw = st.text_input("Password", type="password", key="login_pw", label_visibility="collapsed", placeholder="Enter password")
     if _pw:
+        _role = None
         if _OWNER_PW and _pw == _OWNER_PW:
-            st.session_state["auth_role"] = "owner"
-            st.rerun()
+            _role = "owner"
         elif _GUEST_PW and _pw == _GUEST_PW:
-            st.session_state["auth_role"] = "guest"
+            _role = "guest"
+        if _role:
+            st.session_state["auth_role"] = _role
+            # Save to localStorage via JS
+            _auth_components.html(f"""<script>
+            localStorage.setItem('mp_auth_role', '{_role}');
+            </script>""", height=0)
             st.rerun()
         else:
             st.error("Invalid password.")
@@ -1879,6 +1914,13 @@ _sidebar_html = f"""
 
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
+    if is_guest():
+        st.markdown('<div style="text-align:center;margin:-10px 0 10px;"><span style="background:rgba(251,191,36,0.15);color:#FBBF24;padding:3px 12px;border-radius:12px;font-size:10px;font-weight:600;letter-spacing:1px;">GUEST ACCESS</span></div>', unsafe_allow_html=True)
+    if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
+        st.session_state["auth_role"] = None
+        st.session_state.pop("_auth_checked", None)
+        _auth_components.html("""<script>localStorage.removeItem('mp_auth_role');</script>""", height=0)
+        st.rerun()
     # Hidden buttons for each page — JS wires sidebar links to click these
     # instead of doing full page reloads (eliminates white flash)
     _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
@@ -6110,39 +6152,38 @@ Provide a health check report:
 7. TOP 3 RECOMMENDATIONS - Specific, actionable changes
 8. WHAT'S WORKING - Top 2-3 things to keep doing
 
-Return as JSON:
+Return ONLY valid JSON, no markdown, no code fences, no explanation before or after:
 {{"health_score": 72, "sections": [{{"title": "...", "grade": "B+", "detail": "..."}}], "flagged": ["..."], "recommendations": ["..."]}}"""
 
-            raw = call_claude(prompt, max_tokens=1200)
-            # Strip markdown code fences and extract JSON
-            _clean = raw.strip()
-            # Remove any code fence markers (```, ```json, etc.)
-            _clean = re.sub(r'```\w*', '', _clean).strip()
+            raw = call_claude(prompt, max_tokens=2000)
+            # Parse JSON — try multiple approaches
             data = None
+            _clean = raw.strip()
+            # 1. Strip code fences
+            _clean = re.sub(r'```\w*\s*', '', _clean).strip()
+            _clean = _clean.rstrip('`').strip()
+            # 2. Try direct parse
             try:
-                # Find the outermost { ... } block
-                _start = _clean.index('{')
-                _depth = 0
-                _end = _start
-                for _ci, _ch in enumerate(_clean[_start:], _start):
-                    if _ch == '{': _depth += 1
-                    elif _ch == '}': _depth -= 1
-                    if _depth == 0:
-                        _end = _ci + 1
-                        break
-                data = json.loads(_clean[_start:_end])
+                data = json.loads(_clean)
             except Exception:
                 pass
+            # 3. Try regex extraction
+            if not data:
+                try:
+                    _jm = re.search(r'\{.*"health_score".*\}', _clean, re.DOTALL)
+                    if _jm:
+                        data = json.loads(_jm.group())
+                except Exception:
+                    pass
 
-            if data and "health_score" in data:
+            if data and isinstance(data, dict) and "health_score" in data:
                 save_json("health_check_cache.json", {
                     "data": data,
                     "last_run": datetime.now().strftime("%Y-%m-%d %H:%M MST")
                 })
                 hc_cache = load_json("health_check_cache.json", {})
             else:
-                st.error("Audit returned unexpected format. Try again.")
-                st.markdown(f'<div class="output-box" style="font-size:12px;max-height:200px;overflow:auto;">{raw[:500]}</div>', unsafe_allow_html=True)
+                st.error("Audit returned unexpected format. Click Clear and try again.")
 
     # Render cached results (persists across sessions)
     data = hc_cache.get("data")
