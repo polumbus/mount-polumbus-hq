@@ -344,11 +344,11 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 /* ═══════════════════════════════════════════════
    CREATOR STUDIO — Clean Dock
 ═══════════════════════════════════════════════ */
-/* Format/Voice pill rows — compact rounded pills */
+/* Format/Voice pill rows — compact rectangular buttons */
 .cs-fmt-row button, .cs-voice-row button {
-  padding: 6px 14px !important; border-radius: 20px !important;
-  font-size: 11px !important; font-weight: 600 !important;
-  min-height: 0 !important; height: auto !important; line-height: 1.3 !important;
+  padding: 0 16px !important; border-radius: 14px !important;
+  font-size: 12px !important; font-weight: 600 !important;
+  min-height: 44px !important; height: 44px !important; line-height: 1.3 !important;
   width: auto !important; min-width: 0 !important;
 }
 .cs-fmt-row [data-testid="stHorizontalBlock"],
@@ -5034,8 +5034,8 @@ Your coaching style:
     # --- Conversations as HTML pills ---
     _convs = st.session_state.coach_conversations[-6:]
     _cur_id = st.session_state.coach_current.get("id")
-    _pill_on = "height:36px;padding:0 14px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
-    _pill_off = "height:36px;padding:0 14px;border-radius:20px;font-size:11px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _pill_on = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _pill_off = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
     _conv_html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">'
     _conv_html += f'<span class="cs-bot" data-bot="cc_new" style="{_pill_off}">+ New</span>'
     for _ci, conv in enumerate(reversed(_convs)):
