@@ -405,7 +405,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-rg_load_verified"], [class*="st-key-rg_list_"],
 [class*="st-key-rg_new_list_btn"], [class*="st-key-rg_etg_"],
 [class*="st-key-rg_etl_"], [class*="st-key-rg_ets_"], [class*="st-key-rg_etrd_"],
-[class*="st-key-insp_show_add"],
+[class*="st-key-insp_show_add"], [class*="st-key-insp_tag_"],
 [class*="st-key-rdc_morning"], [class*="st-key-rdc_evening"],
 [class*="st-key-sig_refresh"], [class*="st-key-sig_tab_"],
 [class*="st-key-sig_beat_"], [class*="st-key-sig_nat_"],
@@ -7072,29 +7072,33 @@ def page_inspiration():
                     st.rerun(scope="app")
         _ib_add_dialog()
 
-    # Filter tags as pills
+    # Filter tags as HTML pills
     _all_tags = set()
     for item in inspo:
         for t in item.get("tags", []):
             _all_tags.add(t)
     _all_tags = sorted(_all_tags)[:8]
-    if _all_tags:
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Tags</div>', unsafe_allow_html=True)
-        if "insp_tag_sel" not in st.session_state:
-            st.session_state.insp_tag_sel = ""
-        _tc = st.columns(min(len(_all_tags) + 1, 9))
-        with _tc[0]:
-            if st.button("All", key="insp_tag_all", type="primary" if not st.session_state.insp_tag_sel else "secondary"):
-                st.session_state.insp_tag_sel = ""
-                st.rerun()
-        for _ti, _tg in enumerate(_all_tags[:7]):
-            with _tc[_ti + 1]:
-                if st.button(_tg, key=f"insp_tag_{_ti}", type="primary" if st.session_state.insp_tag_sel == _tg else "secondary"):
-                    st.session_state.insp_tag_sel = _tg
-                    st.rerun()
-        tag_filter = st.session_state.insp_tag_sel
-    else:
-        tag_filter = ""
+    if "insp_tag_sel" not in st.session_state:
+        st.session_state.insp_tag_sel = ""
+    _pon = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _poff = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _tags_html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">'
+    _tags_html += f'<span class="cs-bot" data-bot="insp_tag_all" style="{_pon if not st.session_state.insp_tag_sel else _poff}">All</span>'
+    for _ti, _tg in enumerate(_all_tags[:7]):
+        _cls = _pon if st.session_state.insp_tag_sel == _tg else _poff
+        _tags_html += f'<span class="cs-bot" data-bot="insp_tag_{_ti}" style="{_cls}">{_tg}</span>'
+    _tags_html += '</div>'
+    st.markdown(_tags_html, unsafe_allow_html=True)
+
+    # Hidden tag buttons
+    if st.button("insp_tag_all", key="insp_tag_all"):
+        st.session_state.insp_tag_sel = ""
+        st.rerun()
+    for _ti, _tg in enumerate(_all_tags[:7]):
+        if st.button(f"insp_tag_{_ti}", key=f"insp_tag_{_ti}"):
+            st.session_state.insp_tag_sel = _tg
+            st.rerun()
+    tag_filter = st.session_state.insp_tag_sel
 
     st.markdown('<div style="height:1px;background:#1a2a45;margin:16px 0 14px;"></div>', unsafe_allow_html=True)
 
@@ -7129,26 +7133,25 @@ def page_inspiration():
                 metrics += f"Likes: {item['likes']:,} "
             if item.get("views"):
                 metrics += f"Views: {item['views']:,}"
+            import urllib.parse as _urlparse
+            _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
+            _use_style = "height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid rgba(45,212,191,0.3);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
+            _rep_style = "height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
+            _del_style = "height:32px;padding:0 10px;border-radius:10px;font-size:10px;font-weight:600;background:transparent;border:1px solid rgba(248,113,113,0.2);color:rgba(248,113,113,0.5);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;"
             st.markdown(f"""<div class="tweet-card" style="position:relative;">
-                <a href="?page=Idea Bank&del_inspo={real_idx}" style="position:absolute;top:10px;right:12px;color:#333355;font-size:14px;text-decoration:none;line-height:1;" title="Delete">x</a>
-                <div style="display:flex; justify-content:space-between; margin-bottom:6px; padding-right:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
                     <span class="tweet-num">{item.get('author','')}</span>
                     <span style="font-size:11px; color:#444466;">{item.get('saved_at','')[:10]}</span>
                 </div>
                 <div style="color:#d8d8e8; font-size:14px; margin-bottom:8px; line-height:1.6;">{item.get('text','')}</div>
-                <div style="margin-bottom:4px;">{tags_html}</div>
-                <div style="font-size:11px; color:#666688;">{metrics}</div>
+                <div style="margin-bottom:6px;">{tags_html}</div>
+                <div style="font-size:11px; color:#666688; margin-bottom:8px;">{metrics}</div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" class="cs-bot" style="{_use_style}">USE</a>
+                    <a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" class="cs-bot" style="{_rep_style}">REPURPOSE</a>
+                    <a href="?page=Idea+Bank&del_inspo={real_idx}" style="{_del_style}" title="Delete">✕</a>
+                </div>
             </div>""", unsafe_allow_html=True)
-            import urllib.parse as _urlparse
-            _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
-            st.markdown(
-                f'<a href="/?page=Creator+Studio&idea={_ib_encoded}" target="_self" '
-                f'style="display:block;width:100%;padding:8px 12px;background:#1e3a5f;'
-                f'border:1px solid #2d5a8e;border-radius:4px;color:#7eb8f7;text-align:center;'
-                f'text-decoration:none;font-size:14px;font-weight:600;margin-top:4px;">'
-                f'Use in Creator Studio</a>',
-                unsafe_allow_html=True
-            )
 
     # ── Hidden buttons are CSS-hidden; bottom bar clicks wired by global MutationObserver ──
 
