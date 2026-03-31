@@ -7,14 +7,26 @@ Streamlit Cloud sends prompts here; this calls the local Claude CLI (sonnet).
 Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
-import json, os, subprocess, time, urllib.request, urllib.error, re
+import json, os, subprocess, time, urllib.request, urllib.error, re, hashlib, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
+from chatgpt_oauth import call_chatgpt_oauth
+from anthropic_circuit import (
+    DEFAULT_UNAVAILABLE_COOLDOWN,
+    block_for as anthropic_block_for,
+    get_state as get_anthropic_state,
+    is_blocked as anthropic_is_blocked,
+    mark_available as anthropic_mark_available,
+    mark_probe_attempt as anthropic_mark_probe_attempt,
+    mark_rate_limited as anthropic_mark_rate_limited,
+    parse_retry_after as anthropic_parse_retry_after,
+    should_probe as anthropic_should_probe,
+)
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
-CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
+CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 PROXY_API_KEY = os.environ.get("HQ_PROXY_KEY", "")
 PORT = 7821
@@ -25,6 +37,120 @@ GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
 TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
 
 _cookie_cache = {"auth_token": "", "ct0": "", "fetched_at": 0}
+_recovery_thread = None
+
+
+def _load_oauth_access_token():
+    """Read Claude OAuth access token from local credentials file."""
+    try:
+        creds_path = os.path.expanduser("~/.claude/.credentials.json")
+        with open(creds_path, "r", encoding="utf-8") as f:
+            creds = json.load(f)
+        oauth = creds.get("claudeAiOauth", creds)
+        return oauth.get("accessToken", "")
+    except Exception:
+        return ""
+
+
+def _call_claude_oauth(prompt, system, max_tokens, model):
+    """Direct Claude API fallback using OAuth bearer token."""
+    token = _load_oauth_access_token()
+    if not token:
+        raise Exception("No OAuth token available")
+
+    version = "2.1.86"
+    salt = "59cf53e54c78"
+    chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
+    short_hash = hashlib.sha256((salt + "".join(chars) + version).encode()).hexdigest()[:3]
+    billing_line = f"x-anthropic-billing-header: cc_version={version}.{short_hash}; cc_entrypoint=claude-code; cch=00000;"
+
+    system_array = [{"type": "text", "text": billing_line}]
+    if system:
+        system_array.append({"type": "text", "text": system, "cache_control": {"type": "ephemeral"}})
+
+    body = json.dumps({
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_array,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages?beta=true",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24",
+            "User-Agent": f"claude-cli/{version}",
+            "x-app": "cli",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "x-stainless-lang": "js",
+            "x-stainless-os": "Linux",
+            "x-stainless-arch": "x64",
+            "x-stainless-runtime": "node",
+            "x-stainless-package-version": "0.74.0",
+            "x-stainless-retry-count": "0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            anthropic_mark_rate_limited(
+                anthropic_parse_retry_after(getattr(e, "headers", None)),
+                source="proxy_oauth",
+                error=f"HTTP {e.code}",
+            )
+        raise
+    if data.get("content"):
+        anthropic_mark_available("proxy_oauth")
+        return data["content"][0].get("text", "").strip()
+    raise Exception(f"API error: {data.get('error', data)}")
+
+
+def _maybe_restore_anthropic():
+    if not anthropic_should_probe():
+        return
+    anthropic_mark_probe_attempt()
+    try:
+        probe = _call_claude_oauth("Reply with OK only.", "", 8, "claude-sonnet-4-6")
+        if probe:
+            anthropic_mark_available("proxy_probe")
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            anthropic_mark_rate_limited(
+                anthropic_parse_retry_after(getattr(e, "headers", None)),
+                source="proxy_probe",
+                error=f"HTTP {e.code}",
+            )
+        else:
+            anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="proxy_probe", error=str(e))
+    except Exception as e:
+        anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="proxy_probe", error=str(e))
+
+
+def _anthropic_recovery_loop():
+    while True:
+        try:
+            _maybe_restore_anthropic()
+        except Exception:
+            pass
+        time.sleep(5)
+
+
+def _ensure_recovery_thread():
+    global _recovery_thread
+    if _recovery_thread and _recovery_thread.is_alive():
+        return
+    _recovery_thread = threading.Thread(
+        target=_anthropic_recovery_loop,
+        name="anthropic-recovery",
+        daemon=True,
+    )
+    _recovery_thread.start()
 
 def _get_twitter_cookies():
     """Fetch latest Twitter cookies from Gist (synced by Chrome extension)."""
@@ -283,6 +409,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
             prompt = body.get("prompt", "")
             system = body.get("system", "")
             model = body.get("model", "claude-sonnet-4-6")
+            _maybe_restore_anthropic()
+            if anthropic_is_blocked():
+                try:
+                    chatgpt_text = call_chatgpt_oauth(prompt, system)
+                    self.send_json(200, {"text": chatgpt_text, "fallback": "chatgpt_oauth", "anthropic_state": get_anthropic_state()})
+                    return
+                except Exception as chatgpt_error:
+                    self.send_json(500, {"error": f"Anthropic blocked | ChatGPT: {str(chatgpt_error)}", "anthropic_state": get_anthropic_state()})
+                    return
             try:
                 clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
                 cmd = [CLAUDE_CLI, "-p", "--model", model]
@@ -293,12 +428,43 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     input=prompt, capture_output=True, text=True, timeout=120, env=clean_env,
                 )
                 if result.returncode == 0 and result.stdout.strip():
+                    anthropic_mark_available("proxy_cli")
                     self.send_json(200, {"text": result.stdout.strip()})
                 else:
-                    self.send_json(500, {"error": result.stderr.strip() or "empty response"})
+                    cli_error = result.stderr.strip() or "empty response"
+                    if "Credit balance is too low" in cli_error:
+                        anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="proxy_cli", error=cli_error)
+                    try:
+                        fallback_text = _call_claude_oauth(prompt, system, 1200, model)
+                        if fallback_text:
+                            self.send_json(200, {"text": fallback_text, "fallback": "oauth"})
+                            return
+                    except Exception as oauth_error:
+                        try:
+                            chatgpt_text = call_chatgpt_oauth(prompt, system)
+                            if chatgpt_text:
+                                self.send_json(200, {"text": chatgpt_text, "fallback": "chatgpt_oauth"})
+                                return
+                        except Exception as chatgpt_error:
+                            cli_error = f"CLI: {cli_error} | OAuth: {str(oauth_error)} | ChatGPT: {str(chatgpt_error)}"
+                    self.send_json(500, {"error": cli_error})
             except subprocess.TimeoutExpired:
                 self.send_json(504, {"error": "timeout"})
             except Exception as e:
+                try:
+                    fallback_text = _call_claude_oauth(prompt, system, 1200, model)
+                    if fallback_text:
+                        self.send_json(200, {"text": fallback_text, "fallback": "oauth"})
+                        return
+                except Exception as oauth_error:
+                    try:
+                        chatgpt_text = call_chatgpt_oauth(prompt, system)
+                        if chatgpt_text:
+                            self.send_json(200, {"text": chatgpt_text, "fallback": "chatgpt_oauth"})
+                            return
+                    except Exception as chatgpt_error:
+                        self.send_json(500, {"error": f"{str(e)} | OAuth: {str(oauth_error)} | ChatGPT: {str(chatgpt_error)}"})
+                        return
                 self.send_json(500, {"error": str(e)})
 
         elif self.path == "/save-tweet-url":
@@ -365,7 +531,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.send_json(200, {"status": "ok"})
+            _maybe_restore_anthropic()
+            self.send_json(200, {"status": "ok", "anthropic_state": get_anthropic_state()})
         else:
             self.send_json(404, {"error": "not found"})
 
@@ -373,6 +540,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not PROXY_API_KEY:
         print("WARNING: HQ_PROXY_KEY not set — proxy is unprotected!")
+    _ensure_recovery_thread()
     server = ThreadedHTTPServer(("0.0.0.0", PORT), ProxyHandler)
     print(f"Claude proxy listening on port {PORT}")
     print("To expose publicly: ssh -R 80:localhost:7821 nokey@localhost.run")

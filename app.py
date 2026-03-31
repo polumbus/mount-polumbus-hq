@@ -9,6 +9,7 @@ import hashlib
 import concurrent.futures
 import requests
 import tomli
+import urllib.error
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
@@ -16,6 +17,17 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   odds_available, odds_format_block,
                   get_google_trends, get_reddit_trending, get_newsapi_headlines,
                   get_coingecko_trending)
+from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG,
+                    _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
+from chatgpt_oauth import call_chatgpt_oauth
+from anthropic_circuit import (
+    DEFAULT_UNAVAILABLE_COOLDOWN,
+    block_for as anthropic_block_for,
+    is_blocked as anthropic_is_blocked,
+    mark_available as anthropic_mark_available,
+    mark_rate_limited as anthropic_mark_rate_limited,
+    parse_retry_after as anthropic_parse_retry_after,
+)
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -26,9 +38,6 @@ st.set_page_config(
 )
 
 # ─── Constants ──────────────────────────────────────────────────────────────
-AMPLIFIER_AVATAR_URL = "https://raw.githubusercontent.com/polumbus/mount-polumbus-hq/master/static/amplifier.jpg"
-_DEAD_B64 = "unused"  #VR42p1ZaZRdVZXe+5w7vXmoV6/GV1WpSqqSykAGMkAIw2qXqMEQF0RQu1sbRUFxQFfT2oNi+0NRWluW2korKtrayCA2Q4MNSpgyB0KSSqoqNY9vnt+749n941ZVisAS9P16775z7vnOt/fZw3eQiOCtPoKIhOCcuz8HTg29cOD4kRMDQ9Mz88Vy2dAtIQBBYiyoKM2hUG+ibev6Nbsu3dK/rted4jgOImMM33It/NOACEA4jgtlemruwUeeevyFg0O5TE1B7tckWWEEKAhJAAAxJIYCyDItp2Z4DeqNxq7ZtWPf+65OdLS6sBjnfxoUCiEQ33yMEIIxBgCjY5Pfuefnjx4+XPLL3mhQsoSZKhm5ilXRHdMmRwAQEAACcsZlSfJ71Aa/3Bi0VV7NlUIl89ptWz//6Q/39HQuf+2fx5DjOJxz23G+cdePfvjo4/XWYDAU0Mcz5YmUVTOQM5Qk5IjIAACRAIAIgIAISAhhWSBI9qr+zkats7FcLqvTxVv2XvOlf/iELEnOIutvF5BtO5LET54a/PjtXztNlcYVLeXT06WReUBkqoyMARAJQHStCkTnOUZAAgIEREYkHN0EolB3U2BtIjM+twa99377KxvW97lLvC2TuUMfePDJT37t255NK3muljw8BIiSJgsCIEQXhTt/YUe46HKIC9tE9wFyQAS7bgFRfNsq0eCtHxv7/j/ffuP7d78ppgsZcgfd8/37//6H93VcsSH30mBpKq0GvEQLC7vWcddCBEQgAQvvQEJg4DoU0SJKQCRARASzVPMnYg07+yb3n7rrEx/53G0ffiOm1wFaQvP5e+/r2bVh+onjjmFJmkyCAJAAgQhxwSqO7TiODYRcYoxzQHAsW9gCELnEmcRoCdAiocjQ1i1Jldt3bxl58bW7P/Z3n73tby/AdB6Q62i/eejJv/7qN1dcsWHq0cOAyCSJBC0zEAKAY1mCY6CzMdjVxBS5MDxTHU8Bgb87Hupptap68dxsfS4vc4bIibmYgAgBCREdWyCJzr3bR/af+MWX77hh33uW+/gCIPconjw1uOsDn2y8fO3cE8cch5jEyFkgHhHJEbZlgYThNe1tV62Xwv5aviaFtEg8MvCT3wPA6g9dlUsWOJEW9pYHpyeeHzCKFVV3kDFa8LAFxoRNjGPb7i2p50+/8OsfrF/XtxQLkIiISAiybXvn7g/PJfz6KxPVVIGrCgly34KItmnziDe+qSfS2yq3RirJYvr4qBrxa7GQcEQw4JU8Km46U53NEoEvEWu8an1rZxtM5v/vG/dbw0lJlhhn590DwTEsbzzk2dTVOlV98YmfSbLEEBGR33nnnUIIzvnX77330ZEzfhuyA1OyTyMhFueC5ThNl61efcPlerlWLlawIVQ4MRFqjSgepTKWVsJ+aYyMly1OZlq6Wpo2rIRmf7gpXJ7L2qW6axgiACImS3qmHIwGJq0aS5Wv3LXNJQkdx0HEycmZrdffHNjQOfPEMe5RwSFCWkQjuq6/JLK6febQECksuKEr1NlSPDVhTKZKYylZkwMbu6LtjUK38smconnqs5nsqyPB5qgGatqadp+iOTU90hw5+8s/VgZnJYnTIlHI0KmbbbsvLp8YP/LQf3Z0thERE0SI+K17fma2BisD08CQSCygQbQsu+XKteGe1sEHXzJms5HuptzgTKcWWLttXWZwCip1YQmuyCgx2a/5miOZo4M84Gl/x6ZKuoC5SuX50+VcoTSdzSQLq/ZdxkMesUg8ABARMFY+PWW2Bb/1vZ8jIhExifO52eQjBw6GQ/7iWJKr8oLzIZAj5FigZefq8T+8yixbCngqE2k5VTrxzIFj//OCz+NRA14UNsoSBjxmQCVAqtRlhlZZl30qC3jU5tgV112tdTTWU3nwax3v2GRZNizlfAKuSqWxZDgYePjlA3OzSc45A4AHHnmqFJCNiezSUXBjjUmie8/2SrpsFipywIOI3qaoXdHzh4Zz+09VZ7LFiZQwbM6RN0f7168D3bIKtXO/fK58elzmUnUqowW0/Mx85cykMZ4qZ8tte7drbVFhOcvKCQJEfSJd9kkPPPIUADAieuy5l72RQHkizVR56SDYlr1y32VqW0Pm5IQW9CEiEDnlum070roEi/o9sWDLVet5LFg5N1s7PVnK5IxCRYv6Q11N2BrRdvQGE7Hk/pP7/+1XckWvjqWmH325Wq5d/E83YFBzkx8CEAFTpcpkxhcLPbb/ABGxobOjZ7NpxSKrZqBLJoLjCP/OvqZ3b0kPTnOGAECChGHVRuZ5U+Smuz679rb3+rsaDcu+7Nb36amyNZUeevawNZuvZ8u2xi/64Dvfd9sHiqYNjMdXdzkSi2/pId3MHBk2OXTv2WY7DizmIGRo1QxJt8+kk0NnR9n+l45WFbAyZWToJke0BcQDH/zXT5pFvTKesku60G2rWDOzVeTMyhSPHHgleXgwPzTNZen004fMQoVxrggsjM713XAlWTR1eOD4/qOiWFPiobZ3bCXOpKA3unmVVahM7z8d6mnTYkFhO+eNxpidrdRVtv/lo7ypq3+wXrSm845pAyIgki3UeKjp3Ztmjw/rk0k9U6xNpsxCzdcSZkEPWM70iyfNdMmYK5Rt11J5AAh2xBExPzqvtMckjuVzs9PHznTt6Leq9ey5GYkzyzCDXU3BFS3p0xOh9lhlIqUni0xiy0sWqSUUrAvua1lZVLE+llooHBAt04qsbof2iCjpJPOmK9bxsN/IliJrExj0IQOsmShxpnJPe8zf3SKFfYpXJSBbYtV8Jb6zv5LKt21aSY5Dfm99Ltd+9ZbqdCZ9cNDXFDGqtVBHTNSNwtkZSZaWkq6wHC3RAPkaV1u6nYBWG00yibuAHMcJrW7zJ+IOoi8ayI/Pt75zc2x7r163OONMldGjiroRWtflaQhWkqXwph417A3EQtEN3f54JNgWi/Z3GnO52WPnAqvbAytaynNZrSFYeHXEqeje1obG7WuYZWdeHUNBSzlbmJavI27mKqxkGCCEcMRisQAIaBZrit/jMCBFdrKVsV88KzPWtHFl9syEYzq+voS8riOwoas4m2deJdzdHN+0KlM3yrny/OGh4ccOZedx6Xq94ar1akOQy7w8PMs8cmhNwqrUoVCvzRdDF3VrsQA5C0UnIAiHkKik61xpXakEPdXxNFMkt1BnyMy6sWLP9nqpNvW7A8jAqpu518ZDzSF/awMw5l2d6H3Xjnql7pe5z6dNP3+ybDtbr9w+evh0/ewUVetSW3TXx/YYJM7d/+zc08dkBoJx/5o2WzetTGnm6NlVN+5KHzhbm87yRbMIy/Z3xPRilV3YcRAgZ0amNPvCKTtf1VNFye+98e7PMc6P3fVw4cQ4U7ivLbyhowMte/LZV07d90zptXGWLuqpXHVwWk8WFFWiqu43QaRL3LEbVjRrkUD5tRHSlI03v9dCCnc1VWYzatgvxAXlPCIAD3b0sZC3PpnhMl9MesAIa9lSx19tNBjjEktOzcsNfi0eET5F7Wz0B3zPPfRs4eUBf2ssciaBtl2bzh65/+mmFc1KyGfkq+Z4evDEmdzxc1Q20KuAI6SgN9LfueOSzSOTs061HmptKA/OlEbmuSwtMiS8XY1YMVhAUYizhSC0SBKTeXk0WRqc3X3Hh+R4KDs6Y5l2dGOnEg2EPVryuVPlJw5LNaOezOUHJpWGoNCt9r4Oq2oIR1Tmc1o0UD88wnOVeqrYtKHHsm1fPJw9NPjgTx/y+FVZU2zdMsv6UnNBBIwjcAyoCu/feElGcuy5Ai3VwAAAIHGWH50fOzLg96nRnhbVo5iFaufmldmxueTLpyVVi6zrDK/tRInZhYoU8JXnc5njo0rI23X1xaWppGWTtDYBYT9xDK5sN0tVM1PyIjcyBbUxFIyFJp48Crq1lGiZxOW2aAf3Sqs72gemhmS/xyhUkbPlBqViLf/imexLZ7hXlXyqbTpGrsR8mjCc8OpmJ+zffev7//dXj889kVWDSmxbX8tl6w3LXrNzc/L0uHdz13X/eFPKrGfmUoWhGds0TYssBL1mhrxa+uiwniwqiuy2S8IRSthnW/bqji6898f/fccDD6iGKA7OMk2ixWzvlmcIbiITAGDrVmRLd+LqTVMHBhUJLWBSPCJZlq85Uh5PoVeLb+2t6nVRrnscYBFfKNFcmM/nhydD7TEt4AVBxAFrpj6VGfz1ftStBZMhOroZ6m01PfyufTewy3de7LGIN/hJOLjYAy62WeBW3IAIDGWvWjgzbeaqiZ1rhCQ7pbo1n+PNIfCoDeu7/N1NtmW1dTb5Q/7CbDr1yujEkTP5V4cpWcoeHJx7/lRxKh1pikw+dfTMz59F3XKTq7ttEiTHAh5TXL7zYqm3r7uvoXGA12WfJmihh3LdiV4fDgiIEw398s9Nu9YktvYZtqOuafdH/cVXxwONIQNw/A8n8sPTbZet1ZxOn0+VPGppcKaUn6aqYeXKUkDLvjaWPjCoSBItDzZCyF7VUqX+aLxvdbeEiHsuv/TI478LdMbzg7NclYCcxcYYz5vP/YLIHJp7+kTq0LmmHauUqfTYwFRpPMUC2rqPvyvQGKzXjUhrQ2F4dur5U7IsybKkKnItXya/p6m/Y/S3Bxi53e5S0gBHt8N9bZV0/r179qJbxs7OJDdfd5O2qjn5zGtcU0g4y4PVErJl7o4khG3aJIhxxmVOguSWUM8Nl0sh/9TRs10X984PTFcnUowzJR6O9idiK5snHz048dgRWZKWakB0e9ma2fzOi/ShueOP/KS1rRlt2+acf+r2r/3X6Ek1XSuNJZkquTtYhuNNBCREdNlznYxsx5ZZ7wd28XhDrVBp7mshAfVClauSU6xO/f6VwslJ91i5mgQAMUTHsINdcSPm+eDKDT/4zr84jrPQBk1MzGy97mOBjV1zTxzjHonEkpXcOvNtSHGIwnLk9siGT10zPzTt8Wp6qpA+Mky6VU8WUICkSBcIG4yhXTfbdm8uvjJ+5OEfd3W1ExFjjAkhurraP3P9tcnRmfi2VWbZwIVO290OLmcJARAI38AbETGZ61PZqWdeibY3CIaSxCvD81aqJEvScjQLczkzy/WmbavmRmc/ff2eFSsSbqPIAIAx5jjiji98dA33WxFPINHo6DYuqG70BtXR5Zze+B8RybI09+IZNG2QMLomoTYGABeix7I+g5CBUzf8iZgd9fSj/4tfuNlxFnp7V5BDRFAV5af/fmf16Gj00l5Jk4XlACICLfFxXjABRrDcv84DI0Rm2MMPH2jqbilOpoRh4aLhlwYjIllC0pSGnb3lI6P3ffdOVVUQF6SVC+WYBx588m/uvKv7qoumfnfItYIrDsGyyIRv5A2WyVMAgkhrixr5KlQNeF2BQ8hAWASIHdduHfnDiV/ceceN79+9XI45n7w457bt3LDvPd+69aaR519L7N3OFcXRrcUER2+E4ap2LotL/xIAIqtPZqBmIFvaBbl+Y+s2U3jHtVvPPXfi7ltvcoW95QLom0t63/3e/Xf88L6OK9bnDw6VJ5JywEdEQIKAvQHT0kNalgOBcCHmLxgUOSKY5XqgozF6ae/EH09885aPfu7TbyXpLcf0mwefvPWrd2tbVkgFPXV4GAC4JhEhvH4CLgARtBgj8HVHAd3WytYtBhDf3uuE1PrRse9/5QtvV/S8QBa++bNfHaBKY09bZWC6ODIPAFyVkaGr8cCbnkNYzDiIIIRt2AAQ7m7297elR2b6efDe73z5T8nCbyWc21+/60f/8fBjRnvIHw6Yk7nKeMqs6siQSRw5Q8TXHUL3iDtC2A4Ikn1aoCuuJqLlYlmdKd2yd/eXvnjLXyKcX3i1MDr57Xt+9tuDh4pB2RcLyRbY6ZKRLVuVujAsIWgh1SAyxrjqXi0EpMaAzbGWKwVL1t4d227/zEd6ujv+8quFN718+c0jTz2+/8BQLl1VkPk1RZU5MBQCCFwnFgwJwDIsp1L3mtQbbbzm8h37rnt3ItHydi9f3tb1lCCi89dTZ04Pv3jg2OETZwYnp5OlYknXTccGAIVzv6o1h0K9ifZtF/Vfdsnmv+B66v8BQ0TjWPySRpIAAAAASUVORK5CYII="
-AMPLIFIER_IMG = f'<img src="{AMPLIFIER_AVATAR_URL}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:4px;">'
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
@@ -45,100 +54,9 @@ except Exception:
     except Exception:
         TWITTER_API_IO_KEY = ""
 
-TYLER_HANDLE = "tyler_polumbus"
+# TYLER_HANDLE, TYLER_CONTEXT, _WHATS_HOT_VOICE_GUIDE -> config.py
 
 # ─── Tyler's Voice System Prompt ─────────────────────────────────────────────
-TYLER_CONTEXT = """You are a content assistant for Tyler Polumbus — former NFL offensive lineman, Super Bowl 50 champion with the Denver Broncos, and current sports media personality.
-
-Tyler's profile:
-- Played 8 NFL seasons as an undrafted free agent, started 60+ games
-- Host of The PhD Show on Altitude 92.5 radio (Denver)
-- Runs Mount Polumbus podcast/YouTube channel
-- Colorado native, deep Denver sports loyalist
-- Covers Broncos (primary ~80% of content), Nuggets, Avalanche, CU Buffs
-- 42K+ followers on X (@tyler_polumbus)
-- Communication style: direct, blunt, no fluff, former-player perspective, knows the game from inside the trenches
-
-Tyler's voice on X:
-- Short punchy sentences. Never sounds like a press release.
-- Uses "we" when talking Broncos — it's personal
-- Hot takes that have teeth — backed by real football knowledge
-- Doesn't hedge. If he thinks something, he says it.
-- Occasional humor but never tries too hard
-- Knows X-specific hooks: numbers, provocative openers, "unpopular opinion" frames
-- Never uses emojis unless it's the fire emoji or a sport-specific one
-- Threads are rare but devastating when used
-- Keeps tweets under 200 characters when possible for max punch
-
-Denver sports context:
-- Broncos: Always relevant, always rebuilding faith post-Super Bowl 50
-- Nuggets: Back-to-back runs, Jokic era content is premium
-- Avalanche: Stanley Cup window, Nathan MacKinnon era
-- CU Buffs: Deion Sanders era is must-cover content
-
-KNOWN ENTITY SPELLINGS — always spell these correctly:
-- Sean Payton (NOT Shawn Payton) — Broncos head coach
-- Courtland Sutton (NOT Sutton Courtland)
-- Nikola Jokic (NOT Jokić — skip the accent in tweet text)
-- J.K. Dobbins (NOT JK Dobbins or J.K Dobbins)
-
-IMPORTANT: Never use emojis in your output. Write plain text only."""
-
-_WHATS_HOT_VOICE_GUIDE = """
-VOICE SELECTION — read the topic and pick automatically:
-DEFAULT: Pure analytical observation. State what the film
-shows. Open with a specific stat or fact nobody is tracking.
-End with ellipsis that invites the reader to analyze
-alongside you. No opinion stated — the facts do that work.
-Example: "Jokic in fourth quarter playoff games — 12.4
-points on 67% shooting. The defense has no answer for
-the high post read..."
-CRITICAL: Diagnosis not complaint. Open with one undeniable
-stat. Identify the structural cause. Name the specific
-person or decision-maker who owns the fix. End with a
-period not an ellipsis. Never attack character.
-Never say "I played in this league."
-Example: "We gave up 6 sacks in losses, 1.2 in wins.
-The two-minute protection scheme is broken. Payton owns that."
-HOMER: One overlooked signal the casual fan is missing.
-State it specifically. Show why it matters. End by showing
-a specific outside party already reacting — opposing coaches,
-rival programs, national media. Their reaction is the proof.
-Never state confidence directly. Never say "I've been in
-winning rooms." Show the opposition already worried.
-ENDING RULE: The final sentence must name a specific outside
-party and show them already responding to what your subject
-is doing. NOT you explaining the signal. NOT "this is real."
-The opponent's reaction IS the proof — let it speak.
-WRONG ENDING: "Position coaches don't travel for guys they're
-not serious about." — you explaining the insight
-RIGHT ENDING: "Every team picking in that range just added
-him to their board." — outside party already responding
-Example: "Jokic averaging a triple double in March. The team
-drawing Denver in round 2 just redesigned their defensive scheme."
-SARCASTIC: Two modes only.
-Positive moment → Cultural Leap: Jump to a completely
-unrelated world. Specific person in a specific human
-situation outside sports. Never explain the joke.
-Example: "That cornerback needs to call someone he trusts
-right now. Not about football."
-Negative moment → Implied Real Story: State the surface
-story as if neutral. Imply the real story underneath.
-Never state it directly. Never use generic openers like
-"Oh interesting" or "Oh cool."
-Example: "Turns out the Patriots offense doesn't suck
-because of a snow storm."
-RULES FOR ALL VOICES:
-
-Never copy feed content — use it as topic inspiration only
-Never say "I played in this league" or "I've been in
-winning rooms" or "I know what winning looks like"
-Authority comes from specificity not stated credentials
-Hooks are Normal Tweet length — 161 to 260 characters
-No hashtags no emojis no links
-Never start a hook with RT or @
-"""
-
 # ─── Styles ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -1024,7 +942,7 @@ def auto_height(text, min_h=80, chars_per_line=55, line_h=22):
     return max(min_h, total * line_h)
 
 
-_VOICE_LABELS = {"Default": "Film Room", "Critical": "Diagnosis", "Hype": "Don't Sleep", "Sarcastic": "Layered"}
+# _VOICE_LABELS -> config.py
 
 
 def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
@@ -1488,13 +1406,24 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         system = get_voice_context()
 
     # 1. Direct OAuth HTTP — fastest, no subprocess overhead
-    try:
-        return _call_claude_direct(prompt, system or "", max_tokens, model)
-    except Exception:
-        pass
+    if not anthropic_is_blocked():
+        try:
+            result = _call_claude_direct(prompt, system or "", max_tokens, model)
+            anthropic_mark_available("streamlit_direct")
+            return result
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                anthropic_mark_rate_limited(
+                    anthropic_parse_retry_after(getattr(e, "headers", None)),
+                    source="streamlit_direct",
+                    error=f"HTTP {e.code}",
+                )
+        except Exception as e:
+            if "Credit balance is too low" in str(e):
+                anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_direct", error=str(e))
 
     # 2. Local CLI fallback
-    if os.path.exists(CLAUDE_CLI):
+    if not anthropic_is_blocked() and os.path.exists(CLAUDE_CLI):
         try:
             clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             cmd = [CLAUDE_CLI, "-p", "--model", model]
@@ -1505,7 +1434,10 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                 input=prompt, capture_output=True, text=True, timeout=90, env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
+                anthropic_mark_available("streamlit_cli")
                 return result.stdout.strip()
+            if "Credit balance is too low" in (result.stderr or ""):
+                anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_cli", error=result.stderr.strip())
         except Exception:
             pass
 
@@ -1515,7 +1447,13 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     except Exception:
         pass
 
-    return "AI unavailable — check proxy or credentials."
+    # 4. ChatGPT OAuth fallback via local Codex login
+    try:
+        return call_chatgpt_oauth(prompt, system or "")
+    except Exception:
+        pass
+
+    return "AI unavailable — check Anthropic and ChatGPT credentials."
 
 
 def _gist_headers():
@@ -2878,13 +2816,7 @@ def page_brain_dump():
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: COMPOSE IDEAS
 # ═══════════════════════════════════════════════════════════════════════════
-_FORMAT_GUIDES = {
-    "Punchy Tweet":  {"chars": "≤ 160 chars", "icon": "⚡", "rules": ["2 sentences only", "Take + engagement hook", "No hashtags, no ellipsis", "Every word earns its place"]},
-    "Normal Tweet":  {"chars": "161 – 260 chars", "icon": "✦", "rules": ["Hook + line break + payoff", "Question OR ellipsis (not both)", "Stop the scroll in 8 words", "No links, no hashtags"]},
-    "Long Tweet":    {"chars": "280 – 1200 chars", "icon": "◈", "rules": ["First 280 must work standalone", "Short paras + line breaks", "Comparison lists hit hard", "End with debate invite"]},
-    "Thread":        {"chars": "5 – 8 tweets", "icon": "≡", "rules": ["Each tweet stands alone", "Tweet 1 = scroll stopper", "Tweet 7+ = replies CTA", "One stat-heavy tweet minimum"]},
-    "Article":       {"chars": "1500 – 2000 words", "icon": "▣", "rules": ["Hero image REQUIRED", "Subheadings every 300 words", "Bold 2-3 key stats/section", "End with discussion question"]},
-}
+# _FORMAT_GUIDES -> config.py
 
 
 # ═══════════════════════════════════════════════════════════════════════════

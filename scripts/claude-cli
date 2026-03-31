@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TMP_JS="/tmp/claude-real.js"
+cp /home/polfam/.npm-global/bin/claude.real "$TMP_JS"
+exec node "$TMP_JS" "$@"

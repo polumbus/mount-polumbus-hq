@@ -3,6 +3,10 @@
 
 const PROXY_URL = "https://gertrude-spectroscopic-nominally.ngrok-free.dev";
 const PROXY_KEY = "polumbus_hq_proxy_2026";
+const AUTH_KEYS = {
+  token: "hq_auth_token",
+  user: "hq_auth_user"
+};
 
 async function callProxy(path, body) {
   const resp = await fetch(`${PROXY_URL}${path}`, {
@@ -14,7 +18,11 @@ async function callProxy(path, body) {
     },
     body: JSON.stringify(body)
   });
-  return resp.json();
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.error || `HTTP ${resp.status}`);
+  }
+  return data;
 }
 
 function extractTweetData(tweetElement) {
@@ -356,13 +364,13 @@ async function openReplyModal(tweetElement) {
       } else {
         optionA.textContent = "AI failed — write your own";
         optionB.textContent = "AI failed — write your own";
-        status.textContent = "AI failed";
+        status.textContent = result.error || "AI failed";
         status.style.color = "#ff4444";
       }
     } catch (e) {
-      optionA.textContent = "Proxy unreachable";
-      optionB.textContent = "Proxy unreachable";
-      status.textContent = "Proxy unreachable";
+      optionA.textContent = "AI failed — write your own";
+      optionB.textContent = "AI failed — write your own";
+      status.textContent = e?.message || "Proxy unreachable";
       status.style.color = "#ff4444";
     }
     regenBtn.disabled = false;
@@ -393,9 +401,22 @@ async function openReplyModal(tweetElement) {
 
 // ── Use Signal ───────────────────────────────────────────────────────────────
 
-const HQ_APP_URL = "https://polumbus-hq.streamlit.app";
+const HQ_APP_URL = "https://postascend.streamlit.app";
 
-function useSignal(tweetElement) {
+async function loadSavedHQAuth() {
+  try {
+    const result = await chrome.storage.local.get([AUTH_KEYS.token, AUTH_KEYS.user]);
+    return {
+      token: result[AUTH_KEYS.token] || "",
+      user: result[AUTH_KEYS.user] || ""
+    };
+  } catch (err) {
+    console.warn("[HQ] Could not read saved auth", err);
+    return { token: "", user: "" };
+  }
+}
+
+async function useSignal(tweetElement) {
   const data = extractTweetData(tweetElement);
 
   // Extract reply count from metrics group
@@ -419,6 +440,10 @@ function useSignal(tweetElement) {
     sig_likes: data.likes.toString(),
     sig_url: data.tweet_url,
   });
+
+  const auth = await loadSavedHQAuth();
+  if (auth.token) params.set("token", auth.token);
+  if (auth.user) params.set("user", auth.user);
 
   window.open(`${HQ_APP_URL}/?${params.toString()}`, "_blank");
 }
