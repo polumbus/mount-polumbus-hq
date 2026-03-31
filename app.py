@@ -384,10 +384,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-bd_gen_tweets"], [class*="st-key-bd_gen_long"],
 [class*="st-key-bd_gen_video"], [class*="st-key-bd_save"],
 [class*="st-key-bd_new"], [class*="st-key-bd_saved"],
-[class*="st-key-ci_banger"], [class*="st-key-ci_build"],
-[class*="st-key-ci_repurpose"], [class*="st-key-ci_engage"],
-[class*="st-key-ci_save"], [class*="st-key-ci_bank_btn"],
-[class*="st-key-ci_inspiration"], [class*="st-key-ci_post_direct"],
+[class~="st-key-ci_banger"], [class~="st-key-ci_build"],
+[class~="st-key-ci_repurpose"], [class~="st-key-ci_engage"],
+[class~="st-key-ci_save"], [class~="st-key-ci_bank_btn"],
+[class~="st-key-ci_inspiration"], [class~="st-key-ci_post_direct"],
 [class*="st-key-coach_new"], [class*="st-key-coach_clear_all"],
 [class*="st-key-cv_"], [class*="st-key-cc_fmt_"],
 [class*="st-key-coach_send"], [class*="st-key-coach_save_idea"],
@@ -4660,11 +4660,6 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         bd = st.session_state["ci_banger_data"]
         _ai_pick = str(bd.get("pick", "1")).strip()
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
-        # Debug: show what AI returned
-        _dbg_o1 = bd.get("option1", "")[:80]
-        _dbg_p1 = bd.get("option1_pattern", "")[:80]
-        st.markdown(f'<div style="font-size:9px;color:#333;margin-bottom:4px;">DBG opt1: {_dbg_o1} | pat1: {_dbg_p1}</div>', unsafe_allow_html=True)
-
         for ti, (opt_text, pattern) in enumerate(opts):
             opt_key = f"ci_banger_opt_{ti + 1}"
             _is_pick = _ai_pick == str(ti + 1)
