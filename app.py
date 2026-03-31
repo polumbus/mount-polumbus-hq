@@ -6079,8 +6079,13 @@ Return as JSON:
 {{"health_score": 72, "sections": [{{"title": "...", "grade": "B+", "detail": "..."}}], "flagged": ["..."], "recommendations": ["..."]}}"""
 
             raw = call_claude(prompt, max_tokens=1200)
+            # Strip markdown code fences before parsing
+            _clean = raw.strip()
+            if _clean.startswith("```"):
+                _clean = re.sub(r'^```\w*\n?', '', _clean)
+                _clean = re.sub(r'\n?```$', '', _clean.strip())
             try:
-                json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                json_match = re.search(r'\{.*\}', _clean, re.DOTALL)
                 data = json.loads(json_match.group()) if json_match else None
             except Exception:
                 data = None
@@ -6092,11 +6097,24 @@ Return as JSON:
                 })
                 hc_cache = load_json("health_check_cache.json", {})
             else:
-                st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+                st.error("Audit returned unexpected format. Try again.")
+                st.markdown(f'<div class="output-box" style="font-size:12px;max-height:200px;overflow:auto;">{raw[:500]}</div>', unsafe_allow_html=True)
 
     # Render cached results (persists across sessions)
     data = hc_cache.get("data")
-    if data and "health_score" in data:
+    # Handle case where data was saved as string instead of dict
+    if isinstance(data, str):
+        try:
+            _clean_data = re.sub(r'^```\w*\n?', '', data.strip())
+            _clean_data = re.sub(r'\n?```$', '', _clean_data.strip())
+            _jm = re.search(r'\{.*\}', _clean_data, re.DOTALL)
+            data = json.loads(_jm.group()) if _jm else None
+            if data:
+                hc_cache["data"] = data
+                save_json("health_check_cache.json", hc_cache)
+        except Exception:
+            data = None
+    if data and isinstance(data, dict) and "health_score" in data:
         score = data["health_score"]
         ring_color = "#22c55e" if score >= 75 else "#2DD4BF" if score >= 55 else "#ef4444"
         st.markdown(f"""<div style="display:flex;flex-direction:column;align-items:center;margin:20px 0;">
