@@ -4337,7 +4337,11 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         _ra, _rb = st.columns([1, 1])
         with _ra:
             if st.button("Refresh Options", key="ci_refresh_options", use_container_width=True):
-                st.session_state["ci_dialog_pending"] = {
+                for _k in ["ci_banger_data", "ci_result", "ci_repurposed", "ci_preview", "ci_grades"]:
+                    st.session_state.pop(_k, None)
+                with st.spinner("Post Ascend AI is working... generating fresh options"):
+                    _run_ci_ai(action, tweet_text, fmt, voice)
+                st.session_state["_ci_reopen_dialog"] = {
                     "action": action,
                     "tweet_text": tweet_text,
                     "fmt": fmt,
@@ -5342,6 +5346,16 @@ def page_compose_ideas():
             with st.spinner("Post Ascend AI is working..."):
                 _run_ci_ai(_action, _txt, _fmt, _voice)
         _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
+
+    _reopen_dialog = st.session_state.pop("_ci_reopen_dialog", None)
+    if _reopen_dialog:
+        _ci_output_panel(
+            str(time.time()),
+            _reopen_dialog["action"],
+            _reopen_dialog["tweet_text"],
+            _reopen_dialog["fmt"],
+            _reopen_dialog["voice"],
+        )
 
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
