@@ -376,7 +376,45 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .cs-voice-row button[kind="primary"] {
   background: rgba(196,158,60,0.1) !important; border: 1px solid rgba(196,158,60,0.4) !important; color: #C49E3C !important;
 }
-/* Hidden button containers are collapsed by JS MutationObserver */
+/* Hidden action buttons — CSS hides them from first frame (no flash) */
+/* clip:rect keeps elements in DOM and clickable, unlike display:none */
+[class*="st-key-bd_subject"], [class*="st-key-bd_ideas"],
+[class*="st-key-bd_gen_tweets"], [class*="st-key-bd_gen_long"],
+[class*="st-key-bd_gen_video"], [class*="st-key-bd_save"],
+[class*="st-key-bd_new"], [class*="st-key-bd_saved"],
+[class*="st-key-ci_banger"], [class*="st-key-ci_build"],
+[class*="st-key-ci_repurpose"], [class*="st-key-ci_engage"],
+[class*="st-key-ci_save"], [class*="st-key-ci_bank_btn"],
+[class*="st-key-ci_inspiration"], [class*="st-key-ci_post_direct"],
+[class*="st-key-coach_send"], [class*="st-key-coach_save_idea"],
+[class*="st-key-coach_repurpose"],
+[class*="st-key-aw_scratch"], [class*="st-key-aw_outline"],
+[class*="st-key-aw_research_btn"], [class*="st-key-aw_save"],
+[class*="st-key-aw_show_articles"], [class*="st-key-aw_copy"],
+[class*="st-key-aw_verify"],
+[class*="st-key-th_ai_hooks"], [class*="st-key-th_ai_worst"],
+[class*="st-key-th_ai_voice"], [class*="st-key-th_ai_topics"],
+[class*="st-key-aa_run"],
+[class*="st-key-hc_run"], [class*="st-key-hc_clear"],
+[class*="st-key-ap_load"], [class*="st-key-ap_ai"],
+[class*="st-key-ar_run"], [class*="st-key-ar_save_voice"],
+[class*="st-key-rg_load_posts"], [class*="st-key-rg_load_all"],
+[class*="st-key-rg_load_verified"],
+[class*="st-key-insp_show_add"],
+[class*="st-key-rdc_morning"], [class*="st-key-rdc_evening"],
+[class*="st-key-sig_refresh"],
+[class*="st-key-timer_5"], [class*="st-key-timer_10"],
+[class*="st-key-timer_15"], [class*="st-key-timer_30"] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
 /* Icon dock hover effect */
 .cs-idock-btn:hover { opacity:0.85; transform:translateY(-2px); transition:all 0.2s; }
 .cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
@@ -1880,24 +1918,11 @@ _stc.html("""<script>
   }
   setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
 
-  /* ── Global: MutationObserver that hides hidden buttons + wires docks/bottoms + tags pill rows ── */
+  /* ── Global: MutationObserver that wires docks/bottoms + tags pill rows ── */
+  /* Hidden buttons are now hidden by CSS (clip:rect) in the global stylesheet — no JS hiding needed */
   /* Runs on EVERY DOM change so it works on reruns (not just full page loads) */
-  var _hidePrefixes=['dock_','bot_','bd_','cc_','aw_','th_','aa_','hc_','ap_','ar_','rg_','ib_','rdc_','sig_','timer_'];
   function processDOM(){
     var btns=doc.querySelectorAll('button');
-    /* Hide all hidden buttons (any button whose text starts with a known prefix) */
-    for(var i=0;i<btns.length;i++){
-      var t=btns[i].textContent.trim();
-      for(var p=0;p<_hidePrefixes.length;p++){
-        if(t.indexOf(_hidePrefixes[p])===0){
-          var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].parentElement.parentElement;
-          if(el&&el.style.opacity!=='0'){
-            el.style.cssText='position:absolute;width:0;height:0;overflow:hidden;padding:0;margin:0;border:0;opacity:0;pointer-events:none;';
-          }
-          break;
-        }
-      }
-    }
     /* Tag pill rows */
     var labels=['Punchy','Normal','Long','Thread','Article'];
     var voiceLabels=['Default','Critical','Homer','Sarcastic'];
@@ -2165,7 +2190,7 @@ def page_brain_dump():
                         st.rerun(scope="app")
         _bd_saved_dialog()
 
-    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
+    # ── Hidden buttons are CSS-hidden; dock/bottom clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5096,7 +5121,7 @@ Your coaching style:
     if "coach_save_text_result" in st.session_state:
         st.markdown(f'<div class="output-box">{st.session_state.coach_save_text_result}</div>', unsafe_allow_html=True)
 
-    # ── JS: hide hidden buttons + wire bottom bar clicks ──
+    # ── Hidden buttons are CSS-hidden; bottom bar clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5382,7 +5407,7 @@ def page_article_writer():
                         st.rerun(scope="app")
         _aw_articles_dialog()
 
-    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
+    # ── Hidden buttons are CSS-hidden; dock/bottom clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5691,7 +5716,7 @@ def page_tweet_history():
 
     st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
     # ── Hall of Fame ──
     def _eng_score(t):
@@ -5926,7 +5951,7 @@ Return as JSON:
                 else:
                     st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6054,7 +6079,7 @@ Return as JSON:
             for r in data["recommendations"]:
                 st.markdown(f"- {r}")
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6173,7 +6198,7 @@ Give:
 4. AVERAGE DAILY GROWTH ESTIMATE - Based on current trajectory""", max_tokens=800)
                 st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6326,7 +6351,7 @@ Return this exact JSON structure:
             for t in _ar_tweets[:6]:
                 render_tweet_card(t)
 
-    # ── JS: hide hidden buttons + wire dock/bottom clicks ──
+    # ── Hidden buttons are CSS-hidden; dock/bottom clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -6923,7 +6948,7 @@ def page_reply_guy():
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: INSPIRATION
@@ -7052,7 +7077,7 @@ def page_inspiration():
                 unsafe_allow_html=True
             )
 
-    # ── JS: hide hidden buttons + wire bottom bar clicks ──
+    # ── Hidden buttons are CSS-hidden; bottom bar clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7269,7 +7294,7 @@ def page_rd_council():
             with st.expander(_label):
                 _render_council_session(_s)
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7763,7 +7788,7 @@ def page_signals_prompts():
                     st.session_state.pop(_k, None)
                 _signal_brief_dialog(str(time.time()))
 
-    # ── JS: hide hidden buttons + wire dock clicks ──
+    # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
     import streamlit.components.v1 as _sig_stc
     _sig_stc.html("""<script>
     (function(){
