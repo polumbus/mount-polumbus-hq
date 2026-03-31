@@ -5240,92 +5240,74 @@ def page_article_writer():
     if "aw_sel_dump" not in st.session_state:
         st.session_state.aw_sel_dump = None
 
-    if st.session_state.aw_source == "Tweets":
-        for i, tw in enumerate(top_tweets):
-            txt = tw.get("text", "")
-            dt = tw.get("createdAt", "")[:10]
-            likes = tw.get("likeCount", 0)
-            rts = tw.get("retweetCount", 0)
-            reps = tw.get("replyCount", 0)
-            views = tw.get("viewCount", 0)
-            selected = st.session_state.aw_sel_tweet == i
-            border = "border-left:3px solid #2DD4BF;" if selected else ""
-            _sel_style = "margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:inline-flex;align-items:center;"
-            _sel_cls = _sel_style + ("background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;" if selected else "background:#0a1220;border:1px solid #1a2a45;color:#5a7090;")
-            st.markdown(f"""<div class="tweet-card" style="{border}">
-                <div class="tweet-num">{dt}</div>
-                <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
-                <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
-                <span class="cs-bot" data-bot="aw_tw_{i}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
-            </div>""", unsafe_allow_html=True)
-            if st.button(f"aw_tw_{i}", key=f"aw_tw_{i}"):
-                st.session_state.aw_sel_tweet = i
-                st.session_state.aw_sel_dump = None
-                st.session_state["aw_autogen"] = tw.get("text", "")
-                st.rerun()
-        if not top_tweets:
-            st.info("No tweet history yet. Sync tweets in Post History first.")
+    # ── Two-column: cards left, action dock right (sticky) ──
+    _aw_left, _aw_right = st.columns([3, 1])
 
-    elif st.session_state.aw_source == "Raw Thoughts":
-        if not dumps:
-            st.markdown('<div class="output-box">No brain dumps yet. Create one in Raw Thoughts tool first.</div>', unsafe_allow_html=True)
-        else:
-            for j, d in enumerate(reversed(dumps[-6:])):
-                ts = d.get("saved_at", "")[:16].replace("T", " ")
-                preview = d.get("text", "")[:160]
-                selected = st.session_state.aw_sel_dump == j
+    with _aw_left:
+        if st.session_state.aw_source == "Tweets":
+            for i, tw in enumerate(top_tweets):
+                txt = tw.get("text", "")
+                dt = tw.get("createdAt", "")[:10]
+                likes = tw.get("likeCount", 0)
+                rts = tw.get("retweetCount", 0)
+                reps = tw.get("replyCount", 0)
+                views = tw.get("viewCount", 0)
+                selected = st.session_state.aw_sel_tweet == i
                 border = "border-left:3px solid #2DD4BF;" if selected else ""
                 _sel_style = "margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:inline-flex;align-items:center;"
                 _sel_cls = _sel_style + ("background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;" if selected else "background:#0a1220;border:1px solid #1a2a45;color:#5a7090;")
                 st.markdown(f"""<div class="tweet-card" style="{border}">
-                    <div class="tweet-num">{ts}</div>
-                    <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
-                    <span class="cs-bot" data-bot="aw_bd_{j}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
+                    <div class="tweet-num">{dt}</div>
+                    <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
+                    <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
+                    <span class="cs-bot" data-bot="aw_tw_{i}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
                 </div>""", unsafe_allow_html=True)
-                if st.button(f"aw_bd_{j}", key=f"aw_bd_{j}"):
-                    st.session_state.aw_sel_dump = j
-                    st.session_state.aw_sel_tweet = None
-                    st.session_state["aw_autogen"] = d.get("text", "")
+                if st.button(f"aw_tw_{i}", key=f"aw_tw_{i}"):
+                    st.session_state.aw_sel_tweet = i
+                    st.session_state.aw_sel_dump = None
+                    st.session_state["aw_autogen"] = tw.get("text", "")
                     st.rerun()
+            if not top_tweets:
+                st.info("No tweet history yet. Sync tweets in Post History first.")
 
-    # Auto-generate when tweet/dump is selected
-    if st.session_state.get("aw_autogen"):
-        seed_text = st.session_state.pop("aw_autogen")
-        with st.spinner("Writing article..."):
-            voice = get_voice_context()
-            pp = analyze_personal_patterns()
-            pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
-            prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
-            st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
+        elif st.session_state.aw_source == "Raw Thoughts":
+            if not dumps:
+                st.markdown('<div class="output-box">No brain dumps yet. Create one in Raw Thoughts tool first.</div>', unsafe_allow_html=True)
+            else:
+                for j, d in enumerate(reversed(dumps[-6:])):
+                    ts = d.get("saved_at", "")[:16].replace("T", " ")
+                    preview = d.get("text", "")[:160]
+                    selected = st.session_state.aw_sel_dump == j
+                    border = "border-left:3px solid #2DD4BF;" if selected else ""
+                    _sel_style = "margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:inline-flex;align-items:center;"
+                    _sel_cls = _sel_style + ("background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;" if selected else "background:#0a1220;border:1px solid #1a2a45;color:#5a7090;")
+                    st.markdown(f"""<div class="tweet-card" style="{border}">
+                        <div class="tweet-num">{ts}</div>
+                        <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
+                        <span class="cs-bot" data-bot="aw_bd_{j}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button(f"aw_bd_{j}", key=f"aw_bd_{j}"):
+                        st.session_state.aw_sel_dump = j
+                        st.session_state.aw_sel_tweet = None
+                        st.session_state["aw_autogen"] = d.get("text", "")
+                        st.rerun()
 
-    st.markdown('<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>', unsafe_allow_html=True)
+        if st.session_state.aw_source == "Scratch":
+            manual = st.text_area("Type / paste your own seed:", height=80, key="aw_manual",
+                placeholder="Paste a tweet, idea, or topic to expand...", label_visibility="collapsed")
 
-    # Resolve seed text
-    seed_text = ""
-    if st.session_state.aw_sel_tweet is not None and top_tweets:
-        seed_text = top_tweets[st.session_state.aw_sel_tweet].get("text", "")
-    elif st.session_state.aw_sel_dump is not None and dumps:
-        idx = st.session_state.aw_sel_dump
-        rev = list(reversed(dumps[-6:]))
-        if idx < len(rev):
-            seed_text = rev[idx].get("text", "")
+        # Research data display
+        if st.session_state.get("aw_research_data"):
+            _rr = st.session_state["aw_research_data"]
+            st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
+            if _rr.get("citations"):
+                st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
 
-    if st.session_state.aw_source == "Scratch" or not seed_text:
-        manual = st.text_area("Type / paste your own seed:", height=80, key="aw_manual",
-            placeholder="Paste a tweet, idea, or topic to expand...", label_visibility="collapsed")
-        if manual.strip():
-            seed_text = manual.strip()
-
-    # Research data display
-    if st.session_state.get("aw_research_data"):
-        _rr = st.session_state["aw_research_data"]
-        st.markdown(f'<div style="background:#0d1829;border:1px solid #1e3a5f;border-left:3px solid #00E5CC;border-radius:8px;padding:14px;margin:8px 0;font-size:12px;color:#b8c8d8;line-height:1.7;"><div style="font-size:10px;color:#00E5CC;font-weight:700;letter-spacing:1px;margin-bottom:6px;">PERPLEXITY RESEARCH</div>{_rr["answer"]}</div>', unsafe_allow_html=True)
-        if _rr.get("citations"):
-            st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
-
-    # --- Icon dock: Write, Outline, Research ---
-    st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:12px 0 8px;">ACTIONS</div>
-    <div class="cs-icon-dock cs-aw-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+    with _aw_right:
+        # ── Sticky action dock (vertical) ──
+        st.markdown('''<div style="position:sticky;top:80px;">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:0 0 8px;text-align:center;">ACTIONS</div>
+        <div class="cs-icon-dock cs-aw-dock" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin-bottom:16px;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="aw_write" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#060A12" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#060A12" stroke-width="2"/></svg>
         <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">WRITE</span>
@@ -5338,7 +5320,30 @@ def page_article_writer():
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#5a7090" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#5a7090" stroke-width="2"/></svg>
         <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">RESEARCH</span>
       </div>
+    </div>
     </div>''', unsafe_allow_html=True)
+
+    # Auto-generate when tweet/dump is selected
+    if st.session_state.get("aw_autogen"):
+        _auto_seed = st.session_state.pop("aw_autogen")
+        with st.spinner("Writing article..."):
+            voice = get_voice_context()
+            pp = analyze_personal_patterns()
+            pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
+            prompt = f"""Write a complete X Article based on this seed:\n\n\"{_auto_seed}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
+            st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
+
+    # Resolve seed text for manual actions
+    seed_text = ""
+    if st.session_state.get("aw_sel_tweet") is not None and top_tweets:
+        seed_text = top_tweets[st.session_state.aw_sel_tweet].get("text", "")
+    elif st.session_state.get("aw_sel_dump") is not None and dumps:
+        idx = st.session_state.aw_sel_dump
+        rev = list(reversed(dumps[-6:]))
+        if idx < len(rev):
+            seed_text = rev[idx].get("text", "")
+    if st.session_state.aw_source == "Scratch":
+        seed_text = st.session_state.get("aw_manual", "").strip() or seed_text
 
     # Hidden buttons for dock
     if st.button("aw_write", key="aw_scratch"):
