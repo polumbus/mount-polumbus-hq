@@ -5928,11 +5928,11 @@ def page_algo_analyzer():
     cls = "char-over" if char_len > 280 else ""
     st.markdown(f'<div class="char-count {cls}">{char_len}/280</div>', unsafe_allow_html=True)
 
-    # --- Analyze button as primary dock style ---
+    # --- Grades button (same icon as Creator Studio grades) ---
     st.markdown('''<div class="cs-icon-dock cs-algo-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="aa_analyze" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">ANALYZE</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#060A12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
