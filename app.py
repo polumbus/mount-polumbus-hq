@@ -405,7 +405,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-rg_load_verified"],
 [class*="st-key-insp_show_add"],
 [class*="st-key-rdc_morning"], [class*="st-key-rdc_evening"],
-[class*="st-key-sig_refresh"],
+[class*="st-key-sig_refresh"], [class*="st-key-sig_tab_"],
+[class*="st-key-sig_beat_"], [class*="st-key-sig_nat_"],
 [class*="st-key-timer_5"], [class*="st-key-timer_10"],
 [class*="st-key-timer_15"], [class*="st-key-timer_30"] {
   position: absolute !important;
@@ -7738,19 +7739,21 @@ def page_signals_prompts():
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
 
-    # Tab pills
-    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Signal Source</div>', unsafe_allow_html=True)
+    # Tab pills as HTML
     if "sig_tab" not in st.session_state:
         st.session_state.sig_tab = "Beat"
-    _stab_cols = st.columns(2)
-    with _stab_cols[0]:
-        if st.button("Beat Reporters", key="sig_tab_beat", type="primary" if st.session_state.sig_tab == "Beat" else "secondary"):
-            st.session_state.sig_tab = "Beat"
-            st.rerun()
-    with _stab_cols[1]:
-        if st.button("National Takes", key="sig_tab_nat", type="primary" if st.session_state.sig_tab == "National" else "secondary"):
-            st.session_state.sig_tab = "National"
-            st.rerun()
+    _tab_on = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _tab_off = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    st.markdown(f'''<div style="display:flex;gap:8px;margin:8px 0 16px;">
+      <span class="cs-bot" data-bot="sig_tab_beat" style="{_tab_on if st.session_state.sig_tab == 'Beat' else _tab_off}">Beat Reporters</span>
+      <span class="cs-bot" data-bot="sig_tab_nat" style="{_tab_off if st.session_state.sig_tab == 'Beat' else _tab_on}">National Takes</span>
+    </div>''', unsafe_allow_html=True)
+    if st.button("sig_tab_beat", key="sig_tab_beat"):
+        st.session_state.sig_tab = "Beat"
+        st.rerun()
+    if st.button("sig_tab_nat", key="sig_tab_nat"):
+        st.session_state.sig_tab = "National"
+        st.rerun()
 
     # ── Signal 1: Beat Reporter Heat Map ──
     if st.session_state.sig_tab == "Beat":
@@ -7781,8 +7784,9 @@ def page_signals_prompts():
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
+                <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
-            if st.button("Use Signal", key=f"sig_beat_{idx}", use_container_width=True):
+            if st.button(f"sig_beat_{idx}", key=f"sig_beat_{idx}"):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
                 for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -7814,8 +7818,9 @@ def page_signals_prompts():
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
+                <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
-            if st.button("Use Signal", key=f"sig_nat_{idx}", use_container_width=True):
+            if st.button(f"sig_nat_{idx}", key=f"sig_nat_{idx}"):
                 st.session_state["sig_selected"] = tw
                 st.session_state["sig_brief"] = _build_signal_brief(tw)
                 for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
