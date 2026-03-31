@@ -692,27 +692,36 @@ def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
     if voice_name == "Default":
         return get_voice_context()
 
-    # Voice mode rules — universal structure guidance, no niche-specific examples
-    # Owner gets Tyler's sports examples. Guests get rules only (their own
-    # top tweets serve as examples via patterns context).
-    _owner_critical_examples = """EXAMPLES (copy this exact energy):
+    # Voice mode rules — universal structure guidance
+    # Owner gets Tyler's sports examples. Guests get their own top tweets as examples.
+    if _is_g:
+        # Pull guest's top tweets as voice examples
+        _pp = analyze_personal_patterns()
+        _guest_top = _pp.get("top_examples", [])[:3] if _pp else []
+        if _guest_top:
+            _guest_ex_block = "YOUR TOP-PERFORMING TWEETS (use as voice/energy reference):\n" + "\n".join([f'- "{ex["text"][:200]}"' for ex in _guest_top]) + "\n"
+        else:
+            _guest_ex_block = ""
+        _owner_critical_examples = _guest_ex_block
+        _owner_homer_examples = _guest_ex_block
+        _owner_sarcastic_examples = _guest_ex_block
+    else:
+        _owner_critical_examples = """EXAMPLES (copy this exact energy):
 - "We passed on 52% of third downs last year and went 8-9. Meanwhile Kansas City ran on 3rd-and-short 74% of the time and won the Super Bowl. That gap is a choice. Who owns it?"
 - "The Broncos have had 5 different offensive coordinators in 8 years. And we keep wondering why the offense looks confused. That's on the front office. Connect the dots."
 - "Bo Nix threw for 3,000 yards last season. Good. But 18 of those touchdowns came against bottom-10 defenses. Payton needs to answer for that schedule construction."
-""" if not _is_g else ""
-
-    _owner_homer_examples = """EXAMPLES (copy this exact energy):
+"""
+        _owner_homer_examples = """EXAMPLES (copy this exact energy):
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday. The team drawing Denver in round 2 just changed their entire defensive game plan."
 - "Bo Nix's third down completion rate jumped 12% in the second half. Every defensive coordinator in the AFC pulled up that film tonight."
 - "MacKinnon and Makar both locked in at the same time in April for the first time in three years. The rest of the West is recalculating everything."
-""" if not _is_g else ""
-
-    _owner_sarcastic_examples = """EXAMPLES (copy this exact energy):
+"""
+        _owner_sarcastic_examples = """EXAMPLES (copy this exact energy):
 - "Turns out the Patriots offense doesn't suck because of a snow storm."
 - "That cornerback needs to call someone he trusts right now. Not about football."
 - "Starting to feel like Bo Nix really should have played with a broken ankle."
 - "Bold of Skip to finally come out and say it."
-""" if not _is_g else ""
+"""
 
     voice_blocks = {
         "Critical": f"""CRITICAL VOICE — DIRECT MODE:
@@ -2377,7 +2386,7 @@ _sidebar_html = f"""
     </div>
   </div>
 
-  <div class="mp-pro">PRO</div>
+  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
 </div>
 
 """
@@ -2385,12 +2394,30 @@ _sidebar_html = f"""
 with st.sidebar:
     st.markdown(_sidebar_html, unsafe_allow_html=True)
     if is_guest():
-        st.markdown('<div style="text-align:center;margin:-10px 0 10px;"><span style="background:rgba(251,191,36,0.15);color:#FBBF24;padding:3px 12px;border-radius:12px;font-size:10px;font-weight:600;letter-spacing:1px;">GUEST ACCESS</span></div>', unsafe_allow_html=True)
+        _g_avatar = st.session_state.get("user_avatar", "")
+        _g_name = st.session_state.get("user_display_name", "")
+        _g_handle = get_current_handle()
+        _g_username = st.session_state.get("auth_username", "")
+        if _g_avatar and _g_handle:
+            st.markdown(f"""<div style="text-align:center;margin:-6px 0 8px;">
+                <img src="{_g_avatar}" style="width:32px;height:32px;border-radius:50%;border:1px solid #2DD4BF;margin-bottom:4px;" />
+                <div style="font-size:11px;color:#E2E8F0;font-weight:600;">{_g_name or _g_handle}</div>
+                <div style="font-size:10px;color:#6E7681;">@{_g_handle}</div>
+            </div>""", unsafe_allow_html=True)
+        elif _g_username:
+            st.markdown(f'<div style="text-align:center;margin:-6px 0 8px;font-size:11px;color:#6E7681;">{_g_username}</div>', unsafe_allow_html=True)
     if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
         st.session_state["auth_role"] = None
         st.session_state.pop("_auth_token", None)
-        if "token" in st.query_params:
-            del st.query_params["token"]
+        st.session_state.pop("auth_username", None)
+        st.session_state.pop("user_handle", None)
+        st.session_state.pop("user_display_name", None)
+        st.session_state.pop("user_avatar", None)
+        st.session_state.pop("onboarding_complete", None)
+        st.session_state.pop("onboarding_step", None)
+        for _k in ["token", "user", "guest_id"]:
+            if _k in st.query_params:
+                del st.query_params[_k]
         st.rerun()
     # Hidden buttons for each page — JS wires sidebar links to click these
     # instead of doing full page reloads (eliminates white flash)
@@ -4166,9 +4193,11 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     result = None
 
     # --- PARALLEL FETCH: stats + sports context at the same time ---
+    # Skip sports context entirely for non-sports guests
     _live_stats_block = ""
     _sports_ctx = ""
-    if action in ("banger", "build", "rewrite") and tweet_text.strip():
+    _skip_sports = is_guest() and "sport" not in load_json("topics.json", {}).get("niche", "").lower()
+    if action in ("banger", "build", "rewrite") and tweet_text.strip() and not _skip_sports:
         _entities = _detect_sports_entities(tweet_text)
         _needs_stats = not _input_has_stats(tweet_text) and (_entities["players"] or _entities["teams"])
         _needs_sports = _sports_context_relevant(tweet_text)
@@ -5585,7 +5614,12 @@ def page_compose_ideas():
         if st.button("bot_hot", key="ci_inspiration"):
             st.session_state["_ci_show_inspiration"] = True
         if st.button("bot_post", key="ci_post_direct"):
-            if tweet_text.strip():
+            if is_guest():
+                # Guests: open intent link in browser instead of direct post
+                import urllib.parse as _up_post
+                _enc_post = _up_post.quote(tweet_text.strip()[:280])
+                st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc_post}" target="_blank" style="display:inline-block;padding:8px 16px;background:#2DD4BF;border-radius:8px;color:#000;font-weight:600;text-decoration:none;">Open in X to Post</a>', unsafe_allow_html=True)
+            elif tweet_text.strip():
                 with st.spinner("Posting..."):
                     _ok, _err = _post_tweet(tweet_text.strip())
                 if _ok:
@@ -5640,8 +5674,10 @@ def page_content_coach():
         st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
 
     _coach_sports = ""
-    try: _coach_sports = f"\n\nLIVE SPORTS CONTEXT (reference when relevant):\n{get_sports_context()}"
-    except Exception: pass
+    _coach_skip_sports = is_guest() and "sport" not in load_json("topics.json", {}).get("niche", "").lower()
+    if not _coach_skip_sports:
+        try: _coach_sports = f"\n\nLIVE SPORTS CONTEXT (reference when relevant):\n{get_sports_context()}"
+        except Exception: pass
     COACH_SYSTEM = get_voice_context() + f"""
 
 You are Amplifier, Tyler's personal social media coach. You are an EXPERT on:
@@ -6027,8 +6063,12 @@ def page_article_writer():
                 if pp:
                     pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
                 _aw_sports = ""
-                try: _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
-                except Exception: pass
+                _aw_skip_sports = is_guest() and "sport" not in load_json("topics.json", {}).get("niche", "").lower()
+                if not _aw_skip_sports:
+                    try:
+                        _aw_sports = f"\n\nLIVE SPORTS CONTEXT:\n{get_sports_context()}"
+                    except Exception:
+                        pass
                 _aw_research = ""
                 if st.session_state.get("aw_research_data", {}).get("answer"):
                     _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research_data']['answer'][:1500]}"
@@ -8118,7 +8158,8 @@ def _build_signal_brief(tweet):
     for league, signals in _sport_signals.items():
         _sport_scores[league] = sum(1 for s in signals if s in _all_text)
 
-    _today_playing = _get_denver_games_today()
+    _sb_skip_sports = is_guest() and "sport" not in load_json("topics.json", {}).get("niche", "").lower()
+    _today_playing = _get_denver_games_today() if not _sb_skip_sports else []
     _best_sport = max(_sport_scores, key=_sport_scores.get) if max(_sport_scores.values()) > 0 else None
 
     if is_guest():
@@ -8430,6 +8471,17 @@ page_map = {
 # so the old session_state guard was useless — the sync ran on every click.
 @st.cache_data(ttl=3600, show_spinner=False)
 def _auto_sync_tweets():
+    # Guests: already synced during onboarding, just do a quick refresh
+    if is_guest():
+        try:
+            existing = load_json("tweet_history.json", [])
+            if len(existing) >= 20:
+                sync_tweet_history(quick=True)
+            # If < 20 tweets, onboarding should have caught this
+        except Exception:
+            pass
+        return
+    # Owner: check gist for tweet count and sync accordingly
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         resp = requests.get(
