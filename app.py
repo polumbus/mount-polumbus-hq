@@ -6007,17 +6007,14 @@ def page_health_check():
     st.markdown('<div class="main-header">ACCOUNT <span>AUDIT</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Full audit of your X account — posting cadence, engagement rate, hook quality, content mix, and actionable fixes.</div>', unsafe_allow_html=True)
 
-    # What it checks
-    with st.expander("ℹ️ What this audits", expanded=False):
-        st.markdown("""<div style="padding:4px 0;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div style="color:#8888aa;font-size:13px;">&#9632; Posting frequency &amp; consistency</div>
-      <div style="color:#8888aa;font-size:13px;">&#9632; Hook quality (first-line scroll-stop rate)</div>
-      <div style="color:#8888aa;font-size:13px;">&#9632; Engagement rate vs views</div>
-      <div style="color:#8888aa;font-size:13px;">&#9632; Content mix (takes / analysis / humor)</div>
-      <div style="color:#8888aa;font-size:13px;">&#9632; Underperforming tweets flagged</div>
-      <div style="color:#8888aa;font-size:13px;">&#9632; Top 3 specific, actionable improvements</div>
-    </div>
+    # What it checks — always visible
+    st.markdown("""<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0 16px;">
+      <div style="color:#5a7090;font-size:12px;">&#9632; Posting frequency &amp; consistency</div>
+      <div style="color:#5a7090;font-size:12px;">&#9632; Hook quality (first-line scroll-stop rate)</div>
+      <div style="color:#5a7090;font-size:12px;">&#9632; Engagement rate vs views</div>
+      <div style="color:#5a7090;font-size:12px;">&#9632; Content mix (takes / analysis / humor)</div>
+      <div style="color:#5a7090;font-size:12px;">&#9632; Underperforming tweets flagged</div>
+      <div style="color:#5a7090;font-size:12px;">&#9632; Top 3 specific, actionable improvements</div>
     </div>""", unsafe_allow_html=True)
 
     # Last run timestamp
@@ -6112,18 +6109,27 @@ Return as JSON:
         </div>""", unsafe_allow_html=True)
 
         for section in data.get("sections", []):
-            with st.expander(f"{section.get('title', '')} — {section.get('grade', '')}"):
-                st.markdown(f'<div class="output-box">{section.get("detail", "")}</div>', unsafe_allow_html=True)
+            _title = section.get("title", "")
+            _grade = section.get("grade", "")
+            _detail = section.get("detail", "")
+            _gc = "#2DD4BF" if _grade and _grade[0] in "AB" else "#FBBF24" if _grade and _grade[0] == "C" else "#F87171"
+            st.markdown(f'''<div style="background:#0a1220;border:1px solid #1a2a45;border-radius:14px;padding:16px 18px;margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#5a7090;text-transform:uppercase;">{_title}</span>
+                    <span style="font-size:14px;font-weight:800;color:{_gc};">{_grade}</span>
+                </div>
+                <div style="font-size:13px;color:#b0c0d0;line-height:1.7;">{_detail}</div>
+            </div>''', unsafe_allow_html=True)
 
         if data.get("flagged"):
-            st.markdown("### Flagged Tweets")
+            st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#F87171;text-transform:uppercase;margin:16px 0 8px;">FLAGGED TWEETS</div>', unsafe_allow_html=True)
             for f in data["flagged"]:
-                st.markdown(f'<div class="output-box" style="border-left-color:#ef4444;">{f}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#0a1220;border:1px solid rgba(248,113,113,0.2);border-left:3px solid #F87171;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:#b0c0d0;line-height:1.6;">{f}</div>', unsafe_allow_html=True)
 
         if data.get("recommendations"):
-            st.markdown("### Recommendations")
+            st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#2DD4BF;text-transform:uppercase;margin:16px 0 8px;">RECOMMENDATIONS</div>', unsafe_allow_html=True)
             for r in data["recommendations"]:
-                st.markdown(f"- {r}")
+                st.markdown(f'<div style="background:#0a1220;border:1px solid #1a2a45;border-left:3px solid #2DD4BF;border-radius:10px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:#b0c0d0;line-height:1.6;">{r}</div>', unsafe_allow_html=True)
 
     # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
