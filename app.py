@@ -58,8 +58,11 @@ except Exception:
 # TYLER_HANDLE, TYLER_CONTEXT, _WHATS_HOT_VOICE_GUIDE -> config.py
 
 # ─── Tyler's Voice System Prompt ─────────────────────────────────────────────
-# ─── Styles ─────────────────────────────────────────────────────────────────
-st.markdown("""
+# ─── Styles (extracted to styles.py) ──────────────────────────────────────────
+from styles import inject_css
+inject_css()
+
+_DEAD_START = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -8833,6 +8836,49 @@ def page_debug_console():
     debug_status = _load_debug_status()
     tweet_sync_status = debug_status.get("tweet_sync", {})
     signals_fetch_status = debug_status.get("signals_fetch", {})
+    proxy_health = _get_proxy_health_debug()
+    last_route = st.session_state.get("_ai_last_route", "no AI call yet")
+    last_route_at = st.session_state.get("_ai_last_at", "")
+    card1, card2 = st.columns(2)
+    with card1:
+        st.markdown(
+            f"""<div style="background:#0D1929;border:1px solid #1E3050;border-radius:12px;padding:14px 16px;margin:6px 0 10px;">
+            <div style="font-size:11px;letter-spacing:1.4px;color:#6B8AAA;text-transform:uppercase;margin-bottom:8px;">Last Tweet Sync</div>
+            <div style="font-size:18px;font-weight:700;color:#E2E8F0;">{tweet_sync_status.get('status', 'unknown').upper()}</div>
+            <div style="font-size:12px;color:#9FB0C2;margin-top:6px;">{tweet_sync_status.get('detail', 'No sync recorded')}</div>
+            <div style="font-size:11px;color:#6E7681;margin-top:6px;">{tweet_sync_status.get('at', 'No timestamp')}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""<div style="background:#0D1929;border:1px solid #1E3050;border-radius:12px;padding:14px 16px;margin:0 0 10px;">
+            <div style="font-size:11px;letter-spacing:1.4px;color:#6B8AAA;text-transform:uppercase;margin-bottom:8px;">Last Signals Fetch</div>
+            <div style="font-size:18px;font-weight:700;color:#E2E8F0;">{signals_fetch_status.get('status', 'unknown').upper()}</div>
+            <div style="font-size:12px;color:#9FB0C2;margin-top:6px;">{signals_fetch_status.get('detail', 'No signal fetch recorded')}</div>
+            <div style="font-size:11px;color:#6E7681;margin-top:6px;">{signals_fetch_status.get('at', 'No timestamp')}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    with card2:
+        st.markdown(
+            f"""<div style="background:#0D1929;border:1px solid #1E3050;border-radius:12px;padding:14px 16px;margin:6px 0 10px;">
+            <div style="font-size:11px;letter-spacing:1.4px;color:#6B8AAA;text-transform:uppercase;margin-bottom:8px;">Last AI Route</div>
+            <div style="font-size:18px;font-weight:700;color:#E2E8F0;">{str(last_route).upper()}</div>
+            <div style="font-size:12px;color:#9FB0C2;margin-top:6px;">{st.session_state.get('_ai_last_provider', 'unknown')} / {st.session_state.get('_ai_last_source', 'unknown')}</div>
+            <div style="font-size:11px;color:#6E7681;margin-top:6px;">{last_route_at or 'No timestamp'}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""<div style="background:#0D1929;border:1px solid #1E3050;border-radius:12px;padding:14px 16px;margin:0 0 10px;">
+            <div style="font-size:11px;letter-spacing:1.4px;color:#6B8AAA;text-transform:uppercase;margin-bottom:8px;">Proxy Health</div>
+            <div style="font-size:18px;font-weight:700;color:#E2E8F0;">{'OK' if proxy_health.get('ok') else 'DOWN'}</div>
+            <div style="font-size:12px;color:#9FB0C2;margin-top:6px;">{proxy_health.get('proxy_url', proxy_health.get('error', 'No proxy URL'))}</div>
+            <div style="font-size:11px;color:#6E7681;margin-top:6px;">Anthropic blocked: {bool(anthropic_get_state().get('blocked_until', 0) > time.time())}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
     s1, s2 = st.columns(2)
     with s1:
         st.markdown("### Pipeline Status")
@@ -8863,7 +8909,6 @@ def page_debug_console():
 
     st.markdown("### AI Routing")
     anthropic_state = anthropic_get_state()
-    proxy_health = _get_proxy_health_debug()
     ai_rows = [
         {"item": "Primary model", "value": st.session_state.get("_ai_last_model", "claude-sonnet-4-6"), "notes": "default app model"},
         {"item": "Last route used", "value": st.session_state.get("_ai_last_route", "no AI call yet"), "notes": st.session_state.get("_ai_last_provider", "")},
