@@ -19,7 +19,7 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="PostAscend",
+    page_title="Post Ascend",
     page_icon="mountain",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -1769,8 +1769,8 @@ if not st.session_state["auth_role"]:
     </style>""", unsafe_allow_html=True)
     st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">MOUNT POLUMBUS</div>
-    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">HEADQUARTERS</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">POST ASCEND</div>
+    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI CONTENT CREATION + GROWTH</div>
     </div></div>""", unsafe_allow_html=True)
 
     _auth_tab = st.radio("", ["Sign In", "Create Account"], horizontal=True, key="auth_tab", label_visibility="collapsed")
@@ -5363,7 +5363,7 @@ def _ci_inspiration_dialog():
             st.session_state["inspo_page"] = 0
         else:
             # No gist cache — generate fresh (slow, but only happens once)
-            with st.spinner("PostAscend AI is working..."):
+            with st.spinner("Post Ascend AI is working..."):
                 _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude()
             if not _all_ideas:
                 st.error("Couldn't generate ideas — try again.")
@@ -5587,7 +5587,7 @@ def page_compose_ideas():
         st.session_state["ci_text"] = seed
         _fmt = st.session_state.get("ci_format", "Normal Tweet")
         _vc = st.session_state.get("ci_voice", "Default")
-        with st.spinner("PostAscend AI is working..."):
+        with st.spinner("Post Ascend AI is working..."):
             _run_ci_ai("rewrite", seed, _fmt, _vc)
         _ci_output_panel(str(time.time()), "rewrite", seed, _fmt, _vc)
         return
@@ -5742,7 +5742,7 @@ def page_compose_ideas():
                 _clear_banger()
             elif _action == "grades":
                 st.session_state.pop("ci_grades", None)
-            with st.spinner("PostAscend AI is working..."):
+            with st.spinner("Post Ascend AI is working..."):
                 _run_ci_ai(_action, _txt, _fmt, _voice)
         _ci_output_panel(str(time.time()), _action, _txt, _fmt, _voice)
 
@@ -5891,7 +5891,7 @@ Your coaching style:
     if not st.session_state.coach_current["messages"]:
         demo_pick = st.selectbox("Demo questions:", ["-- Pick a question --"] + DEMO_QUESTIONS, key="coach_demo", label_visibility="collapsed")
         if demo_pick != "-- Pick a question --":
-            with st.spinner("PostAscend AI is working..."):
+            with st.spinner("Post Ascend AI is working..."):
                 _send_message(demo_pick, include_history, coach_fmt)
             st.rerun()
 
@@ -7760,7 +7760,7 @@ def page_reply_guy():
                 st.rerun()
         st.session_state["rg_viral_fmt"] = _viral_fmt
         st.session_state["rg_viral_voice"] = _viral_voice
-        with st.spinner("PostAscend AI is working..."):
+        with st.spinner("Post Ascend AI is working..."):
             _run_ci_ai("banger", _viral_idea, _viral_fmt, _viral_voice)
         _ci_output_panel(str(time.time()), "banger", _viral_idea, _viral_fmt, _viral_voice)
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
@@ -8610,9 +8610,9 @@ if is_guest():
 </div>
 """, unsafe_allow_html=True)
 else:
-    st.markdown("""
+    st.markdown(f"""
 <div class="hq-footer">
-  <a href="https://x.com/tyler_polumbus" target="_blank">@tyler_polumbus</a>
-  <a href="#" target="_blank">PostAscend</a>
+  <a href="https://x.com/{_footer_handle}" target="_blank">@{_footer_handle}</a>
+  <a href="#" target="_blank">Post Ascend</a>
 </div>
 """, unsafe_allow_html=True)
