@@ -422,8 +422,9 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 /* Icon dock hover effect */
 .cs-idock-btn:hover { opacity:0.85; transform:translateY(-2px); transition:all 0.2s; }
 .cs-idock-primary:hover { box-shadow:0 4px 20px rgba(45,212,191,0.3); }
-/* Bottom bar hover */
-.cs-bot:hover { opacity:0.85; transition:all 0.2s; }
+/* Bottom bar + inline button hover + active */
+.cs-bot:hover { border-color:rgba(45,212,191,0.4) !important; color:#8ab0c8 !important; transition:all 0.15s; }
+.cs-bot:active { transform:scale(0.95); opacity:0.8; transition:all 0.05s; }
 /* Mobile: force pill rows horizontal, not stacked */
 @media (max-width: 768px) {
   .cs-fmt-row [data-testid="stHorizontalBlock"],
@@ -7777,7 +7778,7 @@ def page_signals_prompts():
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
-                <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_beat_{idx}", key=f"sig_beat_{idx}"):
                 st.session_state["sig_selected"] = tw
@@ -7811,7 +7812,7 @@ def page_signals_prompts():
                 </div>
                 <div style="font-size:12px;color:#d8d8e8;line-height:1.5;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
                 <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
-                <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_nat_{idx}", key=f"sig_nat_{idx}"):
                 st.session_state["sig_selected"] = tw
@@ -7819,6 +7820,15 @@ def page_signals_prompts():
                 for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
                     st.session_state.pop(_k, None)
                 _signal_brief_dialog(str(time.time()))
+
+    # ── Next Page dock at bottom ──
+    st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+    <div class="cs-icon-dock cs-sig-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="sig_next" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#060A12" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">NEXT PAGE</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
 
     # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
     import streamlit.components.v1 as _sig_stc
