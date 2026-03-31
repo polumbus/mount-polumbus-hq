@@ -3843,15 +3843,19 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         else:
             _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
         _build_opening = "Tyler provided this structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
+        _char_limit_b = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
+        _char_rule_b = f"\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully." if fmt == "Normal Tweet" else (f"\n- CHARACTER LIMIT: Every option MUST be under 160 characters for Punchy Tweet format." if fmt == "Punchy Tweet" else (f"\n- LENGTH: Long Tweet format — 600-1200 characters. Use the space." if fmt == "Long Tweet" else ""))
         build_prompt = f"""{_build_opening}
 
 {_brief_block}
+{_live_stats_block}
+{format_mod}{_sports_ctx_b}{_fmt_inject_b}
 
-{format_mod}{_sports_ctx_b}{_fmt_inject_b}{_live_stats_block}
-
-STAT INTEGRITY RULE:
-- If LIVE STATS are provided above, use ONLY those numbers. Do not invent or adjust them.
-- If NO stats are provided, do not fabricate specific numbers. A tweet without stats is better than one with wrong stats.
+STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
+- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
+- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
+- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Homer" else ""}
 
 TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
@@ -3861,9 +3865,9 @@ Rules:
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above
+- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
 
-{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
 Return ONLY this JSON, no other text:
 {{
@@ -7653,14 +7657,16 @@ def _signal_brief_dialog(_nonce):
 
     if st.button("⊞ Build", use_container_width=True, key="sig_build", type="primary"):
         final_brief = st.session_state.get("sig_brief_edit", edited_brief)
-        # Store voice/fmt for result display after rerun
         st.session_state["_sig_last_fmt"] = sig_fmt
         st.session_state["_sig_last_voice"] = sig_voice
-        st.session_state["_sig_pending_build"] = {
-            "brief": final_brief,
-            "fmt": sig_fmt,
-            "voice": sig_voice,
-        }
+        # Clear old results
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        # Run AI right here inside the dialog — spinner is visible to user
+        with st.spinner("Building your tweets... AI is generating 3 options"):
+            _run_ci_ai("build", final_brief, sig_fmt, sig_voice)
+        # Signal main page to reopen this dialog with results
+        st.session_state["_sig_reopen_with_results"] = True
         st.rerun()
 
 
@@ -7693,36 +7699,36 @@ def page_signals_prompts():
             st.session_state.pop(_k, None)
         _signal_brief_dialog(str(time.time()))
 
-    # ── Handle pending build (AI runs HERE on main page, then dialog reopens with results) ──
-    _pending = st.session_state.pop("_sig_pending_build", None)
-    if _pending:
-        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
-            st.session_state.pop(_k, None)
-        _status = st.empty()
-        _status.markdown('<div style="text-align:center;padding:40px 0;"><div style="font-size:15px;font-weight:600;color:#2DD4BF;margin-bottom:8px;">Building your tweets...</div><div style="font-size:12px;color:#666888;">AI is generating 3 options from your signal brief</div></div>', unsafe_allow_html=True)
-        _run_ci_ai("build", _pending["brief"], _pending["fmt"], _pending["voice"])
-        _status.empty()
-        st.session_state["sig_fmt"] = _pending["fmt"]
-        st.session_state["sig_voice"] = _pending["voice"]
+    # ── Reopen dialog with results after Build ran AI inside dialog ──
+    if st.session_state.pop("_sig_reopen_with_results", False):
         _signal_brief_dialog(str(time.time()))
 
     # ── Handle Redo from Signal Build dialog ──
     if st.session_state.pop("_sig_reopen_result", False):
         _signal_brief_dialog(str(time.time()))
 
-    # ── Next Page as dock button ──
-    st.markdown('''<div class="cs-icon-dock cs-sig-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
-      <div class="cs-idock-btn" data-dock="sig_next" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="#5a7090" stroke-width="2"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">NEXT</span>
-      </div>
+    # ── Tab pills FIRST (render before fetch so page isn't empty) ──
+    # Tab pills as HTML
+    if "sig_tab" not in st.session_state:
+        st.session_state.sig_tab = "Beat"
+    _tab_on = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _tab_off = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    st.markdown(f'''<div style="display:flex;gap:8px;margin:8px 0 16px;">
+      <span class="cs-bot" data-bot="sig_tab_beat" style="{_tab_on if st.session_state.sig_tab == 'Beat' else _tab_off}">Beat Reporters</span>
+      <span class="cs-bot" data-bot="sig_tab_nat" style="{_tab_off if st.session_state.sig_tab == 'Beat' else _tab_on}">National Takes</span>
     </div>''', unsafe_allow_html=True)
+    if st.button("sig_tab_beat", key="sig_tab_beat"):
+        st.session_state.sig_tab = "Beat"
+        st.rerun()
+    if st.button("sig_tab_nat", key="sig_tab_nat"):
+        st.session_state.sig_tab = "National"
+        st.rerun()
 
+    # ── Fetch signals ──
     _force_refresh = False
     if st.button("sig_next", key="sig_refresh"):
         _force_refresh = True
 
-    # ── Fetch signals — all state in session_state, not module dict ──
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
     _need_fetch = _force_refresh or (time.time() - _cache_ts > 300) or not st.session_state.get("_sig_beat_tweets")
     if _need_fetch:
@@ -7739,26 +7745,8 @@ def page_signals_prompts():
 
     beat_tweets = _dedup_signals(st.session_state.get("_sig_beat_tweets", []))
     national_tweets = _dedup_signals(st.session_state.get("_sig_nat_tweets", []))
-
-    # Sort by reply count (replies = controversy = prompt gold)
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
-
-    # Tab pills as HTML
-    if "sig_tab" not in st.session_state:
-        st.session_state.sig_tab = "Beat"
-    _tab_on = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
-    _tab_off = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
-    st.markdown(f'''<div style="display:flex;gap:8px;margin:8px 0 16px;">
-      <span class="cs-bot" data-bot="sig_tab_beat" style="{_tab_on if st.session_state.sig_tab == 'Beat' else _tab_off}">Beat Reporters</span>
-      <span class="cs-bot" data-bot="sig_tab_nat" style="{_tab_off if st.session_state.sig_tab == 'Beat' else _tab_on}">National Takes</span>
-    </div>''', unsafe_allow_html=True)
-    if st.button("sig_tab_beat", key="sig_tab_beat"):
-        st.session_state.sig_tab = "Beat"
-        st.rerun()
-    if st.button("sig_tab_nat", key="sig_tab_nat"):
-        st.session_state.sig_tab = "National"
-        st.rerun()
 
     # ── Signal 1: Beat Reporter Heat Map ──
     if st.session_state.sig_tab == "Beat":
