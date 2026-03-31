@@ -402,7 +402,9 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-ap_load"], [class*="st-key-ap_ai"],
 [class*="st-key-ar_run"], [class*="st-key-ar_save_voice"],
 [class*="st-key-rg_load_posts"], [class*="st-key-rg_load_all"],
-[class*="st-key-rg_load_verified"],
+[class*="st-key-rg_load_verified"], [class*="st-key-rg_list_"],
+[class*="st-key-rg_new_list_btn"], [class*="st-key-rg_etg_"],
+[class*="st-key-rg_etl_"], [class*="st-key-rg_ets_"], [class*="st-key-rg_etrd_"],
 [class*="st-key-insp_show_add"],
 [class*="st-key-rdc_morning"], [class*="st-key-rdc_evening"],
 [class*="st-key-sig_refresh"], [class*="st-key-sig_tab_"],
@@ -3884,7 +3886,12 @@ Return ONLY this JSON, no other text:
 }}"""
         _max_tok_b = 2000 if fmt == "Thread" else 700
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
+        with open("/tmp/build_debug.log", "w") as _dbg:
+            _dbg.write(f"RAW:\n{raw}\n\n")
         build_data = _parse_banger_json(raw)
+        if build_data:
+            with open("/tmp/build_debug.log", "a") as _dbg:
+                _dbg.write(f"PARSED:\n{json.dumps(build_data, indent=2)}\n")
         if build_data and build_data.get("option1"):
             for _ok in ["option1", "option2", "option3"]:
                 if build_data.get(_ok):
@@ -6471,20 +6478,26 @@ def page_reply_guy():
             _rg_actions["replied"] = replied_tweets[-500:]
             _save_actions_gist(_rg_actions)
 
-    # ── List selection as pills ──
-    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:4px 0;">Engagement List</div>', unsafe_allow_html=True)
+    # ── List selection as HTML pills ──
     _list_keys = list(st.session_state.custom_lists.keys())
     if "rg_source_sel" not in st.session_state:
         st.session_state.rg_source_sel = _list_keys[0] if _list_keys else ""
-    _lc = st.columns(min(len(_list_keys) + 1, 8))
+    _lon = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _loff = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _list_html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">'
     for _li, _lk in enumerate(_list_keys[:7]):
-        with _lc[_li]:
-            if st.button(_lk, key=f"rg_list_{_li}", type="primary" if st.session_state.rg_source_sel == _lk else "secondary"):
-                st.session_state.rg_source_sel = _lk
-                st.rerun()
-    with _lc[min(len(_list_keys), 7)]:
-        if st.button("+ New", key="rg_new_list_btn", type="secondary"):
-            st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
+        _cls = _lon if st.session_state.rg_source_sel == _lk else _loff
+        _list_html += f'<span class="cs-bot" data-bot="rg_list_{_li}" style="{_cls}">{_lk}</span>'
+    _list_html += f'<span class="cs-bot" data-bot="rg_new_list" style="{_loff}">+ New</span>'
+    _list_html += '</div>'
+    st.markdown(_list_html, unsafe_allow_html=True)
+
+    for _li, _lk in enumerate(_list_keys[:7]):
+        if st.button(f"rg_list_{_li}", key=f"rg_list_{_li}"):
+            st.session_state.rg_source_sel = _lk
+            st.rerun()
+    if st.button("rg_new_list", key="rg_new_list_btn"):
+        st.session_state["rg_show_new_list"] = not st.session_state.get("rg_show_new_list", False)
     list_source = st.session_state.rg_source_sel
 
     # --- Action dock: Load Feed, My Replies, Verified ---
@@ -6803,46 +6816,54 @@ def page_reply_guy():
                         del st.session_state[options_key]
                         st.rerun()
 
-            # Action row — uniform pill buttons
-            ab1, ab2, ab3, ab4 = st.columns(4)
-            with ab1:
-                if st.button("🤖 AI", key=f"rg_etg_{i}", use_container_width=True, help="Generate 3 reply options"):
-                    with st.spinner(""):
-                        raw = call_claude(
-                            f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
-                            f'Write exactly 3 different reply options, each under 150 chars. '
-                            f'Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis. '
-                            f'Format: one reply per line, no numbering, no labels.',
-                            max_tokens=250)
-                        opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
-                        if opts:
-                            st.session_state[options_key] = opts
-                            if not st.session_state.get(et_input_key,"").strip():
-                                st.session_state[f"{et_input_key}_p"] = opts[0]
+            # Action row — icon dock buttons
+            _liked_html = f'<div style="width:40px;height:40px;border-radius:12px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);display:flex;align-items:center;justify-content:center;"><span style="color:#4ade80;font-size:16px;">♥</span></div>' if et_already_liked else f'<div class="cs-bot" data-bot="rg_etl_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" stroke="#5a7090" stroke-width="2"/></svg></div>'
+            st.markdown(f'''<div style="display:flex;gap:6px;margin-top:6px;">
+              <div class="cs-bot" data-bot="rg_etg_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="AI Generate">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 01-1 1h-6a1 1 0 01-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z" stroke="#5a7090" stroke-width="2"/><line x1="9" y1="21" x2="15" y2="21" stroke="#5a7090" stroke-width="2"/></svg>
+              </div>
+              {_liked_html}
+              <div class="cs-bot" data-bot="rg_ets_{i}" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Send Reply">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="#060A12" stroke-width="2"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="#060A12" stroke-width="2"/></svg>
+              </div>
+              <div class="cs-bot" data-bot="rg_etrd_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Mark Done">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>''', unsafe_allow_html=True)
+
+            # Hidden buttons for actions
+            if st.button(f"rg_etg_{i}", key=f"rg_etg_{i}"):
+                with st.spinner(""):
+                    raw = call_claude(
+                        f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
+                        f'Write exactly 3 different reply options, each under 150 chars. '
+                        f'Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis. '
+                        f'Format: one reply per line, no numbering, no labels.',
+                        max_tokens=250)
+                    opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
+                    if opts:
+                        st.session_state[options_key] = opts
+                        if not st.session_state.get(et_input_key,"").strip():
+                            st.session_state[f"{et_input_key}_p"] = opts[0]
+                st.rerun()
+            if not et_already_liked:
+                if st.button(f"rg_etl_{i}", key=f"rg_etl_{i}"):
+                    _proxy_tweet_action("like", tid)
+                    _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
+                    _save_actions_gist(_actions)
                     st.rerun()
-            with ab2:
-                if et_already_liked:
-                    st.markdown('<div style="text-align:center;padding:9px 0;font-size:16px;color:#4ade80;" title="Liked">♥</div>', unsafe_allow_html=True)
-                else:
-                    if st.button("♡ Like", key=f"rg_etl_{i}", use_container_width=True, help="Like on X"):
-                        _proxy_tweet_action("like", tid)
-                        _actions["liked"] = list(set(_actions["liked"] + [tid]))[-500:]
+            if st.button(f"rg_ets_{i}", key=f"rg_ets_{i}"):
+                if reply_text.strip() and tid:
+                    if _proxy_tweet_action("reply", tid, reply_text.strip()):
+                        _bump_reply()
+                        progress["count"] = progress.get("count", 0) + 1
+                        save_json("reply_progress.json", progress)
+                        _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
                         _save_actions_gist(_actions)
                         st.rerun()
-            with ab3:
-                if st.button("↗ Send", key=f"rg_ets_{i}", use_container_width=True, help="Send reply via proxy", type="primary"):
-                    if reply_text.strip() and tid:
-                        if _proxy_tweet_action("reply", tid, reply_text.strip()):
-                            _bump_reply()
-                            progress["count"] = progress.get("count", 0) + 1
-                            save_json("reply_progress.json", progress)
-                            _actions["replied"] = list(set(_actions["replied"] + [tid]))[-500:]
-                            _save_actions_gist(_actions)
-                            st.rerun()
-                        else:
-                            st.error("Reply failed")
-            with ab4:
-                if st.button("✓ Done", key=f"rg_etrd_{i}", use_container_width=True, help="Mark done (replied on native X)", type="secondary"):
+                    else:
+                        st.error("Reply failed")
+            if st.button(f"rg_etrd_{i}", key=f"rg_etrd_{i}"):
                     _bump_reply()
                     progress["count"] = progress.get("count", 0) + 1
                     save_json("reply_progress.json", progress)
