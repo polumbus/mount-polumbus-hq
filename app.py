@@ -105,11 +105,11 @@ rival programs, national media. Their reaction is the proof.
 Never state confidence directly. Never say "I've been in
 winning rooms." Show the opposition already worried.
 ENDING RULE: The final sentence must name a specific outside
-party and show them already responding to what Tyler's team
-is doing. NOT Tyler explaining the signal. NOT "this is real."
+party and show them already responding to what your subject
+is doing. NOT you explaining the signal. NOT "this is real."
 The opponent's reaction IS the proof — let it speak.
 WRONG ENDING: "Position coaches don't travel for guys they're
-not serious about." — Tyler explaining the insight
+not serious about." — you explaining the insight
 RIGHT ENDING: "Every team picking in that range just added
 him to their board." — outside party already responding
 Example: "Jokic averaging a triple double in March. The team
@@ -616,20 +616,58 @@ hr { border-color: #14203A !important; }
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+def build_user_context() -> str:
+    """Return the base system prompt for the current user.
+    Owner: returns TYLER_CONTEXT (unchanged).
+    Guest: builds a generic creator context from their profile + tweet data."""
+    if not is_guest():
+        return TYLER_CONTEXT
+
+    profile = load_json("profile.json", {})
+    topics = load_json("topics.json", {})
+    handle = profile.get("handle", get_current_handle())
+    name = profile.get("name", handle)
+    bio = profile.get("bio", "")
+    followers = profile.get("followers", 0)
+    niche = topics.get("niche", "General")
+    topic_list = topics.get("topics", [])
+    topics_str = ", ".join(topic_list) if topic_list else niche
+
+    return f"""You are a content assistant for @{handle} ({name}) — a content creator focused on {niche.lower()}.
+
+Profile:
+- {followers:,} followers on X (@{handle})
+- Niche: {niche}
+- Key topics: {topics_str}
+{f'- Bio: {bio}' if bio else ''}
+
+Voice on X:
+- Match @{handle}'s natural voice from their tweet history (provided separately)
+- Short punchy sentences. Never sound like a press release or corporate account.
+- Write in first person as @{handle}
+- Use hooks that drive engagement: numbers, provocative openers, strong opinions
+- Keep tweets under 280 characters. Under 200 when possible for max punch.
+- No hashtags unless specifically requested
+
+IMPORTANT: Never use emojis in your output. Write plain text only."""
+
+
 @st.cache_data(ttl=3600)
 def get_voice_context():
-    """Build Tyler's voice context from his actual tweet history (default voice only)."""
+    """Build voice context from actual tweet history (default voice only)."""
     tweets = load_json("tweet_history.json", [])
+    _base = build_user_context()
     if not tweets:
-        return TYLER_CONTEXT
+        return _base
 
     # Get top 15 tweets by engagement as voice examples
     top = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:15]
     examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
 
-    return TYLER_CONTEXT + f"""
+    _label = "YOUR" if is_guest() else "TYLER'S"
+    return _base + f"""
 
-TYLER'S ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
+{_label} ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
 {examples}
 
 Match this exact voice, tone, sentence structure, and style in everything you write.
@@ -640,95 +678,107 @@ Note: Format-specific rules (character limits, structure, thread formatting, art
 def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
     """Return the right system prompt for the selected voice mode.
 
-    For Default: uses Tyler's actual top-tweet examples (anchors to his natural style).
-    For Critical/Homer/Sarcastic: uses Tyler's background + mode-specific example tweets.
-    Passing top-tweet examples for non-default modes locks the model onto default voice —
-    that's the bug this function fixes.
+    For Default: uses user's actual top-tweet examples (anchors to natural style).
+    For Critical/Hype/Sarcastic: uses user's background + mode-specific rules.
+    Owner gets Tyler-specific examples. Guests get universal rules only
+    (their own tweet examples are injected via patterns context).
     """
+    _base = build_user_context()
+    _handle = get_current_handle()
+    _is_g = is_guest()
+
     if voice_name == "Default":
         return get_voice_context()
 
-    # For non-default voices: Tyler's profile/background only (no top-tweet examples),
-    # plus concrete example tweets that show exactly what this voice sounds like.
-    voice_examples = {
-        "Critical": """EXAMPLES OF TYLER WRITING IN CRITICAL VOICE (copy this exact energy):
+    # Voice mode rules — universal structure guidance, no niche-specific examples
+    # Owner gets Tyler's sports examples. Guests get rules only (their own
+    # top tweets serve as examples via patterns context).
+    _owner_critical_examples = """EXAMPLES (copy this exact energy):
 - "We passed on 52% of third downs last year and went 8-9. Meanwhile Kansas City ran on 3rd-and-short 74% of the time and won the Super Bowl. That gap is a choice. Who owns it?"
 - "The Broncos have had 5 different offensive coordinators in 8 years. And we keep wondering why the offense looks confused. That's on the front office. Connect the dots."
 - "Bo Nix threw for 3,000 yards last season. Good. But 18 of those touchdowns came against bottom-10 defenses. Payton needs to answer for that schedule construction."
+""" if not _is_g else ""
 
-CRITICAL VOICE RULES:
-- Always open with a SPECIFIC number, stat, or named failure — never a vague complaint
-- Identify the structural cause — not "they need to be better"
-- End by naming the specific person who owns it. Period. Full stop. Never ellipsis.
-- Authority IMPLIED through specificity — never say "I played in this league" or "I know what accountability looks like"
-- Tone: disappointed not angry. Calm, credible, constructive.""",
-
-        "Homer": """EXAMPLES OF TYLER WRITING IN HOMER VOICE (copy this exact energy):
+    _owner_homer_examples = """EXAMPLES (copy this exact energy):
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday. The team drawing Denver in round 2 just changed their entire defensive game plan."
 - "Bo Nix's third down completion rate jumped 12% in the second half. Every defensive coordinator in the AFC pulled up that film tonight."
 - "MacKinnon and Makar both locked in at the same time in April for the first time in three years. The rest of the West is recalculating everything."
+""" if not _is_g else ""
 
-HOMER VOICE RULES:
-- Always use "we" or "this team" — the reader is part of the belief
-- Ground optimism in something SPECIFIC — a player, a stat, a moment
-- End by showing the OPPONENT'S reaction — their worry is the proof. Not "we're ready" — "they're already adjusting"
-- Authority IMPLIED through specificity — never say "I've been in winning rooms" or "I've watched enough film to know"
-- Tone: infectious, grounded confidence. Earned optimism, not blind cheerleading.""",
-
-        "Sarcastic": """EXAMPLES OF TYLER WRITING IN SARCASTIC VOICE (copy this exact energy):
+    _owner_sarcastic_examples = """EXAMPLES (copy this exact energy):
 - "Turns out the Patriots offense doesn't suck because of a snow storm."
 - "That cornerback needs to call someone he trusts right now. Not about football."
 - "Starting to feel like Bo Nix really should have played with a broken ankle."
 - "Bold of Skip to finally come out and say it."
+""" if not _is_g else ""
 
+    voice_blocks = {
+        "Critical": f"""CRITICAL VOICE — DIRECT MODE:
+{_owner_critical_examples}
+CRITICAL VOICE RULES:
+- Always open with a SPECIFIC number, stat, or named failure — never a vague complaint
+- Identify the structural cause — not "they need to be better"
+- End by naming the specific person or entity who owns it. Period. Full stop. Never ellipsis.
+- Authority IMPLIED through specificity — never stated
+- Tone: disappointed not angry. Calm, credible, constructive.""",
+
+        "Hype": f"""HOMER VOICE — HYPE MODE:
+{_owner_homer_examples}
+HOMER VOICE RULES:
+- Ground optimism in something SPECIFIC — a person, a stat, a moment
+- End by showing the OPPOSITION'S reaction — their worry is the proof
+- Authority IMPLIED through specificity — never stated
+- Tone: infectious, grounded confidence. Earned optimism, not blind cheerleading.""",
+
+        "Sarcastic": f"""SARCASTIC VOICE — DRY HUMOR MODE:
+{_owner_sarcastic_examples}
 SARCASTIC VOICE RULES:
 - Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
 - Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
 - Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
-- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great" — find the specific reaction that fits THIS moment
-- Authority implied through specificity — never stated
+- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
 - Drop it and walk away. Never explain the joke.""",
     }
 
-    examples_for_mode = voice_examples.get(voice_name, "")
-    if examples_for_mode:
-        return TYLER_CONTEXT + f"""
+    block = voice_blocks.get(voice_name, "")
+    if block:
+        return _base + f"""
 
-{examples_for_mode}
+{block}
 
 {voice_mod}
 
-IMPORTANT: Write ONLY in the voice mode above. Do NOT fall back to Tyler's typical default voice."""
+IMPORTANT: Write ONLY in the voice mode above. Do NOT fall back to the default voice."""
 
     # Custom account voice style
     custom_styles = load_json("voice_styles.json", [])
     for style in custom_styles:
         if style.get("name") == voice_name:
-            handle = style.get("handle", "")
+            s_handle = style.get("handle", "")
             summary = style.get("summary", "")
-            tweets = style.get("tweets", [])
-            tweet_block = "\n".join([f'- "{t}"' for t in tweets[:10]])
-            return TYLER_CONTEXT + f"""
+            s_tweets = style.get("tweets", [])
+            tweet_block = "\n".join([f'- "{t}"' for t in s_tweets[:10]])
+            return _base + f"""
 
-You are writing AS TYLER POLUMBUS but in the STYLE of @{handle}.
+You are writing AS @{_handle} but in the STYLE of @{s_handle}.
 
 THEIR VOICE PROFILE:
 {summary}
 
-EXAMPLE TWEETS FROM @{handle} (match this energy, not Tyler's default voice):
+EXAMPLE TWEETS FROM @{s_handle} (match this energy, not your default voice):
 {tweet_block}
 
 STYLE RULES:
-- Adopt @{handle}'s tone, rhythm, and formatting approach
-- Keep Tyler's former-player credibility and sports authority
-- Write about Tyler's topics (Broncos, Nuggets, sports) in @{handle}'s voice
+- Adopt @{s_handle}'s tone, rhythm, and formatting approach
+- Keep @{_handle}'s authority and topic focus
+- Write about @{_handle}'s topics in @{s_handle}'s voice
 - Do NOT copy their exact tweets — channel the style
 
 {voice_mod}
 
-IMPORTANT: Write in @{handle}'s STYLE as described above."""
+IMPORTANT: Write in @{s_handle}'s STYLE as described above."""
 
-    return TYLER_CONTEXT
+    return _base
 
 
 @st.cache_data(ttl=3600)
@@ -846,15 +896,17 @@ def build_patterns_context(patterns, fmt=""):
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
     opt_range = patterns.get("optimal_char_range", (0, 280))
 
+    _owner_label = "TYLER'S PERSONAL" if not is_guest() else "YOUR PERSONAL"
+    _poss = "his" if not is_guest() else "your"
+    _sig = f"- {patterns.get('top_ellipsis_pct', 0)}% use ellipsis (...) — {_poss} signature\n" if patterns.get("top_ellipsis_pct", 0) > 10 else ""
     return f"""
-TYLER'S PERSONAL TWEET BENCHMARKS (from his actual tweet history):
+{_owner_label} TWEET BENCHMARKS (from actual tweet history):
 
 Character Length:
 - Sweet spot: {opt_range[0]}–{opt_range[1]} characters
 
 Style Patterns (top performers):
-- {patterns.get("top_ellipsis_pct", 0)}% use ellipsis (...) — his signature
-- {patterns.get("top_question_pct", 0)}% end with a question
+{_sig}- {patterns.get("top_question_pct", 0)}% end with a question
 - Average {patterns.get("top_linebreaks_avg", 0)} line breaks per top tweet
 - Common first words: {first_words}
 
@@ -873,7 +925,7 @@ def auto_height(text, min_h=80, chars_per_line=55, line_h=22):
     return max(min_h, total * line_h)
 
 
-_VOICE_LABELS = {"Default": "Film Room", "Critical": "Diagnosis", "Homer": "Don't Sleep", "Sarcastic": "Layered"}
+_VOICE_LABELS = {"Default": "Film Room", "Critical": "Diagnosis", "Hype": "Don't Sleep", "Sarcastic": "Layered"}
 
 
 def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
@@ -907,7 +959,7 @@ def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
         card = f'''<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:0;">
 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
 <div style="width:32px;height:32px;border-radius:50%;background:#0C1630;border:1.5px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2DD4BF;flex-shrink:0;">TP</div>
-<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">Tyler Polumbus</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@tyler_polumbus</div></div>
+<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">{st.session_state.get("user_display_name", "Tyler Polumbus")}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@{get_current_handle()}</div></div>
 <div style="font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(45,212,191,0.12);color:#2DD4BF;border:0.5px solid rgba(45,212,191,0.25);white-space:nowrap;">{i+1}/{total} · {voice_label}</div>
 </div>
 <div style="font-size:13px;color:rgba(255,255,255,0.82);line-height:1.65;white-space:pre-wrap;">{tweet_body_html}</div>
@@ -1422,7 +1474,7 @@ def _save_actions_gist(actions: dict):
 
 
 def load_json(filename: str, default=None):
-    path = DATA_DIR / filename
+    path = get_data_dir() / filename
     if path.exists():
         try:
             return json.loads(path.read_text())
@@ -1432,11 +1484,12 @@ def load_json(filename: str, default=None):
 
 
 def save_json(filename: str, data):
-    path = DATA_DIR / filename
+    path = get_data_dir() / filename
     path.write_text(json.dumps(data, indent=2, default=str))
 
 
-ENGAGEMENT_LISTS_PATH = DATA_DIR / 'engagement_lists.json'
+def _get_engagement_lists_path():
+    return get_data_dir() / 'engagement_lists.json'
 
 _ENGAGEMENT_DEFAULTS = {
     'Broncos Reporters': {'list_id': '1294328608417177604'},
@@ -1446,9 +1499,13 @@ _ENGAGEMENT_DEFAULTS = {
 }
 
 def load_engagement_lists() -> dict:
-    if ENGAGEMENT_LISTS_PATH.exists():
+    _path = _get_engagement_lists_path()
+    if _path.exists():
         try:
-            loaded = json.loads(ENGAGEMENT_LISTS_PATH.read_text())
+            loaded = json.loads(_path.read_text())
+            # Guests: return their lists as-is, no Tyler defaults backfilled
+            if is_guest():
+                return loaded
             migrated = {}
             for k, v in loaded.items():
                 if isinstance(v, str):
@@ -1466,6 +1523,9 @@ def load_engagement_lists() -> dict:
             return migrated
         except Exception:
             pass
+    # Guests with no file: empty lists (onboarding creates the file)
+    if is_guest():
+        return {}
     return {k: dict(v) for k, v in _ENGAGEMENT_DEFAULTS.items()}
 
 def save_engagement_lists(lists: dict):
@@ -1565,14 +1625,25 @@ try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
 except (KeyError, FileNotFoundError):
     _OWNER_PW = ""
-try:
-    _GUEST_PW = st.secrets["GUEST_PASSWORD"]
-except (KeyError, FileNotFoundError):
-    _GUEST_PW = ""
 
-# Generate simple tokens from passwords — not for security, just for URL persistence
+_ACCOUNTS_PATH = Path(os.path.expanduser("~/.openclaw/guests/accounts.json"))
+
+def _load_accounts() -> dict:
+    if _ACCOUNTS_PATH.exists():
+        try:
+            return json.loads(_ACCOUNTS_PATH.read_text())
+        except Exception:
+            pass
+    return {}
+
+def _save_accounts(data: dict):
+    _ACCOUNTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _ACCOUNTS_PATH.write_text(json.dumps(data, indent=2, default=str))
+
+def _hash_pw(username: str, password: str) -> str:
+    return _hl.sha256(f"mp_{username}_{password}".encode()).hexdigest()
+
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
-_GUEST_TOKEN = _hl.sha256(f"mp_guest_{_GUEST_PW}".encode()).hexdigest()[:16] if _GUEST_PW else ""
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
@@ -1580,43 +1651,434 @@ if "auth_role" not in st.session_state:
 # Restore from token query param (survives refresh)
 if not st.session_state["auth_role"]:
     _tok = st.query_params.get("token", "")
+    _tok_user = st.query_params.get("user", "")
     if _tok and _tok == _OWNER_TOKEN:
         st.session_state["auth_role"] = "owner"
-    elif _tok and _tok == _GUEST_TOKEN:
-        st.session_state["auth_role"] = "guest"
+    elif _tok and _tok_user:
+        _accts = _load_accounts()
+        if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
+            st.session_state["auth_role"] = "guest"
+            st.session_state["auth_username"] = _tok_user
+            _gid = _accts[_tok_user].get("guest_id", "")
+            if _gid:
+                st.query_params["guest_id"] = _gid
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
     </style>""", unsafe_allow_html=True)
-    st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+    st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">MOUNT POLUMBUS</div>
     <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">HEADQUARTERS</div>
     </div></div>""", unsafe_allow_html=True)
-    _pw = st.text_input("Password", type="password", key="login_pw", label_visibility="collapsed", placeholder="Enter password")
-    if _pw:
-        _role = None
-        _token = ""
-        if _OWNER_PW and _pw == _OWNER_PW:
-            _role = "owner"
-            _token = _OWNER_TOKEN
-        elif _GUEST_PW and _pw == _GUEST_PW:
-            _role = "guest"
-            _token = _GUEST_TOKEN
-        if _role:
-            st.session_state["auth_role"] = _role
-            st.query_params["token"] = _token
-            st.rerun()
-        else:
-            st.error("Invalid password.")
+
+    _auth_tab = st.radio("", ["Sign In", "Create Account"], horizontal=True, key="auth_tab", label_visibility="collapsed")
+
+    if _auth_tab == "Sign In":
+        _login_user = st.text_input("Username", key="login_user", placeholder="Username", label_visibility="collapsed")
+        _login_pw = st.text_input("Password", type="password", key="login_pw", placeholder="Password", label_visibility="collapsed")
+        if _login_user and _login_pw:
+            if st.button("Sign In", type="primary", use_container_width=True, key="btn_signin"):
+                # Check owner
+                if _login_user.lower().strip() == "owner" and _OWNER_PW and _login_pw == _OWNER_PW:
+                    st.session_state["auth_role"] = "owner"
+                    st.query_params["token"] = _OWNER_TOKEN
+                    st.rerun()
+                else:
+                    _accts = _load_accounts()
+                    _lu = _login_user.lower().strip()
+                    if _lu in _accts and _accts[_lu]["password_hash"] == _hash_pw(_lu, _login_pw):
+                        _token = _hl.sha256(f"mp_guest_{_lu}_{_login_pw}".encode()).hexdigest()[:16]
+                        _accts[_lu]["token"] = _token
+                        _accts[_lu]["last_login"] = datetime.now().isoformat()
+                        _save_accounts(_accts)
+                        st.session_state["auth_role"] = "guest"
+                        st.session_state["auth_username"] = _lu
+                        st.query_params["token"] = _token
+                        st.query_params["user"] = _lu
+                        _gid = _accts[_lu].get("guest_id", "")
+                        if _gid:
+                            st.query_params["guest_id"] = _gid
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
+
+    else:  # Create Account
+        _new_user = st.text_input("Choose a username", key="signup_user", placeholder="Username (letters, numbers, underscores)", label_visibility="collapsed")
+        _new_pw = st.text_input("Choose a password", type="password", key="signup_pw", placeholder="Password (6+ characters)", label_visibility="collapsed")
+        _new_pw2 = st.text_input("Confirm password", type="password", key="signup_pw2", placeholder="Confirm password", label_visibility="collapsed")
+        if _new_user and _new_pw and _new_pw2:
+            if st.button("Create Account", type="primary", use_container_width=True, key="btn_signup"):
+                import re as _re_signup
+                _nu = _new_user.lower().strip()
+                if not _re_signup.match(r'^[a-z0-9_]{3,20}$', _nu):
+                    st.error("Username must be 3-20 characters: letters, numbers, underscores only.")
+                elif _nu == "owner":
+                    st.error("That username is reserved.")
+                elif _new_pw != _new_pw2:
+                    st.error("Passwords don't match.")
+                elif len(_new_pw) < 6:
+                    st.error("Password must be at least 6 characters.")
+                else:
+                    _accts = _load_accounts()
+                    if _nu in _accts:
+                        st.error("Username already taken. Try another.")
+                    else:
+                        _token = _hl.sha256(f"mp_guest_{_nu}_{_new_pw}".encode()).hexdigest()[:16]
+                        _accts[_nu] = {
+                            "password_hash": _hash_pw(_nu, _new_pw),
+                            "token": _token,
+                            "created_at": datetime.now().isoformat(),
+                            "guest_id": "",
+                        }
+                        _save_accounts(_accts)
+                        st.session_state["auth_role"] = "guest"
+                        st.session_state["auth_username"] = _nu
+                        st.query_params["token"] = _token
+                        st.query_params["user"] = _nu
+                        st.rerun()
     st.stop()
 
 
 def is_guest() -> bool:
     """Returns True if current user is a guest (beta tester)."""
     return st.session_state.get("auth_role") == "guest"
+
+
+def get_current_handle() -> str:
+    """Returns the Twitter handle for the current user."""
+    if is_guest():
+        return st.session_state.get("user_handle", "")
+    return TYLER_HANDLE
+
+
+def get_data_dir() -> Path:
+    """Returns the data directory for the current user. Guests get isolated storage."""
+    if is_guest():
+        handle = get_current_handle()
+        if handle:
+            guest_dir = Path(os.path.expanduser(f"~/.openclaw/guests/{handle}/data"))
+            guest_dir.mkdir(parents=True, exist_ok=True)
+            return guest_dir
+    return DATA_DIR
+
+
+# ─── Guest Registry ───────────────────────────────────────────────────────
+_GUEST_REGISTRY_PATH = Path(os.path.expanduser("~/.openclaw/guests/registry.json"))
+
+def _load_guest_registry() -> dict:
+    if _GUEST_REGISTRY_PATH.exists():
+        try:
+            return json.loads(_GUEST_REGISTRY_PATH.read_text())
+        except Exception:
+            pass
+    return {}
+
+def _save_guest_registry(data: dict):
+    _GUEST_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _GUEST_REGISTRY_PATH.write_text(json.dumps(data, indent=2, default=str))
+
+
+# ─── Guest Onboarding (multi-step: connect → sync → analyze → unlock) ────
+if is_guest():
+    # Initialize onboarding state
+    if "onboarding_step" not in st.session_state:
+        st.session_state["onboarding_step"] = "check_registry"
+    if "onboarding_complete" not in st.session_state:
+        st.session_state["onboarding_complete"] = False
+
+    # --- Returning guest: restore from registry and check if data exists ---
+    if st.session_state["onboarding_step"] == "check_registry":
+        _reg = _load_guest_registry()
+        _guest_id = st.query_params.get("guest_id", "")
+        if _guest_id and _guest_id in _reg:
+            _entry = _reg[_guest_id]
+            st.session_state["user_handle"] = _entry["handle"]
+            st.session_state["user_display_name"] = _entry.get("name", "")
+            st.session_state["user_avatar"] = _entry.get("avatar", "")
+            # Check if this returning guest already has all required data
+            _guest_data = Path(os.path.expanduser(f"~/.openclaw/guests/{_entry['handle']}/data"))
+            _has_history = (_guest_data / "tweet_history.json").exists()
+            _has_benchmarks = (_guest_data / "benchmarks.json").exists()
+            _has_topics = (_guest_data / "topics.json").exists()
+            if _has_history and _has_benchmarks and _has_topics:
+                st.session_state["onboarding_complete"] = True
+                st.session_state["onboarding_step"] = "done"
+            elif _has_history and _has_topics:
+                st.session_state["onboarding_step"] = "analyzing"
+            elif _has_topics:
+                st.session_state["onboarding_step"] = "syncing"
+            else:
+                st.session_state["onboarding_step"] = "niche"
+        else:
+            st.session_state["onboarding_step"] = "connect"
+
+    # --- Gate: block app access until onboarding is complete ---
+    if not st.session_state["onboarding_complete"]:
+        st.markdown("""<style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stToolbar"] { display: none !important; }
+        </style>""", unsafe_allow_html=True)
+
+        _step = st.session_state["onboarding_step"]
+
+        # ── Step 1a: Enter X Handle ──
+        if _step == "connect":
+            st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
+            <div style="text-align:center;max-width:420px;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2DD4BF;letter-spacing:2px;margin-bottom:4px;">STEP 1 OF 4</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#E2E8F0;letter-spacing:1px;margin-bottom:8px;">CONNECT YOUR X ACCOUNT</div>
+            <div style="font-size:12px;color:#6E7681;margin-bottom:30px;line-height:1.6;">
+            Enter your X handle so we can pull your tweet history and personalize everything to your style.</div>
+            </div></div>""", unsafe_allow_html=True)
+            _handle_input = st.text_input("Your X handle", key="onboard_handle", placeholder="@yourhandle", label_visibility="collapsed")
+            if _handle_input:
+                _clean_handle = _handle_input.strip().lstrip("@")
+                if st.button("Look Up Account", type="primary", use_container_width=True, key="onboard_connect"):
+                    with st.spinner(f"Looking up @{_clean_handle}..."):
+                        _user_data = fetch_user_info(_clean_handle)
+                    if not _user_data or not _user_data.get("userName"):
+                        st.error(f"Could not find @{_clean_handle}. Check the handle and try again.")
+                    elif _user_data.get("protected"):
+                        st.error("This account is private. We need a public account to pull your tweet history. Change your account to public in X settings, then try again.")
+                    elif (_user_data.get("statusesCount") or 0) < 20:
+                        _sc = _user_data.get("statusesCount", 0)
+                        st.error(f"This account only has {_sc} posts. We need at least 20 to build your profile. Post more and come back!")
+                    else:
+                        # Passed all checks — store data and move to confirmation
+                        st.session_state["_onboard_user_data"] = _user_data
+                        st.session_state["onboarding_step"] = "confirm"
+                        st.rerun()
+            st.stop()
+
+        # ── Step 1b: Confirm Identity ──
+        elif _step == "confirm":
+            _user_data = st.session_state.get("_onboard_user_data", {})
+            _name = _user_data.get("name", "")
+            _handle = _user_data.get("userName", "")
+            _avatar = _user_data.get("profilePicture", "")
+            _bio = _user_data.get("description", "")
+            _followers = _user_data.get("followers", 0)
+            _tweets = _user_data.get("statusesCount", 0)
+            st.markdown(f"""<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;">
+            <div style="text-align:center;max-width:420px;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2DD4BF;letter-spacing:2px;margin-bottom:4px;">STEP 1 OF 4</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#E2E8F0;letter-spacing:1px;margin-bottom:12px;">IS THIS YOU?</div>
+            <div style="margin:20px auto;width:fit-content;">
+                <img src="{_avatar}" style="width:80px;height:80px;border-radius:50%;border:2px solid #2DD4BF;" />
+            </div>
+            <div style="font-size:18px;color:#E2E8F0;font-weight:600;">{_name}</div>
+            <div style="font-size:14px;color:#2DD4BF;margin-bottom:8px;">@{_handle}</div>
+            <div style="font-size:12px;color:#8B949E;margin-bottom:12px;line-height:1.5;max-width:360px;margin-left:auto;margin-right:auto;">{_bio}</div>
+            <div style="font-size:12px;color:#6E7681;">{_followers:,} followers &middot; {_tweets:,} posts</div>
+            </div></div>""", unsafe_allow_html=True)
+            _c1, _c2 = st.columns(2)
+            with _c1:
+                if st.button("That's not me", use_container_width=True, key="onboard_not_me"):
+                    st.session_state.pop("_onboard_user_data", None)
+                    st.session_state["onboarding_step"] = "connect"
+                    st.rerun()
+            with _c2:
+                if st.button("Yes, continue", type="primary", use_container_width=True, key="onboard_confirm"):
+                    _gid = _hl.sha256(f"guest_{_handle}".encode()).hexdigest()[:12]
+                    st.session_state["user_handle"] = _handle
+                    st.session_state["user_display_name"] = _name
+                    st.session_state["user_avatar"] = _avatar
+                    st.session_state["user_bio"] = _bio
+                    st.session_state["user_followers"] = _followers
+                    # Save to registry
+                    _reg = _load_guest_registry()
+                    _reg[_gid] = {
+                        "handle": _handle,
+                        "name": _name,
+                        "avatar": _avatar,
+                        "bio": _bio,
+                        "followers": _followers,
+                        "connected_at": datetime.now().isoformat(),
+                    }
+                    _save_guest_registry(_reg)
+                    st.query_params["guest_id"] = _gid
+                    # Link guest_id back to user account
+                    _auth_user = st.session_state.get("auth_username", "")
+                    if _auth_user:
+                        _accts = _load_accounts()
+                        if _auth_user in _accts:
+                            _accts[_auth_user]["guest_id"] = _gid
+                            _save_accounts(_accts)
+                    # Save profile to guest data dir
+                    _gdir = Path(os.path.expanduser(f"~/.openclaw/guests/{_handle}/data"))
+                    _gdir.mkdir(parents=True, exist_ok=True)
+                    (_gdir / "profile.json").write_text(json.dumps({
+                        "handle": _handle,
+                        "name": _name,
+                        "avatar": _avatar,
+                        "bio": _bio,
+                        "followers": _followers,
+                    }, indent=2))
+                    st.session_state.pop("_onboard_user_data", None)
+                    st.session_state["onboarding_step"] = "niche"
+                    st.rerun()
+            st.stop()
+
+        # ── Step 2: Pick Your Niche ──
+        elif _step == "niche":
+            st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;">
+            <div style="text-align:center;max-width:420px;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2DD4BF;letter-spacing:2px;margin-bottom:4px;">STEP 2 OF 4</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#E2E8F0;letter-spacing:1px;margin-bottom:8px;">WHAT DO YOU POST ABOUT?</div>
+            <div style="font-size:12px;color:#6E7681;margin-bottom:30px;line-height:1.6;">
+            This helps us find trending topics in your world and tailor content suggestions to your audience.</div>
+            </div></div>""", unsafe_allow_html=True)
+            _niche_options = ["Sports", "Tech", "Finance / Crypto", "Fitness / Health", "Entertainment", "Politics / News", "Business / Marketing", "Gaming", "Music", "Food / Lifestyle", "Other"]
+            _selected_niche = st.selectbox("Your primary niche", _niche_options, key="onboard_niche_select", label_visibility="collapsed")
+            st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+            _topics_input = st.text_input("Your key topics (comma-separated, 3-5)", key="onboard_topics", placeholder="e.g. AI startups, SaaS growth, product launches", label_visibility="collapsed")
+            st.markdown("<div style='font-size:11px;color:#6E7681;margin-top:-8px;margin-bottom:16px;'>These are the subjects you tweet about most. We use them to find relevant trending content.</div>", unsafe_allow_html=True)
+            # Optional: add your own X lists
+            with st.expander("Have X Lists you follow? (optional)", expanded=False):
+                st.markdown("<div style='font-size:11px;color:#6E7681;margin-bottom:8px;'>Add list IDs from lists you follow on X. Find the ID in the URL: x.com/i/lists/<strong>1234567890</strong></div>", unsafe_allow_html=True)
+                _custom_list_1_name = st.text_input("List name", placeholder="e.g. Tech Leaders", key="onboard_cl1_name", label_visibility="collapsed")
+                _custom_list_1_id = st.text_input("List ID", placeholder="e.g. 1234567890", key="onboard_cl1_id", label_visibility="collapsed")
+                _custom_list_2_name = st.text_input("List name 2", placeholder="e.g. AI Researchers", key="onboard_cl2_name", label_visibility="collapsed")
+                _custom_list_2_id = st.text_input("List ID 2", placeholder="e.g. 9876543210", key="onboard_cl2_id", label_visibility="collapsed")
+            if _selected_niche and _topics_input and _topics_input.strip():
+                _topics_list = [t.strip() for t in _topics_input.split(",") if t.strip()]
+                if len(_topics_list) < 2:
+                    st.warning("Enter at least 2 topics separated by commas.")
+                elif st.button("Continue", type="primary", use_container_width=True, key="onboard_niche_continue"):
+                    _niche_data = {
+                        "niche": _selected_niche,
+                        "topics": _topics_list,
+                        "set_at": datetime.now().isoformat(),
+                    }
+                    save_json("topics.json", _niche_data)
+                    # Auto-generate search-based engagement feeds from topics
+                    _auto_lists = {}
+                    for _topic in _topics_list[:5]:
+                        _auto_lists[_topic.title()] = {
+                            "search_query": f"{_topic} min_faves:10 -filter:retweets",
+                        }
+                    # Add a general niche feed
+                    _auto_lists[f"{_selected_niche} Feed"] = {
+                        "search_query": f"{_selected_niche.split('/')[0].strip().lower()} -filter:retweets min_faves:20",
+                    }
+                    # Add any custom X lists the user provided
+                    _cl1n = st.session_state.get("onboard_cl1_name", "").strip()
+                    _cl1i = st.session_state.get("onboard_cl1_id", "").strip()
+                    _cl2n = st.session_state.get("onboard_cl2_name", "").strip()
+                    _cl2i = st.session_state.get("onboard_cl2_id", "").strip()
+                    if _cl1n and _cl1i and _cl1i.isdigit():
+                        _auto_lists[_cl1n] = {"list_id": _cl1i}
+                    if _cl2n and _cl2i and _cl2i.isdigit():
+                        _auto_lists[_cl2n] = {"list_id": _cl2i}
+                    save_json("engagement_lists.json", _auto_lists)
+                    st.session_state["onboarding_step"] = "syncing"
+                    st.rerun()
+            st.stop()
+
+        # ── Step 3: Sync Tweet History ──
+        elif _step == "syncing":
+            _handle = st.session_state.get("user_handle", "")
+            st.markdown(f"""<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;">
+            <div style="text-align:center;max-width:420px;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2DD4BF;letter-spacing:2px;margin-bottom:4px;">STEP 3 OF 4</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#E2E8F0;letter-spacing:1px;margin-bottom:8px;">LOADING YOUR POSTS</div>
+            <div style="font-size:12px;color:#6E7681;margin-bottom:30px;line-height:1.6;">
+            Pulling tweet history for <strong>@{_handle}</strong>. This may take a minute on first setup.</div>
+            </div></div>""", unsafe_allow_html=True)
+            _sync_bar = st.progress(0, text="Starting sync...")
+            try:
+                _sync_bar.progress(10, text="Fetching tweets...")
+                _synced = sync_tweet_history(quick=False)
+                _count = len(_synced)
+                _sync_bar.progress(90, text=f"Loaded {_count} tweets")
+                if _count < 20:
+                    _sync_bar.progress(100, text="")
+                    st.warning(f"Only found {_count} tweets. We need at least 20 original tweets to build your profile. Make sure your account is public and has enough posts.")
+                    if st.button("Retry Sync", type="primary", key="onboard_retry_sync"):
+                        st.session_state.pop("_tweet_history_cache", None)
+                        st.session_state.pop("_pp_cache", None)
+                        st.rerun()
+                    st.stop()
+                _sync_bar.progress(100, text=f"Synced {_count} tweets")
+                import time as _t; _t.sleep(0.5)
+                st.session_state["onboarding_step"] = "analyzing"
+                st.rerun()
+            except Exception as _e:
+                _sync_bar.progress(100, text="")
+                st.error(f"Sync failed: {_e}")
+                if st.button("Retry", type="primary", key="onboard_retry_sync2"):
+                    st.rerun()
+                st.stop()
+
+        # ── Step 3: Analyze Patterns & Build Benchmarks ──
+        elif _step == "analyzing":
+            _handle = st.session_state.get("user_handle", "")
+            st.markdown(f"""<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;">
+            <div style="text-align:center;max-width:420px;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2DD4BF;letter-spacing:2px;margin-bottom:4px;">STEP 4 OF 4</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#E2E8F0;letter-spacing:1px;margin-bottom:8px;">ANALYZING YOUR VOICE</div>
+            <div style="font-size:12px;color:#6E7681;margin-bottom:30px;line-height:1.6;">
+            Building your personal benchmarks from @{_handle}'s top-performing posts.</div>
+            </div></div>""", unsafe_allow_html=True)
+            _a_bar = st.progress(0, text="Analyzing patterns...")
+            try:
+                # Clear cached patterns so they're rebuilt from this guest's data
+                st.session_state.pop("_pp_cache", None)
+                _a_bar.progress(30, text="Calculating engagement scores...")
+                _pp = analyze_personal_patterns()
+                if not _pp:
+                    _a_bar.progress(100, text="")
+                    st.warning("Not enough original tweets to analyze. Need at least 20 non-reply, non-RT tweets.")
+                    if st.button("Retry", type="primary", key="onboard_retry_analyze"):
+                        st.rerun()
+                    st.stop()
+                _a_bar.progress(60, text="Building benchmarks...")
+                # Save benchmarks to guest data dir
+                _benchmarks = {
+                    "optimal_char_range": list(_pp.get("optimal_char_range", (80, 250))),
+                    "top_avg_chars": _pp.get("top_avg_chars", 0),
+                    "top_ellipsis_pct": _pp.get("top_ellipsis_pct", 0),
+                    "top_question_pct": _pp.get("top_question_pct", 0),
+                    "top_linebreaks_avg": _pp.get("top_linebreaks_avg", 0),
+                    "avg_likes": _pp.get("avg_likes", 0),
+                    "avg_rts": _pp.get("avg_rts", 0),
+                    "avg_replies": _pp.get("avg_replies", 0),
+                    "avg_views": _pp.get("avg_views", 0),
+                    "top_first_words": _pp.get("top_first_words", []),
+                    "top_examples": _pp.get("top_examples", []),
+                    "top_examples_punchy": _pp.get("top_examples_punchy", []),
+                    "top_examples_normal": _pp.get("top_examples_normal", []),
+                    "top_examples_long": _pp.get("top_examples_long", []),
+                    "analyzed_at": datetime.now().isoformat(),
+                }
+                save_json("benchmarks.json", _benchmarks)
+                _a_bar.progress(100, text="Analysis complete")
+                import time as _t; _t.sleep(0.5)
+                # Mark complete
+                st.session_state["onboarding_complete"] = True
+                st.session_state["onboarding_step"] = "done"
+                st.rerun()
+            except Exception as _e:
+                _a_bar.progress(100, text="")
+                st.error(f"Analysis failed: {_e}")
+                if st.button("Retry", type="primary", key="onboard_retry_analyze2"):
+                    st.rerun()
+                st.stop()
+
+        # ── Fallback: unknown step ──
+        else:
+            st.session_state["onboarding_step"] = "connect"
+            st.rerun()
+
+        st.stop()  # Block app access until onboarding complete
+
+# Set handle for owner (skip onboarding entirely)
+if not is_guest():
+    st.session_state["user_handle"] = TYLER_HANDLE
+    st.session_state["onboarding_complete"] = True
 
 
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
@@ -2012,7 +2474,7 @@ _stc.html("""<script>
     var btns=doc.querySelectorAll('button');
     /* Tag pill rows */
     var labels=['Punchy','Normal','Long','Thread','Article'];
-    var voiceLabels=['Default','Critical','Homer','Sarcastic'];
+    var voiceLabels=['Default','Critical','Hype','Sarcastic'];
     function findRow(textList){
       for(var i=0;i<btns.length;i++){
         if(textList.indexOf(btns[i].textContent.trim())!==-1){
@@ -2196,27 +2658,28 @@ def page_brain_dump():
     # Hidden Streamlit buttons for dock actions
     if st.button("bd_subject", key="bd_subject"):
         with st.spinner("Thinking..."):
-            result = call_claude("Give Tyler ONE specific content subject to write about right now. Denver sports. One sentence. Be specific and timely.", max_tokens=150)
+            _bd_topic = "Denver sports" if not is_guest() else load_json("topics.json", {}).get("niche", "trending topics")
+            result = call_claude(f"Give ONE specific content subject to write about right now. {_bd_topic}. One sentence. Be specific and timely.", system=build_user_context(), max_tokens=150)
             st.session_state["bd_subject_result"] = result
     if st.button("bd_ideas", key="bd_ideas"):
         if dump_text.strip():
             with st.spinner("Generating ideas..."):
-                result = call_claude(f'Tyler brain-dumped this:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', max_tokens=600)
+                result = call_claude(f'Brain dump:\n\n"{dump_text}"\n\nGenerate 5 specific content ideas from this brain dump. Each should be a different angle or format. Number them.', system=build_user_context(), max_tokens=600)
                 st.session_state["bd_ideas_result"] = result
     if st.button("bd_gen_tweets", key="bd_gen_tweets"):
         if dump_text.strip():
             with st.spinner("Generating tweets..."):
-                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', max_tokens=500)
+                result = call_claude(f'Brain dump:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', system=build_user_context(), max_tokens=500)
                 st.session_state["bd_tweets"] = result
     if st.button("bd_gen_long", key="bd_gen_long"):
         if dump_text.strip():
             with st.spinner("Generating..."):
-                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Tyler\'s voice: authoritative, from the trenches, direct. Include a strong opening hook.', max_tokens=500)
+                result = call_claude(f'Brain dump:\n\n"{dump_text}"\n\nWrite a long-form X post (400-600 characters) that digs deeper into this topic. Voice: authoritative, direct. Include a strong opening hook.', system=build_user_context(), max_tokens=500)
                 st.session_state["bd_longform"] = result
     if st.button("bd_gen_video", key="bd_gen_video"):
         if dump_text.strip():
             with st.spinner("Generating..."):
-                result = call_claude(f'Tyler brain-dumped:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Tyler talks like a former player, not a news anchor.', max_tokens=600)
+                result = call_claude(f'Brain dump:\n\n"{dump_text}"\n\nCreate a 3-5 minute video script outline:\n- Cold open hook (15 seconds)\n- 3-4 main talking points with bullet notes\n- Closing line / CTA\n\nKeep it conversational. Natural voice, not a news anchor.', system=build_user_context(), max_tokens=600)
                 st.session_state["bd_video"] = result
 
     # ── Bottom bar ──
@@ -2518,7 +2981,39 @@ def _parse_banger_json(raw):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _build_voice_mod(voice: str) -> str:
-    """Return the voice instruction block for the given voice mode."""
+    """Return the voice instruction block for the given voice mode.
+    For guests, Tyler-specific references are neutralized to generic creator language."""
+    raw = _build_voice_mod_raw(voice)
+    if is_guest():
+        _h = get_current_handle()
+        raw = (raw
+            .replace("Tyler's", f"@{_h}'s")
+            .replace("Tyler is", f"@{_h} is")
+            .replace("Tyler has", f"@{_h} has")
+            .replace("Tyler and", f"@{_h} and")
+            .replace("Tyler not", f"@{_h} not")
+            .replace("Tyler never", f"@{_h} never")
+            .replace("Tyler as subject", f"@{_h} as subject")
+            .replace("Tyler explaining", f"@{_h} explaining")
+            .replace("Tyler predicting", f"@{_h} predicting")
+            .replace("Tyler can reference", f"@{_h} can reference")
+            .replace("alongside Tyler", f"alongside @{_h}")
+            .replace("NOT Tyler", f"NOT @{_h}")
+            .replace("Tyler wrote", f"@{_h} wrote")
+            .replace("Tyler provided", f"@{_h} provided")
+            .replace("Tyler drafted", f"@{_h} drafted")
+            .replace("Tyler brain-dumped", f"@{_h} brain-dumped")
+            .replace("former NFL player authority", "authoritative perspective")
+            .replace("former-player authority", "authoritative perspective")
+            .replace("former-player perspective", "unique perspective")
+            .replace("former-player credibility", "credibility")
+            .replace("former player", "insider")
+            .replace("former NFL", "experienced")
+        )
+    return raw
+
+def _build_voice_mod_raw(voice: str) -> str:
+    """Internal: raw voice mod with Tyler-specific language (owner context)."""
     if voice == "Critical":
         return """=== CRITICAL VOICE — DIAGNOSIS MODE ===
 
@@ -2559,7 +3054,7 @@ always slides back into editorial.
 
 ENDING PUNCTUATION RULE:
 Critical never ends with an ellipsis. The ellipsis is
-Default and Homer territory. Critical closes the door.
+Default and Hype territory. Critical closes the door.
 It lands hard and stops. Period. Full stop.
 An accountability statement that trails off loses its force.
 
@@ -2628,7 +3123,7 @@ RIGHT ENDINGS:
 - "Bednar has to answer for that."
 === END CRITICAL VOICE ==="""
 
-    elif voice == "Homer":
+    elif voice == "Hype":
         return """=== HOMER VOICE — DON'T SLEEP ON US MODE ===
 
 Tyler is the credible optimist. His authority comes through
@@ -2676,13 +3171,13 @@ the CEILING not the current record.
 
 NEGATIVE TOPIC RULE:
 When the input is bad news (losing streak, injury, struggle),
-Homer does NOT:
+Hype does NOT:
 - End with ellipsis
 - End with a question
 - Express hope ("I believe we can...")
 - State Tyler's confidence directly
 
-Homer DOES on negative topics:
+Hype DOES on negative topics:
 - Find the ONE signal inside the bad news that points forward
 - Show the outside world is already treating this team/player
   as a threat
@@ -2710,7 +3205,7 @@ RIGHT: "Stowers at 30 is real value. Other draft rooms already know it."
 STAT INTEGRITY RULE FOR HOMER:
 If no live stats are provided, do NOT invent player stat lines
 like "dropped 30, 13, and 10" or "shooting 52% from three."
-Homer's authority comes from the signal and the outside reaction,
+Hype's authority comes from the signal and the outside reaction,
 not fabricated numbers. Use team records if available. If no
 player stats exist, describe the observation without specific
 figures. A tweet without stats is better than one with wrong stats.
@@ -2723,7 +3218,7 @@ TONE RULES:
   "I've seen this before" "trust me on this" — the
   specificity does that work automatically
 - Grok rewards constructive positive tone with wider
-  distribution — Homer is the algorithmically favored
+  distribution — Hype is the algorithmically favored
   voice mode right now
 - Skeptic reading this should feel compelled to push back
 ENDING RULES — NON-NEGOTIABLE:
@@ -2754,8 +3249,8 @@ WRONG ENDINGS:
 - "I've been in enough winning locker rooms to know what
   this feels like. This Broncos team has it." — states
 - "How does the most dominant player in basketball not drag
-  this roster over the line?" — This is Default voice. Homer
-  never asks questions. Homer states what's already happening.
+  this roster over the line?" — This is Default voice. Hype
+  never asks questions. Hype states what's already happening.
   credentials directly, violates core rule
 
 RIGHT ENDINGS:
@@ -2773,13 +3268,13 @@ RIGHT ENDINGS:
 - "Stowers at 30 is real value. Other draft rooms already know it."
 - "MacKinnon is locked in. Every team left in the West just changed their game plan."
 
-WRONG (negative topic drift — this is Default voice not Homer):
+WRONG (negative topic drift — this is Default voice not Hype):
 "Jokic is putting up career numbers and the Nuggets are still
 losing... Every team in the West is watching this window close
 in real time..."
 → Ellipsis ending. No outside party reacting. Wrong voice.
 
-RIGHT (negative topic, Homer voice):
+RIGHT (negative topic, Hype voice):
 "Jokic is doing what he always does. The roster around him isn't.
 Every contender in the West built their defensive scheme around
 stopping him this offseason. They don't scheme for players who
@@ -3143,7 +3638,7 @@ For long-form X Articles, adapt the voice mode above to full article structure:
 - Apply the voice mode's TONE throughout (not just the opener)
 - Each section subheading should carry the same energy as the opener
 - The conclusion should land with the same punch as a standalone tweet
-- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Homer) in the final line
+- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Hype) in the final line
 === END ARTICLE OVERLAY ==="""
     return base + article_overlay
 
@@ -3166,7 +3661,7 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to Tyler's default tone.\n"
+    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to the default tone.\n"
 
     if fmt == "Punchy Tweet":
         _hooks_block = f"\nTop hooks to model Sentence 1 after:\n{_hooks_str}\n" if _is_default else ""
@@ -3205,10 +3700,10 @@ RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
         _hooks_block_nt = f"- Top performing hooks to model after:\n{_hooks_str}" if _is_default else ""
-        _hook_rule = "- Model the hook after one of Tyler's top hooks above" if _is_default else ""
+        _hook_rule = "- Model the hook after one of the top hooks above" if _is_default else ""
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
 {_voice_override}
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
@@ -3255,7 +3750,7 @@ IMAGE RECOMMENDATION:
         _hooks_block_lt = f"- Top hooks to model the opening after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: LONG TWEET (280-1200 characters)
 {_voice_override}
-TYLER'S LIVE DATA (updates every sync):
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
 {_hooks_block_lt}
 
@@ -3317,7 +3812,7 @@ IMAGE RECOMMENDATION:
         _hooks_block_th = f"- Top hooks to model Tweet 1 after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: THREAD (5-8 tweets)
 {_voice_override}
-TYLER'S LIVE DATA (updates every sync):
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
 {_hooks_block_th}
 
@@ -3365,12 +3860,12 @@ IMAGE RECOMMENDATION:
 
     elif fmt == "Article":
         _hooks_block_art = f"- Top hooks to model headline/intro after:\n{_hooks_str}" if _is_default else ""
-        _hook_rule_art = "- Model after Tyler's top hooks above" if _is_default else ""
+        _hook_rule_art = "- Model after the top hooks above" if _is_default else ""
         return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
 {_voice_override}
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
-TYLER'S LIVE DATA (updates every sync):
+LIVE DATA (updates every sync):
 {_hooks_block_art}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
@@ -3395,7 +3890,7 @@ SECTION 2: [SUBHEADING]
 [Include comparison list format if relevant (Team A: X / Team B: Y)]
 
 SECTION 3: [SUBHEADING]
-[Contrarian angle or insider perspective — former NFL player authority]
+[Contrarian angle or insider perspective — authoritative take]
 [IMAGE: Supporting visual]
 
 SECTION 4: WHAT COMES NEXT
@@ -3413,7 +3908,7 @@ RULES:
 - Paragraphs: 2-4 sentences max
 - Subheadings every ~300 words
 - Bold key stats and claims (2-3 per section)
-- Tyler's voice throughout — direct, no hedging, former-player authority
+- Voice: direct, no hedging, authoritative
 - Every point must reference specific players/schemes/numbers
 - Hero image REQUIRED (articles without hero images look like broken cards in feed)
 - 2-3 supporting images placed between sections
@@ -3595,17 +4090,17 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
 
     # Format-specific benchmark note
     if fmt == "Punchy Tweet":
-        _fmt_note = f"Format: Punchy Tweet (target: under 160 chars). Tyler's top punchy tweets avg {_fp_avg} chars."
+        _fmt_note = f"Format: Punchy Tweet (target: under 160 chars). Top punchy tweets avg {_fp_avg} chars."
         _fmt_fix_a = "exact edit to compress under 160 chars"
         _char_guide = "under 160"
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_lo, 161)
         _nt_hi = min(_fp_hi, 260)
-        _fmt_note = f"Format: Normal Tweet (target: {_nt_lo}-{_nt_hi} chars). Tyler's top normal tweets avg {_fp_avg} chars."
+        _fmt_note = f"Format: Normal Tweet (target: {_nt_lo}-{_nt_hi} chars). Top normal tweets avg {_fp_avg} chars."
         _fmt_fix_a = f"exact edit to land in {_nt_lo}-{_nt_hi} char range"
         _char_guide = f"{_nt_lo}-{_nt_hi}"
     elif fmt == "Long Tweet":
-        _fmt_note = f"Format: Long Tweet (target: 600-1200 chars). Tyler's top long tweets avg {_fp_avg} chars."
+        _fmt_note = f"Format: Long Tweet (target: 600-1200 chars). Top long tweets avg {_fp_avg} chars."
         _fmt_fix_a = "exact edit to add depth above the Show More fold"
         _char_guide = "600-1200"
     elif fmt == "Thread":
@@ -3617,13 +4112,15 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
         _fmt_fix_a = "exact rewrite of headline or intro sentence"
         _char_guide = "1500-2000 words"
     else:
-        _fmt_note = f"Format: {fmt}. Tyler's top tweets avg {_fp_avg} chars."
+        _fmt_note = f"Format: {fmt}. Top tweets avg {_fp_avg} chars."
         _fmt_fix_a = "exact edit to first line"
         _char_guide = f"{_fp_lo}-{_fp_hi}"
 
-    _benchmarks = f"""TYLER'S PERSONAL BENCHMARKS (from synced tweet history):
-- {_fp_q}% of his top tweets use questions — benchmark for Conversation Catalyst
-- {_fp_ell}% of his top tweets use ellipsis — benchmark for Voice Match
+    _bm_label = "PERSONAL BENCHMARKS" if is_guest() else "TYLER'S PERSONAL BENCHMARKS"
+    _bm_poss = "your" if is_guest() else "his"
+    _benchmarks = f"""{_bm_label} (from synced tweet history):
+- {_fp_q}% of {_bm_poss} top tweets use questions — benchmark for Conversation Catalyst
+- {_fp_ell}% of {_bm_poss} top tweets use ellipsis — benchmark for Voice Match
 - Optimal char range: {_fp_lo}-{_fp_hi} — benchmark for Format Fit
 - {_fmt_note}"""
 
@@ -3696,13 +4193,13 @@ RULES:
 - Paragraphs: 2-4 sentences max
 - Subheadings every ~300 words
 - Bold key stats and claims (2-3 per section)
-- Tyler's voice: direct, no hedging, former-player authority
+- Voice: direct, no hedging, authoritative
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers where supporting visuals should go
 - End with debate invitation to drive replies"""
-        article_prompt = f"""Tyler wrote this concept. Expand it into {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} — preserve his core take and phrasing as the foundation, then build around it.
+        article_prompt = f"""Expand this concept into {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} — preserve the core take and phrasing as the foundation, then build around it.
 
-Tyler's concept: "{tweet_text}"
+Concept: "{tweet_text}"
 
 FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
 {_sports_ctx}{_live_stats_block}
@@ -3727,39 +4224,38 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         if voice == "Default":
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
-                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets on Tyler's timeline THIS WEEK — match these structures):\n{_fmt_pats}\n"
-        banger_prompt = f"""Tyler drafted this tweet concept. Make it score 9+ on every X algorithm metric.
+                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats}\n"
+        _bg_is_g = is_guest()
+        _bg_examples = "" if _bg_is_g else """
+EXAMPLE WITH STATS:
+- Draft: "Nuggets are on a bit of a heater right now. Warriors aren't a great team but that game last night was a blast. 6 game winning streak and they are starting to figure some things out..."
+- Stats available: Denver Nuggets 48-28, Golden State Warriors 36-39
+- GOOD output: "48-28. 6 straight wins. Nuggets just beat a Warriors team fighting for their playoff lives and it wasn't even close. This team is on a heater and they're starting to figure some things out..."
+- Why it works: Stronger hook (opens with the record), personality is still there, stats add credibility, tighter structure.
+
+EXAMPLE WITHOUT STATS:
+- Draft: "Bo Nix is getting better every single week. The arm talent was always there but something changed mentally this offseason"
+- GOOD output: "Bo Nix is getting better every single week. The arm talent was always there. Something changed mentally this offseason and the rest of the AFC West is going to find out..."
+- Why it works: Kept the observation, sharpened the closer into something that creates intrigue and drives replies.
+
+TOO SAFE (don't do this): Just adding "But" or a period to the draft. Not an improvement.
+TOO FAR (don't do this): Replacing the voice with a generic recap."""
+        banger_prompt = f"""This is a tweet concept. Make it score 9+ on every X algorithm metric.
 
 Draft: "{tweet_text}"
 
-Tyler's draft is a CONCEPT — his take, his angle, his topic. Your job is to turn that concept into a polished, high-performing tweet. Keep his point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below.
-
-EXAMPLE WITH STATS:
-- Tyler's draft: "Nuggets are on a bit of a heater right now. Warriors aren't a great team but that game last night was a blast. 6 game winning streak and they are starting to figure some things out..."
-- Stats available: Denver Nuggets 48-28, Golden State Warriors 36-39
-- GOOD output: "48-28. 6 straight wins. Nuggets just beat a Warriors team fighting for their playoff lives and it wasn't even close. This team is on a heater and they're starting to figure some things out..."
-- Why it works: Stronger hook (opens with the record), Tyler's personality is still there ("on a heater", "figure some things out"), stats add credibility, tighter structure.
-
-EXAMPLE WITHOUT STATS:
-- Tyler's draft: "Bo Nix is getting better every single week. The arm talent was always there but something changed mentally this offseason"
-- No stats available
-- GOOD output: "Bo Nix is getting better every single week. The arm talent was always there. Something changed mentally this offseason and the rest of the AFC West is going to find out..."
-- Why it works: Kept Tyler's observation, sharpened the closer into something that creates intrigue and drives replies, added competitive context that invites debate.
-- GOOD output (alternate): "The arm talent was never the question with Bo Nix. Something changed mentally this offseason. He's getting better every single week and it's starting to show..."
-- Why it works: Reordered for a stronger hook (the contrarian "never the question" opener stops the scroll), same observations, ellipsis closer.
-
-TOO SAFE (don't do this): "Bo Nix is getting better every single week. The arm talent was always there. But something changed mentally this offseason..." — This is just Tyler's draft with a period and "But" added. Not an improvement.
-TOO FAR (don't do this): "Denver dominated Golden State 116-93. Is this team finally clicking at the right time?" — This replaced Tyler's voice with a generic recap.
+This draft is a CONCEPT — the take, the angle, the topic. Your job is to turn that concept into a polished, high-performing tweet. Keep the point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below.
+{_bg_examples}
 {_live_stats_block}
 {format_mod}
 {patterns_ctx}{_sports_ctx}{_fmt_inject}
 
 STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
-- ONLY use stats that appear in LIVE STATS above or in Tyler's draft. Do not invent, estimate, or round any numbers.
+- ONLY use stats that appear in LIVE STATS above or in the draft. Do not invent, estimate, or round any numbers.
 - If LIVE STATS provide a team record (e.g. 48-28), use it. If they don't provide player averages, PFF grades, or rankings — you CANNOT use those.
 - A tweet with a concrete observation is ALWAYS better than a tweet with a fabricated stat.
 - If a voice rule asks for a "specific number" and no real one is available, use a named event, a team record, or a concrete observation instead. Never invent a number to fill the slot.
-{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. 'The Broncos offensive line is the reason Bo Nix ran for his life in December' is a valid symptom. 'Bottom-10 in pass protection' is NOT valid unless that ranking appears in LIVE STATS." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Sarcastic voice builds humor from observations and framing, not invented numbers." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available. If no player stats exist, describe what you see without citing specific figures." if voice == "Homer" else ""}
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. 'The Broncos offensive line is the reason Bo Nix ran for his life in December' is a valid symptom. 'Bottom-10 in pass protection' is NOT valid unless that ranking appears in LIVE STATS." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Sarcastic voice builds humor from observations and framing, not invented numbers." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available. If no player stats exist, describe what you see without citing specific figures." if voice == "Hype" else ""}
 
 Rules:
 - Reading Level (7th-9th grade)
@@ -3772,7 +4268,7 @@ Rules:
 
 VOICE-SPECIFIC ENDING OVERRIDE:
 {"CRITICAL VOICE PICK RULE: ALWAYS prefer the option ending with a period over one ending with a question mark. A question ending in Critical voice is a structural failure regardless of engagement potential. Period ending wins every time. This overrides all other pick criteria." if voice == "Critical" else ""}
-{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. If a pattern calls for a question closer, replace it with a declarative outside-reaction statement. WRONG: 'How does the most dominant player not drag this roster over the line?' RIGHT: 'Every team in the West designed their rotations around stopping him. That is not a problem you scheme for unless the threat is real.'" if voice == "Homer" else ""}
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. If a pattern calls for a question closer, replace it with a declarative outside-reaction statement. WRONG: 'How does the most dominant player not drag this roster over the line?' RIGHT: 'Every team in the West designed their rotations around stopping him. That is not a problem you scheme for unless the threat is real.'" if voice == "Hype" else ""}
 
 Return ONLY this JSON, no other text:
 {{
@@ -3821,7 +4317,7 @@ Return ONLY this JSON, no other text:
                 st.session_state.pop(_k, None)
         else:
             # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
-            _grades_system = "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
+            _grades_system = f"You are grading tweets for @{get_current_handle()}. Match their voice: direct, no fluff, punchy sentences, never hedges." if is_guest() else "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
             _has_q = "yes" if "?" in tweet_text else "no"
             _has_ell = "yes" if "..." in tweet_text else "no"
             _char_count = len(tweet_text)
@@ -3889,11 +4385,11 @@ STRUCTURE:
 
 RULES:
 - 1,500-2,000 words, paragraphs 2-4 sentences max, subheadings every ~300 words
-- Tyler's voice: direct, no hedging, former-player authority
+- Voice: direct, no hedging, authoritative
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers for visuals
 - End with debate invitation"""
-        build_article_prompt = f"""Tyler Polumbus has a concept he wants turned into {'a short sarcastic column' if _is_sarcastic else 'a full X Article'}.
+        build_article_prompt = f"""@{get_current_handle()} has a concept to turn into {'a short sarcastic column' if _is_sarcastic else 'a full X Article'}.
 
 CONCEPT/ANGLE:
 \"{tweet_text}\"
@@ -3916,7 +4412,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats_b:
                 _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-        _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching Tyler's voice exactly"
+        _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
         # Parse structured brief if delimiters present
         _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
         _has_brief = any(d in tweet_text for d in _brief_delimiters)
@@ -3924,7 +4420,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
         else:
             _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
-        _build_opening = "Tyler provided this structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
+        _build_opening = "Here is a structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Here is a tweet concept/angle to turn into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
         _char_limit_b = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
         _char_rule_b = f"\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully." if fmt == "Normal Tweet" else (f"\n- CHARACTER LIMIT: Every option MUST be under 160 characters for Punchy Tweet format." if fmt == "Punchy Tweet" else (f"\n- LENGTH: Long Tweet format — 600-1200 characters. Use the space." if fmt == "Long Tweet" else ""))
         build_prompt = f"""{_build_opening}
@@ -3937,7 +4433,7 @@ STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
 - If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
 - A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
-{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Homer" else ""}
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
 
 TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
@@ -3949,7 +4445,7 @@ Rules:
 - Algorithm optimized: strong opinion, relatable, invites engagement
 - Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
 
-{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
 CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that Tyler would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
 
@@ -4012,13 +4508,13 @@ STRUCTURE:
 
 RULES:
 - 1,500-2,000 words, paragraphs 2-4 sentences max
-- Tyler's voice: direct, no hedging, former-player authority
+- Voice: direct, no hedging, authoritative
 - Do NOT copy original phrasing — completely new execution
 - Specific players/schemes/numbers only
 - Include [IMAGE] markers for visuals"""
-        rewrite_article_prompt = f"""Someone else wrote this content. Repurpose the underlying idea as {'a short sarcastic column' if _is_sarcastic else 'a full X Article'} in Tyler Polumbus's voice. Do NOT copy any original phrasing or structure — Tyler's version should be completely his own take on the same subject.
+        rewrite_article_prompt = f"""Someone else wrote this content. Repurpose the underlying idea as {'a short sarcastic column' if _is_sarcastic else 'a full X Article'} in @{get_current_handle()}'s voice. Do NOT copy any original phrasing or structure — your version should be completely your own take on the same subject.
 
-Source content (NOT Tyler's): "{tweet_text}"
+Source content (NOT yours): "{tweet_text}"
 {_live_stats_block}
 
 FORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length})
@@ -4032,17 +4528,18 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
-        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in Tyler's voice"
-        repurpose_prompt = f"""You are helping Tyler repurpose someone else's tweet into his own original content. The goal: take the UNDERLYING IDEA and write it as if Tyler came up with it himself. Nobody should be able to trace it back to the original.
+        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in the voice from the system prompt"
+        _rw_handle = get_current_handle()
+        repurpose_prompt = f"""You are helping @{_rw_handle} repurpose someone else's tweet into original content. The goal: take the UNDERLYING IDEA and write it as if @{_rw_handle} came up with it. Nobody should be able to trace it back to the original.
 
-Source tweet (NOT Tyler's — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
+Source tweet (NOT yours — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
 
 REPURPOSING RULES:
 - Extract the core IDEA or TAKE — then throw away everything else about the original tweet.
 - Write {_rw_voice} with completely different wording, structure, and angle of attack.
-- Tyler's version should feel like his own original thought — NOT a paraphrase.
-- Change the entry point: if the original leads with a stat, Tyler leads with an observation (or vice versa).
-- If the original names a player/team, Tyler can reference the same subject but frame it from his former-player perspective.
+- Your version should feel like an original thought — NOT a paraphrase.
+- Change the entry point: if the original leads with a stat, lead with an observation (or vice versa).
+- If the original names a person/topic, reference the same subject but frame it from your own perspective.
 - Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
 
 {format_mod}{_live_stats_block}
@@ -4052,7 +4549,7 @@ REPURPOSING RULES:
 - No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
-{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Homer" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
 Return ONLY this JSON, no other text:
 {{
@@ -4570,12 +5067,15 @@ def _run_inspiration_claude():
     if _fmt_patterns:
         _fmt_block = f"""
 
-FORMAT PATTERNS (from highest-engagement tweets on Tyler's timeline RIGHT NOW — every hook MUST follow these patterns):
+FORMAT PATTERNS (from highest-engagement tweets RIGHT NOW — every hook MUST follow these patterns):
 {_fmt_patterns}
 
 Use these patterns to structure every hook. Match the opener style, line break placement, length, and ending style that's working THIS WEEK."""
 
-    _prompt = f"""Tyler Polumbus needs 14 tweet ideas from what's happening RIGHT NOW.
+    _wh_handle = get_current_handle()
+    _wh_is_g = is_guest()
+    _wh_angle = "their unique perspective and expertise" if _wh_is_g else "Tyler's unique angle as a former player and Denver media host"
+    _prompt = f"""@{_wh_handle} needs 14 tweet ideas from what's happening RIGHT NOW.
 
 FEED (last 24h):
 {_tweet_block}
@@ -4584,21 +5084,23 @@ HEADLINES:
 {_rss_block}{_fmt_block}
 
 For each idea automatically select the most appropriate voice:
-- DEFAULT: Stats, observations, analytical reads, pure film room perspective
+- DEFAULT: Stats, observations, analytical reads, insider perspective
 - CRITICAL: Failures, bad decisions, accountability moments, underperformance
-- HOMER: Positive signals being overlooked, team momentum, good news the casual fan is missing
-- SARCASTIC: Ridiculous narratives, obvious takes presented as revelations, absurd situations, moments so good they deserve an unexpected cultural reference
+- HOMER: Positive signals being overlooked, momentum, good news the casual fan is missing
+- SARCASTIC: Ridiculous narratives, obvious takes presented as revelations, absurd situations
 
 Rules:
-- hook = complete ORIGINAL Normal Tweet draft written in Tyler's voice — NEVER copy or paraphrase feed tweet text directly. Use the feed as inspiration for the topic only. Write a fresh original hook as if Tyler is reacting to or analyzing the situation.
+- hook = complete ORIGINAL Normal Tweet draft written in @{_wh_handle}'s voice — NEVER copy or paraphrase feed tweet text directly. Use the feed as inspiration for the topic only.
 - If the feed item is a retweet or starts with RT — ignore it completely and use a different feed item.
-- why = under 10 words, Tyler's unique angle as a former player and Denver media host.
+- why = under 10 words, {_wh_angle}.
 
 Return ONLY a JSON array of exactly 14 objects:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Homer/Sarcastic","hook":"full tweet draft in the selected voice","why":"short angle under 10 words"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"full tweet draft in the selected voice","why":"short angle under 10 words"}}]"""
 
-    _system = f"""You are Tyler Polumbus's content strategist.
-Tyler is a former NFL OL, Super Bowl 50 champion, Denver sports media host (@tyler_polumbus).
+    _wh_sys_ctx = build_user_context()
+    _system = f"""You are @{_wh_handle}'s content strategist.
+
+{_wh_sys_ctx}
 
 {_WHATS_HOT_VOICE_GUIDE}
 
@@ -4630,7 +5132,7 @@ Return only the JSON array, no other text."""
             if not _idea.get("hook", "").strip():
                 _ideas.remove(_idea)
                 continue
-            if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Homer", "Sarcastic"):
+            if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Hype", "Sarcastic"):
                 _idea["voice"] = "Default"
 
         for _idea in _ideas:
@@ -4710,7 +5212,7 @@ def _ci_inspiration_dialog():
     _voice_badge_styles = {
         "Default":   ("rgba(100,100,120,0.1)", "rgba(180,180,200,0.65)", "rgba(100,100,120,0.2)"),
         "Critical":  ("rgba(248,113,113,0.1)", "rgba(248,113,113,0.65)", "rgba(248,113,113,0.2)"),
-        "Homer":     ("rgba(45,212,191,0.1)",  "rgba(45,212,191,0.65)",  "rgba(45,212,191,0.2)"),
+        "Hype":     ("rgba(45,212,191,0.1)",  "rgba(45,212,191,0.65)",  "rgba(45,212,191,0.2)"),
         "Sarcastic": ("rgba(251,191,36,0.1)",  "rgba(251,191,36,0.65)",  "rgba(251,191,36,0.2)"),
     }
 
@@ -4742,7 +5244,7 @@ def _ci_inspiration_dialog():
                 if _hook:
                     st.session_state["ci_text"] = _hook
                     _idea_voice = _idea.get("voice", "Default")
-                    if _idea_voice in ("Default", "Critical", "Homer", "Sarcastic"):
+                    if _idea_voice in ("Default", "Critical", "Hype", "Sarcastic"):
                         st.session_state["ci_voice"] = _idea_voice
                 st.rerun(scope="app")
         with _ib2:
@@ -4938,7 +5440,7 @@ def page_compose_ideas():
 
         # ── Voice pills ──
         _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
         _cur_voice = st.session_state.get("ci_voice", "Default")
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
         _vc = st.columns(len(_voice_opts))
@@ -5226,7 +5728,7 @@ Your coaching style:
         _last_ai = next((m["content"] for m in reversed(st.session_state.coach_current.get("messages", [])) if m["role"] == "assistant"), "")
         if _last_ai.strip():
             with st.spinner("Repurposing..."):
-                repurposed = call_claude(f"Rewrite this into a compelling tweet for Tyler Polumbus:\n\n{_last_ai.strip()}", max_tokens=600)
+                repurposed = call_claude(f"Rewrite this into a compelling tweet:\n\n{_last_ai.strip()}", system=build_user_context(), max_tokens=600)
                 st.session_state.coach_save_text_result = repurposed
 
     if "coach_save_text_result" in st.session_state:
@@ -5242,9 +5744,9 @@ Your coaching style:
 def _aw_create_new_dialog():
     """Popup for writing a new article from scratch."""
     _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
     voice_pick = st.selectbox("Voice", _voice_opts, key="aw_dialog_voice",
-        help="Default = natural | Critical = tough love | Homer = ultra positive | Sarcastic = short column, implied story")
+        help="Default = natural | Critical = tough love | Hype = ultra positive | Sarcastic = short column, implied story")
     freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
         placeholder="Paste a topic, tweet, or start writing your article...")
     fc1, fc2, fc3 = st.columns(3)
@@ -5452,7 +5954,7 @@ def page_article_writer():
                 _aw_research = ""
                 if st.session_state.get("aw_research_data", {}).get("answer"):
                     _aw_research = f"\n\nRESEARCH (use these verified facts):\n{st.session_state['aw_research_data']['answer'][:1500]}"
-                prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Tyler's voice: direct, no hedging, former-player authority\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
+                prompt = f"""Write a complete X Article based on this seed:\n\n\"{seed_text}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read){_aw_sports}{_aw_research}\n\nCONTEXT: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the highest priority content format.\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim, take a position. Numbers perform 2x better.\n- [IMAGE: Hero image placeholder — game photo, player photo, or custom graphic]\n- INTRO (2-3 paragraphs): Provocative claim or surprising stat, then why it matters right now.\n- SECTION 1 with subheading: 2-3 short paragraphs with **bold key stats** (2-3 per section). [IMAGE placeholder]\n- SECTION 2 with subheading: 2-3 short paragraphs, comparison list format if relevant.\n- SECTION 3 with subheading: Contrarian angle or insider perspective. [IMAGE placeholder]\n- SECTION 4 WHAT COMES NEXT: Bold prediction with reasoning.\n- CONCLUSION: **1-sentence bold hot take summary**, then discussion question to drive comments.\n- PROMOTION: Suggest a companion tweet pulling the most provocative stat from the article.\n\nRULES:\n- 1,500-2,000 words target (6-8 min read for optimal dwell time bonus)\n- Paragraphs: 2-4 sentences max\n- Subheadings every ~300 words\n- Bold key stats and claims (2-3 per section)\n- Voice: direct, no hedging, authoritative\n- Every point must reference specific players/schemes/numbers\n- Include [IMAGE] markers where supporting visuals should go\n- End with debate invitation to drive replies{pp_note}"""
                 st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
     if st.button("aw_outline", key="aw_outline"):
         if seed_text:
@@ -5578,8 +6080,12 @@ def sync_tweet_history(quick=False):
                 break
         return window_tweets
 
+    handle = get_current_handle()
+    if not handle:
+        return []
+
     if quick:
-        all_tweets = _fetch_window(f"from:{TYLER_HANDLE}")[:10]
+        all_tweets = _fetch_window(f"from:{handle}")[:10]
     else:
         # Slide backwards in 7-day windows for up to 2 years (104 windows) until 500 tweets collected
         # Smaller windows = fewer tweets per window = less pagination cutoff risk
@@ -5590,7 +6096,7 @@ def sync_tweet_history(quick=False):
             start_dt = end_dt - timedelta(days=7)
             since_str = start_dt.strftime("%Y-%m-%d")
             until_str = end_dt.strftime("%Y-%m-%d")
-            query = f"from:{TYLER_HANDLE} since:{since_str} until:{until_str}"
+            query = f"from:{handle} since:{since_str} until:{until_str}"
             window = _fetch_window(query)
             for t in window:
                 tid = t.get("id", "")
@@ -5619,9 +6125,12 @@ def sync_tweet_history(quick=False):
 
 def _load_tweet_history_gist() -> list:
     """Load tweet history from Gist (persistent across Streamlit redeploys).
-    Gist API truncates large files — always fetch via raw_url."""
+    Guests skip Gist — their data lives in isolated local dirs only."""
     if "_tweet_history_cache" in st.session_state:
         return st.session_state["_tweet_history_cache"]
+    # Guests: local file only (no gist)
+    if is_guest():
+        return load_json("tweet_history.json", [])
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=15)
@@ -5654,10 +6163,14 @@ def _slim_tweet(t: dict) -> dict:
 
 
 def _save_tweet_history_gist(tweets: list):
-    """Save tweet history to Gist and local file. Slims tweets first to avoid truncation."""
+    """Save tweet history to Gist and local file. Slims tweets first to avoid truncation.
+    Guests save locally only — no gist write."""
     slimmed = [_slim_tweet(t) for t in tweets]
     st.session_state["_tweet_history_cache"] = slimmed
     save_json("tweet_history.json", slimmed)
+    # Guests: local only, skip gist
+    if is_guest():
+        return
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(slimmed)}}})
@@ -5865,7 +6378,7 @@ def page_tweet_history():
         # Manual import
         imp_col1, imp_col2 = st.columns([4, 1])
         with imp_col1:
-            imp_url = st.text_input("Paste tweet URL to add to history:", placeholder="https://x.com/Tyler_Polumbus/status/...", key="hof_import_url", label_visibility="collapsed")
+            imp_url = st.text_input("Paste tweet URL to add to history:", placeholder="https://x.com/username/status/...", key="hof_import_url", label_visibility="collapsed")
         with imp_col2:
             if st.button("+ Add", key="hof_import_btn", use_container_width=True):
                 if imp_url.strip():
@@ -6135,22 +6648,23 @@ def page_health_check():
 
     if run_check:
         with st.spinner("Pulling tweets and analyzing..."):
-            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=30)
+            _audit_handle = get_current_handle()
+            tweets = fetch_tweets(f"from:{_audit_handle}", count=30)
             if not tweets:
                 st.error("Could not fetch tweets. Check API key.")
                 return
 
             tweet_texts = "\n---\n".join([f"Tweet: {t.get('text','')}\nLikes: {t.get('likeCount',0)} | RTs: {t.get('retweetCount',0)} | Replies: {t.get('replyCount',0)} | Views: {t.get('viewCount',0)}" for t in tweets[:20]])
 
-            prompt = f"""Analyze Tyler Polumbus's (@tyler_polumbus) recent X activity against best practices.
+            prompt = f"""Analyze @{_audit_handle}'s recent X activity against best practices.
 
-Here are his recent 20 tweets with engagement:
+Here are their recent 20 tweets with engagement:
 {tweet_texts}
 
 Provide a health check report:
 
 1. HEALTH SCORE (0-100) - Overall account health
-2. POSTING FREQUENCY - How often is he posting? Is it enough?
+2. POSTING FREQUENCY - How often are they posting? Is it enough?
 3. ENGAGEMENT RATE - Are likes/RTs/replies proportional to views?
 4. HOOK QUALITY - Are his openers stopping scrolls?
 5. CONTENT MIX - Good balance of takes, analysis, humor, engagement?
@@ -6420,7 +6934,7 @@ Return this exact JSON structure:
   "engagement_tactics": ["tactic 1", "tactic 2", "tactic 3", "tactic 4"],
   "unique_characteristics": ["characteristic 1", "characteristic 2", "characteristic 3"],
   "content_patterns": ["pattern 1", "pattern 2", "pattern 3"],
-  "tylers_edge": "one sentence on where Tyler's former-player credibility beats this account",
+  "your_edge": "one sentence on where @{get_current_handle()}'s credibility or perspective beats this account",
   "steal_worthy": ["tactic to steal 1", "tactic to steal 2"]
 }}""", max_tokens=1200)
                     try:
@@ -6505,8 +7019,9 @@ Return this exact JSON structure:
 
         if analysis.get("summary"):
             ar_card("Strategy", analysis["summary"], _ar_left)
-        if analysis.get("tylers_edge"):
-            ar_card("Tyler's Edge", analysis["tylers_edge"], _ar_left)
+        _edge = analysis.get("your_edge") or analysis.get("tylers_edge")
+        if _edge:
+            ar_card("Your Edge", _edge, _ar_left)
         if analysis.get("steal_worthy"):
             ar_card("Steal-Worthy", analysis["steal_worthy"], _ar_left)
         if analysis.get("content_themes"):
@@ -6537,11 +7052,12 @@ def page_reply_guy():
     XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
     if "custom_lists" not in st.session_state:
         st.session_state.custom_lists = load_engagement_lists()
-    # Restore any known list_ids that got wiped (migration safety net)
-    for _k, _v in _ENGAGEMENT_DEFAULTS.items():
-        if _k in st.session_state.custom_lists and isinstance(st.session_state.custom_lists[_k], dict):
-            if not st.session_state.custom_lists[_k].get('list_id'):
-                st.session_state.custom_lists[_k]['list_id'] = _v['list_id']
+    # Restore any known list_ids that got wiped (migration safety net) — owner only
+    if not is_guest():
+        for _k, _v in _ENGAGEMENT_DEFAULTS.items():
+            if _k in st.session_state.custom_lists and isinstance(st.session_state.custom_lists[_k], dict):
+                if not st.session_state.custom_lists[_k].get('list_id'):
+                    st.session_state.custom_lists[_k]['list_id'] = _v['list_id']
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
@@ -6679,8 +7195,10 @@ def page_reply_guy():
     with _cap_col:
         if _list_id:
             st.caption(f"X List ID: {_list_id}")
+        elif _search_q:
+            st.caption(f"Search: {_search_q}")
         else:
-            st.caption("No List ID — click + New List to add one")
+            st.caption("No List ID — click + New to add one")
     with _del_col:
         if st.button("🗑 Delete", key="rg_del_list_btn", use_container_width=True,
                      help="Remove this list from engagement targets"):
@@ -6700,14 +7218,18 @@ def page_reply_guy():
                 st.session_state.pop("rg_confirm_delete", None)
                 st.rerun()
 
+    _search_q = _list_data.get("search_query", "") if isinstance(_list_data, dict) else ""
     if do_load:
-        if not _list_id:
-            st.error("No X List ID for this list. Use + New List to set one.")
+        if not _list_id and not _search_q:
+            st.error("No X List ID or search query for this feed. Use + New to set one.")
         else:
             with st.spinner("Fetching posts..."):
                 from datetime import timezone as _tz, timedelta as _td
                 from dateutil import parser as _dtparser
-                raw_tweets = fetch_tweets_from_list(_list_id, count=100)
+                if _list_id:
+                    raw_tweets = fetch_tweets_from_list(_list_id, count=100)
+                else:
+                    raw_tweets = fetch_tweets(_search_q, count=50)
                 _now_utc = datetime.now(_tz.utc)
                 _cutoff  = _now_utc - _td(hours=24)
                 def _fresh(t):
@@ -6777,15 +7299,16 @@ def page_reply_guy():
         _insp_disabled = not bool(tweets_data)
         if st.button("⚡ Generate Ideas", use_container_width=True, type="primary", key="btn_inspiration", disabled=_insp_disabled):
             _lines = [f"@{t.get('_target_account','?')}: {t.get('text','')[:120]}" for t in tweets_data[:15]]
+            _insp_handle = get_current_handle()
             _prompt = (
-                "Based on these tweets from sports journalists and analysts:\n\n"
+                "Based on these tweets from accounts in the feed:\n\n"
                 + "\n".join(f"- {l}" for l in _lines)
-                + "\n\nGenerate 5 fresh, punchy tweet ideas for @tyler_polumbus — former NFL OL, Super Bowl 50 champion, Denver sports host. "
-                "Each should react to something in the feed, sound like an NFL insider, be under 280 chars. "
+                + f"\n\nGenerate 5 fresh, punchy tweet ideas for @{_insp_handle}. "
+                "Each should react to something in the feed, match the voice in the system prompt, be under 280 chars. "
                 "Numbered list. No hashtags. No emojis."
             )
             with st.spinner("Reading the feed..."):
-                st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=TYLER_CONTEXT, max_tokens=1000)
+                st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=build_user_context(), max_tokens=1000)
         if not tweets_data:
             st.caption("Load a feed first")
         if st.session_state.get("rg_inspiration_ideas"):
@@ -6860,7 +7383,7 @@ def page_reply_guy():
                     tid_ = t.get("id","")
                     key_ = f"rg_et_{tweets_data.index(t)}"
                     if not st.session_state.get(key_,"").strip():
-                        sug = call_claude(f'Tyler wants to reply to @{acc_}\'s tweet: "{text_[:150]}". Write ONE reply under 150 chars. Tyler\'s voice: direct, ellipsis, former NFL player. No emojis.', max_tokens=80)
+                        sug = call_claude(f'Reply to @{acc_}\'s tweet: "{text_[:150]}". Write ONE reply under 150 chars. Match the voice in the system prompt. No emojis.', system=build_user_context(), max_tokens=80)
                         st.session_state[key_] = sug
             st.rerun()
 
@@ -6962,11 +7485,11 @@ def page_reply_guy():
             if st.button(f"rg_etg_{i}", key=f"rg_etg_{i}"):
                 with st.spinner(""):
                     raw = call_claude(
-                        f'Tyler wants to reply to @{acc}\'s tweet: "{text[:150]}". '
+                        f'Reply to @{acc}\'s tweet: "{text[:150]}". '
                         f'Write exactly 3 different reply options, each under 150 chars. '
-                        f'Tyler\'s voice: direct, uses ellipsis, former NFL player. No emojis. '
+                        f'Match the voice in the system prompt. No emojis. '
                         f'Format: one reply per line, no numbering, no labels.',
-                        max_tokens=250)
+                        system=build_user_context(), max_tokens=250)
                     opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
                     if opts:
                         st.session_state[options_key] = opts
@@ -7016,8 +7539,8 @@ def page_reply_guy():
                 index=["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"].index(_viral_fmt),
                 key="rg_viral_fmt_sel", label_visibility="collapsed")
         with _vf2:
-            _viral_voice = st.selectbox("Voice", ["Default", "Critical", "Homer", "Sarcastic"],
-                index=["Default", "Critical", "Homer", "Sarcastic"].index(_viral_voice),
+            _viral_voice = st.selectbox("Voice", ["Default", "Critical", "Hype", "Sarcastic"],
+                index=["Default", "Critical", "Hype", "Sarcastic"].index(_viral_voice),
                 key="rg_viral_voice_sel", label_visibility="collapsed")
         with _vclose:
             if st.button("✕ Close", key="rg_viral_close", use_container_width=True):
@@ -7098,12 +7621,12 @@ def page_reply_guy():
                     if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options"):
                         with st.spinner(""):
                             raw = call_claude(
-                                f'Tyler originally tweeted: "{txt[:200]}"\n\n'
+                                f'Original tweet: "{txt[:200]}"\n\n'
                                 f'@{rauthor} replied: "{rtext[:200]}"\n\n'
-                                f'Write exactly 3 different reply options from Tyler. Under 150 chars each. '
-                                f'Direct, ellipsis style, former NFL player. No emojis. '
+                                f'Write exactly 3 different reply options. Under 150 chars each. '
+                                f'Match the voice in the system prompt. No emojis. '
                                 f'One reply per line, no numbering.',
-                                max_tokens=250)
+                                system=build_user_context(), max_tokens=250)
                             opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
                             if opts:
                                 st.session_state[opts_key] = opts
@@ -7520,12 +8043,22 @@ def _build_signal_brief(tweet):
     _today_playing = _get_denver_games_today()
     _best_sport = max(_sport_scores, key=_sport_scores.get) if max(_sport_scores.values()) > 0 else None
 
-    _angles = {
-        "NFL": "Tyler's lens as a former professional athlete and Denver media host",
-        "NBA": "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily",
-        "NHL": "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely",
-        "CFB": "Tyler's lens as a former professional athlete and Colorado insider",
-    }
+    if is_guest():
+        _topics = load_json("topics.json", {})
+        _niche_str = _topics.get("niche", "General").lower()
+        _angles = {
+            "NFL": f"@{get_current_handle()}'s perspective on football",
+            "NBA": f"@{get_current_handle()}'s perspective on basketball",
+            "NHL": f"@{get_current_handle()}'s perspective on hockey",
+            "CFB": f"@{get_current_handle()}'s perspective on college football",
+        }
+    else:
+        _angles = {
+            "NFL": "Tyler's lens as a former professional athlete and Denver media host",
+            "NBA": "Tyler's lens as a former professional athlete and Denver media host who watches the Nuggets daily",
+            "NHL": "Tyler's lens as a former professional athlete and Denver media host who follows the Avalanche closely",
+            "CFB": "Tyler's lens as a former professional athlete and Colorado insider",
+        }
 
     if _best_sport:
         _sport = _best_sport
@@ -7581,7 +8114,7 @@ def _signal_brief_dialog(_nonce):
     edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
 
     _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
     _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
     # Use session state defaults so changing voice/format doesn't close dialog
     _v_idx = _voice_opts.index(st.session_state.get("sig_voice", "Default")) if st.session_state.get("sig_voice", "Default") in _voice_opts else 0
@@ -7847,7 +8380,15 @@ page_fn = page_map.get(page)
 if page_fn:
     page_fn()
 
-st.markdown("""
+_footer_handle = get_current_handle()
+if is_guest():
+    st.markdown(f"""
+<div class="hq-footer">
+  <a href="https://x.com/{_footer_handle}" target="_blank">@{_footer_handle}</a>
+</div>
+""", unsafe_allow_html=True)
+else:
+    st.markdown("""
 <div class="hq-footer">
   <a href="https://x.com/tyler_polumbus" target="_blank">@tyler_polumbus</a>
   <a href="#" target="_blank">PhD Show</a>
