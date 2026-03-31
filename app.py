@@ -6293,45 +6293,68 @@ def sync_tweet_history(quick=False):
 
     handle = get_current_handle()
     if not handle:
+        _save_debug_status("tweet_sync", {
+            "status": "error",
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "detail": "No handle available",
+            "mode": "quick" if quick else "full",
+        })
         return []
 
-    if quick:
-        all_tweets = _fetch_window(f"from:{handle}")[:10]
-    else:
-        # Slide backwards in 7-day windows for up to 2 years (104 windows) until 500 tweets collected
-        # Smaller windows = fewer tweets per window = less pagination cutoff risk
-        all_tweets = []
-        seen_ids = set()
-        end_dt = datetime.now()
-        for _ in range(104):
-            start_dt = end_dt - timedelta(days=7)
-            since_str = start_dt.strftime("%Y-%m-%d")
-            until_str = end_dt.strftime("%Y-%m-%d")
-            query = f"from:{handle} since:{since_str} until:{until_str}"
-            window = _fetch_window(query)
-            for t in window:
-                tid = t.get("id", "")
-                if tid and tid not in seen_ids:
-                    seen_ids.add(tid)
-                    all_tweets.append(t)
-            end_dt = start_dt
-            _time.sleep(0.5)
-            if len(all_tweets) >= 500:
-                break
+    try:
+        if quick:
+            all_tweets = _fetch_window(f"from:{handle}")[:10]
+        else:
+            # Slide backwards in 7-day windows for up to 2 years (104 windows) until 500 tweets collected
+            # Smaller windows = fewer tweets per window = less pagination cutoff risk
+            all_tweets = []
+            seen_ids = set()
+            end_dt = datetime.now()
+            for _ in range(104):
+                start_dt = end_dt - timedelta(days=7)
+                since_str = start_dt.strftime("%Y-%m-%d")
+                until_str = end_dt.strftime("%Y-%m-%d")
+                query = f"from:{handle} since:{since_str} until:{until_str}"
+                window = _fetch_window(query)
+                for t in window:
+                    tid = t.get("id", "")
+                    if tid and tid not in seen_ids:
+                        seen_ids.add(tid)
+                        all_tweets.append(t)
+                end_dt = start_dt
+                _time.sleep(0.5)
+                if len(all_tweets) >= 500:
+                    break
 
-    # Merge with existing history (from Gist)
-    existing = _load_tweet_history_gist()
-    combined = all_tweets + existing
-    seen = set()
-    unique = []
-    for t in combined:
-        tid = t.get("id", "")
-        if tid and tid not in seen:
-            seen.add(tid)
-            unique.append(t)
-    unique = unique[:500]
-    _save_tweet_history_gist(unique)
-    return unique
+        # Merge with existing history (from Gist)
+        existing = _load_tweet_history_gist()
+        combined = all_tweets + existing
+        seen = set()
+        unique = []
+        for t in combined:
+            tid = t.get("id", "")
+            if tid and tid not in seen:
+                seen.add(tid)
+                unique.append(t)
+        unique = unique[:500]
+        _save_tweet_history_gist(unique)
+        _save_debug_status("tweet_sync", {
+            "status": "ok",
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "detail": f"{len(unique)} tweets available",
+            "mode": "quick" if quick else "full",
+            "handle": handle,
+        })
+        return unique
+    except Exception as e:
+        _save_debug_status("tweet_sync", {
+            "status": "error",
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "detail": str(e)[:300],
+            "mode": "quick" if quick else "full",
+            "handle": handle,
+        })
+        raise
 
 
 def _load_tweet_history_gist() -> list:
@@ -8415,15 +8438,30 @@ def page_signals_prompts():
     _need_fetch = _force_refresh or (time.time() - _cache_ts > 300) or not st.session_state.get("_sig_beat_tweets")
     if _need_fetch:
         with st.spinner("Scanning Twitter signals..."):
-            _start_beat = st.session_state.get("_sig_beat_cursor", "") if _force_refresh else ""
-            _start_nat = st.session_state.get("_sig_nat_cursor", "") if _force_refresh else ""
-            _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat)
-            _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat)
-            st.session_state["_sig_beat_tweets"] = _beat
-            st.session_state["_sig_nat_tweets"] = _nat
-            st.session_state["_sig_beat_cursor"] = _beat_cur
-            st.session_state["_sig_nat_cursor"] = _nat_cur
-            st.session_state["_sig_cache_ts"] = time.time()
+            try:
+                _start_beat = st.session_state.get("_sig_beat_cursor", "") if _force_refresh else ""
+                _start_nat = st.session_state.get("_sig_nat_cursor", "") if _force_refresh else ""
+                _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat)
+                _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat)
+                st.session_state["_sig_beat_tweets"] = _beat
+                st.session_state["_sig_nat_tweets"] = _nat
+                st.session_state["_sig_beat_cursor"] = _beat_cur
+                st.session_state["_sig_nat_cursor"] = _nat_cur
+                st.session_state["_sig_cache_ts"] = time.time()
+                _save_debug_status("signals_fetch", {
+                    "status": "ok",
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                    "detail": f"beat={len(_beat)} national={len(_nat)}",
+                    "force_refresh": bool(_force_refresh),
+                })
+            except Exception as e:
+                _save_debug_status("signals_fetch", {
+                    "status": "error",
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                    "detail": str(e)[:300],
+                    "force_refresh": bool(_force_refresh),
+                })
+                raise
 
     beat_tweets = _dedup_signals(st.session_state.get("_sig_beat_tweets", []))
     national_tweets = _dedup_signals(st.session_state.get("_sig_nat_tweets", []))
@@ -8569,6 +8607,30 @@ def _debug_count_json_list(filename: str) -> int:
 
 def _debug_events_path() -> Path:
     return get_data_dir() / "debug_events.json"
+
+
+def _debug_status_path() -> Path:
+    return get_data_dir() / "debug_status.json"
+
+
+def _load_debug_status() -> dict:
+    path = _debug_status_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_debug_status(key: str, payload: dict):
+    try:
+        state = _load_debug_status()
+        state[key] = payload
+        _debug_status_path().write_text(json.dumps(state, indent=2, default=str))
+    except Exception:
+        pass
 
 
 def _load_debug_events() -> list:
@@ -8767,6 +8829,37 @@ def page_debug_console():
     c2.metric("Current Page", st.session_state.get("current_page", "unknown"))
     c3.metric("Handle", get_current_handle() or "n/a")
     c4.metric("Tweet History", f"{_debug_count_json_list('tweet_history.json'):,}")
+
+    debug_status = _load_debug_status()
+    tweet_sync_status = debug_status.get("tweet_sync", {})
+    signals_fetch_status = debug_status.get("signals_fetch", {})
+    s1, s2 = st.columns(2)
+    with s1:
+        st.markdown("### Pipeline Status")
+        st.dataframe([
+            {
+                "pipeline": "Tweet sync",
+                "status": tweet_sync_status.get("status", "unknown"),
+                "at": tweet_sync_status.get("at", ""),
+                "detail": tweet_sync_status.get("detail", ""),
+                "mode": tweet_sync_status.get("mode", ""),
+            },
+            {
+                "pipeline": "Signals fetch",
+                "status": signals_fetch_status.get("status", "unknown"),
+                "at": signals_fetch_status.get("at", ""),
+                "detail": signals_fetch_status.get("detail", ""),
+                "mode": "force" if signals_fetch_status.get("force_refresh") else "normal",
+            },
+        ], use_container_width=True, hide_index=True)
+    with s2:
+        st.markdown("### Quick Checks")
+        st.dataframe([
+            {"check": "Signals cache age (s)", "value": round(max(0, time.time() - st.session_state.get("_sig_cache_ts", 0)), 1) if st.session_state.get("_sig_cache_ts") else "missing"},
+            {"check": "Signals beat cache", "value": len(st.session_state.get("_sig_beat_tweets", []))},
+            {"check": "Signals national cache", "value": len(st.session_state.get("_sig_nat_tweets", []))},
+            {"check": "Recent debug events", "value": len(_load_debug_events())},
+        ], use_container_width=True, hide_index=True)
 
     st.markdown("### AI Routing")
     anthropic_state = anthropic_get_state()
