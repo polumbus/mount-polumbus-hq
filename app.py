@@ -390,6 +390,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-cv_"], [class*="st-key-cc_fmt_"],
 [class*="st-key-coach_send"], [class*="st-key-coach_save_idea"],
 [class*="st-key-coach_repurpose"],
+[class*="st-key-aw_src_"], [class*="st-key-aw_tw_"], [class*="st-key-aw_bd_"],
 [class*="st-key-aw_scratch"], [class*="st-key-aw_outline"],
 [class*="st-key-aw_research_btn"], [class*="st-key-aw_save"],
 [class*="st-key-aw_show_articles"], [class*="st-key-aw_copy"],
@@ -5210,17 +5211,25 @@ def page_article_writer():
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
 
-    # --- Source pills ---
-    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Source</div>', unsafe_allow_html=True)
+    # --- Source as HTML buttons ---
     if "aw_source" not in st.session_state:
         st.session_state.aw_source = "Tweets"
     _src_opts = ["Tweets", "Raw Thoughts", "Scratch"]
-    _src_cols = st.columns(len(_src_opts))
+    _btn_on = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _btn_off = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _src_html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">'
+    _src_html += '<span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;display:flex;align-items:center;margin-right:4px;">Source</span>'
     for _si, _so in enumerate(_src_opts):
-        with _src_cols[_si]:
-            if st.button(_so, key=f"aw_src_{_si}", type="primary" if st.session_state.aw_source == _so else "secondary"):
-                st.session_state.aw_source = _so
-                st.rerun()
+        _cls = _btn_on if st.session_state.aw_source == _so else _btn_off
+        _src_html += f'<span class="cs-bot" data-bot="aw_src_{_si}" style="{_cls}">{_so}</span>'
+    _src_html += '</div>'
+    st.markdown(_src_html, unsafe_allow_html=True)
+
+    # Hidden source buttons
+    for _si, _so in enumerate(_src_opts):
+        if st.button(f"aw_src_{_si}", key=f"aw_src_{_si}"):
+            st.session_state.aw_source = _so
+            st.rerun()
 
     tweets = load_json("tweet_history.json", [])
     top_tweets = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:8] if tweets else []
@@ -5241,12 +5250,15 @@ def page_article_writer():
             views = tw.get("viewCount", 0)
             selected = st.session_state.aw_sel_tweet == i
             border = "border-left:3px solid #2DD4BF;" if selected else ""
+            _sel_style = "margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:inline-flex;align-items:center;"
+            _sel_cls = _sel_style + ("background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;" if selected else "background:#0a1220;border:1px solid #1a2a45;color:#5a7090;")
             st.markdown(f"""<div class="tweet-card" style="{border}">
                 <div class="tweet-num">{dt}</div>
                 <div style="color:#d8d8e8;font-size:13px;">{txt[:220]}{'...' if len(txt)>220 else ''}</div>
                 <div style="margin-top:6px;font-size:11px;color:#8888aa;">{likes} likes &middot; {rts} RTs &middot; {reps} replies &middot; {views:,} views</div>
+                <span class="cs-bot" data-bot="aw_tw_{i}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
             </div>""", unsafe_allow_html=True)
-            if st.button("Select", key=f"aw_tw_{i}", use_container_width=True):
+            if st.button(f"aw_tw_{i}", key=f"aw_tw_{i}"):
                 st.session_state.aw_sel_tweet = i
                 st.session_state.aw_sel_dump = None
                 st.session_state["aw_autogen"] = tw.get("text", "")
@@ -5263,11 +5275,14 @@ def page_article_writer():
                 preview = d.get("text", "")[:160]
                 selected = st.session_state.aw_sel_dump == j
                 border = "border-left:3px solid #2DD4BF;" if selected else ""
+                _sel_style = "margin-top:8px;height:32px;padding:0 14px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:inline-flex;align-items:center;"
+                _sel_cls = _sel_style + ("background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;" if selected else "background:#0a1220;border:1px solid #1a2a45;color:#5a7090;")
                 st.markdown(f"""<div class="tweet-card" style="{border}">
                     <div class="tweet-num">{ts}</div>
                     <div style="color:#d8d8e8;font-size:13px;">{preview}{'...' if len(d.get('text',''))>160 else ''}</div>
+                    <span class="cs-bot" data-bot="aw_bd_{j}" style="{_sel_cls}">{'Selected' if selected else 'Select'}</span>
                 </div>""", unsafe_allow_html=True)
-                if st.button("Select", key=f"aw_bd_{j}", use_container_width=True):
+                if st.button(f"aw_bd_{j}", key=f"aw_bd_{j}"):
                     st.session_state.aw_sel_dump = j
                     st.session_state.aw_sel_tweet = None
                     st.session_state["aw_autogen"] = d.get("text", "")
