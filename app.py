@@ -1417,6 +1417,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
             st.session_state["_ai_last_provider"] = "anthropic"
             st.session_state["_ai_last_source"] = "streamlit_direct"
             st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+            _append_debug_event("ai_call", "ok", "anthropic_direct", {"model": model})
             return result
         except urllib.error.HTTPError as e:
             if e.code == 429:
@@ -1426,10 +1427,12 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                     error=f"HTTP {e.code}",
                 )
                 st.session_state["_ai_last_error"] = f"anthropic_direct HTTP {e.code}"
+                _append_debug_event("ai_call", "error", f"anthropic_direct HTTP {e.code}", {"model": model})
         except Exception as e:
             if "Credit balance is too low" in str(e):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_direct", error=str(e))
             st.session_state["_ai_last_error"] = f"anthropic_direct {e}"
+            _append_debug_event("ai_call", "error", f"anthropic_direct {e}", {"model": model})
 
     # 2. Local CLI fallback
     if not anthropic_is_blocked() and os.path.exists(CLAUDE_CLI):
@@ -1448,11 +1451,13 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                 st.session_state["_ai_last_provider"] = "anthropic"
                 st.session_state["_ai_last_source"] = "streamlit_cli"
                 st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+                _append_debug_event("ai_call", "ok", "anthropic_cli", {"model": model})
                 return result.stdout.strip()
             if "Credit balance is too low" in (result.stderr or ""):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_cli", error=result.stderr.strip())
             if result.stderr:
                 st.session_state["_ai_last_error"] = f"anthropic_cli {result.stderr.strip()}"
+                _append_debug_event("ai_call", "error", f"anthropic_cli {result.stderr.strip()}", {"model": model})
         except Exception:
             pass
 
@@ -1463,9 +1468,11 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         st.session_state["_ai_last_provider"] = "proxy"
         st.session_state["_ai_last_source"] = "streamlit_proxy"
         st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+        _append_debug_event("ai_call", "ok", "proxy", {"model": model})
         return proxy_text
     except Exception as e:
         st.session_state["_ai_last_error"] = f"proxy {e}"
+        _append_debug_event("ai_call", "error", f"proxy {e}", {"model": model})
         pass
 
     # 4. ChatGPT OAuth fallback via local Codex login
@@ -1475,9 +1482,11 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         st.session_state["_ai_last_provider"] = "chatgpt"
         st.session_state["_ai_last_source"] = "local_codex_oauth"
         st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+        _append_debug_event("ai_call", "ok", "chatgpt_oauth", {"model": model})
         return chatgpt_text
     except Exception as e:
         st.session_state["_ai_last_error"] = f"chatgpt_oauth {e}"
+        _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
         pass
 
     return "AI unavailable — check Anthropic and ChatGPT credentials."
@@ -8558,6 +8567,78 @@ def _debug_count_json_list(filename: str) -> int:
         return 0
 
 
+def _debug_events_path() -> Path:
+    return get_data_dir() / "debug_events.json"
+
+
+def _load_debug_events() -> list:
+    path = _debug_events_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _append_debug_event(kind: str, status: str, detail: str, meta: dict | None = None):
+    try:
+        events = _load_debug_events()
+        events.append({
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "kind": kind,
+            "status": status,
+            "detail": detail[:300],
+            "meta": meta or {},
+        })
+        _debug_events_path().write_text(json.dumps(events[-60:], indent=2, default=str))
+    except Exception:
+        pass
+
+
+def _debug_file_info(filename: str) -> dict:
+    path = get_data_dir() / filename
+    info = {"file": filename, "exists": path.exists(), "count": "", "updated": ""}
+    if path.exists():
+        try:
+            info["updated"] = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+        except Exception:
+            pass
+        try:
+            payload = json.loads(path.read_text())
+            if isinstance(payload, list):
+                info["count"] = len(payload)
+            elif isinstance(payload, dict):
+                info["count"] = len(payload.keys())
+        except Exception:
+            info["count"] = "invalid json"
+    return info
+
+
+def _get_build_info() -> dict:
+    import platform
+    info = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "cwd": os.getcwd(),
+        "now": datetime.now().isoformat(timespec="seconds"),
+    }
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            info["git_sha"] = result.stdout.strip()
+    except Exception:
+        pass
+    for env_key in ["STREAMLIT_SERVER_PORT", "STREAMLIT_RUNTIME", "HOSTNAME"]:
+        if os.environ.get(env_key):
+            info[env_key.lower()] = os.environ.get(env_key)
+    return info
+
+
 def _get_proxy_health_debug() -> dict:
     import urllib.request
     proxy_url = _get_proxy_url()
@@ -8594,7 +8675,73 @@ def _run_owner_ai_probe() -> dict:
         result["error"] = str(e)
     result["elapsed_s"] = round(time.time() - started, 2)
     result["proxy_health"] = _get_proxy_health_debug()
+    _append_debug_event("probe", "ok" if result.get("ok") else "error", "live_ai_probe", {
+        "route": result.get("route", ""),
+        "provider": result.get("provider", ""),
+        "elapsed_s": result.get("elapsed_s", 0),
+    })
     return result
+
+
+def _run_debug_test_suite() -> list:
+    results = []
+
+    proxy_health = _get_proxy_health_debug()
+    results.append({
+        "test": "Proxy health",
+        "status": "ok" if proxy_health.get("ok") else "error",
+        "detail": proxy_health.get("proxy_url", "") if proxy_health.get("ok") else proxy_health.get("error", "unknown"),
+    })
+
+    try:
+        probe = _run_owner_ai_probe()
+        results.append({
+            "test": "AI route",
+            "status": "ok" if probe.get("ok") else "error",
+            "detail": probe.get("route", probe.get("error", "unknown")),
+        })
+    except Exception as e:
+        results.append({"test": "AI route", "status": "error", "detail": str(e)})
+
+    try:
+        info = fetch_user_info(get_current_handle())
+        detail = f"@{info.get('userName', '')}" if info.get("userName") else "no user payload"
+        results.append({"test": "Twitter API", "status": "ok" if info.get("userName") else "error", "detail": detail})
+    except Exception as e:
+        results.append({"test": "Twitter API", "status": "error", "detail": str(e)})
+
+    try:
+        gist_id = st.secrets.get("GIST_ID", "")
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        ok = resp.status_code == 200
+        results.append({"test": "Gist read", "status": "ok" if ok else "error", "detail": f"HTTP {resp.status_code}"})
+    except Exception as e:
+        results.append({"test": "Gist read", "status": "error", "detail": str(e)})
+
+    try:
+        gist_id = st.secrets.get("GIST_ID", "")
+        payload = json.dumps({
+            "files": {
+                "hq_debug_probe.json": {
+                    "content": json.dumps({"last_probe_at": datetime.now().isoformat(timespec="seconds")})
+                }
+            }
+        })
+        resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=10)
+        ok = resp.status_code == 200
+        results.append({"test": "Gist write", "status": "ok" if ok else "error", "detail": f"HTTP {resp.status_code}"})
+    except Exception as e:
+        results.append({"test": "Gist write", "status": "error", "detail": str(e)})
+
+    try:
+        tweet_count = _debug_count_json_list("tweet_history.json")
+        status = "ok" if tweet_count >= 20 else "warn"
+        results.append({"test": "Tweet history data", "status": status, "detail": f"{tweet_count} records"})
+    except Exception as e:
+        results.append({"test": "Tweet history data", "status": "error", "detail": str(e)})
+
+    _append_debug_event("suite", "ok", "debug_test_suite", {"results": results})
+    return results
 
 
 def page_debug_console():
@@ -8605,9 +8752,15 @@ def page_debug_console():
     st.markdown('<div class="main-header">DEBUG <span>CONSOLE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Owner-only visibility into routing, services, runtime state, and live backend probes.</div>', unsafe_allow_html=True)
 
-    if st.button("Run Live AI Probe", type="primary", use_container_width=True, key="debug_run_probe"):
-        with st.spinner("Running live AI probe..."):
-            st.session_state["_debug_last_probe"] = _run_owner_ai_probe()
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("Run Live AI Probe", type="primary", use_container_width=True, key="debug_run_probe"):
+            with st.spinner("Running live AI probe..."):
+                st.session_state["_debug_last_probe"] = _run_owner_ai_probe()
+    with b2:
+        if st.button("Run Backend Test Suite", use_container_width=True, key="debug_run_suite"):
+            with st.spinner("Running backend tests..."):
+                st.session_state["_debug_test_suite"] = _run_debug_test_suite()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Auth Role", st.session_state.get("auth_role", "unknown"))
@@ -8639,6 +8792,11 @@ def page_debug_console():
     elif proxy_health.get("error"):
         st.error(f"Proxy health failed: {proxy_health['error']}")
 
+    suite_results = st.session_state.get("_debug_test_suite")
+    if suite_results:
+        st.markdown("### Backend Test Suite")
+        st.dataframe(suite_results, use_container_width=True, hide_index=True)
+
     st.markdown("### Service Checks")
     service_rows = [
         {"service": "Anthropic refresh secret", "status": _debug_has_secret("CLAUDE_REFRESH_TOKEN")},
@@ -8667,6 +8825,31 @@ def page_debug_console():
         {"item": "Idea bank count", "value": str(_debug_count_json_list("inspiration.json"))},
     ]
     st.dataframe(runtime_rows, use_container_width=True, hide_index=True)
+
+    st.markdown("### Deploy Info")
+    st.json(_get_build_info())
+
+    st.markdown("### Data Health")
+    data_rows = [
+        _debug_file_info("tweet_history.json"),
+        _debug_file_info("saved_ideas.json"),
+        _debug_file_info("saved_articles.json"),
+        _debug_file_info("brain_dumps.json"),
+        _debug_file_info("coach_conversations.json"),
+        _debug_file_info("reply_progress.json"),
+        _debug_file_info("voice_styles.json"),
+        _debug_file_info("topics.json"),
+        _debug_file_info("benchmarks.json"),
+        _debug_file_info("voice_fingerprint.json"),
+    ]
+    st.dataframe(data_rows, use_container_width=True, hide_index=True)
+
+    st.markdown("### Recent Debug Events")
+    recent_events = list(reversed(_load_debug_events()[-20:]))
+    if recent_events:
+        st.dataframe(recent_events, use_container_width=True, hide_index=True)
+    else:
+        st.caption("No debug events recorded yet.")
 
     with st.expander("Session state snapshot", expanded=False):
         snapshot = {}
