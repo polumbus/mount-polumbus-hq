@@ -7622,41 +7622,46 @@ ANGLE: {_angle}"""
 
 @st.dialog("Signal Brief", width="large")
 def _signal_brief_dialog(_nonce):
-    """Popup for editing a signal brief and choosing voice/format before building."""
+    """Popup for editing a signal brief, building, and showing results — all in one dialog."""
     brief = st.session_state.get("sig_brief", "")
     if not brief:
         st.warning("No signal selected.")
         return
 
+    # If AI already ran, show results directly
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+        fmt = st.session_state.get("_sig_last_fmt", "Normal Tweet")
+        voice = st.session_state.get("_sig_last_voice", "Default")
+        _ci_output_panel_impl("build", brief, fmt, voice)
+        return
+
+    # Show brief + controls
     st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
     edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
 
     _custom_voices = load_json("voice_styles.json", [])
     _voice_opts = ["Default", "Critical", "Homer", "Sarcastic"] + [s["name"] for s in _custom_voices]
     _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+    # Use session state defaults so changing voice/format doesn't close dialog
+    _v_idx = _voice_opts.index(st.session_state.get("sig_voice", "Default")) if st.session_state.get("sig_voice", "Default") in _voice_opts else 0
+    _f_idx = _fmt_opts.index(st.session_state.get("sig_fmt", "Normal Tweet")) if st.session_state.get("sig_fmt", "Normal Tweet") in _fmt_opts else 1
     vc1, vc2 = st.columns(2)
     with vc1:
-        sig_voice = st.selectbox("Voice", _voice_opts, key="sig_voice")
+        sig_voice = st.selectbox("Voice", _voice_opts, index=_v_idx, key="sig_voice")
     with vc2:
-        sig_fmt = st.selectbox("Format", _fmt_opts, index=1, key="sig_fmt")
+        sig_fmt = st.selectbox("Format", _fmt_opts, index=_f_idx, key="sig_fmt")
 
     if st.button("⊞ Build", use_container_width=True, key="sig_build", type="primary"):
-        # Store pending build — AI will run on the main page OUTSIDE this dialog
+        final_brief = st.session_state.get("sig_brief_edit", edited_brief)
+        # Store voice/fmt for result display after rerun
+        st.session_state["_sig_last_fmt"] = sig_fmt
+        st.session_state["_sig_last_voice"] = sig_voice
         st.session_state["_sig_pending_build"] = {
-            "brief": st.session_state.get("sig_brief_edit", edited_brief),
+            "brief": final_brief,
             "fmt": sig_fmt,
             "voice": sig_voice,
         }
         st.rerun()
-
-
-@st.dialog("Signal Build", width="large")
-def _signal_result_dialog(_nonce):
-    """Display-only dialog showing AI build results from a signal brief."""
-    brief = st.session_state.get("sig_brief", "")
-    fmt = st.session_state.get("sig_fmt", "Normal Tweet")
-    voice = st.session_state.get("sig_voice", "Default")
-    _ci_output_panel_impl("build", brief, fmt, voice)
 
 
 def page_signals_prompts():
@@ -7688,7 +7693,7 @@ def page_signals_prompts():
             st.session_state.pop(_k, None)
         _signal_brief_dialog(str(time.time()))
 
-    # ── Handle pending build (AI runs HERE on main page, visible to user) ──
+    # ── Handle pending build (AI runs HERE on main page, then dialog reopens with results) ──
     _pending = st.session_state.pop("_sig_pending_build", None)
     if _pending:
         for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -7699,11 +7704,11 @@ def page_signals_prompts():
         _status.empty()
         st.session_state["sig_fmt"] = _pending["fmt"]
         st.session_state["sig_voice"] = _pending["voice"]
-        _signal_result_dialog(str(time.time()))
+        _signal_brief_dialog(str(time.time()))
 
     # ── Handle Redo from Signal Build dialog ──
     if st.session_state.pop("_sig_reopen_result", False):
-        _signal_result_dialog(str(time.time()))
+        _signal_brief_dialog(str(time.time()))
 
     # ── Next Page as dock button ──
     st.markdown('''<div class="cs-icon-dock cs-sig-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
