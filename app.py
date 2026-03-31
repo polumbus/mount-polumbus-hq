@@ -38,6 +38,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Prevent visual flash during Streamlit reruns (sidebar/content briefly unstyled)
+st.markdown(
+    '<style>.stApp{animation:mp-load .2s ease}@keyframes mp-load{from{opacity:0}to{opacity:1}}</style>',
+    unsafe_allow_html=True,
+)
+
 # ─── Constants ──────────────────────────────────────────────────────────────
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
@@ -1227,13 +1233,11 @@ _cookies = CookieController()
 
 # Cookie controller JS component needs one render cycle to initialize.
 # On the first render, getAll() returns None even if cookies exist.
-# Wait and rerun so cookie-based login restoration actually works.
+# Stop rendering and let the component's JS trigger a natural rerun.
 if "cookies_ready" not in st.session_state:
     _all_cookies = _cookies.getAll()
     if _all_cookies is None:
-        import time as _time_init
-        _time_init.sleep(0.5)
-        st.rerun()
+        st.stop()
     st.session_state["cookies_ready"] = True
 
 try:
