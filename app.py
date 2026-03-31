@@ -386,6 +386,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-ci_repurpose"], [class*="st-key-ci_engage"],
 [class*="st-key-ci_save"], [class*="st-key-ci_bank_btn"],
 [class*="st-key-ci_inspiration"], [class*="st-key-ci_post_direct"],
+[class*="st-key-coach_new"], [class*="st-key-coach_clear_all"],
+[class*="st-key-cv_"], [class*="st-key-cc_fmt_"],
 [class*="st-key-coach_send"], [class*="st-key-coach_save_idea"],
 [class*="st-key-coach_repurpose"],
 [class*="st-key-aw_scratch"], [class*="st-key-aw_outline"],
@@ -4953,8 +4955,8 @@ def page_compose_ideas():
 # PAGE: CONTENT COACH
 # ═══════════════════════════════════════════════════════════════════════════
 def page_content_coach():
-    st.markdown('<div class="main-header">CONTENT <span>COACH</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="tool-desc">{AMPLIFIER_IMG} <strong style="color:#2DD4BF;">Amplifier</strong> is your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="main-header">CONTENT COACH: {AMPLIFIER_IMG} <span>AMPLIFIER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
 
     # --- Initialize session state ---
     if "coach_conversations" not in st.session_state:
@@ -5029,41 +5031,55 @@ Your coaching style:
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
 
-    # --- Conversations pill row ---
-    _convs = st.session_state.coach_conversations[-8:]
-    if _convs or st.session_state.coach_current.get("messages"):
-        _conv_cols = st.columns(min(len(_convs) + 2, 10))
-        with _conv_cols[0]:
-            if st.button("+ New", key="coach_new", type="secondary"):
-                st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
-                st.rerun()
-        for _ci, conv in enumerate(reversed(_convs)):
-            if _ci + 1 < len(_conv_cols) - 1:
-                with _conv_cols[_ci + 1]:
-                    label = conv.get("title", "Untitled")[:16]
-                    is_active = conv.get("id") == st.session_state.coach_current.get("id")
-                    if st.button(label, key=f"cv_{conv['id']}", type="primary" if is_active else "secondary"):
-                        st.session_state.coach_current = json.loads(json.dumps(conv))
-                        st.rerun()
-        with _conv_cols[-1]:
-            if st.session_state.coach_conversations:
-                if st.button("Clear All", key="coach_clear_all", type="secondary"):
-                    st.session_state.coach_conversations = []
-                    st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
-                    save_json("coach_conversations.json", [])
-                    st.rerun()
+    # --- Conversations as HTML pills ---
+    _convs = st.session_state.coach_conversations[-6:]
+    _cur_id = st.session_state.coach_current.get("id")
+    _pill_on = "height:36px;padding:0 14px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _pill_off = "height:36px;padding:0 14px;border-radius:20px;font-size:11px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+    _conv_html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">'
+    _conv_html += f'<span class="cs-bot" data-bot="cc_new" style="{_pill_off}">+ New</span>'
+    for _ci, conv in enumerate(reversed(_convs)):
+        _label = conv.get("title", "Untitled")[:18]
+        _is_active = conv.get("id") == _cur_id
+        _conv_html += f'<span class="cs-bot" data-bot="cc_conv_{_ci}" style="{_pill_on if _is_active else _pill_off}">{_label}</span>'
+    if st.session_state.coach_conversations:
+        _conv_html += f'<span class="cs-bot" data-bot="cc_clear" style="{_pill_off}">Clear</span>'
+    _conv_html += '</div>'
+    st.markdown(_conv_html, unsafe_allow_html=True)
 
-    # --- Output Format pills ---
-    st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Output Format</div>', unsafe_allow_html=True)
+    # Hidden buttons for conversations
+    if st.button("cc_new", key="coach_new"):
+        st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
+        st.rerun()
+    for _ci, conv in enumerate(reversed(_convs)):
+        if st.button(f"cc_conv_{_ci}", key=f"cv_{conv['id']}"):
+            st.session_state.coach_current = json.loads(json.dumps(conv))
+            st.rerun()
+    if st.button("cc_clear", key="coach_clear_all"):
+        st.session_state.coach_conversations = []
+        st.session_state.coach_current = {"id": None, "messages": [], "title": "New Chat"}
+        save_json("coach_conversations.json", [])
+        st.rerun()
+
+    # --- Output Format as HTML pills ---
     _fmt_opts = ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"]
     if "coach_fmt_sel" not in st.session_state:
         st.session_state.coach_fmt_sel = "General Advice"
-    _fc = st.columns(len(_fmt_opts))
+    _cur_fmt = st.session_state.coach_fmt_sel
+    _fmt_html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px;">'
+    _fmt_html += '<span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;display:flex;align-items:center;margin-right:4px;">Format</span>'
     for _fi, _fo in enumerate(_fmt_opts):
-        with _fc[_fi]:
-            if st.button(_fo, key=f"cc_fmt_{_fi}", type="primary" if st.session_state.coach_fmt_sel == _fo else "secondary"):
-                st.session_state.coach_fmt_sel = _fo
-                st.rerun()
+        _short = _fo.replace("General ", "").replace(" Tweet", "")
+        _cls = _pill_on if _fo == _cur_fmt else _pill_off
+        _fmt_html += f'<span class="cs-bot" data-bot="cc_fmt_{_fi}" style="{_cls}">{_short}</span>'
+    _fmt_html += '</div>'
+    st.markdown(_fmt_html, unsafe_allow_html=True)
+
+    # Hidden buttons for format
+    for _fi, _fo in enumerate(_fmt_opts):
+        if st.button(f"cc_fmt_{_fi}", key=f"cc_fmt_{_fi}"):
+            st.session_state.coach_fmt_sel = _fo
+            st.rerun()
     coach_fmt = st.session_state.coach_fmt_sel
 
     include_history = st.toggle("Include Post History", value=not bool(st.session_state.coach_current["messages"]), key="coach_hist_toggle", help="Feed recent tweet history to the advisor for personalized advice")
