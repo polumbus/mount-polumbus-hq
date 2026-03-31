@@ -584,3 +584,143 @@ def get_sleeper_trending_for_inspo() -> list:
     except Exception:
         pass
     return lines
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Universal APIs — Work for any content niche
+# ═══════════════════════════════════════════════════════════════════════
+
+def get_google_trends(geo: str = "US") -> list:
+    """Get Google Trends daily trending searches. Free, no auth."""
+    try:
+        import xml.etree.ElementTree as ET
+        resp = requests.get(
+            f"https://trends.google.com/trending/rss?geo={geo}",
+            headers=_HEADERS, timeout=_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return []
+        root = ET.fromstring(resp.text)
+        items = root.findall(".//item")
+        results = []
+        for item in items[:15]:
+            title = item.find("title")
+            traffic = item.find("{https://trends.google.com/trending/rss}approx_traffic")
+            if title is not None and title.text:
+                line = f"TRENDING: {title.text}"
+                if traffic is not None and traffic.text:
+                    line += f" ({traffic.text} searches)"
+                results.append(line)
+        return results
+    except Exception:
+        return []
+
+
+# Niche → subreddit mapping for Reddit integration
+_NICHE_SUBREDDITS = {
+    "sports": ["nfl", "nba", "hockey", "CFB", "sports"],
+    "tech": ["technology", "programming", "artificial", "startups", "gadgets"],
+    "finance": ["wallstreetbets", "stocks", "CryptoCurrency", "investing", "finance"],
+    "fitness": ["fitness", "bodybuilding", "running", "nutrition", "loseit"],
+    "entertainment": ["entertainment", "movies", "television", "Music", "popculture"],
+    "politics": ["politics", "worldnews", "news", "geopolitics"],
+    "business": ["Entrepreneur", "smallbusiness", "marketing", "startups", "SaaS"],
+    "gaming": ["gaming", "pcgaming", "Games", "esports", "Steam"],
+    "music": ["Music", "hiphopheads", "indieheads", "WeAreTheMusicMakers"],
+    "food": ["food", "Cooking", "MealPrepSunday", "EatCheapAndHealthy"],
+    "general": ["popular", "todayilearned", "Futurology"],
+}
+
+
+def get_reddit_trending(niche: str = "general", topics: list = None) -> list:
+    """Get trending Reddit posts for a niche. Free, no auth needed."""
+    niche_key = niche.lower().split("/")[0].strip()
+    subreddits = _NICHE_SUBREDDITS.get(niche_key, _NICHE_SUBREDDITS["general"])[:3]
+    results = []
+    for sub in subreddits:
+        try:
+            resp = requests.get(
+                f"https://www.reddit.com/r/{sub}/hot.json?limit=5",
+                headers={"User-Agent": "MountPolumbusHQ/1.0"},
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code != 200:
+                continue
+            posts = resp.json().get("data", {}).get("children", [])
+            for p in posts:
+                d = p.get("data", {})
+                title = d.get("title", "")
+                ups = d.get("ups", 0)
+                comments = d.get("num_comments", 0)
+                if title and ups > 50 and not d.get("stickied"):
+                    results.append(f"r/{sub}: {title} ({ups:,} upvotes, {comments:,} comments)")
+        except Exception:
+            continue
+    return results[:12]
+
+
+def get_newsapi_headlines(topics: list = None, niche: str = "general") -> list:
+    """Get headlines from NewsAPI.org. Requires NEWSAPI_KEY in secrets."""
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("NEWSAPI_KEY", "")
+        if not api_key:
+            return []
+        # Build query from topics or niche
+        if topics:
+            q = " OR ".join(topics[:3])
+        else:
+            q = niche.split("/")[0].strip()
+        resp = requests.get(
+            "https://newsapi.org/v2/everything",
+            params={
+                "q": q,
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 10,
+            },
+            headers={"X-Api-Key": api_key},
+            timeout=_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return []
+        articles = resp.json().get("articles", [])
+        results = []
+        for a in articles:
+            title = a.get("title", "")
+            source = a.get("source", {}).get("name", "")
+            if title and "[Removed]" not in title:
+                results.append(f"{title}" + (f" — {source}" if source else ""))
+        return results
+    except Exception:
+        return []
+
+
+def get_coingecko_trending() -> list:
+    """Get trending crypto coins from CoinGecko. Free, no auth."""
+    try:
+        resp = requests.get(
+            "https://api.coingecko.com/api/v3/search/trending",
+            headers=_HEADERS, timeout=_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        results = []
+        # Trending coins
+        for c in data.get("coins", [])[:7]:
+            item = c.get("item", {})
+            name = item.get("name", "")
+            symbol = item.get("symbol", "")
+            rank = item.get("market_cap_rank", "?")
+            price_change = item.get("data", {}).get("price_change_percentage_24h", {}).get("usd")
+            line = f"TRENDING CRYPTO: {name} (${symbol})"
+            if rank and rank != "?":
+                line += f" — rank #{rank}"
+            if price_change is not None:
+                direction = "up" if price_change > 0 else "down"
+                line += f", {direction} {abs(price_change):.1f}% in 24h"
+            results.append(line)
+        return results
+    except Exception:
+        return []
