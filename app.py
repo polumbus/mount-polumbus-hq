@@ -1225,6 +1225,17 @@ from streamlit_cookies_controller import CookieController
 
 _cookies = CookieController()
 
+# Cookie controller JS component needs one render cycle to initialize.
+# On the first render, getAll() returns None even if cookies exist.
+# Wait and rerun so cookie-based login restoration actually works.
+if "cookies_ready" not in st.session_state:
+    _all_cookies = _cookies.getAll()
+    if _all_cookies is None:
+        import time as _time_init
+        _time_init.sleep(0.5)
+        st.rerun()
+    st.session_state["cookies_ready"] = True
+
 try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
 except (KeyError, FileNotFoundError):
@@ -2077,6 +2088,7 @@ with st.sidebar:
         st.session_state.pop("onboarding_complete", None)
         st.session_state.pop("onboarding_step", None)
         _clear_auth_cookie()
+        st.session_state.pop("cookies_ready", None)
         for _k in ["token", "user", "guest_id"]:
             if _k in st.query_params:
                 del st.query_params[_k]
