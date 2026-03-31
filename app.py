@@ -7135,8 +7135,8 @@ def page_inspiration():
                 metrics += f"Views: {item['views']:,}"
             import urllib.parse as _urlparse
             _ib_encoded = _urlparse.quote(item.get("text", ""), safe="")
-            _use_style = "height:44px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background-color:#0e1a2e;border:1px solid rgba(45,212,191,0.3);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
-            _rep_style = "height:44px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background-color:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
+            _use_style = "height:44px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background-color:#0a1220;border:1px solid rgba(45,212,191,0.3);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
+            _rep_style = "height:44px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background-color:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;margin-right:6px;"
             _del_style = "height:32px;padding:0 10px;border-radius:10px;font-size:10px;font-weight:600;background:transparent;border:1px solid rgba(248,113,113,0.2);color:rgba(248,113,113,0.5);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;"
             st.markdown(f"""<div class="tweet-card" style="position:relative;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
