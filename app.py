@@ -23,6 +23,7 @@ from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
     block_for as anthropic_block_for,
+    get_state as anthropic_get_state,
     is_blocked as anthropic_is_blocked,
     mark_available as anthropic_mark_available,
     mark_rate_limited as anthropic_mark_rate_limited,
@@ -1405,11 +1406,17 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     if system is None:
         system = get_voice_context()
 
+    st.session_state["_ai_last_model"] = model
+
     # 1. Direct OAuth HTTP — fastest, no subprocess overhead
     if not anthropic_is_blocked():
         try:
             result = _call_claude_direct(prompt, system or "", max_tokens, model)
             anthropic_mark_available("streamlit_direct")
+            st.session_state["_ai_last_route"] = "anthropic_direct"
+            st.session_state["_ai_last_provider"] = "anthropic"
+            st.session_state["_ai_last_source"] = "streamlit_direct"
+            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
             return result
         except urllib.error.HTTPError as e:
             if e.code == 429:
@@ -1418,9 +1425,11 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                     source="streamlit_direct",
                     error=f"HTTP {e.code}",
                 )
+                st.session_state["_ai_last_error"] = f"anthropic_direct HTTP {e.code}"
         except Exception as e:
             if "Credit balance is too low" in str(e):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_direct", error=str(e))
+            st.session_state["_ai_last_error"] = f"anthropic_direct {e}"
 
     # 2. Local CLI fallback
     if not anthropic_is_blocked() and os.path.exists(CLAUDE_CLI):
@@ -1435,22 +1444,40 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
             )
             if result.returncode == 0 and result.stdout.strip():
                 anthropic_mark_available("streamlit_cli")
+                st.session_state["_ai_last_route"] = "anthropic_cli"
+                st.session_state["_ai_last_provider"] = "anthropic"
+                st.session_state["_ai_last_source"] = "streamlit_cli"
+                st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
                 return result.stdout.strip()
             if "Credit balance is too low" in (result.stderr or ""):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_cli", error=result.stderr.strip())
+            if result.stderr:
+                st.session_state["_ai_last_error"] = f"anthropic_cli {result.stderr.strip()}"
         except Exception:
             pass
 
     # 3. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
-        return _call_claude_proxy(prompt, system or "", max_tokens, model)
-    except Exception:
+        proxy_text = _call_claude_proxy(prompt, system or "", max_tokens, model)
+        st.session_state["_ai_last_route"] = "proxy"
+        st.session_state["_ai_last_provider"] = "proxy"
+        st.session_state["_ai_last_source"] = "streamlit_proxy"
+        st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+        return proxy_text
+    except Exception as e:
+        st.session_state["_ai_last_error"] = f"proxy {e}"
         pass
 
     # 4. ChatGPT OAuth fallback via local Codex login
     try:
-        return call_chatgpt_oauth(prompt, system or "")
-    except Exception:
+        chatgpt_text = call_chatgpt_oauth(prompt, system or "")
+        st.session_state["_ai_last_route"] = "chatgpt_oauth"
+        st.session_state["_ai_last_provider"] = "chatgpt"
+        st.session_state["_ai_last_source"] = "local_codex_oauth"
+        st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+        return chatgpt_text
+    except Exception as e:
+        st.session_state["_ai_last_error"] = f"chatgpt_oauth {e}"
         pass
 
     return "AI unavailable — check Anthropic and ChatGPT credentials."
@@ -1782,6 +1809,11 @@ if not st.session_state["auth_role"]:
 def is_guest() -> bool:
     """Returns True if current user is a guest (beta tester)."""
     return st.session_state.get("auth_role") == "guest"
+
+
+def is_owner() -> bool:
+    """Returns True if current user is the owner account."""
+    return st.session_state.get("auth_role") == "owner"
 
 
 def get_current_handle() -> str:
@@ -2157,6 +2189,27 @@ def _act(name):
 # Token prefix for sidebar links — ensures auth survives page navigation
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
+_owner_debug_zone = ""
+if is_owner():
+    _owner_debug_zone = f"""
+
+  <div class="mp-zone mp-zone-insights">
+    <div class="mp-zone-label">OWNER</div>
+    <a href="/?{_tok_qp}page=Debug+Console" class="mp-ico {_act('Debug Console')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#91A2B2" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+    </a>
+    <div class="mp-panel">
+      <div class="mp-panel-header">OWNER</div>
+      <a href="/?{_tok_qp}page=Debug+Console" class="mp-panel-item {_act('Debug Console')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        Debug Console
+      </a>
+    </div>
+  </div>
+"""
 
 _sidebar_html = f"""
 <style>
@@ -2415,6 +2468,7 @@ _sidebar_html = f"""
       </a>
     </div>
   </div>
+  {_owner_debug_zone}
 
   <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
 </div>
@@ -2454,6 +2508,8 @@ with st.sidebar:
     _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
                   "Signals & Prompts", "Reply Mode", "Idea Bank",
                   "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
+    if is_owner():
+        _all_pages.append("Debug Console")
     def _nav_to(pg):
         st.session_state.current_page = pg
         st.session_state._nav_override = True
@@ -2631,6 +2687,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Account+Audit" target="_self" style="{_lnk}">Account Audit</a>
   <a href="/?{_tok_qp}page=My+Stats" target="_self" style="{_lnk}">My Stats</a>
   <a href="/?{_tok_qp}page=Profile+Analyzer" target="_self" style="{_lnk}">Profile Analyzer</a>
+  {f'<div style="{_sec}">OWNER</div><a href="/?{_tok_qp}page=Debug+Console" target="_self" style="{_lnk}">Debug Console</a>' if is_owner() else ''}
 </div>
 <label for="_mob_chk" id="_mob_ham">
   <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
@@ -2644,6 +2701,9 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
+if page == "Debug Console" and not is_owner():
+    page = "Creator Studio"
+    st.session_state.current_page = page
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -8471,6 +8531,160 @@ def page_signals_prompts():
     </script>""", height=0)
 
 
+def _mask_debug_value(value: str, keep: int = 4) -> str:
+    if not value:
+        return "missing"
+    if len(value) <= keep * 2:
+        return "*" * len(value)
+    return f"{value[:keep]}...{value[-keep:]}"
+
+
+def _debug_has_secret(name: str) -> bool:
+    try:
+        return bool(st.secrets.get(name, ""))
+    except Exception:
+        return False
+
+
+def _debug_exists(path_str: str) -> bool:
+    return Path(os.path.expanduser(path_str)).exists()
+
+
+def _debug_count_json_list(filename: str) -> int:
+    try:
+        data = load_json(filename, [])
+        return len(data) if isinstance(data, list) else 0
+    except Exception:
+        return 0
+
+
+def _get_proxy_health_debug() -> dict:
+    import urllib.request
+    proxy_url = _get_proxy_url()
+    if not proxy_url:
+        return {"ok": False, "error": "No proxy URL configured"}
+    try:
+        req = urllib.request.Request(
+            f"{proxy_url.rstrip('/')}/health",
+            headers={"ngrok-skip-browser-warning": "1"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        return {"ok": True, "proxy_url": proxy_url, "data": data}
+    except Exception as e:
+        return {"ok": False, "proxy_url": proxy_url, "error": str(e)}
+
+
+def _run_owner_ai_probe() -> dict:
+    started = time.time()
+    result = {
+        "at": datetime.now().isoformat(timespec="seconds"),
+        "model": "claude-sonnet-4-6",
+    }
+    try:
+        text = call_claude("Reply with exactly: DEBUG_OK", system="You are terse.", max_tokens=12, model="claude-sonnet-4-6")
+        result["ok"] = True
+        result["text"] = text.strip()
+        result["route"] = st.session_state.get("_ai_last_route", "unknown")
+        result["provider"] = st.session_state.get("_ai_last_provider", "unknown")
+        result["source"] = st.session_state.get("_ai_last_source", "unknown")
+    except Exception as e:
+        result["ok"] = False
+        result["error"] = str(e)
+    result["elapsed_s"] = round(time.time() - started, 2)
+    result["proxy_health"] = _get_proxy_health_debug()
+    return result
+
+
+def page_debug_console():
+    if not is_owner():
+        st.warning("Owner access required.")
+        return
+
+    st.markdown('<div class="main-header">DEBUG <span>CONSOLE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Owner-only visibility into routing, services, runtime state, and live backend probes.</div>', unsafe_allow_html=True)
+
+    if st.button("Run Live AI Probe", type="primary", use_container_width=True, key="debug_run_probe"):
+        with st.spinner("Running live AI probe..."):
+            st.session_state["_debug_last_probe"] = _run_owner_ai_probe()
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Auth Role", st.session_state.get("auth_role", "unknown"))
+    c2.metric("Current Page", st.session_state.get("current_page", "unknown"))
+    c3.metric("Handle", get_current_handle() or "n/a")
+    c4.metric("Tweet History", f"{_debug_count_json_list('tweet_history.json'):,}")
+
+    st.markdown("### AI Routing")
+    anthropic_state = anthropic_get_state()
+    proxy_health = _get_proxy_health_debug()
+    ai_rows = [
+        {"item": "Primary model", "value": st.session_state.get("_ai_last_model", "claude-sonnet-4-6"), "notes": "default app model"},
+        {"item": "Last route used", "value": st.session_state.get("_ai_last_route", "no AI call yet"), "notes": st.session_state.get("_ai_last_provider", "")},
+        {"item": "Last route source", "value": st.session_state.get("_ai_last_source", "unknown"), "notes": st.session_state.get("_ai_last_at", "")},
+        {"item": "Last AI error", "value": st.session_state.get("_ai_last_error", "") or "none", "notes": ""},
+        {"item": "Anthropic blocked", "value": str(bool(anthropic_state.get("blocked_until", 0) > time.time())), "notes": anthropic_state.get("source", "")},
+        {"item": "Anthropic last error", "value": anthropic_state.get("last_error", "") or "none", "notes": ""},
+        {"item": "Proxy health", "value": "ok" if proxy_health.get("ok") else "down", "notes": proxy_health.get("proxy_url", "")},
+    ]
+    st.dataframe(ai_rows, use_container_width=True, hide_index=True)
+
+    last_probe = st.session_state.get("_debug_last_probe")
+    if last_probe:
+        with st.expander("Last live probe", expanded=True):
+            st.json(last_probe)
+    if proxy_health.get("ok"):
+        with st.expander("Proxy health payload", expanded=False):
+            st.json(proxy_health.get("data", {}))
+    elif proxy_health.get("error"):
+        st.error(f"Proxy health failed: {proxy_health['error']}")
+
+    st.markdown("### Service Checks")
+    service_rows = [
+        {"service": "Anthropic refresh secret", "status": _debug_has_secret("CLAUDE_REFRESH_TOKEN")},
+        {"service": "Proxy URL secret", "status": _debug_has_secret("CLAUDE_PROXY_URL")},
+        {"service": "Proxy key secret", "status": _debug_has_secret("CLAUDE_PROXY_KEY")},
+        {"service": "GitHub PAT", "status": _debug_has_secret("GITHUB_PAT")},
+        {"service": "Gist ID", "status": _debug_has_secret("GIST_ID")},
+        {"service": "Twitter API key", "status": _debug_has_secret("TWITTER_API_IO_KEY") or bool(TWITTER_API_IO_KEY)},
+        {"service": "Perplexity key", "status": _debug_has_secret("PERPLEXITY_API_KEY")},
+        {"service": "Odds key", "status": _debug_has_secret("ODDS_API_KEY")},
+        {"service": "News API key", "status": _debug_has_secret("NEWSAPI_KEY")},
+        {"service": "Local Claude creds", "status": _debug_exists("~/.claude/.credentials.json")},
+        {"service": "Local Codex auth", "status": _debug_exists("~/.codex/auth.json")},
+    ]
+    st.dataframe(service_rows, use_container_width=True, hide_index=True)
+
+    st.markdown("### Runtime State")
+    runtime_rows = [
+        {"item": "Data dir", "value": str(get_data_dir())},
+        {"item": "Proxy URL", "value": proxy_health.get("proxy_url") or _get_proxy_url() or "missing"},
+        {"item": "Auth token", "value": _mask_debug_value(st.session_state.get("_auth_token", ""))},
+        {"item": "Auth username", "value": st.session_state.get("auth_username", "") or "owner"},
+        {"item": "OAuth last error", "value": st.session_state.get("_oauth_last_error", "") or "none"},
+        {"item": "Signals beat cache", "value": str(len(st.session_state.get("_sig_beat_tweets", [])))},
+        {"item": "Signals national cache", "value": str(len(st.session_state.get("_sig_nat_tweets", [])))},
+        {"item": "Idea bank count", "value": str(_debug_count_json_list("inspiration.json"))},
+    ]
+    st.dataframe(runtime_rows, use_container_width=True, hide_index=True)
+
+    with st.expander("Session state snapshot", expanded=False):
+        snapshot = {}
+        for key in sorted(st.session_state.keys()):
+            value = st.session_state.get(key)
+            if "token" in key.lower() or "password" in key.lower():
+                snapshot[key] = _mask_debug_value(str(value))
+            else:
+                snapshot[key] = str(value)
+        st.json(snapshot)
+
+    with st.expander("Query params", expanded=False):
+        masked_qp = {}
+        for key, value in st.query_params.items():
+            masked_qp[key] = _mask_debug_value(str(value)) if key == "token" else value
+        st.json(masked_qp)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
@@ -8488,6 +8702,8 @@ page_map = {
     "Idea Bank": page_inspiration,
     "Signals & Prompts": page_signals_prompts,
 }
+if is_owner():
+    page_map["Debug Console"] = page_debug_console
 
 # Sync strategy:
 # @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
