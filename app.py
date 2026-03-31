@@ -536,7 +536,7 @@ hr { border-color: #14203A !important; }
 [data-testid="stExpander"] summary p { color: #00E5CC !important; }
 
 </style>
-""", unsafe_allow_html=True)
+"""
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
