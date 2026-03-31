@@ -618,10 +618,65 @@ hr { border-color: #14203A !important; }
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+def _analyze_voice_fingerprint(tweets: list) -> dict:
+    """Analyze a user's tweets to build a voice fingerprint — language level,
+    tone markers, sentence patterns. Used to make AI output actually sound
+    like the user, not a sanitized version of them."""
+    if not tweets:
+        return {}
+
+    originals = [t.get("text", "") for t in tweets
+                 if not t.get("text", "").startswith("RT ") and len(t.get("text", "")) > 20]
+    if not originals:
+        return {}
+
+    all_text = " ".join(originals).lower()
+    total = len(originals)
+
+    # Profanity / strong language detection
+    _profanity = ["fuck", "shit", "damn", "hell", "ass ", "bitch", "crap", "piss", "bastard", "bullshit"]
+    _strong_opinion = ["idiots", "moron", "clown", "joke", "pathetic", "garbage", "trash", "scam", "fraud", "corrupt", "pansy", "coward"]
+    _casual = ["lol", "lmao", "bruh", "bro ", "dude", "ngl", "tbh", "imo", "fr ", "smh", "wtf"]
+
+    profanity_count = sum(1 for t in originals if any(w in t.lower() for w in _profanity))
+    strong_count = sum(1 for t in originals if any(w in t.lower() for w in _strong_opinion))
+    casual_count = sum(1 for t in originals if any(w in t.lower() for w in _casual))
+
+    profanity_pct = round(profanity_count / total * 100)
+    strong_pct = round(strong_count / total * 100)
+    casual_pct = round(casual_count / total * 100)
+
+    # Determine language level
+    if profanity_pct >= 10:
+        lang_level = "raw"  # regularly uses profanity
+    elif profanity_pct >= 3 or strong_pct >= 15:
+        lang_level = "unfiltered"  # occasional profanity, frequent strong opinions
+    elif strong_pct >= 5 or casual_pct >= 15:
+        lang_level = "blunt"  # strong opinions, casual tone
+    else:
+        lang_level = "clean"  # professional, no profanity
+
+    # Detect tone patterns
+    question_pct = round(sum(1 for t in originals if "?" in t) / total * 100)
+    exclaim_pct = round(sum(1 for t in originals if "!" in t) / total * 100)
+    avg_len = sum(len(t) for t in originals) // total
+
+    return {
+        "lang_level": lang_level,
+        "profanity_pct": profanity_pct,
+        "strong_opinion_pct": strong_pct,
+        "casual_pct": casual_pct,
+        "question_pct": question_pct,
+        "exclaim_pct": exclaim_pct,
+        "avg_length": avg_len,
+    }
+
+
 def build_user_context() -> str:
     """Return the base system prompt for the current user.
     Owner: returns TYLER_CONTEXT (unchanged).
-    Guest: builds a generic creator context from their profile + tweet data."""
+    Guest: builds a generic creator context from their profile + tweet data,
+    including their actual language level and tone."""
     if not is_guest():
         return TYLER_CONTEXT
 
@@ -635,6 +690,35 @@ def build_user_context() -> str:
     topic_list = topics.get("topics", [])
     topics_str = ", ".join(topic_list) if topic_list else niche
 
+    # Analyze voice fingerprint from tweet history
+    tweets = load_json("tweet_history.json", [])
+    vfp = _analyze_voice_fingerprint(tweets)
+
+    # Build language level instruction
+    lang = vfp.get("lang_level", "clean")
+    if lang == "raw":
+        lang_instruction = f"""- @{handle} uses raw, unfiltered language including profanity. This is CENTRAL to their voice.
+- You MUST match this language level. Sanitizing their voice is a failure. If they say "fuck" you say "fuck."
+- Do NOT tone down, soften, or clean up the language. Write exactly how they write."""
+    elif lang == "unfiltered":
+        lang_instruction = f"""- @{handle} is blunt and uses strong language. Occasional profanity is part of the voice.
+- Do NOT sanitize or soften. If the moment calls for strong language, use it. This person does not hedge."""
+    elif lang == "blunt":
+        lang_instruction = f"""- @{handle} is direct and opinionated. No corporate polish, no diplomatic hedging.
+- Strong opinions stated plainly. Doesn't sugarcoat."""
+    else:
+        lang_instruction = f"""- @{handle} keeps it professional but direct. No corporate fluff."""
+
+    # Tone details
+    tone_notes = []
+    if vfp.get("question_pct", 0) > 25:
+        tone_notes.append(f"- Uses questions frequently ({vfp['question_pct']}% of tweets) — rhetorical questions are a signature")
+    if vfp.get("casual_pct", 0) > 10:
+        tone_notes.append("- Casual/internet-speak tone (lol, bruh, ngl, etc.) — keep it conversational")
+    if vfp.get("exclaim_pct", 0) > 20:
+        tone_notes.append("- High energy — exclamation marks are part of the voice")
+    tone_block = "\n".join(tone_notes)
+
     return f"""You are a content assistant for @{handle} ({name}) — a content creator focused on {niche.lower()}.
 
 Profile:
@@ -643,15 +727,19 @@ Profile:
 - Key topics: {topics_str}
 {f'- Bio: {bio}' if bio else ''}
 
-Voice on X:
-- Match @{handle}'s natural voice from their tweet history (provided separately)
+Voice on X — CRITICAL (read their actual tweets below and MATCH their exact tone):
+{lang_instruction}
 - Short punchy sentences. Never sound like a press release or corporate account.
 - Write in first person as @{handle}
-- Use hooks that drive engagement: numbers, provocative openers, strong opinions
+- The tweets below show EXACTLY how this person writes. Match that energy, vocabulary, and attitude.
+{tone_block}
+
+Format rules:
 - Keep tweets under 280 characters. Under 200 when possible for max punch.
 - No hashtags unless specifically requested
+- No emojis in output. Write plain text only.
 
-IMPORTANT: Never use emojis in your output. Write plain text only."""
+VOICE MATCHING IS THE #1 PRIORITY. A tweet that sounds like @{handle} actually wrote it is always better than a "well-crafted" tweet that sounds like an AI."""
 
 
 @st.cache_data(ttl=3600)
@@ -2066,6 +2154,10 @@ if is_guest():
                     "analyzed_at": datetime.now().isoformat(),
                 }
                 save_json("benchmarks.json", _benchmarks)
+                # Build and save voice fingerprint (language level, tone markers)
+                _a_bar.progress(80, text="Fingerprinting voice...")
+                _vfp = _analyze_voice_fingerprint(load_json("tweet_history.json", []))
+                save_json("voice_fingerprint.json", _vfp)
                 _a_bar.progress(100, text="Analysis complete")
                 import time as _t; _t.sleep(0.5)
                 # Mark complete
