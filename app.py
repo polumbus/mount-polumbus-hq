@@ -5240,10 +5240,26 @@ def page_article_writer():
     if "aw_sel_dump" not in st.session_state:
         st.session_state.aw_sel_dump = None
 
-    # ── Two-column: cards left, action dock right (sticky) ──
-    _aw_left, _aw_right = st.columns([3, 1])
+    # ── Action dock: horizontal, between source pills and cards ──
+    st.markdown('''<div class="cs-icon-dock cs-aw-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
+      <div class="cs-idock-btn cs-idock-primary" data-dock="aw_write" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#060A12" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#060A12" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">WRITE</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="aw_outline" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="12" x2="21" y2="12" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="18" x2="21" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">OUTLINE</span>
+      </div>
+      <div class="cs-idock-btn" data-dock="aw_research" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#5a7090" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#5a7090" stroke-width="2"/></svg>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">RESEARCH</span>
+      </div>
+    </div>''', unsafe_allow_html=True)
 
-    with _aw_left:
+    st.markdown('<div style="height:1px;background:#1a2a45;margin:8px 0 14px;"></div>', unsafe_allow_html=True)
+
+    # ── Source cards ──
+    if True:
         if st.session_state.aw_source == "Tweets":
             for i, tw in enumerate(top_tweets):
                 txt = tw.get("text", "")
@@ -5303,25 +5319,7 @@ def page_article_writer():
             if _rr.get("citations"):
                 st.markdown(f'<div style="font-size:10px;color:#3a5070;margin-bottom:8px;">Sources: {", ".join(str(c) for c in _rr["citations"][:5])}</div>', unsafe_allow_html=True)
 
-    with _aw_right:
-        # ── Sticky action dock (vertical) ──
-        st.markdown('''<div style="position:sticky;top:80px;">
-        <div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin:0 0 8px;text-align:center;">ACTIONS</div>
-        <div class="cs-icon-dock cs-aw-dock" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin-bottom:16px;">
-      <div class="cs-idock-btn cs-idock-primary" data-dock="aw_write" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#060A12" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#060A12" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">WRITE</span>
-      </div>
-      <div class="cs-idock-btn" data-dock="aw_outline" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="12" x2="21" y2="12" stroke="#5a7090" stroke-width="2"/><line x1="8" y1="18" x2="21" y2="18" stroke="#5a7090" stroke-width="2"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">OUTLINE</span>
-      </div>
-      <div class="cs-idock-btn" data-dock="aw_research" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#5a7090" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#5a7090" stroke-width="2"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">RESEARCH</span>
-      </div>
-    </div>
-    </div>''', unsafe_allow_html=True)
+    # (action dock rendered above the cards)
 
     # Auto-generate when tweet/dump is selected
     if st.session_state.get("aw_autogen"):
