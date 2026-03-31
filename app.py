@@ -399,7 +399,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-th_ai_voice"], [class*="st-key-th_ai_topics"],
 [class*="st-key-aa_run"],
 [class*="st-key-hc_run"], [class*="st-key-hc_clear"],
-[class*="st-key-ap_load"], [class*="st-key-ap_ai"],
+[class*="st-key-ap_load"], [class*="st-key-ap_ai"], [class*="st-key-ap_sort_"],
 [class*="st-key-ar_run"], [class*="st-key-ar_save_voice"],
 [class*="st-key-rg_load_posts"], [class*="st-key-rg_load_all"],
 [class*="st-key-rg_load_verified"], [class*="st-key-rg_list_"],
@@ -1556,6 +1556,41 @@ def render_tweet_card(tweet: dict, idx: int = 0):
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+# ─── Authentication Gate ───────────────────────────────────────────────────
+_OWNER_PW = st.secrets.get("OWNER_PASSWORD", "")
+_GUEST_PW = st.secrets.get("GUEST_PASSWORD", "")
+
+if "auth_role" not in st.session_state:
+    st.session_state["auth_role"] = None
+
+if not st.session_state["auth_role"]:
+    st.markdown("""<style>
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    </style>""", unsafe_allow_html=True)
+    st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+    <div style="text-align:center;max-width:360px;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">MOUNT POLUMBUS</div>
+    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">HEADQUARTERS</div>
+    </div></div>""", unsafe_allow_html=True)
+    _pw = st.text_input("Password", type="password", key="login_pw", label_visibility="collapsed", placeholder="Enter password")
+    if _pw:
+        if _OWNER_PW and _pw == _OWNER_PW:
+            st.session_state["auth_role"] = "owner"
+            st.rerun()
+        elif _GUEST_PW and _pw == _GUEST_PW:
+            st.session_state["auth_role"] = "guest"
+            st.rerun()
+        else:
+            st.error("Invalid password.")
+    st.stop()
+
+
+def is_guest() -> bool:
+    """Returns True if current user is a guest (beta tester)."""
+    return st.session_state.get("auth_role") == "guest"
 
 
 # ─── Sidebar Navigation ────────────────────────────────────────────────────
@@ -6079,16 +6114,25 @@ Return as JSON:
 {{"health_score": 72, "sections": [{{"title": "...", "grade": "B+", "detail": "..."}}], "flagged": ["..."], "recommendations": ["..."]}}"""
 
             raw = call_claude(prompt, max_tokens=1200)
-            # Strip markdown code fences before parsing
+            # Strip markdown code fences and extract JSON
             _clean = raw.strip()
-            if _clean.startswith("```"):
-                _clean = re.sub(r'^```\w*\n?', '', _clean)
-                _clean = re.sub(r'\n?```$', '', _clean.strip())
+            # Remove any code fence markers (```, ```json, etc.)
+            _clean = re.sub(r'```\w*', '', _clean).strip()
+            data = None
             try:
-                json_match = re.search(r'\{.*\}', _clean, re.DOTALL)
-                data = json.loads(json_match.group()) if json_match else None
+                # Find the outermost { ... } block
+                _start = _clean.index('{')
+                _depth = 0
+                _end = _start
+                for _ci, _ch in enumerate(_clean[_start:], _start):
+                    if _ch == '{': _depth += 1
+                    elif _ch == '}': _depth -= 1
+                    if _depth == 0:
+                        _end = _ci + 1
+                        break
+                data = json.loads(_clean[_start:_end])
             except Exception:
-                data = None
+                pass
 
             if data and "health_score" in data:
                 save_json("health_check_cache.json", {
@@ -6105,10 +6149,15 @@ Return as JSON:
     # Handle case where data was saved as string instead of dict
     if isinstance(data, str):
         try:
-            _clean_data = re.sub(r'^```\w*\n?', '', data.strip())
-            _clean_data = re.sub(r'\n?```$', '', _clean_data.strip())
-            _jm = re.search(r'\{.*\}', _clean_data, re.DOTALL)
-            data = json.loads(_jm.group()) if _jm else None
+            _cd = re.sub(r'```\w*', '', data.strip()).strip()
+            _s = _cd.index('{')
+            _d = 0
+            _e = _s
+            for _ci, _ch in enumerate(_cd[_s:], _s):
+                if _ch == '{': _d += 1
+                elif _ch == '}': _d -= 1
+                if _d == 0: _e = _ci + 1; break
+            data = json.loads(_cd[_s:_e])
             if data:
                 hc_cache["data"] = data
                 save_json("health_check_cache.json", hc_cache)
@@ -6190,9 +6239,9 @@ def page_account_pulse():
         st.markdown('<div style="color:#555778;font-size:13px;padding:12px 0;">Could not load account data — check your API key.</div>', unsafe_allow_html=True)
         return
 
-    followers = user.get("followersCount", 0)
-    following = user.get("followingCount", 0)
-    tweet_count = user.get("statusesCount", 0)
+    followers = user.get("followers", user.get("followersCount", user.get("followers_count", 0)))
+    following = user.get("following", user.get("followingCount", user.get("following_count", 0)))
+    tweet_count = user.get("statusesCount", user.get("tweets_count", user.get("statuses_count", 0)))
     ratio = round(followers / max(following, 1), 1)
     followers_display = "—" if not followers else f"{followers:,}"
 
@@ -6225,17 +6274,23 @@ def page_account_pulse():
             eng_rate = round((total_likes / max(total_views, 1)) * 100, 2)
             st.markdown(f'<div class="stat-card"><div class="stat-num">{eng_rate}%</div><div class="stat-label">Engagement Rate</div></div>', unsafe_allow_html=True)
 
-        # Top 5 tweets - sort pills
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin:12px 0 4px;">Sort By</div>', unsafe_allow_html=True)
+        # Top 5 tweets - sort pills as HTML
         _sort_opts = ["Likes", "Views", "Replies", "RTs"]
         if "stats_sort_sel" not in st.session_state:
             st.session_state.stats_sort_sel = "Likes"
-        _sort_cols = st.columns(len(_sort_opts))
+        _son = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+        _soff = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
+        _sort_html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">'
+        _sort_html += '<span style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;display:flex;align-items:center;margin-right:4px;">Sort By</span>'
         for _si, _so in enumerate(_sort_opts):
-            with _sort_cols[_si]:
-                if st.button(_so, key=f"ap_sort_{_si}", type="primary" if st.session_state.stats_sort_sel == _so else "secondary"):
-                    st.session_state.stats_sort_sel = _so
-                    st.rerun()
+            _cls = _son if st.session_state.stats_sort_sel == _so else _soff
+            _sort_html += f'<span class="cs-bot" data-bot="ap_sort_{_si}" style="{_cls}">{_so}</span>'
+        _sort_html += '</div>'
+        st.markdown(_sort_html, unsafe_allow_html=True)
+        for _si, _so in enumerate(_sort_opts):
+            if st.button(f"ap_sort_{_si}", key=f"ap_sort_{_si}"):
+                st.session_state.stats_sort_sel = _so
+                st.rerun()
         _sort_by = st.session_state.stats_sort_sel
         _sort_map = {"Likes": "likeCount", "Views": "viewCount", "Replies": "replyCount", "RTs": "retweetCount"}
         top5 = sorted(tweets, key=lambda t: t.get(_sort_map[_sort_by], 0), reverse=True)[:5]
