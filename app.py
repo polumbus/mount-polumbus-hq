@@ -13,7 +13,9 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores,
-                  odds_available, odds_format_block)
+                  odds_available, odds_format_block,
+                  get_google_trends, get_reddit_trending, get_newsapi_headlines,
+                  get_coingecko_trending)
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -2088,6 +2090,8 @@ if not is_guest():
 # Save auth token to session so it survives page nav (sidebar links drop query params)
 if st.query_params.get("token"):
     st.session_state["_auth_token"] = st.query_params["token"]
+if st.query_params.get("user"):
+    st.session_state["auth_username"] = st.query_params["user"]
 
 _qp_page = st.query_params.get("page", "")
 _is_first_load = "_session_started" not in st.session_state
@@ -2104,9 +2108,11 @@ else:
 # Only sync if a page param already exists (avoid triggering rerun on fresh load)
 if _qp_page and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
-# Re-inject auth token into URL so refresh preserves login
+# Re-inject auth token + username into URL so refresh preserves login
 if st.session_state.get("_auth_token") and not st.query_params.get("token"):
     st.query_params["token"] = st.session_state["_auth_token"]
+if st.session_state.get("auth_username") and not st.query_params.get("user"):
+    st.query_params["user"] = st.session_state["auth_username"]
 
 _cur_pg = st.session_state.current_page
 
@@ -2114,7 +2120,8 @@ def _act(name):
     return "active" if _cur_pg == name else ""
 
 # Token prefix for sidebar links — ensures auth survives page navigation
-_tok_qp = f"token={st.session_state.get('_auth_token', '')}&" if st.session_state.get("_auth_token") else ""
+_tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
+_tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
 
 _sidebar_html = f"""
 <style>
@@ -2437,11 +2444,13 @@ _stc.html("""<script>
   function wireNav(){
     var sidebar=doc.querySelector('section[data-testid="stSidebar"]');
     if(!sidebar) return;
-    /* Hide nav buttons visually but keep enabled (display:none disables them) */
-    sidebar.querySelectorAll('button[kind="secondary"]').forEach(function(btn){
-      if(btn.textContent.match(/^(Creator Studio|Raw Thoughts|Content Coach|Article Writer|Signals & Prompts|Reply Mode|Idea Bank|Post History|Algorithm Score|Account Audit|My Stats|Profile Analyzer)$/)){
-        var el=btn.closest('[data-testid="element-container"]')||btn.parentElement.parentElement;
-        el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+    var pageNames=['Creator Studio','Raw Thoughts','Content Coach','Article Writer','Signals & Prompts','Reply Mode','Idea Bank','Post History','Algorithm Score','Account Audit','My Stats','Profile Analyzer'];
+    /* Hide nav buttons visually but keep clickable */
+    sidebar.querySelectorAll('button').forEach(function(btn){
+      var t=btn.textContent.trim();
+      if(pageNames.indexOf(t)!==-1){
+        var el=btn.closest('[data-testid="stElementContainer"]')||btn.closest('[data-testid="element-container"]')||btn.parentElement.parentElement;
+        if(el) el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
       }
     });
     /* Intercept all sidebar <a> links and click the matching hidden button */
@@ -2453,7 +2462,8 @@ _stc.html("""<script>
         var url=new URL(a.href,win.location.origin);
         var page=url.searchParams.get('page');
         if(!page) return;
-        var btns=sidebar.querySelectorAll('button[kind="secondary"]');
+        /* Find matching button anywhere in sidebar */
+        var btns=sidebar.querySelectorAll('button');
         for(var i=0;i<btns.length;i++){
           if(btns[i].textContent.trim()===page){
             btns[i].removeAttribute('disabled');
@@ -2461,6 +2471,7 @@ _stc.html("""<script>
             return;
           }
         }
+        /* Fallback: full page nav */
         win.location.href=a.href;
       });
     });
@@ -4925,6 +4936,8 @@ def _fetch_inspiration_feed():
     # Layer 1: ALL Twitter lists in parallel
     _lists = load_engagement_lists()
     _all_list_ids = [v.get("list_id", "") for v in _lists.values() if isinstance(v, dict) and v.get("list_id")]
+    # Also collect search-query-based feeds (guests get these from onboarding)
+    _list_search_queries = [v.get("search_query", "") for v in _lists.values() if isinstance(v, dict) and v.get("search_query")]
 
     def _fetch_list(lid):
         if not lid:
@@ -4944,31 +4957,82 @@ def _fetch_inspiration_feed():
                 _out.append(_t)
         return _out
 
-    # Layer 2: Twitter searches
-    _search_queries = [
-        "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
-        "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
-    ]
+    # Layer 2: Twitter searches — personalized per user
+    _is_g = is_guest()
+    if _is_g:
+        _topics_data = load_json("topics.json", {})
+        _user_topics = _topics_data.get("topics", [])
+        # Build search queries from user's topics + their engagement list queries
+        _search_queries = _list_search_queries[:]
+        if _user_topics:
+            # Add a combined OR query from their top topics
+            _topic_or = " OR ".join(_user_topics[:4])
+            _search_queries.append(f"{_topic_or} min_faves:10 -filter:retweets")
+    else:
+        _search_queries = [
+            "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
+            "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
+        ]
 
-    # Layer 3: RSS feeds
-    _rss_feeds = [
-        "https://www.espn.com/espn/rss/news",
-        "https://www.espn.com/espn/rss/nfl/news",
-        "https://www.espn.com/espn/rss/nba/news",
-        "https://news.google.com/rss/search?q=sports+news+today&hl=en-US&gl=US&ceid=US:en",
-        "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
-    ]
+    # Layer 3: RSS feeds — niche-aware for guests
+    if _is_g:
+        _niche = load_json("topics.json", {}).get("niche", "General").lower()
+        _rss_feeds = [
+            "https://news.google.com/rss/search?q=trending+news+today&hl=en-US&gl=US&ceid=US:en",
+        ]
+        # Add niche-specific RSS
+        _niche_rss = {
+            "sports": ["https://www.espn.com/espn/rss/news", "https://www.espn.com/espn/rss/nfl/news"],
+            "tech": ["https://news.google.com/rss/search?q=technology+startups+AI&hl=en-US&gl=US&ceid=US:en"],
+            "finance": ["https://news.google.com/rss/search?q=finance+markets+crypto&hl=en-US&gl=US&ceid=US:en"],
+            "fitness": ["https://news.google.com/rss/search?q=fitness+health+wellness&hl=en-US&gl=US&ceid=US:en"],
+            "entertainment": ["https://news.google.com/rss/search?q=entertainment+movies+music&hl=en-US&gl=US&ceid=US:en"],
+            "politics": ["https://news.google.com/rss/search?q=politics+policy+government&hl=en-US&gl=US&ceid=US:en"],
+            "business": ["https://news.google.com/rss/search?q=business+entrepreneurship+marketing&hl=en-US&gl=US&ceid=US:en"],
+            "gaming": ["https://news.google.com/rss/search?q=gaming+esports+video+games&hl=en-US&gl=US&ceid=US:en"],
+        }
+        for _nk, _nurls in _niche_rss.items():
+            if _nk in _niche:
+                _rss_feeds.extend(_nurls)
+                break
+        # Also add RSS from their specific topics
+        for _tp in load_json("topics.json", {}).get("topics", [])[:2]:
+            _rss_feeds.append(f"https://news.google.com/rss/search?q={_tp.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en")
+    else:
+        _rss_feeds = [
+            "https://www.espn.com/espn/rss/news",
+            "https://www.espn.com/espn/rss/nfl/news",
+            "https://www.espn.com/espn/rss/nba/news",
+            "https://news.google.com/rss/search?q=sports+news+today&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=march+madness+NCAA+2026&hl=en-US&gl=US&ceid=US:en",
+        ]
 
-    # Run ALL fetches in parallel (Twitter lists + searches + RSS + ESPN API + Sleeper API)
+    # Run ALL fetches in parallel
     _list_tweets, _search_tweets, _rss_headlines = [], [], []
     _espn_headlines, _sleeper_lines = [], []
-    with _cf.ThreadPoolExecutor(max_workers=14) as _ex:
+    _trends_lines, _reddit_lines, _newsapi_lines, _crypto_lines = [], [], [], []
+    _topics_data = load_json("topics.json", {}) if _is_g else {}
+    _user_niche = _topics_data.get("niche", "General") if _is_g else "Sports"
+    _user_topics = _topics_data.get("topics", []) if _is_g else []
+    _is_sports_niche = not _is_g or "sport" in _user_niche.lower()
+    _is_crypto_niche = _is_g and ("crypto" in _user_niche.lower() or "finance" in _user_niche.lower())
+    with _cf.ThreadPoolExecutor(max_workers=20) as _ex:
         _list_futs = [_ex.submit(_fetch_list, lid) for lid in _all_list_ids]
         _search_futs = [_ex.submit(fetch_tweets, q, 15) for q in _search_queries]
         _rss_futs = [_ex.submit(_fetch_rss_headlines, u, 12) for u in _rss_feeds]
-        # ESPN + Sleeper APIs (fast, no auth, more reliable than RSS scraping)
-        _espn_fut = _ex.submit(get_espn_headlines_for_inspo)
-        _sleeper_fut = _ex.submit(get_sleeper_trending_for_inspo)
+        # ESPN + Sleeper — sports niche only
+        if _is_sports_niche:
+            _espn_fut = _ex.submit(get_espn_headlines_for_inspo)
+            _sleeper_fut = _ex.submit(get_sleeper_trending_for_inspo)
+        # Universal APIs — all users get Google Trends + Reddit
+        _trends_fut = _ex.submit(get_google_trends)
+        _reddit_fut = _ex.submit(get_reddit_trending, _user_niche, _user_topics)
+        # NewsAPI — if key available
+        _newsapi_fut = _ex.submit(get_newsapi_headlines, _user_topics, _user_niche)
+        # CoinGecko — finance/crypto niche
+        if _is_crypto_niche:
+            _crypto_fut = _ex.submit(get_coingecko_trending)
+        # Collect results
         for _f in _list_futs:
             try: _list_tweets.extend(_f.result())
             except Exception: pass
@@ -4980,13 +5044,24 @@ def _fetch_inspiration_feed():
                 _rss_results = _f.result()
                 _rss_headlines.extend([h for h in _rss_results if not h.startswith("RT ")])
             except Exception: pass
-        try: _espn_headlines = _espn_fut.result()
+        if _is_sports_niche:
+            try: _espn_headlines = _espn_fut.result()
+            except Exception: pass
+            try: _sleeper_lines = _sleeper_fut.result()
+            except Exception: pass
+        try: _trends_lines = _trends_fut.result()
         except Exception: pass
-        try: _sleeper_lines = _sleeper_fut.result()
+        try: _reddit_lines = _reddit_fut.result()
         except Exception: pass
+        try: _newsapi_lines = _newsapi_fut.result()
+        except Exception: pass
+        if _is_crypto_niche:
+            try: _crypto_lines = _crypto_fut.result()
+            except Exception: pass
 
-    # Merge ESPN + Sleeper headlines into RSS block (they're higher quality)
-    _rss_headlines = _espn_headlines + _sleeper_lines + _rss_headlines
+    # Merge all headline sources — higher quality sources first
+    _rss_headlines = (_espn_headlines + _sleeper_lines + _crypto_lines +
+                      _newsapi_lines + _trends_lines + _reddit_lines + _rss_headlines)
 
     # Dedupe tweets
     _seen = set()
