@@ -8644,12 +8644,12 @@ def _auto_sync_tweets(_handle: str = ""):
 
 _auto_sync_tweets(_handle=get_current_handle())
 
-st.html(f'<div style="position:fixed;bottom:40px;right:40px;z-index:0;pointer-events:none;user-select:none;opacity:0.12;"><img src="data:image/png;base64,{_LOGO_WM_B64}" width="100"></div>', height=0)
+st.markdown(f'<div class="main-watermark"><img src="data:image/png;base64,{_LOGO_WM_B64}" width="100"></div>', unsafe_allow_html=True)
 
-st.html(f"""<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid rgba(45,212,191,0.08);">
-  <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="22" height="22" style="border-radius:4px;">
-  <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;color:rgba(255,255,255,0.4);">POST <span style="color:#2DD4BF;">ASCEND</span></span>
-</div>""", height=45)
+st.markdown("""<div class="pa-brand-bar">
+  <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="22" height="22">
+  <span class="pa-brand-text">POST <span>ASCEND</span></span>
+</div>""", unsafe_allow_html=True)
 
 page_fn = page_map.get(page)
 if page_fn:
