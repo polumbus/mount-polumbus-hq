@@ -7,37 +7,37 @@
 .hq-btn {
   padding: 4px 12px;
   border-radius: 16px;
-  border: 1px solid #333;
+  border: 1px solid #1E3050;
   background: transparent;
-  color: #8899aa;
+  color: #5a7090;
   font-size: 12px;
   cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   transition: all 0.15s;
 }
 .hq-btn:hover {
-  border-color: #ff6b00;
-  color: #ff6b00;
+  border-color: #2DD4BF;
+  color: #2DD4BF;
 }
 .hq-save:hover {
-  border-color: #4ecdc4;
-  color: #4ecdc4;
+  border-color: #2DD4BF;
+  color: #2DD4BF;
 }
 .hq-repurpose:hover {
-  border-color: #ff6b00;
-  color: #ff6b00;
+  border-color: #C49E3C;
+  color: #C49E3C;
 }
 .hq-reply:hover {
-  border-color: #a78bfa;
-  color: #a78bfa;
+  border-color: #2DD4BF;
+  color: #2DD4BF;
 }
 .hq-signal:hover {
   border-color: #2DD4BF;
   color: #2DD4BF;
 }
 .hq-saved {
-  border-color: #22c55e !important;
-  color: #22c55e !important;
+  border-color: #2DD4BF !important;
+  color: #2DD4BF !important;
 }
 
 /* ── Modals ── */
@@ -58,8 +58,8 @@
 }
 .hq-modal-box {
   position: relative;
-  background: #0d0d18;
-  border: 1px solid #2a2a4a;
+  background: #0B0E14;
+  border: 1px solid #1E3050;
   border-radius: 14px;
   padding: 22px;
   width: 520px;
@@ -78,35 +78,35 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: #ff6b00;
+  color: #C49E3C;
 }
 .hq-modal-close {
   background: none;
   border: none;
-  color: #666;
+  color: #5a7090;
   font-size: 16px;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
   transition: color 0.15s;
 }
-.hq-modal-close:hover { color: #fff; }
+.hq-modal-close:hover { color: #e8e8f0; }
 .hq-modal-label {
   font-size: 10px;
   letter-spacing: 1.5px;
-  color: #666688;
+  color: #5a7090;
   text-transform: uppercase;
   margin-bottom: 6px;
 }
 .hq-modal-original {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: #0D1929;
+  border: 1px solid #1E3050;
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 4px;
 }
 .hq-modal-source-text {
-  color: #c0c0d8;
+  color: #c0c8d8;
   font-size: 14px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -115,8 +115,8 @@
 .hq-modal-textarea {
   width: 100%;
   box-sizing: border-box;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: #0D1929;
+  border: 1px solid #1E3050;
   border-radius: 8px;
   color: #e8e8f0;
   font-size: 14px;
@@ -128,7 +128,7 @@
   transition: border-color 0.15s;
 }
 .hq-modal-textarea:focus {
-  border-color: #ff6b00;
+  border-color: #2DD4BF;
 }
 .hq-modal-actions {
   display: flex;
@@ -147,16 +147,22 @@
 }
 .hq-modal-btn:disabled { opacity: 0.5; cursor: default; }
 .hq-modal-ai {
-  background: #1a1a2e;
-  border: 1px solid #ff6b00;
-  color: #ff6b00;
+  background: #0D1929;
+  border: 1px solid #2DD4BF;
+  color: #2DD4BF;
 }
-.hq-modal-ai:hover:not(:disabled) { background: #ff6b0018; }
+.hq-modal-ai:hover:not(:disabled) { background: rgba(45,212,191,0.08); }
 .hq-modal-save {
-  background: #ff6b00;
-  color: #fff;
+  background: #C49E3C;
+  color: #0B0E14;
 }
 .hq-modal-save:hover:not(:disabled) { opacity: 0.85; }
+.hq-modal-post {
+  background: linear-gradient(135deg, #1fb8a8 0%, #2DD4BF 55%, #5eebd4 100%);
+  color: #0B0E14;
+  font-weight: 700;
+}
+.hq-modal-post:hover:not(:disabled) { opacity: 0.85; }
 .hq-modal-status {
   font-size: 12px;
   margin-top: 10px;

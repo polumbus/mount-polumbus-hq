@@ -1,6 +1,6 @@
-body { width: 220px; padding: 16px; background: #0a0a0f; color: #e8e8f0; font-family: sans-serif; }
-h2 { font-size: 16px; color: #ff6b00; margin: 0 0 6px; }
-p { font-size: 12px; color: #888; margin: 0 0 10px; }
-.status { padding: 8px 10px; background: #111120; border-radius: 8px; font-size: 12px; }
-.connected { border-left: 3px solid #22c55e; color: #22c55e; }
-.disconnected { border-left: 3px solid #ef4444; color: #aaa; }
+body { width: 220px; padding: 16px; background: #0B0E14; color: #e8e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+h2 { font-size: 16px; color: #2DD4BF; letter-spacing: 2px; margin: 0 0 6px; }
+p { font-size: 12px; color: #5a7090; margin: 0 0 10px; }
+.status { padding: 8px 10px; background: #0D1929; border-radius: 8px; font-size: 12px; }
+.connected { border-left: 3px solid #2DD4BF; color: #2DD4BF; }
+.disconnected { border-left: 3px solid #ef4444; color: #8899aa; }
