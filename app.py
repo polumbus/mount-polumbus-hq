@@ -1227,9 +1227,11 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Authentication Gate ───────────────────────────────────────────────────
+# Auth persists via URL query params (?token=&user=). This is the ONLY reliable
+# persistence method on Streamlit Cloud — cookies and localStorage both fail
+# due to iframe sandbox isolation. Query params survive refresh, bookmarks,
+# and tab close/reopen. session_state caches within a WebSocket session.
 import hashlib as _hl
-import urllib.parse as _auth_urlp
-import streamlit.components.v1 as _auth_comp
 
 try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
@@ -1253,66 +1255,37 @@ def _save_accounts(data: dict):
 def _hash_pw(username: str, password: str) -> str:
     return _hl.sha256(f"mp_{username}_{password}".encode()).hexdigest()
 
-def _set_auth_cookie(role: str, token: str, username: str = ""):
-    """Set persistent auth cookie (30 days) via JS."""
-    _val = _auth_urlp.quote(json.dumps({"role": role, "token": token, "user": username}))
-    _auth_comp.html(
-        f'<script>document.cookie="mp_auth={_val};max-age={60*60*24*30};path=/;SameSite=Lax";</script>',
-        height=0,
-    )
-
-def _clear_auth_cookie():
-    """Clear auth cookie via JS."""
-    _auth_comp.html(
-        '<script>document.cookie="mp_auth=;max-age=0;path=/";</script>',
-        height=0,
-    )
-
-
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
 
-# Restore session: 1) query params, 2) cookie (via st.context.cookies)
+# Restore session from query params (the sole persistence mechanism)
 if not st.session_state["auth_role"]:
     _tok = st.query_params.get("token", "")
     _tok_user = st.query_params.get("user", "")
     if _tok and _tok == _OWNER_TOKEN:
         st.session_state["auth_role"] = "owner"
+        st.session_state["_auth_token"] = _tok
     elif _tok and _tok_user:
         _accts = _load_accounts()
         if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
             st.session_state["auth_role"] = "guest"
             st.session_state["auth_username"] = _tok_user
+            st.session_state["_auth_token"] = _tok
             _gid = _accts[_tok_user].get("guest_id", "")
             if _gid:
                 st.query_params["guest_id"] = _gid
 
-    # Fallback: read cookie directly (survives browser close, no JS needed)
-    if not st.session_state["auth_role"]:
-        try:
-            _cookie_raw = st.context.cookies.get("mp_auth", "")
-            if _cookie_raw:
-                _cookie_data = json.loads(_auth_urlp.unquote(_cookie_raw))
-                _c_role = _cookie_data.get("role", "")
-                _c_token = _cookie_data.get("token", "")
-                _c_user = _cookie_data.get("user", "")
-                if _c_role == "owner" and _c_token == _OWNER_TOKEN:
-                    st.session_state["auth_role"] = "owner"
-                    st.query_params["token"] = _c_token
-                elif _c_role == "guest" and _c_user:
-                    _accts = _load_accounts()
-                    if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
-                        st.session_state["auth_role"] = "guest"
-                        st.session_state["auth_username"] = _c_user
-                        st.query_params["token"] = _c_token
-                        st.query_params["user"] = _c_user
-                        _gid = _accts[_c_user].get("guest_id", "")
-                        if _gid:
-                            st.query_params["guest_id"] = _gid
-        except Exception:
-            pass
+# ALWAYS re-inject auth params into URL on every render. This is critical —
+# Streamlit can strip query params during navigation. Force them back every time.
+if st.session_state.get("auth_role"):
+    _force_tok = st.session_state.get("_auth_token", "")
+    _force_user = st.session_state.get("auth_username", "")
+    if _force_tok:
+        st.query_params["token"] = _force_tok
+    if _force_user:
+        st.query_params["user"] = _force_user
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
@@ -1336,6 +1309,7 @@ if not st.session_state["auth_role"]:
                 st.error("Enter both username and password.")
             elif _login_user.lower().strip() == "owner" and _OWNER_PW and _login_pw == _OWNER_PW:
                 st.session_state["auth_role"] = "owner"
+                st.session_state["_auth_token"] = _OWNER_TOKEN
                 st.query_params["token"] = _OWNER_TOKEN
                 st.rerun()
             else:
@@ -1348,6 +1322,7 @@ if not st.session_state["auth_role"]:
                     _save_accounts(_accts)
                     st.session_state["auth_role"] = "guest"
                     st.session_state["auth_username"] = _lu
+                    st.session_state["_auth_token"] = _token
                     st.query_params["token"] = _token
                     st.query_params["user"] = _lu
                     _gid = _accts[_lu].get("guest_id", "")
@@ -1389,6 +1364,7 @@ if not st.session_state["auth_role"]:
                     _save_accounts(_accts)
                     st.session_state["auth_role"] = "guest"
                     st.session_state["auth_username"] = _nu
+                    st.session_state["_auth_token"] = _token
                     st.query_params["token"] = _token
                     st.query_params["user"] = _nu
                     st.rerun()
@@ -1396,13 +1372,6 @@ if not st.session_state["auth_role"]:
 
 # Sync auth cookie (once per session). The cookie JS can't run during login
 # because st.rerun() kills the iframe. So we set it here on the first app render.
-if st.session_state.get("auth_role") and "cookie_synced" not in st.session_state:
-    st.session_state["cookie_synced"] = True
-    _set_auth_cookie(
-        st.session_state["auth_role"],
-        st.query_params.get("token", ""),
-        st.session_state.get("auth_username", ""),
-    )
 
 
 def is_guest() -> bool:
@@ -1774,11 +1743,6 @@ else:
 # Only sync if a page param already exists (avoid triggering rerun on fresh load)
 if _qp_page and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
-# Re-inject auth token + username into URL so refresh preserves login
-if st.session_state.get("_auth_token") and not st.query_params.get("token"):
-    st.query_params["token"] = st.session_state["_auth_token"]
-if st.session_state.get("auth_username") and not st.query_params.get("user"):
-    st.query_params["user"] = st.session_state["auth_username"]
 
 _cur_pg = st.session_state.current_page
 
@@ -2098,8 +2062,6 @@ with st.sidebar:
         st.session_state.pop("user_avatar", None)
         st.session_state.pop("onboarding_complete", None)
         st.session_state.pop("onboarding_step", None)
-        _clear_auth_cookie()
-        st.session_state.pop("cookie_synced", None)
         for _k in ["token", "user", "guest_id"]:
             if _k in st.query_params:
                 del st.query_params[_k]
