@@ -196,12 +196,10 @@ Format rules:
 VOICE MATCHING IS THE #1 PRIORITY. A tweet that sounds like @{handle} actually wrote it is always better than a "well-crafted" tweet that sounds like an AI."""
 
 
-def get_voice_context():
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_voice_context(_handle: str = ""):
     """Build voice context from actual tweet history (default voice only).
-    No @st.cache_data — must be user-aware (different per handle)."""
-    _cache_key = f"_voice_ctx_{get_current_handle()}"
-    if _cache_key in st.session_state:
-        return st.session_state[_cache_key]
+    Cached per handle for 1 hour via @st.cache_data."""
     tweets = load_json("tweet_history.json", [])
     _base = build_user_context()
     if not tweets:
@@ -212,7 +210,7 @@ def get_voice_context():
     examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
 
     _label = "YOUR" if is_guest() else "TYLER'S"
-    _result = _base + f"""
+    return _base + f"""
 
 {_label} ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
 {examples}
@@ -220,8 +218,6 @@ def get_voice_context():
 Match this exact voice, tone, sentence structure, and style in everything you write.
 
 Note: Format-specific rules (character limits, structure, thread formatting, article layout) will be provided separately. Follow those format rules for structure while maintaining this voice."""
-    st.session_state[_cache_key] = _result
-    return _result
 
 
 def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
@@ -237,13 +233,13 @@ def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
     _is_g = is_guest()
 
     if voice_name == "Default":
-        return get_voice_context()
+        return get_voice_context(_handle=get_current_handle())
 
     # Voice mode rules — universal structure guidance
     # Owner gets Tyler's sports examples. Guests get their own top tweets as examples.
     if _is_g:
         # Pull guest's top tweets as voice examples
-        _pp = analyze_personal_patterns()
+        _pp = analyze_personal_patterns(_handle=get_current_handle())
         _guest_top = _pp.get("top_examples", [])[:3] if _pp else []
         if _guest_top:
             _guest_ex_block = "YOUR TOP-PERFORMING TWEETS (use as voice/energy reference):\n" + "\n".join([f'- "{ex["text"][:200]}"' for ex in _guest_top]) + "\n"
@@ -339,12 +335,10 @@ IMPORTANT: Write in @{s_handle}'s STYLE as described above."""
     return _base
 
 
-def analyze_personal_patterns():
+@st.cache_data(ttl=3600, show_spinner=False)
+def analyze_personal_patterns(_handle: str = ""):
     """Analyze user's tweet history to build personal scoring benchmarks.
-    Cached per user in session_state (not @st.cache_data which leaks across users)."""
-    _pp_key = f"_pp_cache_{get_current_handle()}"
-    if _pp_key in st.session_state:
-        return st.session_state[_pp_key]
+    Cached per handle for 1 hour via @st.cache_data."""
     tweets = load_json("tweet_history.json", [])
     if len(tweets) < 20:
         return None
@@ -426,7 +420,6 @@ def analyze_personal_patterns():
         {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
     ]
 
-    st.session_state[f"_pp_cache_{get_current_handle()}"] = patterns
     return patterns
 
 
@@ -945,7 +938,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
 
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6") -> str:
     if system is None:
-        system = get_voice_context()
+        system = get_voice_context(_handle=get_current_handle())
 
     st.session_state["_ai_last_model"] = model
 
@@ -1651,7 +1644,7 @@ if is_guest():
                     st.warning(f"Only found {_count} tweets. We need at least 20 original tweets to build your profile. Make sure your account is public and has enough posts.")
                     if st.button("Retry Sync", type="primary", key="onboard_retry_sync"):
                         st.session_state.pop("_tweet_history_cache", None)
-                        st.session_state.pop(f"_pp_cache_{get_current_handle()}", None)
+                        analyze_personal_patterns.clear()
                         st.rerun()
                     st.stop()
                 _sync_bar.progress(100, text=f"Synced {_count} tweets")
@@ -1680,7 +1673,7 @@ if is_guest():
                 # Clear cached patterns so they're rebuilt from this guest's data
                 st.session_state.pop("_pp_cache", None)
                 _a_bar.progress(30, text="Calculating engagement scores...")
-                _pp = analyze_personal_patterns()
+                _pp = analyze_personal_patterns(_handle=get_current_handle())
                 if not _pp:
                     _a_bar.progress(100, text="")
                     st.warning("Not enough original tweets to analyze. Need at least 20 non-reply, non-RT tweets.")
@@ -3826,7 +3819,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     print(f"[AI-CALL] action={action} voice={voice} fmt={fmt} text={tweet_text[:80]!r}", file=sys.stderr, flush=True)
 
     voice_mod = _build_voice_mod(voice)
-    pp = analyze_personal_patterns()
+    pp = analyze_personal_patterns(_handle=get_current_handle())
     format_mod = _build_format_mod(fmt, pp, voice)
 
     result = None
@@ -5348,7 +5341,7 @@ def page_content_coach():
         except Exception: pass
     _coach_handle = get_current_handle()
     _coach_niche = load_json("topics.json", {}).get("niche", "content") if is_guest() else "sports content"
-    COACH_SYSTEM = get_voice_context() + f"""
+    COACH_SYSTEM = get_voice_context(_handle=get_current_handle()) + f"""
 
 You are Amplifier, @{_coach_handle}'s personal social media coach. You are an EXPERT on:
 - X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
@@ -5402,7 +5395,7 @@ Your coaching style:
         # Build system prompt
         sys_prompt = COACH_SYSTEM
         if include_history:
-            patterns = analyze_personal_patterns()
+            patterns = analyze_personal_patterns(_handle=get_current_handle())
             if patterns:
                 sys_prompt += build_patterns_context(patterns)
         if coach_fmt != "General Advice":
@@ -5706,8 +5699,8 @@ def page_article_writer():
     if st.session_state.get("aw_autogen"):
         _auto_seed = st.session_state.pop("aw_autogen")
         with st.spinner("Writing article..."):
-            voice = get_voice_context()
-            pp = analyze_personal_patterns()
+            voice = get_voice_context(_handle=get_current_handle())
+            pp = analyze_personal_patterns(_handle=get_current_handle())
             pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
             prompt = f"""Write a complete X Article based on this seed:\n\n\"{_auto_seed}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
             st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
@@ -5728,8 +5721,8 @@ def page_article_writer():
     if st.button("aw_write", key="aw_scratch"):
         if seed_text:
             with st.spinner("Writing full article..."):
-                voice = get_voice_context()
-                pp = analyze_personal_patterns()
+                voice = get_voice_context(_handle=get_current_handle())
+                pp = analyze_personal_patterns(_handle=get_current_handle())
                 pp_note = ""
                 if pp:
                     pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
@@ -5748,7 +5741,7 @@ def page_article_writer():
     if st.button("aw_outline", key="aw_outline"):
         if seed_text:
             with st.spinner("Generating outline..."):
-                voice = get_voice_context()
+                voice = get_voice_context(_handle=get_current_handle())
                 prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
                 st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
     if st.button("aw_research", key="aw_research_btn"):
@@ -6255,7 +6248,7 @@ def page_tweet_history():
     # Debug panel — only shown when debug_mode is active
     if st.session_state.get("debug_mode", False):
         with st.expander("Debug: Pattern Analysis", expanded=False):
-            _pp = analyze_personal_patterns()
+            _pp = analyze_personal_patterns(_handle=get_current_handle())
             if not _pp:
                 st.warning("Not enough data to compute patterns (need 20+ tweets with no URLs).")
             else:
