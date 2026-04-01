@@ -19,6 +19,7 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   get_coingecko_trending)
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG,
                     _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
+from logo_constants import ICON_B64 as _LOGO_ICON_B64, WATERMARK_B64 as _LOGO_WM_B64
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -1865,7 +1866,7 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
-    <img src="app/static/logo_icon_128.png" width="36" height="36" style="border-radius:6px;">
+    <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="36" height="36" style="border-radius:6px;">
   </a>
 
   <div class="mp-zone mp-zone-create">
@@ -2221,7 +2222,7 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="display:flex;align-items:center;gap:10px;"><img src="app/static/logo_icon_128.png" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
+    <div style="display:flex;align-items:center;gap:10px;"><img src="data:image/png;base64,{_LOGO_ICON_B64}" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
@@ -8643,10 +8644,10 @@ def _auto_sync_tweets(_handle: str = ""):
 
 _auto_sync_tweets(_handle=get_current_handle())
 
-st.markdown('<div class="main-watermark"><img src="app/static/logo_login.png" width="100"></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-watermark"><img src="data:image/png;base64,{_LOGO_WM_B64}" width="100"></div>', unsafe_allow_html=True)
 
 st.markdown("""<div class="pa-brand-bar">
-  <img src="app/static/logo_icon_128.png" width="22" height="22">
+  <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="22" height="22">
   <span class="pa-brand-text">POST <span>ASCEND</span></span>
 </div>""", unsafe_allow_html=True)
 
