@@ -196,10 +196,9 @@ Format rules:
 VOICE MATCHING IS THE #1 PRIORITY. A tweet that sounds like @{handle} actually wrote it is always better than a "well-crafted" tweet that sounds like an AI."""
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_voice_context(_handle: str = ""):
-    """Build voice context from actual tweet history (default voice only).
-    Cached per handle for 1 hour via @st.cache_data."""
+@st.cache_data(ttl=3600)
+def get_voice_context():
+    """Build voice context from actual tweet history (default voice only)."""
     tweets = load_json("tweet_history.json", [])
     _base = build_user_context()
     if not tweets:
@@ -233,13 +232,13 @@ def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
     _is_g = is_guest()
 
     if voice_name == "Default":
-        return get_voice_context(_handle=get_current_handle())
+        return get_voice_context()
 
     # Voice mode rules — universal structure guidance
     # Owner gets Tyler's sports examples. Guests get their own top tweets as examples.
     if _is_g:
         # Pull guest's top tweets as voice examples
-        _pp = analyze_personal_patterns(_handle=get_current_handle())
+        _pp = analyze_personal_patterns()
         _guest_top = _pp.get("top_examples", [])[:3] if _pp else []
         if _guest_top:
             _guest_ex_block = "YOUR TOP-PERFORMING TWEETS (use as voice/energy reference):\n" + "\n".join([f'- "{ex["text"][:200]}"' for ex in _guest_top]) + "\n"
@@ -335,10 +334,11 @@ IMPORTANT: Write in @{s_handle}'s STYLE as described above."""
     return _base
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def analyze_personal_patterns(_handle: str = ""):
-    """Analyze user's tweet history to build personal scoring benchmarks.
-    Cached per handle for 1 hour via @st.cache_data."""
+@st.cache_data(ttl=3600)
+def analyze_personal_patterns():
+    """Analyze Tyler's tweet history to build personal scoring benchmarks. Cached per session."""
+    if "_pp_cache" in st.session_state:
+        return st.session_state["_pp_cache"]
     tweets = load_json("tweet_history.json", [])
     if len(tweets) < 20:
         return None
@@ -420,6 +420,7 @@ def analyze_personal_patterns(_handle: str = ""):
         {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
     ]
 
+    st.session_state["_pp_cache"] = patterns
     return patterns
 
 
@@ -938,7 +939,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
 
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6") -> str:
     if system is None:
-        system = get_voice_context(_handle=get_current_handle())
+        system = get_voice_context()
 
     st.session_state["_ai_last_model"] = model
 
@@ -1226,11 +1227,9 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 
 # ─── Authentication Gate ───────────────────────────────────────────────────
-# Auth persists via URL query params (?token=&user=). This is the ONLY reliable
-# persistence method on Streamlit Cloud — cookies and localStorage both fail
-# due to iframe sandbox isolation. Query params survive refresh, bookmarks,
-# and tab close/reopen. session_state caches within a WebSocket session.
 import hashlib as _hl
+import urllib.parse as _auth_urlp
+import streamlit.components.v1 as _auth_comp
 
 try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
@@ -1254,37 +1253,66 @@ def _save_accounts(data: dict):
 def _hash_pw(username: str, password: str) -> str:
     return _hl.sha256(f"mp_{username}_{password}".encode()).hexdigest()
 
+def _set_auth_cookie(role: str, token: str, username: str = ""):
+    """Set persistent auth cookie (30 days) via JS."""
+    _val = _auth_urlp.quote(json.dumps({"role": role, "token": token, "user": username}))
+    _auth_comp.html(
+        f'<script>document.cookie="mp_auth={_val};max-age={60*60*24*30};path=/;SameSite=Lax";</script>',
+        height=0,
+    )
+
+def _clear_auth_cookie():
+    """Clear auth cookie via JS."""
+    _auth_comp.html(
+        '<script>document.cookie="mp_auth=;max-age=0;path=/";</script>',
+        height=0,
+    )
+
+
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
 
-# Restore session from query params (the sole persistence mechanism)
+# Restore session: 1) query params, 2) cookie (via st.context.cookies)
 if not st.session_state["auth_role"]:
     _tok = st.query_params.get("token", "")
     _tok_user = st.query_params.get("user", "")
     if _tok and _tok == _OWNER_TOKEN:
         st.session_state["auth_role"] = "owner"
-        st.session_state["_auth_token"] = _tok
     elif _tok and _tok_user:
         _accts = _load_accounts()
         if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
             st.session_state["auth_role"] = "guest"
             st.session_state["auth_username"] = _tok_user
-            st.session_state["_auth_token"] = _tok
             _gid = _accts[_tok_user].get("guest_id", "")
             if _gid:
                 st.query_params["guest_id"] = _gid
 
-# ALWAYS re-inject auth params into URL on every render. This is critical —
-# Streamlit can strip query params during navigation. Force them back every time.
-if st.session_state.get("auth_role"):
-    _force_tok = st.session_state.get("_auth_token", "")
-    _force_user = st.session_state.get("auth_username", "")
-    if _force_tok:
-        st.query_params["token"] = _force_tok
-    if _force_user:
-        st.query_params["user"] = _force_user
+    # Fallback: read cookie directly (survives browser close, no JS needed)
+    if not st.session_state["auth_role"]:
+        try:
+            _cookie_raw = st.context.cookies.get("mp_auth", "")
+            if _cookie_raw:
+                _cookie_data = json.loads(_auth_urlp.unquote(_cookie_raw))
+                _c_role = _cookie_data.get("role", "")
+                _c_token = _cookie_data.get("token", "")
+                _c_user = _cookie_data.get("user", "")
+                if _c_role == "owner" and _c_token == _OWNER_TOKEN:
+                    st.session_state["auth_role"] = "owner"
+                    st.query_params["token"] = _c_token
+                elif _c_role == "guest" and _c_user:
+                    _accts = _load_accounts()
+                    if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
+                        st.session_state["auth_role"] = "guest"
+                        st.session_state["auth_username"] = _c_user
+                        st.query_params["token"] = _c_token
+                        st.query_params["user"] = _c_user
+                        _gid = _accts[_c_user].get("guest_id", "")
+                        if _gid:
+                            st.query_params["guest_id"] = _gid
+        except Exception:
+            pass
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
@@ -1292,19 +1320,10 @@ if not st.session_state["auth_role"]:
     [data-testid="stToolbar"] { display: none !important; }
     .stApp [data-testid="stAppViewContainer"] { opacity: 1 !important; }
     </style>""", unsafe_allow_html=True)
-    if "_login_logo_html" not in st.session_state:
-        import base64 as _b64
-        _logo_path = Path(__file__).parent / "static" / "logo_login.png"
-        if _logo_path.exists():
-            _logo_b64 = _b64.b64encode(_logo_path.read_bytes()).decode()
-            st.session_state["_login_logo_html"] = f'<img src="data:image/png;base64,{_logo_b64}" width="200" style="margin-bottom:8px;">'
-        else:
-            st.session_state["_login_logo_html"] = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</div>'
-    _logo_html = st.session_state["_login_logo_html"]
-    st.markdown(f"""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
+    st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
-    {_logo_html}
-    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI-POWERED CONTENT CREATION</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">POST ASCEND</div>
+    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI CONTENT CREATION + GROWTH</div>
     </div></div>""", unsafe_allow_html=True)
 
     _auth_tab = st.radio("", ["Sign In", "Create Account"], horizontal=True, key="auth_tab", label_visibility="collapsed")
@@ -1317,7 +1336,6 @@ if not st.session_state["auth_role"]:
                 st.error("Enter both username and password.")
             elif _login_user.lower().strip() == "owner" and _OWNER_PW and _login_pw == _OWNER_PW:
                 st.session_state["auth_role"] = "owner"
-                st.session_state["_auth_token"] = _OWNER_TOKEN
                 st.query_params["token"] = _OWNER_TOKEN
                 st.rerun()
             else:
@@ -1330,7 +1348,6 @@ if not st.session_state["auth_role"]:
                     _save_accounts(_accts)
                     st.session_state["auth_role"] = "guest"
                     st.session_state["auth_username"] = _lu
-                    st.session_state["_auth_token"] = _token
                     st.query_params["token"] = _token
                     st.query_params["user"] = _lu
                     _gid = _accts[_lu].get("guest_id", "")
@@ -1372,7 +1389,6 @@ if not st.session_state["auth_role"]:
                     _save_accounts(_accts)
                     st.session_state["auth_role"] = "guest"
                     st.session_state["auth_username"] = _nu
-                    st.session_state["_auth_token"] = _token
                     st.query_params["token"] = _token
                     st.query_params["user"] = _nu
                     st.rerun()
@@ -1380,6 +1396,13 @@ if not st.session_state["auth_role"]:
 
 # Sync auth cookie (once per session). The cookie JS can't run during login
 # because st.rerun() kills the iframe. So we set it here on the first app render.
+if st.session_state.get("auth_role") and "cookie_synced" not in st.session_state:
+    st.session_state["cookie_synced"] = True
+    _set_auth_cookie(
+        st.session_state["auth_role"],
+        st.query_params.get("token", ""),
+        st.session_state.get("auth_username", ""),
+    )
 
 
 def is_guest() -> bool:
@@ -1644,7 +1667,7 @@ if is_guest():
                     st.warning(f"Only found {_count} tweets. We need at least 20 original tweets to build your profile. Make sure your account is public and has enough posts.")
                     if st.button("Retry Sync", type="primary", key="onboard_retry_sync"):
                         st.session_state.pop("_tweet_history_cache", None)
-                        analyze_personal_patterns.clear()
+                        st.session_state.pop("_pp_cache", None)
                         st.rerun()
                     st.stop()
                 _sync_bar.progress(100, text=f"Synced {_count} tweets")
@@ -1673,7 +1696,7 @@ if is_guest():
                 # Clear cached patterns so they're rebuilt from this guest's data
                 st.session_state.pop("_pp_cache", None)
                 _a_bar.progress(30, text="Calculating engagement scores...")
-                _pp = analyze_personal_patterns(_handle=get_current_handle())
+                _pp = analyze_personal_patterns()
                 if not _pp:
                     _a_bar.progress(100, text="")
                     st.warning("Not enough original tweets to analyze. Need at least 20 non-reply, non-RT tweets.")
@@ -1751,6 +1774,11 @@ else:
 # Only sync if a page param already exists (avoid triggering rerun on fresh load)
 if _qp_page and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
+# Re-inject auth token + username into URL so refresh preserves login
+if st.session_state.get("_auth_token") and not st.query_params.get("token"):
+    st.query_params["token"] = st.session_state["_auth_token"]
+if st.session_state.get("auth_username") and not st.query_params.get("user"):
+    st.query_params["user"] = st.session_state["auth_username"]
 
 _cur_pg = st.session_state.current_page
 
@@ -1761,6 +1789,26 @@ def _act(name):
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
 _owner_debug_zone = ""
+if is_owner():
+    _owner_debug_zone = f"""
+
+  <div class="mp-zone mp-zone-insights">
+    <div class="mp-zone-label">OWNER</div>
+    <a href="/?{_tok_qp}page=Debug+Console" class="mp-ico {_act('Debug Console')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#91A2B2" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+    </a>
+    <div class="mp-panel">
+      <div class="mp-panel-header">OWNER</div>
+      <a href="/?{_tok_qp}page=Debug+Console" class="mp-panel-item {_act('Debug Console')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        Debug Console
+      </a>
+    </div>
+  </div>
+"""
 
 _sidebar_html = f"""
 <style>
@@ -1858,7 +1906,11 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
-    <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="36" height="36" style="border-radius:6px;">
+    <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
+      <polygon points="10,2 19,18 1,18" stroke="#C49E3C" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
+      <polygon points="10,7 15,17 5,17" fill="#C49E3C" opacity="0.25"/>
+      <circle cx="10" cy="2" r="1.2" fill="#00E5CC"/>
+    </svg>
   </a>
 
   <div class="mp-zone mp-zone-create">
@@ -2046,6 +2098,8 @@ with st.sidebar:
         st.session_state.pop("user_avatar", None)
         st.session_state.pop("onboarding_complete", None)
         st.session_state.pop("onboarding_step", None)
+        _clear_auth_cookie()
+        st.session_state.pop("cookie_synced", None)
         for _k in ["token", "user", "guest_id"]:
             if _k in st.query_params:
                 del st.query_params[_k]
@@ -2055,6 +2109,8 @@ with st.sidebar:
     _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
                   "Signals & Prompts", "Reply Mode", "Idea Bank",
                   "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
+    if is_owner():
+        _all_pages.append("Debug Console")
     def _nav_to(pg):
         st.session_state.current_page = pg
         st.session_state._nav_override = True
@@ -2214,7 +2270,7 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="display:flex;align-items:center;gap:10px;"><img src="data:image/png;base64,{_LOGO_ICON_B64}" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
+    <div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;line-height:1.8;">MOUNT<br>POLUMBUS</div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
@@ -2232,6 +2288,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Account+Audit" target="_self" style="{_lnk}">Account Audit</a>
   <a href="/?{_tok_qp}page=My+Stats" target="_self" style="{_lnk}">My Stats</a>
   <a href="/?{_tok_qp}page=Profile+Analyzer" target="_self" style="{_lnk}">Profile Analyzer</a>
+  {f'<div style="{_sec}">OWNER</div><a href="/?{_tok_qp}page=Debug+Console" target="_self" style="{_lnk}">Debug Console</a>' if is_owner() else ''}
 </div>
 <label for="_mob_chk" id="_mob_ham">
   <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
@@ -3702,13 +3759,9 @@ def _save_format_patterns_to_gist(patterns_dict: dict) -> None:
 
 
 def _get_format_patterns_with_fallback(fmt: str) -> str:
-    """Get format patterns for fmt — gist cache first, then fresh analysis, with gist save.
-    Guests skip gist (it's Tyler's data) and use their own patterns only."""
-    if is_guest():
-        # Guests: analyze from their own tweet history, no gist
-        return ""  # Guest patterns come from build_patterns_context() which uses their data
+    """Get format patterns for fmt — gist cache first, then fresh analysis, with gist save."""
     try:
-        # Try gist cache first (owner only)
+        # Try gist cache first
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=8)
         _files = _r.json().get("files", {})
@@ -3819,7 +3872,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     print(f"[AI-CALL] action={action} voice={voice} fmt={fmt} text={tweet_text[:80]!r}", file=sys.stderr, flush=True)
 
     voice_mod = _build_voice_mod(voice)
-    pp = analyze_personal_patterns(_handle=get_current_handle())
+    pp = analyze_personal_patterns()
     format_mod = _build_format_mod(fmt, pp, voice)
 
     result = None
@@ -5339,22 +5392,20 @@ def page_content_coach():
     if not _coach_skip_sports:
         try: _coach_sports = f"\n\nLIVE SPORTS CONTEXT (reference when relevant):\n{get_sports_context()}"
         except Exception: pass
-    _coach_handle = get_current_handle()
-    _coach_niche = load_json("topics.json", {}).get("niche", "content") if is_guest() else "sports content"
-    COACH_SYSTEM = get_voice_context(_handle=get_current_handle()) + f"""
+    COACH_SYSTEM = get_voice_context() + f"""
 
-You are Amplifier, @{_coach_handle}'s personal social media coach. You are an EXPERT on:
+You are Amplifier, Tyler's personal social media coach. You are an EXPERT on:
 - X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
 - Content strategy: hook formulas, thread structures, engagement tactics, audience growth
-- @{_coach_handle}'s specific data: their top performing tweets, patterns, optimal character length, usage rates, what topics work for them
+- Tyler's specific data: his top performing tweets, patterns, optimal character length, question/ellipsis usage rates, what topics work for him
 - All social media platforms (YouTube, Instagram, TikTok, LinkedIn) for future expansion
-- {_coach_niche} specifically: what makes {_coach_niche} content go viral, audience psychology, timing
+- Sports content specifically: what makes sports commentary go viral, fan psychology, timing around games/events
 
 Your coaching style:
 - Direct and practical — no fluff, no "great question!" filler
-- Always reference @{_coach_handle}'s actual data when giving advice
+- Always reference Tyler's actual data when giving advice
 - Give specific, actionable recommendations with examples
-- Challenge them when their ideas won't perform well — don't just agree
+- Challenge Tyler when his ideas won't perform well — don't just agree
 - Think in terms of SYSTEMS not individual posts — build repeatable frameworks
 - Always explain WHY something works in terms of the algorithm
 {_coach_sports}"""
@@ -5395,13 +5446,12 @@ Your coaching style:
         # Build system prompt
         sys_prompt = COACH_SYSTEM
         if include_history:
-            patterns = analyze_personal_patterns(_handle=get_current_handle())
+            patterns = analyze_personal_patterns()
             if patterns:
                 sys_prompt += build_patterns_context(patterns)
         if coach_fmt != "General Advice":
             sys_prompt += f"\n\nFormat your actionable suggestions as: {coach_fmt}"
-        _hist_name = get_current_handle()
-        history_str = "\n".join([f"{_hist_name if m['role']=='user' else 'Amplifier'}: {m['content']}" for m in msgs])
+        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Amplifier'}: {m['content']}" for m in msgs])
         reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as Amplifier.", system=sys_prompt, max_tokens=1200)
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
@@ -5699,8 +5749,8 @@ def page_article_writer():
     if st.session_state.get("aw_autogen"):
         _auto_seed = st.session_state.pop("aw_autogen")
         with st.spinner("Writing article..."):
-            voice = get_voice_context(_handle=get_current_handle())
-            pp = analyze_personal_patterns(_handle=get_current_handle())
+            voice = get_voice_context()
+            pp = analyze_personal_patterns()
             pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
             prompt = f"""Write a complete X Article based on this seed:\n\n\"{_auto_seed}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
             st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
@@ -5721,8 +5771,8 @@ def page_article_writer():
     if st.button("aw_write", key="aw_scratch"):
         if seed_text:
             with st.spinner("Writing full article..."):
-                voice = get_voice_context(_handle=get_current_handle())
-                pp = analyze_personal_patterns(_handle=get_current_handle())
+                voice = get_voice_context()
+                pp = analyze_personal_patterns()
                 pp_note = ""
                 if pp:
                     pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis."
@@ -5741,7 +5791,7 @@ def page_article_writer():
     if st.button("aw_outline", key="aw_outline"):
         if seed_text:
             with st.spinner("Generating outline..."):
-                voice = get_voice_context(_handle=get_current_handle())
+                voice = get_voice_context()
                 prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
                 st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
     if st.button("aw_research", key="aw_research_btn"):
@@ -5995,7 +6045,7 @@ def fetch_tweet_by_id(tweet_id: str) -> dict:
         dt = datetime.utcfromtimestamp(ts_ms / 1000)
         since = dt.strftime("%Y-%m-%d")
         until = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
-        query = f"from:{get_current_handle()} since:{since} until:{until}"
+        query = f"from:{TYLER_HANDLE} since:{since} until:{until}"
         cursor = ""
         for _ in range(5):  # up to 5 pages
             params = {"query": query, "queryType": "Latest", "count": "50"}
@@ -6081,7 +6131,7 @@ def page_tweet_history():
     with hc1:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{len(tweets)}</div><div class="stat-label">Total Tweets</div></div>', unsafe_allow_html=True)
     with hc2:
-        st.markdown(f'<div class="stat-card"><div style="font-size:13px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;word-break:break-all;">@{get_current_handle()}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div style="font-size:13px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;word-break:break-all;">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
     with hc3:
         last_sync = ""
         if tweets:
@@ -6248,7 +6298,7 @@ def page_tweet_history():
     # Debug panel — only shown when debug_mode is active
     if st.session_state.get("debug_mode", False):
         with st.expander("Debug: Pattern Analysis", expanded=False):
-            _pp = analyze_personal_patterns(_handle=get_current_handle())
+            _pp = analyze_personal_patterns()
             if not _pp:
                 st.warning("Not enough data to compute patterns (need 20+ tweets with no URLs).")
             else:
@@ -6575,11 +6625,10 @@ def page_account_pulse():
     st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
 
     # Auto-load on first visit this session
-    _ap_handle = get_current_handle()
     if "ap_user" not in st.session_state:
         with st.spinner("Loading account data..."):
-            user = fetch_user_info(_ap_handle)
-            tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
+            user = fetch_user_info(TYLER_HANDLE)
+            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
 
@@ -6593,8 +6642,8 @@ def page_account_pulse():
 
     if st.button("ap_refresh", key="ap_load"):
         with st.spinner("Refreshing..."):
-            user = fetch_user_info(_ap_handle)
-            tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
+            user = fetch_user_info(TYLER_HANDLE)
+            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
             st.rerun()
@@ -7081,14 +7130,13 @@ def page_reply_guy():
     # ── My Tweet Replies data fetch (buttons now in merged top bar above) ──
     if load_all or load_verified:
         with st.spinner("Fetching tweets and replies..."):
-            _rg_handle = get_current_handle()
-            my_tweets = fetch_tweets(f"from:{_rg_handle}", count=15)
+            my_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=15)
             filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
             st.session_state["rg_my_tweets"] = filtered
             for idx, tw in enumerate(filtered):
                 tw_id = tw.get("id", "")
                 replies = fetch_tweets(f"conversation_id:{tw_id}", count=25)
-                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != _rg_handle.lower() and r.get("id", "") != tw_id]
+                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != TYLER_HANDLE.lower() and r.get("id", "") != tw_id]
                 if load_verified:
                     replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
                 replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
@@ -8597,12 +8645,11 @@ if is_owner():
     page_map["Debug Console"] = page_debug_console
 
 # Sync strategy:
-# @st.cache_data(ttl=3600) runs at most once per hour across ALL page loads for a
-# given handle. The handle param makes it per-user so guest and owner don't share.
-# session_state guard is USELESS on Streamlit Cloud — it resets on every navigation.
+# @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
+# st.session_state resets on every navigation (full page reload on Streamlit Cloud),
+# so the old session_state guard was useless — the sync ran on every click.
 @st.cache_data(ttl=3600, show_spinner=False)
-def _auto_sync_tweets(_handle: str = ""):
-    """Auto-sync tweet history. Cached per handle for 1 hour."""
+def _auto_sync_tweets():
     # Guests: already synced during onboarding, just do a quick refresh
     if is_guest():
         try:
@@ -8634,7 +8681,7 @@ def _auto_sync_tweets(_handle: str = ""):
     except Exception:
         pass
 
-_auto_sync_tweets(_handle=get_current_handle())
+_auto_sync_tweets()
 
 st.markdown('<div class="main-watermark">POST<br><span>ASCEND</span></div>', unsafe_allow_html=True)
 
