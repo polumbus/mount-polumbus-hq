@@ -1,33 +1,18 @@
 // Persist Post Ascend auth params so the X extension can reuse them.
+// Runs once on page load — no interval, no cleanup needed.
 
-const AUTH_KEYS = {
-  token: "hq_auth_token",
-  user: "hq_auth_user"
-};
-
-let _hqInterval = null;
-
-function getAuthFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get("token") || "";
-  const user = params.get("user") || "";
-  return { token, user };
-}
-
-async function saveAuthIfPresent() {
+(async function() {
   try {
-    const { token, user } = getAuthFromUrl();
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token") || "";
     if (!token) return;
 
-    const payload = { [AUTH_KEYS.token]: token };
-    if (user) payload[AUTH_KEYS.user] = user;
+    const payload = { hq_auth_token: token };
+    const user = params.get("user") || "";
+    if (user) payload.hq_auth_user = user;
 
     await chrome.storage.local.set(payload);
   } catch (_) {
-    // Extension context invalidated — stop silently
-    if (_hqInterval) { clearInterval(_hqInterval); _hqInterval = null; }
+    // silently ignore — extension context may be invalidated
   }
-}
-
-saveAuthIfPresent();
-_hqInterval = setInterval(saveAuthIfPresent, 2000);
+})();
