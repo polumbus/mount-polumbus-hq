@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Mount Polumbus HQ",
-  "version": "1.0",
-  "description": "Save tweets to your HQ Inspiration Vault or Repurpose queue",
+  "name": "Post Ascend",
+  "version": "1.1",
+  "description": "Save tweets to your Post Ascend Inspiration Vault or Repurpose queue",
   "permissions": ["activeTab", "storage", "cookies", "alarms"],
   "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://postascend.streamlit.app/*", "https://api.github.com/*", "https://gertrude-spectroscopic-nominally.ngrok-free.dev/*"],
   "background": {"service_worker": "background.js"},
@@ -23,6 +23,6 @@
   },
   "icons": {
     "48": "icon.png",
-    "128": "icon.png"
+    "128": "icon128.png"
   }
 }
