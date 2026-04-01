@@ -85,6 +85,19 @@ button[kind="header"],
 }
 .tool-desc { color: #4a5160; font-size: 13px; margin-bottom: 28px; letter-spacing: 0.3px; }
 
+/* Brand bar — always visible above page content */
+.pa-brand-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 20px; padding-bottom: 12px;
+  border-bottom: 1px solid rgba(45,212,191,0.08);
+}
+.pa-brand-bar img { border-radius: 4px; }
+.pa-brand-text {
+  font-family: 'Bebas Neue', sans-serif; font-size: 18px;
+  letter-spacing: 3px; color: rgba(255,255,255,0.4);
+}
+.pa-brand-text span { color: #2DD4BF; }
+
 /* ═══════════════════════════════════════════════
    BUTTONS
 ═══════════════════════════════════════════════ */

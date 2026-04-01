@@ -8645,6 +8645,11 @@ _auto_sync_tweets(_handle=get_current_handle())
 
 st.markdown('<div class="main-watermark"><img src="app/static/logo_icon_512.png" width="120" height="120"></div>', unsafe_allow_html=True)
 
+st.markdown("""<div class="pa-brand-bar">
+  <img src="app/static/logo_icon_128.png" width="22" height="22">
+  <span class="pa-brand-text">POST <span>ASCEND</span></span>
+</div>""", unsafe_allow_html=True)
+
 page_fn = page_map.get(page)
 if page_fn:
     page_fn()
