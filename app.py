@@ -19,7 +19,6 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   get_coingecko_trending)
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG,
                     _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
-from logo_constants import ICON_B64 as _LOGO_ICON_B64, WATERMARK_B64 as _LOGO_WM_B64
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -8644,12 +8643,9 @@ def _auto_sync_tweets(_handle: str = ""):
 
 _auto_sync_tweets(_handle=get_current_handle())
 
-st.markdown(f'<div class="main-watermark"><img src="data:image/png;base64,{_LOGO_WM_B64}" width="100"></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-watermark">POST<br><span>ASCEND</span></div>', unsafe_allow_html=True)
 
-st.markdown("""<div class="pa-brand-bar">
-  <img src="data:image/png;base64,{_LOGO_ICON_B64}" width="22" height="22">
-  <span class="pa-brand-text">POST <span>ASCEND</span></span>
-</div>""", unsafe_allow_html=True)
+st.markdown('<div class="pa-brand-bar"><span class="pa-brand-text">POST <span>ASCEND</span></span></div>', unsafe_allow_html=True)
 
 page_fn = page_map.get(page)
 if page_fn:

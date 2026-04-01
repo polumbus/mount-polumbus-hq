@@ -91,7 +91,6 @@ button[kind="header"],
   margin-bottom: 20px; padding-bottom: 12px;
   border-bottom: 1px solid rgba(45,212,191,0.08);
 }
-.pa-brand-bar img { border-radius: 4px; }
 .pa-brand-text {
   font-family: 'Bebas Neue', sans-serif; font-size: 18px;
   letter-spacing: 3px; color: rgba(255,255,255,0.4);
@@ -403,8 +402,12 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 /* Watermark */
 .main-watermark {
   position: fixed; bottom: 40px; right: 40px; z-index: 0; pointer-events: none;
-  user-select: none; opacity: 0.12;
+  user-select: none;
+  font-family: 'Bebas Neue', sans-serif; font-size: 48px; letter-spacing: 5px;
+  line-height: 0.9; text-align: right;
+  color: rgba(45,212,191,0.06);
 }
+.main-watermark span { color: rgba(45,212,191,0.10); }
 
 /* Branded footer */
 .hq-footer { text-align: center; padding: 24px 0 8px 0; margin-top: 40px; border-top: 1px solid rgba(45,212,191,0.06); }
