@@ -196,9 +196,12 @@ Format rules:
 VOICE MATCHING IS THE #1 PRIORITY. A tweet that sounds like @{handle} actually wrote it is always better than a "well-crafted" tweet that sounds like an AI."""
 
 
-@st.cache_data(ttl=3600)
 def get_voice_context():
-    """Build voice context from actual tweet history (default voice only)."""
+    """Build voice context from actual tweet history (default voice only).
+    No @st.cache_data — must be user-aware (different per handle)."""
+    _cache_key = f"_voice_ctx_{get_current_handle()}"
+    if _cache_key in st.session_state:
+        return st.session_state[_cache_key]
     tweets = load_json("tweet_history.json", [])
     _base = build_user_context()
     if not tweets:
@@ -209,7 +212,7 @@ def get_voice_context():
     examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
 
     _label = "YOUR" if is_guest() else "TYLER'S"
-    return _base + f"""
+    _result = _base + f"""
 
 {_label} ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
 {examples}
@@ -217,6 +220,8 @@ def get_voice_context():
 Match this exact voice, tone, sentence structure, and style in everything you write.
 
 Note: Format-specific rules (character limits, structure, thread formatting, article layout) will be provided separately. Follow those format rules for structure while maintaining this voice."""
+    st.session_state[_cache_key] = _result
+    return _result
 
 
 def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
@@ -334,11 +339,12 @@ IMPORTANT: Write in @{s_handle}'s STYLE as described above."""
     return _base
 
 
-@st.cache_data(ttl=3600)
 def analyze_personal_patterns():
-    """Analyze Tyler's tweet history to build personal scoring benchmarks. Cached per session."""
-    if "_pp_cache" in st.session_state:
-        return st.session_state["_pp_cache"]
+    """Analyze user's tweet history to build personal scoring benchmarks.
+    Cached per user in session_state (not @st.cache_data which leaks across users)."""
+    _pp_key = f"_pp_cache_{get_current_handle()}"
+    if _pp_key in st.session_state:
+        return st.session_state[_pp_key]
     tweets = load_json("tweet_history.json", [])
     if len(tweets) < 20:
         return None
@@ -420,7 +426,7 @@ def analyze_personal_patterns():
         {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
     ]
 
-    st.session_state["_pp_cache"] = patterns
+    st.session_state[f"_pp_cache_{get_current_handle()}"] = patterns
     return patterns
 
 
@@ -1636,7 +1642,7 @@ if is_guest():
                     st.warning(f"Only found {_count} tweets. We need at least 20 original tweets to build your profile. Make sure your account is public and has enough posts.")
                     if st.button("Retry Sync", type="primary", key="onboard_retry_sync"):
                         st.session_state.pop("_tweet_history_cache", None)
-                        st.session_state.pop("_pp_cache", None)
+                        st.session_state.pop(f"_pp_cache_{get_current_handle()}", None)
                         st.rerun()
                     st.stop()
                 _sync_bar.progress(100, text=f"Synced {_count} tweets")
@@ -3721,9 +3727,13 @@ def _save_format_patterns_to_gist(patterns_dict: dict) -> None:
 
 
 def _get_format_patterns_with_fallback(fmt: str) -> str:
-    """Get format patterns for fmt — gist cache first, then fresh analysis, with gist save."""
+    """Get format patterns for fmt — gist cache first, then fresh analysis, with gist save.
+    Guests skip gist (it's Tyler's data) and use their own patterns only."""
+    if is_guest():
+        # Guests: analyze from their own tweet history, no gist
+        return ""  # Guest patterns come from build_patterns_context() which uses their data
     try:
-        # Try gist cache first
+        # Try gist cache first (owner only)
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=8)
         _files = _r.json().get("files", {})
@@ -5354,20 +5364,22 @@ def page_content_coach():
     if not _coach_skip_sports:
         try: _coach_sports = f"\n\nLIVE SPORTS CONTEXT (reference when relevant):\n{get_sports_context()}"
         except Exception: pass
+    _coach_handle = get_current_handle()
+    _coach_niche = load_json("topics.json", {}).get("niche", "content") if is_guest() else "sports content"
     COACH_SYSTEM = get_voice_context() + f"""
 
-You are Amplifier, Tyler's personal social media coach. You are an EXPERT on:
+You are Amplifier, @{_coach_handle}'s personal social media coach. You are an EXPERT on:
 - X (Twitter) algorithm: engagement weights (replies=27x, bookmarks=20x, retweets=20x, dwell time=20x, likes=1x), penalties (links=-50%, 3+ hashtags=-40%, negative sentiment reduces reach)
 - Content strategy: hook formulas, thread structures, engagement tactics, audience growth
-- Tyler's specific data: his top performing tweets, patterns, optimal character length, question/ellipsis usage rates, what topics work for him
+- @{_coach_handle}'s specific data: their top performing tweets, patterns, optimal character length, usage rates, what topics work for them
 - All social media platforms (YouTube, Instagram, TikTok, LinkedIn) for future expansion
-- Sports content specifically: what makes sports commentary go viral, fan psychology, timing around games/events
+- {_coach_niche} specifically: what makes {_coach_niche} content go viral, audience psychology, timing
 
 Your coaching style:
 - Direct and practical — no fluff, no "great question!" filler
-- Always reference Tyler's actual data when giving advice
+- Always reference @{_coach_handle}'s actual data when giving advice
 - Give specific, actionable recommendations with examples
-- Challenge Tyler when his ideas won't perform well — don't just agree
+- Challenge them when their ideas won't perform well — don't just agree
 - Think in terms of SYSTEMS not individual posts — build repeatable frameworks
 - Always explain WHY something works in terms of the algorithm
 {_coach_sports}"""
@@ -5413,7 +5425,8 @@ Your coaching style:
                 sys_prompt += build_patterns_context(patterns)
         if coach_fmt != "General Advice":
             sys_prompt += f"\n\nFormat your actionable suggestions as: {coach_fmt}"
-        history_str = "\n".join([f"{'Tyler' if m['role']=='user' else 'Amplifier'}: {m['content']}" for m in msgs])
+        _hist_name = get_current_handle()
+        history_str = "\n".join([f"{_hist_name if m['role']=='user' else 'Amplifier'}: {m['content']}" for m in msgs])
         reply = call_claude(f"Conversation so far:\n{history_str}\n\nRespond as Amplifier.", system=sys_prompt, max_tokens=1200)
         msgs.append({"role": "assistant", "content": reply})
         _save_current()
@@ -6007,7 +6020,7 @@ def fetch_tweet_by_id(tweet_id: str) -> dict:
         dt = datetime.utcfromtimestamp(ts_ms / 1000)
         since = dt.strftime("%Y-%m-%d")
         until = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
-        query = f"from:{TYLER_HANDLE} since:{since} until:{until}"
+        query = f"from:{get_current_handle()} since:{since} until:{until}"
         cursor = ""
         for _ in range(5):  # up to 5 pages
             params = {"query": query, "queryType": "Latest", "count": "50"}
@@ -6093,7 +6106,7 @@ def page_tweet_history():
     with hc1:
         st.markdown(f'<div class="stat-card"><div class="stat-num">{len(tweets)}</div><div class="stat-label">Total Tweets</div></div>', unsafe_allow_html=True)
     with hc2:
-        st.markdown(f'<div class="stat-card"><div style="font-size:13px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;word-break:break-all;">@{TYLER_HANDLE}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-card"><div style="font-size:13px;font-weight:700;color:#00E5CC;line-height:1.3;margin-bottom:4px;word-break:break-all;">@{get_current_handle()}</div><div class="stat-label">Handle</div></div>', unsafe_allow_html=True)
     with hc3:
         last_sync = ""
         if tweets:
@@ -6587,10 +6600,11 @@ def page_account_pulse():
     st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
 
     # Auto-load on first visit this session
+    _ap_handle = get_current_handle()
     if "ap_user" not in st.session_state:
         with st.spinner("Loading account data..."):
-            user = fetch_user_info(TYLER_HANDLE)
-            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
+            user = fetch_user_info(_ap_handle)
+            tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
 
@@ -6604,8 +6618,8 @@ def page_account_pulse():
 
     if st.button("ap_refresh", key="ap_load"):
         with st.spinner("Refreshing..."):
-            user = fetch_user_info(TYLER_HANDLE)
-            tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=50)
+            user = fetch_user_info(_ap_handle)
+            tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
             st.session_state["ap_user"] = user
             st.session_state["ap_tweets"] = tweets
             st.rerun()
@@ -7092,13 +7106,14 @@ def page_reply_guy():
     # ── My Tweet Replies data fetch (buttons now in merged top bar above) ──
     if load_all or load_verified:
         with st.spinner("Fetching tweets and replies..."):
-            my_tweets = fetch_tweets(f"from:{TYLER_HANDLE}", count=15)
+            _rg_handle = get_current_handle()
+            my_tweets = fetch_tweets(f"from:{_rg_handle}", count=15)
             filtered = [t for t in my_tweets if int(t.get("replyCount", t.get("reply_count", 0))) >= 2][:8]
             st.session_state["rg_my_tweets"] = filtered
             for idx, tw in enumerate(filtered):
                 tw_id = tw.get("id", "")
                 replies = fetch_tweets(f"conversation_id:{tw_id}", count=25)
-                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != TYLER_HANDLE.lower() and r.get("id", "") != tw_id]
+                replies = [r for r in replies if r.get("author", {}).get("userName", "").lower() != _rg_handle.lower() and r.get("id", "") != tw_id]
                 if load_verified:
                     replies = [r for r in replies if r.get("author", {}).get("isBlueVerified", False) or int(r.get("author", {}).get("followers", 0)) >= 5000]
                 replies.sort(key=lambda r: int(r.get("likeCount", r.get("like_count", 0))), reverse=True)
@@ -8610,8 +8625,13 @@ if is_owner():
 # @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
 # st.session_state resets on every navigation (full page reload on Streamlit Cloud),
 # so the old session_state guard was useless — the sync ran on every click.
-@st.cache_data(ttl=3600, show_spinner=False)
 def _auto_sync_tweets():
+    """Auto-sync tweet history. Uses session_state guard per user (not @st.cache_data
+    which shares one cache across all users and breaks guest sync)."""
+    _sync_key = f"_synced_{get_current_handle()}"
+    if _sync_key in st.session_state:
+        return
+    st.session_state[_sync_key] = True
     # Guests: already synced during onboarding, just do a quick refresh
     if is_guest():
         try:
