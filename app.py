@@ -1305,12 +1305,12 @@ if not st.session_state["auth_role"]:
     </style>""", unsafe_allow_html=True)
     st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
-    <div style="margin:0 auto 16px;width:80px;">
-      <svg width="80" height="80" viewBox="0 0 40 40" fill="none">
-        <polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/>
-        <polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/>
-        <polygon points="30,10 34,6 32,12" fill="#2DD4BF"/>
-        <polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/>
+    <div style="margin:0 auto 16px;">
+      <svg width="80" height="70" viewBox="0 0 100 88" fill="none">
+        <polygon points="18,82 42,40 50,54 30,82" fill="#2DD4BF"/>
+        <polygon points="42,40 50,54 58,40" fill="#0D1E36"/>
+        <polygon points="58,40 70,82 50,54 82,82" fill="#2DD4BF" opacity="0.75"/>
+        <polygon points="42,40 50,26 58,40" fill="#C49E3C"/>
       </svg>
     </div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">POST ASCEND</div>
@@ -1869,11 +1869,11 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
-    <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-      <polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/>
-      <polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/>
-      <polygon points="30,10 34,6 32,12" fill="#2DD4BF"/>
-      <polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/>
+    <svg width="32" height="28" viewBox="0 0 100 88" fill="none">
+      <polygon points="18,82 42,40 50,54 30,82" fill="#2DD4BF"/>
+      <polygon points="42,40 50,54 58,40" fill="#0D1E36"/>
+      <polygon points="58,40 70,82 50,54 82,82" fill="#2DD4BF" opacity="0.75"/>
+      <polygon points="42,40 50,26 58,40" fill="#C49E3C"/>
     </svg>
   </a>
 
@@ -2231,7 +2231,7 @@ st.markdown(f"""
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
     <div style="display:flex;align-items:center;gap:10px;">
-      <svg width="28" height="28" viewBox="0 0 40 40" fill="none"><polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/><polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/><polygon points="30,10 34,6 32,12" fill="#2DD4BF"/><polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/></svg>
+      <svg width="28" height="24" viewBox="0 0 100 88" fill="none"><polygon points="18,82 42,40 50,54 30,82" fill="#2DD4BF"/><polygon points="42,40 50,54 58,40" fill="#0D1E36"/><polygon points="58,40 70,82 50,54 82,82" fill="#2DD4BF" opacity="0.75"/><polygon points="42,40 50,26 58,40" fill="#C49E3C"/></svg>
       <span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span>
     </div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
