@@ -410,8 +410,7 @@ async function loadSavedHQAuth() {
       token: result[AUTH_KEYS.token] || "",
       user: result[AUTH_KEYS.user] || ""
     };
-  } catch (err) {
-    console.warn("[HQ] Could not read saved auth", err);
+  } catch (_) {
     return { token: "", user: "" };
   }
 }
