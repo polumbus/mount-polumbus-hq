@@ -15,22 +15,17 @@ function getAuthFromUrl() {
 }
 
 async function saveAuthIfPresent() {
-  // If extension was reloaded, chrome.runtime.id becomes undefined — bail out
-  if (!chrome.runtime?.id) {
-    if (_hqInterval) clearInterval(_hqInterval);
-    return;
-  }
-
-  const { token, user } = getAuthFromUrl();
-  if (!token) return;
-
-  const payload = { [AUTH_KEYS.token]: token };
-  if (user) payload[AUTH_KEYS.user] = user;
-
   try {
+    const { token, user } = getAuthFromUrl();
+    if (!token) return;
+
+    const payload = { [AUTH_KEYS.token]: token };
+    if (user) payload[AUTH_KEYS.user] = user;
+
     await chrome.storage.local.set(payload);
   } catch (_) {
-    if (_hqInterval) clearInterval(_hqInterval);
+    // Extension context invalidated — stop silently
+    if (_hqInterval) { clearInterval(_hqInterval); _hqInterval = null; }
   }
 }
 
