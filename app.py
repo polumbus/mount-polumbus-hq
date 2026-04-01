@@ -31,9 +31,10 @@ from anthropic_circuit import (
 )
 
 # ─── Page Config ────────────────────────────────────────────────────────────
+_favicon_path = Path(__file__).parent / "static" / "favicon.png"
 st.set_page_config(
     page_title="Post Ascend",
-    page_icon="mountain",
+    page_icon=str(_favicon_path) if _favicon_path.exists() else "mountain",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -1299,10 +1300,17 @@ if not st.session_state["auth_role"]:
     [data-testid="stToolbar"] { display: none !important; }
     .stApp [data-testid="stAppViewContainer"] { opacity: 1 !important; }
     </style>""", unsafe_allow_html=True)
-    st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
+    import base64 as _b64
+    _logo_path = Path(__file__).parent / "static" / "logo_login.png"
+    if _logo_path.exists():
+        _logo_b64 = _b64.b64encode(_logo_path.read_bytes()).decode()
+        _logo_html = f'<img src="data:image/png;base64,{_logo_b64}" width="200" style="margin-bottom:8px;">'
+    else:
+        _logo_html = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</div>'
+    st.markdown(f"""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">POST ASCEND</div>
-    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI CONTENT CREATION + GROWTH</div>
+    {_logo_html}
+    <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI-POWERED CONTENT CREATION</div>
     </div></div>""", unsafe_allow_html=True)
 
     _auth_tab = st.radio("", ["Sign In", "Create Account"], horizontal=True, key="auth_tab", label_visibility="collapsed")
@@ -1758,6 +1766,8 @@ def _act(name):
 # Token prefix for sidebar links — ensures auth survives page navigation
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
+_sidebar_logo_path = Path(__file__).parent / "static" / "logo_sidebar_b64.txt"
+_sidebar_logo_b64 = _sidebar_logo_path.read_text() if _sidebar_logo_path.exists() else ""
 _owner_debug_zone = ""
 if is_owner():
     _owner_debug_zone = f"""
@@ -1876,11 +1886,7 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
-    <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
-      <polygon points="10,2 19,18 1,18" stroke="#C49E3C" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
-      <polygon points="10,7 15,17 5,17" fill="#C49E3C" opacity="0.25"/>
-      <circle cx="10" cy="2" r="1.2" fill="#00E5CC"/>
-    </svg>
+    <img src="data:image/png;base64,{_sidebar_logo_b64}" width="36" height="36" style="border-radius:6px;">
   </a>
 
   <div class="mp-zone mp-zone-create">
@@ -2238,7 +2244,7 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;line-height:1.8;">POST<br>ASCEND</div>
+    <div style="display:flex;align-items:center;gap:10px;"><img src="data:image/png;base64,{_sidebar_logo_b64}" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
@@ -8682,7 +8688,8 @@ else:
     st.markdown(f"""
 <div class="hq-footer">
   <a href="https://x.com/{_footer_handle}" target="_blank">@{_footer_handle}</a>
-  <a href="#" target="_blank">Post Ascend</a>
+  <span style="color:#1E3050;">|</span>
+  <span style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:#4a5160;font-size:12px;">POST <span style="color:#2DD4BF;">ASCEND</span></span>
 </div>
 """, unsafe_allow_html=True)
 
