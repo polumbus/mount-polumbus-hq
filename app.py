@@ -38,12 +38,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Sidebar starts hidden on every render; shown later only after auth passes.
-# This prevents the sidebar from flashing during login→app rerun transitions.
-st.markdown(
-    '<style>[data-testid="stSidebar"]{opacity:0;pointer-events:none}</style>',
-    unsafe_allow_html=True,
-)
+# Hide everything during rerun; revealed at end of script after all content is ready.
+# Prevents sidebar flash + stale login form showing during login→app transition.
+st.markdown("""<style>
+[data-testid="stSidebar"]{opacity:0;pointer-events:none}
+.stApp [data-testid="stAppViewContainer"]{opacity:0}
+</style>""", unsafe_allow_html=True)
 
 # ─── Constants ──────────────────────────────────────────────────────────────
 CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
@@ -1318,6 +1318,7 @@ if not st.session_state["auth_role"]:
     st.markdown("""<style>
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
+    .stApp [data-testid="stAppViewContainer"] { opacity: 1 !important; }
     </style>""", unsafe_allow_html=True)
     st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
@@ -8680,7 +8681,11 @@ def _auto_sync_tweets():
     except Exception:
         pass
 
-_auto_sync_tweets()
+# Run tweet sync in background thread — don't block page render
+import threading as _sync_threading
+if "_tweet_sync_started" not in st.session_state:
+    st.session_state["_tweet_sync_started"] = True
+    _sync_threading.Thread(target=_auto_sync_tweets, daemon=True).start()
 
 st.markdown('<div class="main-watermark">PA</div>', unsafe_allow_html=True)
 
@@ -8703,9 +8708,9 @@ else:
 </div>
 """, unsafe_allow_html=True)
 
-# Reveal sidebar now that all content is rendered (overrides opacity:0 from top of script).
-# This is the LAST output element — sidebar stays hidden during the entire DOM update.
-st.markdown(
-    '<style>[data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}</style>',
-    unsafe_allow_html=True,
-)
+# Reveal everything now that all content is rendered.
+st.markdown("""<style>
+[data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}
+.stApp [data-testid="stAppViewContainer"]{opacity:1!important}
+</style>""", unsafe_allow_html=True)
+
