@@ -2062,8 +2062,6 @@ with st.sidebar:
     _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
                   "Signals & Prompts", "Reply Mode", "Idea Bank",
                   "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
-    if is_owner():
-        _all_pages.append("Debug Console")
     def _nav_to(pg):
         st.session_state.current_page = pg
         st.session_state._nav_override = True
