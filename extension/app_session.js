@@ -24,10 +24,11 @@ async function saveAuthIfPresent() {
   try {
     await chrome.storage.local.set(payload);
   } catch (err) {
-    console.warn("[HQ] Failed to persist auth token", err);
+    // Extension context invalidated (e.g. after reload) — stop polling
+    if (_hqInterval) clearInterval(_hqInterval);
   }
 }
 
 saveAuthIfPresent();
-setInterval(saveAuthIfPresent, 2000);
+const _hqInterval = setInterval(saveAuthIfPresent, 2000);
 
