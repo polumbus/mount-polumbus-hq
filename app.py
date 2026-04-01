@@ -1305,7 +1305,14 @@ if not st.session_state["auth_role"]:
     </style>""", unsafe_allow_html=True)
     st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
-    <div style="width:80px;height:80px;border-radius:14px;border:1px solid #1E3050;margin:0 auto 16px;background:#0D1E36 url('data:image/png;base64,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') center/64px 64px no-repeat;"></div>
+    <div style="margin:0 auto 16px;width:80px;">
+      <svg width="80" height="80" viewBox="0 0 40 40" fill="none">
+        <polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/>
+        <polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/>
+        <polygon points="30,10 34,6 32,12" fill="#2DD4BF"/>
+        <polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/>
+      </svg>
+    </div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2DD4BF;letter-spacing:3px;margin-bottom:4px;">POST ASCEND</div>
     <div style="font-size:11px;color:#4a5160;letter-spacing:2px;text-transform:uppercase;margin-bottom:40px;">AI-POWERED CONTENT CREATION</div>
     </div></div>""", unsafe_allow_html=True)
@@ -1777,7 +1784,7 @@ _sidebar_html = f"""
     width: 52px; height: 52px; border-radius: 10px;
     border: 1px solid #1E3050; display: flex; align-items: center; justify-content: center;
     margin-bottom: 8px; flex-shrink: 0; text-decoration: none !important;
-    background: #0D1E36 url('data:image/png;base64,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') center/36px 36px no-repeat;
+    background: #0D1E36;
 }}
 .mp-logo:link,
 .mp-logo:visited,
@@ -1861,7 +1868,14 @@ _sidebar_html = f"""
 
 <div class="mp-rail">
 
-  <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self"></a>
+  <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
+    <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+      <polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/>
+      <polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/>
+      <polygon points="30,10 34,6 32,12" fill="#2DD4BF"/>
+      <polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/>
+    </svg>
+  </a>
 
   <div class="mp-zone mp-zone-create">
     <div class="mp-zone-label">CREATE</div>
@@ -2216,7 +2230,10 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="display:flex;align-items:center;gap:10px;"><div class="mp-logo" style="width:32px;height:32px;margin:0;flex-shrink:0;background-size:28px 28px;"></div><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="28" height="28" viewBox="0 0 40 40" fill="none"><polygon points="6,34 18,12 24,24" fill="#2DD4BF" opacity="0.9"/><polygon points="18,12 34,6 24,24" fill="#2DD4BF" opacity="0.7"/><polygon points="30,10 34,6 32,12" fill="#2DD4BF"/><polygon points="14,18 18,12 16,14" fill="#C49E3C" opacity="0.9"/></svg>
+      <span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span>
+    </div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
