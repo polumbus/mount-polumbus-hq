@@ -1768,26 +1768,6 @@ def _act(name):
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
 _owner_debug_zone = ""
-if is_owner():
-    _owner_debug_zone = f"""
-
-  <div class="mp-zone mp-zone-insights">
-    <div class="mp-zone-label">OWNER</div>
-    <a href="/?{_tok_qp}page=Debug+Console" class="mp-ico {_act('Debug Console')}" target="_self">
-      <div class="mp-active-pip"></div>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#91A2B2" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
-      </svg>
-    </a>
-    <div class="mp-panel">
-      <div class="mp-panel-header">OWNER</div>
-      <a href="/?{_tok_qp}page=Debug+Console" class="mp-panel-item {_act('Debug Console')}" target="_self">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.27 7.2 16.76l.92-5.34L4.24 7.64l5.36-.78L12 2z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/></svg>
-        Debug Console
-      </a>
-    </div>
-  </div>
-"""
 
 _sidebar_html = f"""
 <style>
@@ -2261,7 +2241,6 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Account+Audit" target="_self" style="{_lnk}">Account Audit</a>
   <a href="/?{_tok_qp}page=My+Stats" target="_self" style="{_lnk}">My Stats</a>
   <a href="/?{_tok_qp}page=Profile+Analyzer" target="_self" style="{_lnk}">Profile Analyzer</a>
-  {f'<div style="{_sec}">OWNER</div><a href="/?{_tok_qp}page=Debug+Console" target="_self" style="{_lnk}">Debug Console</a>' if is_owner() else ''}
 </div>
 <label for="_mob_chk" id="_mob_ham">
   <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
