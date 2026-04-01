@@ -8681,11 +8681,7 @@ def _auto_sync_tweets():
     except Exception:
         pass
 
-# Run tweet sync in background thread — don't block page render
-import threading as _sync_threading
-if "_tweet_sync_started" not in st.session_state:
-    st.session_state["_tweet_sync_started"] = True
-    _sync_threading.Thread(target=_auto_sync_tweets, daemon=True).start()
+_auto_sync_tweets()
 
 st.markdown('<div class="main-watermark">PA</div>', unsafe_allow_html=True)
 
