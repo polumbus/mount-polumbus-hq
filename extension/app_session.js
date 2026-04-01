@@ -5,6 +5,8 @@ const AUTH_KEYS = {
   user: "hq_auth_user"
 };
 
+let _hqInterval = null;
+
 function getAuthFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token") || "";
@@ -23,12 +25,11 @@ async function saveAuthIfPresent() {
 
   try {
     await chrome.storage.local.set(payload);
-  } catch (err) {
-    // Extension context invalidated (e.g. after reload) — stop polling
+  } catch (_) {
+    // Extension context invalidated (e.g. after reload) — stop silently
     if (_hqInterval) clearInterval(_hqInterval);
   }
 }
 
 saveAuthIfPresent();
-const _hqInterval = setInterval(saveAuthIfPresent, 2000);
-
+_hqInterval = setInterval(saveAuthIfPresent, 2000);
