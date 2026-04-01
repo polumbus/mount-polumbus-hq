@@ -38,9 +38,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Prevent visual flash during Streamlit reruns (sidebar/content briefly unstyled)
+# Sidebar starts hidden on every render; shown later only after auth passes.
+# This prevents the sidebar from flashing during login→app rerun transitions.
 st.markdown(
-    '<style>.stApp{animation:mp-load .2s ease}@keyframes mp-load{from{opacity:0}to{opacity:1}}</style>',
+    '<style>[data-testid="stSidebar"]{opacity:0;pointer-events:none}</style>',
     unsafe_allow_html=True,
 )
 
@@ -1227,18 +1228,8 @@ def render_tweet_card(tweet: dict, idx: int = 0):
 
 # ─── Authentication Gate ───────────────────────────────────────────────────
 import hashlib as _hl
-from streamlit_cookies_controller import CookieController
-
-_cookies = CookieController()
-
-# Cookie controller JS component needs one render cycle to initialize.
-# On the first render, getAll() returns None even if cookies exist.
-# Stop rendering and let the component's JS trigger a natural rerun.
-if "cookies_ready" not in st.session_state:
-    _all_cookies = _cookies.getAll()
-    if _all_cookies is None:
-        st.stop()
-    st.session_state["cookies_ready"] = True
+import urllib.parse as _auth_urlp
+import streamlit.components.v1 as _auth_comp
 
 try:
     _OWNER_PW = st.secrets["OWNER_PASSWORD"]
@@ -1263,57 +1254,65 @@ def _hash_pw(username: str, password: str) -> str:
     return _hl.sha256(f"mp_{username}_{password}".encode()).hexdigest()
 
 def _set_auth_cookie(role: str, token: str, username: str = ""):
-    """Set persistent auth cookie (30 days)."""
-    _cookies.set("mp_auth", json.dumps({"role": role, "token": token, "user": username}), max_age=60*60*24*30)
+    """Set persistent auth cookie (30 days) via JS."""
+    _val = _auth_urlp.quote(json.dumps({"role": role, "token": token, "user": username}))
+    _auth_comp.html(
+        f'<script>document.cookie="mp_auth={_val};max-age={60*60*24*30};path=/;SameSite=Lax";</script>',
+        height=0,
+    )
 
 def _clear_auth_cookie():
-    """Clear auth cookie on logout."""
-    _cookies.remove("mp_auth")
+    """Clear auth cookie via JS."""
+    _auth_comp.html(
+        '<script>document.cookie="mp_auth=;max-age=0;path=/";</script>',
+        height=0,
+    )
+
 
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
 
-# Restore session: 1) cookie, 2) query params
+# Restore session: 1) query params, 2) cookie (via st.context.cookies)
 if not st.session_state["auth_role"]:
-    # Try cookie first (survives browser close)
-    _cookie_raw = _cookies.get("mp_auth")
-    if _cookie_raw:
+    _tok = st.query_params.get("token", "")
+    _tok_user = st.query_params.get("user", "")
+    if _tok and _tok == _OWNER_TOKEN:
+        st.session_state["auth_role"] = "owner"
+    elif _tok and _tok_user:
+        _accts = _load_accounts()
+        if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
+            st.session_state["auth_role"] = "guest"
+            st.session_state["auth_username"] = _tok_user
+            _gid = _accts[_tok_user].get("guest_id", "")
+            if _gid:
+                st.query_params["guest_id"] = _gid
+
+    # Fallback: read cookie directly (survives browser close, no JS needed)
+    if not st.session_state["auth_role"]:
         try:
-            _cookie_data = json.loads(_cookie_raw) if isinstance(_cookie_raw, str) else _cookie_raw
-            _c_role = _cookie_data.get("role", "")
-            _c_token = _cookie_data.get("token", "")
-            _c_user = _cookie_data.get("user", "")
-            if _c_role == "owner" and _c_token == _OWNER_TOKEN:
-                st.session_state["auth_role"] = "owner"
-            elif _c_role == "guest" and _c_user:
-                _accts = _load_accounts()
-                if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
-                    st.session_state["auth_role"] = "guest"
-                    st.session_state["auth_username"] = _c_user
-                    _gid = _accts[_c_user].get("guest_id", "")
-                    if _gid:
-                        st.query_params["guest_id"] = _gid
+            _cookie_raw = st.context.cookies.get("mp_auth", "")
+            if _cookie_raw:
+                _cookie_data = json.loads(_auth_urlp.unquote(_cookie_raw))
+                _c_role = _cookie_data.get("role", "")
+                _c_token = _cookie_data.get("token", "")
+                _c_user = _cookie_data.get("user", "")
+                if _c_role == "owner" and _c_token == _OWNER_TOKEN:
+                    st.session_state["auth_role"] = "owner"
+                    st.query_params["token"] = _c_token
+                elif _c_role == "guest" and _c_user:
+                    _accts = _load_accounts()
+                    if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
+                        st.session_state["auth_role"] = "guest"
+                        st.session_state["auth_username"] = _c_user
+                        st.query_params["token"] = _c_token
+                        st.query_params["user"] = _c_user
+                        _gid = _accts[_c_user].get("guest_id", "")
+                        if _gid:
+                            st.query_params["guest_id"] = _gid
         except Exception:
             pass
-
-    # Fallback: query params (for backward compat / shared links)
-    if not st.session_state["auth_role"]:
-        _tok = st.query_params.get("token", "")
-        _tok_user = st.query_params.get("user", "")
-        if _tok and _tok == _OWNER_TOKEN:
-            st.session_state["auth_role"] = "owner"
-            _set_auth_cookie("owner", _tok)
-        elif _tok and _tok_user:
-            _accts = _load_accounts()
-            if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
-                st.session_state["auth_role"] = "guest"
-                st.session_state["auth_username"] = _tok_user
-                _set_auth_cookie("guest", _tok, _tok_user)
-                _gid = _accts[_tok_user].get("guest_id", "")
-                if _gid:
-                    st.query_params["guest_id"] = _gid
 
 if not st.session_state["auth_role"]:
     st.markdown("""<style>
@@ -1337,7 +1336,6 @@ if not st.session_state["auth_role"]:
             elif _login_user.lower().strip() == "owner" and _OWNER_PW and _login_pw == _OWNER_PW:
                 st.session_state["auth_role"] = "owner"
                 st.query_params["token"] = _OWNER_TOKEN
-                _set_auth_cookie("owner", _OWNER_TOKEN)
                 st.rerun()
             else:
                 _accts = _load_accounts()
@@ -1351,7 +1349,6 @@ if not st.session_state["auth_role"]:
                     st.session_state["auth_username"] = _lu
                     st.query_params["token"] = _token
                     st.query_params["user"] = _lu
-                    _set_auth_cookie("guest", _token, _lu)
                     _gid = _accts[_lu].get("guest_id", "")
                     if _gid:
                         st.query_params["guest_id"] = _gid
@@ -1393,9 +1390,18 @@ if not st.session_state["auth_role"]:
                     st.session_state["auth_username"] = _nu
                     st.query_params["token"] = _token
                     st.query_params["user"] = _nu
-                    _set_auth_cookie("guest", _token, _nu)
                     st.rerun()
     st.stop()
+
+# Sync auth cookie (once per session). The cookie JS can't run during login
+# because st.rerun() kills the iframe. So we set it here on the first app render.
+if st.session_state.get("auth_role") and "cookie_synced" not in st.session_state:
+    st.session_state["cookie_synced"] = True
+    _set_auth_cookie(
+        st.session_state["auth_role"],
+        st.query_params.get("token", ""),
+        st.session_state.get("auth_username", ""),
+    )
 
 
 def is_guest() -> bool:
@@ -2092,7 +2098,7 @@ with st.sidebar:
         st.session_state.pop("onboarding_complete", None)
         st.session_state.pop("onboarding_step", None)
         _clear_auth_cookie()
-        st.session_state.pop("cookies_ready", None)
+        st.session_state.pop("cookie_synced", None)
         for _k in ["token", "user", "guest_id"]:
             if _k in st.query_params:
                 del st.query_params[_k]
@@ -8696,3 +8702,10 @@ else:
   <a href="#" target="_blank">Post Ascend</a>
 </div>
 """, unsafe_allow_html=True)
+
+# Reveal sidebar now that all content is rendered (overrides opacity:0 from top of script).
+# This is the LAST output element — sidebar stays hidden during the entire DOM update.
+st.markdown(
+    '<style>[data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}</style>',
+    unsafe_allow_html=True,
+)
