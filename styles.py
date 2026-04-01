@@ -390,10 +390,7 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 /* Watermark */
 .main-watermark {
   position: fixed; bottom: 60px; right: 40px; z-index: 0; pointer-events: none;
-  font-family: 'Bebas Neue', sans-serif; font-size: 120px; letter-spacing: 8px;
-  line-height: 1; user-select: none;
-  background: linear-gradient(135deg, rgba(45,212,191,0.03), rgba(45,212,191,0.01));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  user-select: none; opacity: 0.035;
 }
 
 /* Branded footer */
