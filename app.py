@@ -8662,7 +8662,10 @@ st.markdown("""<div class="main-watermark">
   </svg>
 </div>""", unsafe_allow_html=True)
 
-st.markdown('<div class="pa-brand-bar"><span class="pa-brand-text">POST <span>ASCEND</span></span></div>', unsafe_allow_html=True)
+st.markdown("""<div class="pa-brand-bar">
+  <svg width="22" height="19" viewBox="0 0 100 88" fill="none"><polygon points="18,82 42,40 50,54 30,82" fill="#2DD4BF"/><polygon points="42,40 50,54 58,40" fill="#0D1E36"/><polygon points="58,40 70,82 50,54 82,82" fill="#2DD4BF" opacity="0.75"/><polygon points="42,40 50,26 58,40" fill="#C49E3C"/></svg>
+  <span class="pa-brand-text">POST <span>ASCEND</span></span>
+</div>""", unsafe_allow_html=True)
 
 page_fn = page_map.get(page)
 if page_fn:

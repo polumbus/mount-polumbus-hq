@@ -401,9 +401,10 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 
 /* Watermark */
 .main-watermark {
-  position: fixed; bottom: 40px; right: 40px; z-index: 0; pointer-events: none;
+  position: fixed; bottom: 30px; right: 30px; z-index: 0; pointer-events: none;
   user-select: none; opacity: 0.12;
 }
+.main-watermark svg { width: 140px; height: 122px; }
 
 /* Branded footer */
 .hq-footer { text-align: center; padding: 24px 0 8px 0; margin-top: 40px; border-top: 1px solid rgba(45,212,191,0.06); }
