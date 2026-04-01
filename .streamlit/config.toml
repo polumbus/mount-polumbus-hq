@@ -4,6 +4,7 @@ port = 8501
 headless = true
 fileWatcherType = "poll"
 runOnSave = true
+enableStaticServing = true
 
 [theme]
 primaryColor = "#2DD4BF"

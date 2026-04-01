@@ -1767,7 +1767,6 @@ def _act(name):
 # Token prefix for sidebar links — ensures auth survives page navigation
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
-_sidebar_logo_b64 = "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAIAAAADnC86AAAJPElEQVR4nF1YbYxdVRVd65z7vt+8eW9a2k4/6dTphxQoioIlFkRIoxW1GKMkhpgIokEppKWdNmiBKQMaEyDoDzVKTIgaogmK/CBIGkKAxMhfaqfMDAVaOnSYjzfv+917tj/OOfdeeJkfN/e9c87ea6+19j7D6prtAEBAAEAAAiAhAtpnJSIQIQnAGAOCVAIh7Id2gV1uV4mAJEREBABJsc8kCQEV/Gq7AwnYE0i/qRAQ0u0LABAxhIsRSH8TPwogpN0LJrUUAgIKNh1xsZLKHUh7gMQBGcDmTXuagA4FwEZHn4W4H6TyBeg+9kdKxAMEv18SN32IEIAuCoctPgG0iIgYB3jqh2LDF4gR9w1BBu5Ei6QRf2i8KwWg+CxESJVs6qnhQoq3TT3Y6rpMBEJQBCKBrbWlkqQIRber0L8QiMMMAF2JQHsKASOkclsx3kmRoM02YYSF2sPi47K/hMCkw3DlIeL4xcFrQ1RQREQ58EDHeeOrTApdbgQRuASUAoQCY3eSuDwxqvGzE0tcoISssCB7TZEwAkLcK9LFIxAECYPjbR3GSXQiQohJkUkRkia+Rx8QKuUh8bxPqEYol0AQU8kzC1B0jBARiMUs5ptHmt5yAOcdQnpiCYwLnzDiFETGtAOgnOYS33FkSxCO4SABKEIlevWo+robFwUcI+x7sVh4WQEAAnrAYteEEztE6DVjAMapf/xjvcEfF1f/E+RgUjzL0MDrhv7suGRusVgxWmklYHkR2ZwclyCxJl3I9Mr4eLCkspbihcEUUcUbHB1cSJTn7czrHWn7Jr3S4gW2oE5oEABBbD6OvVZxEDExw70BAWLEWOtxonZ+ZvOiJDmm4venu17jvlF0DYqksjs7CngbtN0ksV/jLAsxoInDivVjfLzfJCjZkokIRHl5uyOMcXtqpayDpf6EztdS3CFIFbcTDzZ87L4FxRT2RwUS95NEBrElJSyPGacSLYobDryP23ce7DSRlA0aqVapHEHENVSlSJWcKykcfRACQsg02Kknug6uSK2gKKGJGi0JI5eRUzgCa4U2UfFStr4Da4xISuGSVa4EhqItfrYjKQVAjJF+KP2eRIbZIFOrDmy7ojPzXn9ugYEWJ1cG6VwQt+0YpnhC8HNXYg5IGSABMlxumDDUxUJm5VBhZFNpx2hhx2hhy6XZ2uCpOw5idg4ZHR8QOPvwFTKSVoIxBITKdcHEgEi6vGMShP3al3aXdu0sbN6Y37whV6shyJqwr4DOe+f7H15ERotTM0EENiHjzYeuqTmSWiolzcAVkGEUmUgKhYyJREAqSs/ofG74tlujSEyrHbV7kA5NJKVif34+arZVNuts0Xq+7UVpqrhiEyqe61wDAEFN9rrhqpWDo1vWLDe6Wtu6is7nL/7rpckDD/RnP6QYJYYKIcQo3Z29KP0wrWra7pSusstXIMYpHXADtAKVUpEREL8+/vXnf3vnmtWVVqevlXURyVSrC6++0XrrdCafNyIRCGpFds9fkMgglpmIACqmRmwRcKx3vdwe6X1IumE0fvd11+1cPVzL/e6Br+RzQa9vlFZiJGo2Nx07UN3zhajZMlRGCMBAuuc/sIsTFxFRsaKFEMAQxptNitq2AUm91fvBvi1fvWb9Qr27vNy+fNPA8e/vzGaVCY1pt9cf/NEl+/eFzVYoYCYIClkqJb1u78JFaC3JCCOwA32sCWtRdBR26VvUqdjoqv3XrLj9xmGtg2xWK0Wlufuy2q6RcnO5tXHspyu/dUt/aTkyhpVSe/LMuyce11qh1+/NzulMECsWbq5286Bv+gTE3jjc/CcCrVW30b12JLN7e+GZl8+Vhzp33742X8r/9YWzTz3z33fP1bcdv3fFvr3RQh1EdrDSnZqZeehXnamzIFfe9s1waZla2/7rLjUirA7vcO2Cyl2tYESQXKq0DpfqtT3XrsyFUy+/2cmVe+32Z3eur1bLJ187nSG2Hj8wtPemcLEOIqiUu9PvvH14vDc3F5RKYbOd37iue+FD22XpHYoEq8M7ABgRRYonFzy3oVXUaBW3jYw+OdHv9mYOPdidnMpUB5qtXtjrl/PBhqP3VPfeaBbrMIJKsXNmenpsIlxYDAp5CSMhpNdHEPirpd9eRCUKSk1ijtNaRa12dnj16PhRlQlyhfzokw+XPndl2O4VsrpSzq89dqB68w2yuCykrpY7k1PTRx4xi/VMsSiRsc7PbMYOtW5CtLnFrZRJ1ekmD62l2wsqAyMTY3rNqqjdVcWChFFQrZh+X6DWPnBf7aYv9pcaYkQNFJv/OzM9NhHOzYMIO93EUMWPg/72a/udcmOGb1qxhEw/FK02PXSo8KmRfqeTWVlbfOW103cdXnjxFVUurXvwYGXPbrPUhIiqltqnTs+MTfTf/6B02bbNjx7VQ4NRq0Ot48ZjrCcoUjkDC+yQp2ws7ipAMSbqdzb+/GB51+USGel1zz72x4+e/zdEMiuGNhw/OHDNVWapQTBTLbbeOj199LHoo/ny1VduOHagtHWzqpSnD41Lq6NyWYlCZ7puQnN3AWWzjmdIa9tRs7X2njuH9n4ZROM/b5758dH5f7ykM5lgsLJp/Ejl85+RpYaC6GqpeerM1JGJaKkeDA4M33tHcfto78JccevWzSfGkAmk36fSgB0uksuMCFhds0MoAtCOt4EOF5ZW3XHb+gN39c59MPunZ+f+/gKDgFrpfG7TibHyrstNvQ6oYLDUPDX59v3j0miqfN6E/cxQbdWtX6vecjOyOZ0J6q++PvOzXzIIRFMik/qnCSHCwdXbPeFArcP5+aHv7t/84KH6ydfff+oPncnpoDoQtru6VNgycbR0xc6w3lCgrpZbpyanDp8I68sqn4MxIE2vZzq94raR1d/7dvX63dlLhi4++9zMw4+rYl7szVESL+bgmu3+VBUtN2r7blp3+CezT//l4p+fgzG6XDTtTlCrXjp+f+nT26N6A0rrYr711qnpY78Ilxs6n5Moir0BiqbdQRRVrt51yXe+seLm62f/9s93H30K2Qyp4O/TYg+2pY06nYGrdq67765zT/x++Y039eAAFKUf6srApSeOlC7bES7VGWhkMr13zs4ceSRcrKtCTsIIrrfbe7+1QBU1GgxYu2HP2vt+uPDiyfO/eVrlcv5yIQT/D4h+dNoZEb0RAAAAAElFTkSuQmCC"
 _owner_debug_zone = ""
 if is_owner():
     _owner_debug_zone = f"""
@@ -1886,7 +1885,7 @@ _sidebar_html = f"""
 <div class="mp-rail">
 
   <a href="/?{_tok_qp}page=Creator+Studio" class="mp-logo" target="_self">
-    <img src="data:image/png;base64,{_sidebar_logo_b64}" width="36" height="36" style="border-radius:6px;">
+    <img src="app/static/logo_icon_128.png" width="36" height="36" style="border-radius:6px;">
   </a>
 
   <div class="mp-zone mp-zone-create">
@@ -2244,7 +2243,7 @@ st.markdown(f"""
 <input type="checkbox" id="_mob_chk">
 <div id="_mob_nav">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="display:flex;align-items:center;gap:10px;"><img src="data:image/png;base64,{_sidebar_logo_b64}" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
+    <div style="display:flex;align-items:center;gap:10px;"><img src="app/static/logo_icon_128.png" width="32" height="32" style="border-radius:4px;"><span style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:3px;">POST ASCEND</span></div>
     <label for="_mob_chk" style="font-size:32px;cursor:pointer;color:#667;line-height:1;padding:4px 8px;">&#215;</label>
   </div>
   <div style="{_sec}">CREATE</div>
@@ -8628,16 +8627,12 @@ if is_owner():
     page_map["Debug Console"] = page_debug_console
 
 # Sync strategy:
-# @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
-# st.session_state resets on every navigation (full page reload on Streamlit Cloud),
-# so the old session_state guard was useless — the sync ran on every click.
-def _auto_sync_tweets():
-    """Auto-sync tweet history. Uses session_state guard per user (not @st.cache_data
-    which shares one cache across all users and breaks guest sync)."""
-    _sync_key = f"_synced_{get_current_handle()}"
-    if _sync_key in st.session_state:
-        return
-    st.session_state[_sync_key] = True
+# @st.cache_data(ttl=3600) runs at most once per hour across ALL page loads for a
+# given handle. The handle param makes it per-user so guest and owner don't share.
+# session_state guard is USELESS on Streamlit Cloud — it resets on every navigation.
+@st.cache_data(ttl=3600, show_spinner=False)
+def _auto_sync_tweets(_handle: str = ""):
+    """Auto-sync tweet history. Cached per handle for 1 hour."""
     # Guests: already synced during onboarding, just do a quick refresh
     if is_guest():
         try:
@@ -8669,9 +8664,9 @@ def _auto_sync_tweets():
     except Exception:
         pass
 
-_auto_sync_tweets()
+_auto_sync_tweets(_handle=get_current_handle())
 
-st.markdown(f'<div class="main-watermark"><img src="data:image/png;base64,{_sidebar_logo_b64}" width="120" height="120"></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-watermark"><img src="app/static/logo_icon_512.png" width="120" height="120"></div>', unsafe_allow_html=True)
 
 page_fn = page_map.get(page)
 if page_fn:
