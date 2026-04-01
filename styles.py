@@ -402,8 +402,8 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 
 /* Watermark */
 .main-watermark {
-  position: fixed; bottom: 60px; right: 40px; z-index: 0; pointer-events: none;
-  user-select: none; opacity: 0.035;
+  position: fixed; bottom: 40px; right: 40px; z-index: 0; pointer-events: none;
+  user-select: none; opacity: 0.12;
 }
 
 /* Branded footer */

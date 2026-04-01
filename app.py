@@ -8643,7 +8643,7 @@ def _auto_sync_tweets(_handle: str = ""):
 
 _auto_sync_tweets(_handle=get_current_handle())
 
-st.markdown('<div class="main-watermark"><img src="app/static/logo_icon_512.png" width="120" height="120"></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-watermark"><img src="app/static/logo_login.png" width="100"></div>', unsafe_allow_html=True)
 
 st.markdown("""<div class="pa-brand-bar">
   <img src="app/static/logo_icon_128.png" width="22" height="22">
