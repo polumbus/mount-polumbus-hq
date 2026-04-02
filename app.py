@@ -8798,24 +8798,6 @@ if is_owner():
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
-# Tweet sync — deferred to AFTER page renders so it never blocks load.
-# On first render, page loads instantly. On second interaction, sync runs if needed.
-def _auto_sync_tweets():
-    try:
-        if is_guest():
-            existing = load_json("tweet_history.json", [])
-            if len(existing) >= 20:
-                sync_tweet_history(quick=True)
-            return
-        # Owner: always quick sync (fetch latest ~10 tweets). Fast, 1 API call.
-        sync_tweet_history(quick=True)
-    except Exception:
-        pass
-
-if st.session_state.get("auth_role") and "_tweet_sync_done" not in st.session_state:
-    st.session_state["_tweet_sync_done"] = True
-    _auto_sync_tweets()
-
 st.markdown("""<div class="main-watermark">
   <svg width="80" height="70" viewBox="0 0 100 88" fill="none">
     <polygon points="18,82 42,40 50,54 30,82" fill="#2DD4BF"/>
@@ -8855,3 +8837,16 @@ st.markdown("""<style>
 [data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}
 .stApp [data-testid="stAppViewContainer"]{opacity:1!important}
 </style>""", unsafe_allow_html=True)
+
+# Tweet sync — skipped on first render so login is instant.
+# Runs on the SECOND rerun (any widget click after page loads).
+if st.session_state.get("auth_role"):
+    if st.session_state.get("_tweet_sync_ready"):
+        if "_tweet_sync_done" not in st.session_state:
+            st.session_state["_tweet_sync_done"] = True
+            try:
+                sync_tweet_history(quick=True)
+            except Exception:
+                pass
+    else:
+        st.session_state["_tweet_sync_ready"] = True
