@@ -5172,10 +5172,14 @@ def _ci_help_dialog():
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
-    _help_col, _spacer = st.columns([1, 8])
-    with _help_col:
-        if st.button("Watch Walkthrough", key="ci_help_video", type="secondary", use_container_width=True):
-            _ci_help_dialog()
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="ci_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Watch Walkthrough</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_ci_help_video", key="ci_help_video"):
+        _ci_help_dialog()
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # Consume staging key FIRST — before any widget is registered

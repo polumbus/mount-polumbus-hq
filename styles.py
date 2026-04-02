@@ -263,6 +263,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class~="st-key-ci_repurpose"], [class~="st-key-ci_engage"],
 [class~="st-key-ci_save"], [class~="st-key-ci_bank_btn"],
 [class~="st-key-ci_inspiration"], [class~="st-key-ci_post_direct"],
+[class~="st-key-ci_help_video"],
 [class*="st-key-coach_new"], [class*="st-key-coach_clear_all"],
 [class*="st-key-cv_"], [class*="st-key-cc_fmt_"],
 [class*="st-key-coach_send"], [class*="st-key-coach_save_idea"],
@@ -316,16 +317,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 /* Bottom bar + inline button hover + active */
 .cs-bot:hover { border-color:rgba(45,212,191,0.4) !important; color:#8ab0c8 !important; transition:all 0.15s; }
 .cs-bot:active { transform:scale(0.95); opacity:0.8; transition:all 0.05s; }
-[class*="st-key-ci_help_video"] button {
-  border-radius: 14px !important;
-  min-height: 44px !important;
-  height: 44px !important;
-  padding: 0 18px !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.08em !important;
-  text-transform: uppercase !important;
-}
 /* Mobile: force pill rows horizontal, not stacked */
 @media (max-width: 768px) {
   .cs-fmt-row [data-testid="stHorizontalBlock"],
