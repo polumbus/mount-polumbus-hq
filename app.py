@@ -917,7 +917,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
         except Exception as e:
             return False, f"Proxy error: {e}"
     if os.path.exists(XURL):
-        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=15)
+        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=8)
         if result.returncode == 0:
             return True, ""
         return False, result.stderr.strip() or result.stdout.strip() or "xurl failed"
@@ -945,7 +945,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         # Fall back to local xurl if available
         if os.path.exists(XURL):
             cmd = [XURL, action, tweet_id] + ([text] if text else [])
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
             return result.returncode == 0
         return False
 
@@ -991,7 +991,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                 cmd += ["--system-prompt", system]
             result = subprocess.run(
                 cmd,
-                input=prompt, capture_output=True, text=True, timeout=90, env=clean_env,
+                input=prompt, capture_output=True, text=True, timeout=20, env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
                 anthropic_mark_available("streamlit_cli")
@@ -3926,10 +3926,10 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
                 ) if _needs_stats else None
                 _fut_sports = _ex.submit(get_sports_context) if _needs_sports else None
                 if _fut_stats:
-                    try: _live_stats_block = _fut_stats.result(timeout=15)
+                    try: _live_stats_block = _fut_stats.result(timeout=8)
                     except Exception: pass
                 if _fut_sports:
-                    try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{_fut_sports.result(timeout=15)}"
+                    try: _sports_ctx = f"\n\nLIVE SPORTS CONTEXT (use if relevant to the tweet):\n{_fut_sports.result(timeout=8)}"
                     except Exception: pass
 
     if action == "banger" and tweet_text.strip() and fmt == "Article":
