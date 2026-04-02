@@ -5184,6 +5184,36 @@ def _coach_help_dialog():
         st.caption("Content Coach walkthrough video is not available in this deployment yet.")
 
 
+@st.dialog("Article Writer Walkthrough", width="large")
+def _article_writer_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to turn tweets, raw thoughts, or scratch ideas into full X Articles with outlines, research, and polished drafts.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _article_help_video = _load_local_video_bytes("article-writer-walkthrough.mp4")
+    if _article_help_video:
+        st.video(_article_help_video)
+    else:
+        st.caption("Article Writer walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Reply Mode Walkthrough", width="large")
+def _reply_mode_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to load a feed, generate stronger replies, and build a consistent daily engagement habit inside Reply Mode.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _reply_help_video = _load_local_video_bytes("reply-mode-walkthrough.mp4")
+    if _reply_help_video:
+        st.video(_reply_help_video)
+    else:
+        st.caption("Reply Mode walkthrough video is not available in this deployment yet.")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -5659,6 +5689,15 @@ def page_article_writer():
 
     st.markdown('<div class="main-header">ARTICLE <span>WRITER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Expand a tweet or brain dump into a full X Article.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="aw_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_aw_help_video", key="aw_help_video"):
+        _article_writer_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # --- Source as HTML buttons ---
     if "aw_source" not in st.session_state:
@@ -6942,6 +6981,15 @@ def page_reply_guy():
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="rg_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_rg_help_video", key="rg_help_video"):
+        _reply_mode_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # --- Load & roll-over progress ---
     progress = load_json("reply_progress.json", {"today": "", "count": 0, "streak": 0, "history": []})
