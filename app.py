@@ -5174,7 +5174,7 @@ def page_compose_ideas():
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
     st.markdown(
         '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
-            <span class="cs-bot" data-bot="ci_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Watch Walkthrough</span>
+            <span class="cs-bot" data-bot="ci_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(45,212,191,0.4);background:rgba(45,212,191,0.1);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Watch Walkthrough</span>
         </div>''',
         unsafe_allow_html=True,
     )
