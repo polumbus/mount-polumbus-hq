@@ -1,0 +1,61 @@
+{
+  "title": "Profile Analyzer Walkthrough",
+  "subtitle": "Research another account and pull strategy from it",
+  "output_name": "profile-analyzer-walkthrough",
+  "app_url": "https://postascend.streamlit.app",
+  "page": "Profile+Analyzer",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.5,
+  "tail_seconds": 1.5,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Profile Analyzer and frame the tool.",
+      "narration": "Profile Analyzer lets you study another account's strategy, voice, and engagement patterns so you can learn from them without copying blindly.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Profile Analyzer",
+      "overlay_body": "Research the account, then steal the right lessons.",
+      "actions": [
+        { "type": "goto_page", "page": "Profile+Analyzer" },
+        { "type": "wait_for_text", "text": "PROFILE ANALYZER" },
+        { "type": "wait", "seconds": 1.0 }
+      ]
+    },
+    {
+      "id": "handle",
+      "caption": "Enter the account handle.",
+      "narration": "Start with the handle you want to study. This lets the tool pull recent posts, summarize the voice, and surface repeatable tactics.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Enter The Handle",
+      "overlay_body": "Pick the account you want to study first.",
+      "actions": [
+        { "type": "fill_input", "text": "AdamSchefter" },
+        { "type": "wait", "seconds": 1.0 }
+      ]
+    },
+    {
+      "id": "research",
+      "caption": "Run the research pass.",
+      "narration": "Hit Research and the analyzer breaks down the account's themes, tone, engagement tactics, and where your own edge is stronger.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Run The Research",
+      "overlay_body": "Get themes, tactics, voice, and strategic takeaways.",
+      "actions": [
+        { "type": "click_dock", "dock": "ar_research" },
+        { "type": "wait", "seconds": 7.5 }
+      ]
+    }
+  ]
+}

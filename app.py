@@ -5225,6 +5225,36 @@ def _reply_mode_help_dialog():
         st.caption("Reply Mode walkthrough video is not available in this deployment yet.")
 
 
+@st.dialog("Idea Bank Walkthrough", width="large")
+def _idea_bank_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to save inspiration into the vault, filter your bank, and reuse strong ideas when you need them.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _idea_bank_help_video = _load_local_video_bytes("idea-bank-walkthrough.mp4")
+    if _idea_bank_help_video:
+        st.video(_idea_bank_help_video)
+    else:
+        st.caption("Idea Bank walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Account Audit Walkthrough", width="large")
+def _account_audit_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to run an account audit, read the health score, and use the recommendations to tighten your growth strategy.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _account_audit_help_video = _load_local_video_bytes("account-audit-walkthrough.mp4")
+    if _account_audit_help_video:
+        st.video(_account_audit_help_video)
+    else:
+        st.caption("Account Audit walkthrough video is not available in this deployment yet.")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -6532,6 +6562,15 @@ Return as JSON:
 def page_health_check():
     st.markdown('<div class="main-header">ACCOUNT <span>AUDIT</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Full audit of your X account — posting cadence, engagement rate, hook quality, content mix, and actionable fixes.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="hc_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_hc_help_video", key="hc_help_video"):
+        _account_audit_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # What it checks — always visible
     st.markdown("""<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0 16px;">
@@ -7610,6 +7649,15 @@ def page_reply_guy():
 def page_inspiration():
     st.markdown('<div class="main-header">IDEA <span>BANK</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Save tweets that inspire you. Reference them when you need ideas.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="ib_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_ib_help_video", key="ib_help_video"):
+        _idea_bank_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     inspo = load_inspiration_gist()
 

@@ -1,0 +1,64 @@
+{
+  "title": "Algorithm Score Walkthrough",
+  "subtitle": "Score a post before you publish it",
+  "output_name": "algorithm-score-walkthrough",
+  "app_url": "https://postascend.streamlit.app",
+  "page": "Algorithm+Score",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.5,
+  "tail_seconds": 1.5,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Algorithm Score and frame the tool.",
+      "narration": "Algorithm Score lets you pressure test a post before it goes live, so you can spot weak hooks, missing payoff, or format problems before they cost reach.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Algorithm Score",
+      "overlay_body": "Pressure test the post before you publish it.",
+      "actions": [
+        { "type": "goto_page", "page": "Algorithm+Score" },
+        { "type": "wait_for_text", "text": "ALGORITHM SCORE" },
+        { "type": "wait", "seconds": 1.0 }
+      ]
+    },
+    {
+      "id": "paste",
+      "caption": "Paste in the draft.",
+      "narration": "Drop in the exact post you want to analyze. The tool grades the content through an X-specific performance lens instead of generic writing advice.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Paste The Draft",
+      "overlay_body": "Score the exact post before it ships.",
+      "actions": [
+        {
+          "type": "fill_textarea",
+          "text": "Bo Nix is processing faster because Sean Payton finally built the offense around timing and clarity instead of asking the rookie to solve chaos after the snap."
+        },
+        { "type": "wait", "seconds": 1.0 }
+      ]
+    },
+    {
+      "id": "score",
+      "caption": "Run the grade.",
+      "narration": "Hit Grades and the app scores the post, highlights the biggest weakness, and suggests a tighter rewrite you can use right away.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "overlay_title": "Run The Grade",
+      "overlay_body": "Get a score, the top fix, and an optimized rewrite.",
+      "actions": [
+        { "type": "click_dock", "dock": "aa_analyze" },
+        { "type": "wait", "seconds": 6.5 }
+      ]
+    }
+  ]
+}
