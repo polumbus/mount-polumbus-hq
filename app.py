@@ -50,6 +50,7 @@ CLAUDE_CLI = "/home/polfam/.npm-global/bin/claude"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 DATA_DIR = Path(os.path.expanduser("~/.openclaw/workspace-omaha/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 try:
     TWITTER_API_IO_KEY = st.secrets["TWITTER_API_IO_KEY"]
@@ -72,6 +73,14 @@ inject_css()
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def _load_local_video_bytes(filename: str) -> bytes | None:
+    video_path = STATIC_DIR / filename
+    if not video_path.exists():
+        return None
+    return video_path.read_bytes()
+
+
 def _analyze_voice_fingerprint(tweets: list) -> dict:
     """Analyze a user's tweets to build a voice fingerprint — language level,
     tone markers, sentence patterns. Used to make AI output actually sound
@@ -5148,6 +5157,18 @@ def _ci_bank_dialog():
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
+    with st.expander("Need help? Watch the Creator Studio walkthrough", expanded=False):
+        st.markdown(
+            '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+            'Watch the full Creator Studio tutorial without leaving the page. It walks through concept entry, voice selection, Build, Refresh Options, and Grades.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        _creator_help_video = _load_local_video_bytes("creator-studio-walkthrough.mp4")
+        if _creator_help_video:
+            st.video(_creator_help_video)
+        else:
+            st.caption("Creator Studio walkthrough video is not available in this deployment yet.")
 
     # Consume staging key FIRST — before any widget is registered
     _idea_from_url = st.query_params.get("idea", "")
@@ -8692,4 +8713,3 @@ st.markdown("""<style>
 [data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}
 .stApp [data-testid="stAppViewContainer"]{opacity:1!important}
 </style>""", unsafe_allow_html=True)
-
