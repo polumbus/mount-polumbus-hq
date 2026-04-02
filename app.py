@@ -1796,6 +1796,7 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
+_nav_pages_js = json.dumps(_nav_pages)
 
 _sidebar_html = f"""
 <style>
@@ -2128,7 +2129,7 @@ _stc.html("""<script>
   function wireNav(){
     var sidebar=doc.querySelector('section[data-testid="stSidebar"]');
     if(!sidebar) return;
-    var pageNames={json.dumps(_nav_pages)};
+    var pageNames=__PAGE_NAMES__;
     /* Hide nav buttons visually but keep clickable */
     sidebar.querySelectorAll('button').forEach(function(btn){
       var t=btn.textContent.trim();
@@ -2224,7 +2225,7 @@ _stc.html("""<script>
   });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
-</script>""", height=0)
+</script>""".replace("__PAGE_NAMES__", _nav_pages_js), height=0)
 
 # ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
 _lnk = "display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;"
