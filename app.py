@@ -2290,6 +2290,15 @@ if page in {"Debug Console", "Signals & Prompts"} and not is_owner():
 def page_brain_dump():
     st.markdown('<div class="main-header">RAW <span>THOUGHTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Set a timer, dump your thoughts, turn them into content.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="bd_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_bd_help_video", key="bd_help_video"):
+        _raw_thoughts_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # Timer
     if "bd_timer_end" not in st.session_state:
@@ -5248,6 +5257,21 @@ def _account_audit_help_dialog():
         st.video(_account_audit_help_video)
     else:
         st.caption("Account Audit walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Raw Thoughts Walkthrough", width="large")
+def _raw_thoughts_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to set the timer, dump your thoughts fast, and turn raw ideas into subjects, tweet options, or longer content.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _raw_thoughts_help_video = _load_local_video_bytes("raw-thoughts-walkthrough.mp4")
+    if _raw_thoughts_help_video:
+        st.video(_raw_thoughts_help_video)
+    else:
+        st.caption("Raw Thoughts walkthrough video is not available in this deployment yet.")
 
 
 def page_compose_ideas():

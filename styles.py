@@ -259,6 +259,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class*="st-key-bd_gen_tweets"], [class*="st-key-bd_gen_long"],
 [class*="st-key-bd_gen_video"], [class*="st-key-bd_save"],
 [class*="st-key-bd_new"], [class*="st-key-bd_saved"],
+[class*="st-key-bd_help_video"],
 [class~="st-key-ci_banger"], [class~="st-key-ci_build"],
 [class~="st-key-ci_repurpose"], [class~="st-key-ci_engage"],
 [class~="st-key-ci_save"], [class~="st-key-ci_bank_btn"],
