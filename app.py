@@ -521,7 +521,7 @@ def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
         card = f'''<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:0;">
 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
 <div style="width:32px;height:32px;border-radius:50%;background:#0C1630;border:1.5px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2DD4BF;flex-shrink:0;">TP</div>
-<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">{st.session_state.get("user_display_name", "Tyler Polumbus")}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@{get_current_handle()}</div></div>
+<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">{st.session_state.get("user_display_name") or (f"@{get_current_handle()}" if get_current_handle() else "Post Ascend User")}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@{get_current_handle()}</div></div>
 <div style="font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(45,212,191,0.12);color:#2DD4BF;border:0.5px solid rgba(45,212,191,0.25);white-space:nowrap;">{i+1}/{total} · {voice_label}</div>
 </div>
 <div style="font-size:13px;color:rgba(255,255,255,0.82);line-height:1.65;white-space:pre-wrap;">{tweet_body_html}</div>
@@ -3839,7 +3839,7 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
 - Optimal char range: {_fp_lo}-{_fp_hi} — benchmark for Format Fit
 - {_fmt_note}"""
 
-    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and tyler_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"tyler_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
+    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
 
     _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"format: {_char_guide}","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"benchmark: {_fp_ell}% ellipsis rate","fix":"exact word or phrase to change"}}]}}"""
 
@@ -4070,9 +4070,11 @@ Return ONLY this JSON, no other text:
             _da, _db = _parse(_ra), _parse(_rb)
 
             if _da and _db and "grades" in _da and "grades" in _db:
+                _voice_score = _da.get("voice_score", _da.get("tyler_score", 0))
                 gdata = {
                     "algorithm_score": _da.get("algorithm_score", 0),
-                    "tyler_score": _da.get("tyler_score", 0),
+                    "voice_score": _voice_score,
+                    "tyler_score": _voice_score,
                     "grades": _da["grades"] + _db["grades"],
                 }
                 _cache = st.session_state.get("ci_grades_cache", {})
@@ -4164,15 +4166,15 @@ Rules:
 
 {"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
-CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that Tyler would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "the actual tweet text Tyler would post — written out in full, ready to copy and paste to X",
+  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
   "option1_pattern": "short label describing the angle this version takes",
-  "option2": "the actual tweet text Tyler would post — a different angle, written out in full",
+  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
   "option2_pattern": "short label describing the angle this version takes",
-  "option3": "the actual tweet text Tyler would post — a third angle, written out in full",
+  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
   "option3_pattern": "short label describing the angle this version takes",
   "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
@@ -4270,10 +4272,10 @@ REPURPOSING RULES:
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text — Tyler's completely original version",
-  "option1_pattern": "angle Tyler takes on this idea",
-  "option2": "full tweet text — different Tyler angle, also fully original",
-  "option2_pattern": "angle Tyler takes on this idea",
+  "option1": "full tweet text — @{_rw_handle}'s completely original version",
+  "option1_pattern": "angle @{_rw_handle} takes on this idea",
+  "option2": "full tweet text — different @{_rw_handle} angle, also fully original",
+  "option2_pattern": "angle @{_rw_handle} takes on this idea",
   "pick": "1 or 2 — just the number, no explanation"
 }}"""
         _max_tok_r = 2000 if fmt == "Thread" else 400
@@ -4416,9 +4418,10 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
     elif st.session_state.get("ci_grades"):
         gd = st.session_state["ci_grades"]
         algo_score = gd.get("algorithm_score", 0)
-        tyler_score = gd.get("tyler_score", 0)
+        voice_score = gd.get("voice_score", gd.get("tyler_score", 0))
         grades = gd.get("grades", [])
-        combined_score = round((algo_score + tyler_score) / 2) if algo_score or tyler_score else 0
+        combined_score = round((algo_score + voice_score) / 2) if algo_score or voice_score else 0
+        _voice_score_label = "Voice Match" if is_guest() else "Tyler Voice"
 
         # ── Session state for grade panel interactivity ──
         if "ci_grade_selected" not in st.session_state:
@@ -4464,11 +4467,11 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Algorithm</div>
           </div>
           <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid #C49E3C;border-radius:10px;padding:12px 14px;text-align:center;">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#C49E3C;line-height:1;">{tyler_score}</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#C49E3C;line-height:1;">{voice_score}</div>
             <div style="height:5px;background:rgba(196,158,60,0.1);border-radius:3px;margin:8px 0 6px;">
-              <div style="width:{tyler_score}%;height:100%;background:#C49E3C;border-radius:3px;"></div>
+              <div style="width:{voice_score}%;height:100%;background:#C49E3C;border-radius:3px;"></div>
             </div>
-            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">Tyler Voice</div>
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;">{_voice_score_label}</div>
           </div>
           <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-top:2px solid rgba(255,255,255,0.18);border-radius:10px;padding:12px 14px;text-align:center;">
             <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:rgba(255,255,255,0.7);line-height:1;">{combined_score}</div>
@@ -5725,7 +5728,7 @@ Your coaching style:
     # Chat display
     for msg in st.session_state.coach_current.get("messages", []):
         if msg["role"] == "user":
-            role_label = "Tyler"
+            role_label = st.session_state.get("user_display_name") or (f"@{get_current_handle()}" if get_current_handle() else "You")
             cls = "chat-user"
         else:
             role_label = f'{AMPLIFIER_IMG} <span style="color:#2DD4BF;">Amplifier</span>'
@@ -5801,7 +5804,8 @@ def _aw_create_new_dialog():
                     voice_system = get_system_for_voice(voice_pick, voice_mod)
                     _is_sarcastic = voice_pick == "Sarcastic"
                     _article_length = "400-600 words. Short column. Hard stop at 600." if _is_sarcastic else "1,500-2,000 words / 6-8 minute read"
-                    _structure = "" if _is_sarcastic else "\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only."
+                    _aw_voice_rules = f"RULES: @{get_current_handle()}'s voice — direct, no hedging, authoritative. Specific players/schemes/numbers only."
+                    _structure = "" if _is_sarcastic else f"\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\n{_aw_voice_rules}"
                     prompt = f"""Write {'a short sarcastic column' if _is_sarcastic else 'a complete X Article'} based on this seed:\n\n\"{freeform.strip()}\"\n\nFORMAT: {'SARCASTIC COLUMN' if _is_sarcastic else 'X ARTICLE'} ({_article_length}){_structure}\n\n{voice_mod}\n\nReturn the article as plain text. Do NOT wrap in JSON or code blocks."""
                     _max_tok = 1200 if _is_sarcastic else 3000
                     result = call_claude(prompt, system=voice_system, max_tokens=_max_tok)
@@ -5966,7 +5970,7 @@ def page_article_writer():
             voice = get_voice_context()
             pp = analyze_personal_patterns()
             pp_note = f"\nData: optimal char range {pp.get('optimal_char_range','N/A')}, {pp.get('top_question_pct',0)}% top tweets use questions, {pp.get('top_ellipsis_pct',0)}% use ellipsis." if pp else ""
-            prompt = f"""Write a complete X Article based on this seed:\n\n\"{_auto_seed}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: Tyler's voice — direct, no hedging, former-player authority. Specific players/schemes/numbers only.{pp_note}"""
+            prompt = f"""Write a complete X Article based on this seed:\n\n\"{_auto_seed}\"\n\nFORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)\n\nSTRUCTURE:\n- HEADLINE: 50-75 chars, include a number or specific claim\n- INTRO (2-3 paragraphs): Provocative claim, why it matters now.\n- 4 SECTIONS with subheadings: 2-3 short paragraphs, **bold key stats**\n- WHAT COMES NEXT: Bold prediction\n- CONCLUSION: 1-sentence hot take + debate question\n- PROMOTION: companion tweet idea\n\nRULES: @{get_current_handle()}'s voice — direct, no hedging, authoritative. Specific players/schemes/numbers only.{pp_note}"""
             st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=3000)
 
     # Resolve seed text for manual actions
@@ -6006,7 +6010,7 @@ def page_article_writer():
         if seed_text:
             with st.spinner("Generating outline..."):
                 voice = get_voice_context()
-                prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep Tyler's voice: direct, opinionated, former-player authority."""
+                prompt = f"""Generate a detailed X Article outline based on:\n\n\"{seed_text}\"\n\nX Articles are the #1 priority format (20x growth since Dec 2025, 2+ min dwell time = +10 algorithm weight, Premium gets 2-4x reach).\n\nOutline format:\n- HEADLINE: 50-75 chars, include a number or specific claim (numbers perform 2x better)\n- [HERO IMAGE suggestion]\n- INTRO hook paragraph (provocative claim + why it matters now)\n- 4-6 section headers with subheadings every ~300 words, 2-3 bullet points each\n- Note where [IMAGE] placements go (2-3 supporting images)\n- WHAT COMES NEXT section with bold prediction\n- CONCLUSION: hot take + debate question\n- PROMOTION: companion tweet idea pulling most provocative stat\n\nTarget: 1,500-2,000 words (6-8 min read). Keep @{get_current_handle()}'s voice: direct, opinionated, authoritative."""
                 st.session_state["aw_result"] = call_claude(prompt, system=voice, max_tokens=1000)
     if st.button("aw_research", key="aw_research_btn"):
         if seed_text and pplx_available():
@@ -6423,12 +6427,14 @@ def page_tweet_history():
     if st.button("th_style", key="th_ai_voice"):
         sample = [t.get("text", "") for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:30]]
         with st.spinner("Analyzing your voice..."):
-            result = call_claude(f"Analyze Tyler's writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes his voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
+            _th_handle = get_current_handle() or "this creator"
+            result = call_claude(f"Analyze @{_th_handle}'s writing voice based on these top-performing tweets. Identify patterns in: sentence length, punctuation style, opener types, tone, vocabulary, what makes this voice unique.\n\nTweets:\n" + "\n---\n".join(sample[:20]))
             st.session_state["th_ai_result"] = result
     if st.button("th_subjects", key="th_ai_topics"):
         sample = [f"{t.get('text','')[:100]} (likes:{t.get('likeCount',0)}, views:{t.get('viewCount',0)})" for t in sorted([t for t in tweets if not t.get("text","").startswith("@")], key=lambda t: t.get("likeCount", 0), reverse=True)[:40]]
         with st.spinner("Analyzing topics..."):
-            result = call_claude(f"Analyze which TOPICS get Tyler the most engagement. Group his tweets by topic and show which topics consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
+            _th_handle = get_current_handle() or "this creator"
+            result = call_claude(f"Analyze which topics get @{_th_handle} the most engagement. Group these tweets by topic and show which themes consistently outperform. Be specific.\n\nTweets:\n" + "\n".join(sample))
             st.session_state["th_ai_result"] = result
 
     if st.session_state.get("th_ai_result"):
@@ -6975,7 +6981,9 @@ def page_account_pulse():
         if st.button("ap_pulse", key="ap_ai"):
             with st.spinner("Analyzing patterns..."):
                 tweet_summary = "\n".join([f"- {t.get('text','')[:100]} (Likes:{t.get('likeCount',0)}, Views:{t.get('viewCount',0)})" for t in tweets[:20]])
-                result = call_claude(f"""Analyze Tyler's recent posting patterns:
+                _ap_handle_name = get_current_handle() or "this creator"
+                _ap_poss = "their" if is_guest() else "his"
+                result = call_claude(f"""Analyze @{_ap_handle_name}'s recent posting patterns:
 
 Followers: {followers:,} | Following: {following:,} | Ratio: {ratio}x
 Avg Likes: {avg_likes} | Avg Views: {avg_views} | Engagement: {eng_rate}%
@@ -6984,9 +6992,9 @@ Recent tweets:
 {tweet_summary}
 
 Give:
-1. BEST POSTING TIME - When do his best tweets seem to land?
+1. BEST POSTING TIME - When do {_ap_poss} best tweets seem to land?
 2. TOP GROWTH OPPORTUNITIES - 3 specific things to improve
-3. CONTENT MIX ASSESSMENT - What should he post more/less of?
+3. CONTENT MIX ASSESSMENT - What should {_ap_poss} content mix shift toward?
 4. AVERAGE DAILY GROWTH ESTIMATE - Based on current trajectory""", max_tokens=800)
                 st.markdown(f'<div class="output-box">{result}</div>', unsafe_allow_html=True)
 
