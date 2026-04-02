@@ -1782,25 +1782,19 @@ _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if
 _owner_debug_zone = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
-_mobile_signals_link = ""
 _nav_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer", "Reply Mode", "Idea Bank",
               "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
 if is_owner():
-    _owner_signals_icon = f"""
-    <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-ico {{_act('Signals & Prompts')}}" target="_self">
+    _owner_signals_icon = f"""<a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-ico {_act('Signals & Prompts')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
-    </a>
-    """
-    _owner_signals_panel = f"""
-      <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-panel-item {{_act('Signals & Prompts')}}" target="_self">
+    </a>"""
+    _owner_signals_panel = f"""<a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-panel-item {_act('Signals & Prompts')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Signals & Prompts
-      </a>
-    """
-    _mobile_signals_link = f'\n  <a href="/?{_tok_qp}page=Signals+%26+Prompts" target="_self" style="{{_lnk}}">Signals & Prompts</a>'
+      </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
 
 _sidebar_html = f"""
@@ -2261,7 +2255,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
-  {_mobile_signals_link}
+  {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
