@@ -5169,6 +5169,21 @@ def _ci_help_dialog():
         st.caption("Creator Studio walkthrough video is not available in this deployment yet.")
 
 
+@st.dialog("Content Coach Walkthrough", width="large")
+def _coach_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to use Content Coach to ask smarter questions, switch formats, and turn guidance into usable posts.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _coach_help_video = _load_local_video_bytes("content-coach-walkthrough.mp4")
+    if _coach_help_video:
+        st.video(_coach_help_video)
+    else:
+        st.caption("Content Coach walkthrough video is not available in this deployment yet.")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -5378,6 +5393,15 @@ def page_compose_ideas():
 def page_content_coach():
     st.markdown(f'<div class="main-header">CONTENT COACH: {AMPLIFIER_IMG} <span>AMPLIFIER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your AI social media expert. Knows your data, the algorithm, and how to grow.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="coach_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_coach_help_video", key="coach_help_video"):
+        _coach_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # --- Initialize session state ---
     if "coach_conversations" not in st.session_state:
