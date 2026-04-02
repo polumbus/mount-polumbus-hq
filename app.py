@@ -518,10 +518,14 @@ def render_thread_cards(thread_text: str, voice: str = "Default") -> str:
         image_html = ""
         for img_desc in image_tags:
             image_html += f'''<div style="margin-top:10px;height:52px;border-radius:8px;background:rgba(255,255,255,0.04);border:0.5px dashed rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;gap:8px;"><div style="width:16px;height:16px;background:rgba(255,255,255,0.1);border-radius:3px;flex-shrink:0;"></div><span style="font-size:11px;color:rgba(255,255,255,0.35);">{img_desc}</span></div>'''
+        _display_name = st.session_state.get("user_display_name") or (f"@{get_current_handle()}" if get_current_handle() else "Post Ascend User")
+        _initial_source = _display_name.replace("@", "").strip() or "PA"
+        _initial_parts = [p for p in re.split(r'[\s._-]+', _initial_source) if p]
+        _initials = "".join(p[0].upper() for p in _initial_parts[:2])[:2] or _initial_source[:2].upper() or "PA"
         card = f'''<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:0;">
 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-<div style="width:32px;height:32px;border-radius:50%;background:#0C1630;border:1.5px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2DD4BF;flex-shrink:0;">TP</div>
-<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">{st.session_state.get("user_display_name") or (f"@{get_current_handle()}" if get_current_handle() else "Post Ascend User")}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@{get_current_handle()}</div></div>
+<div style="width:32px;height:32px;border-radius:50%;background:#0C1630;border:1.5px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2DD4BF;flex-shrink:0;">{_initials}</div>
+<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">{_display_name}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">@{get_current_handle()}</div></div>
 <div style="font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(45,212,191,0.12);color:#2DD4BF;border:0.5px solid rgba(45,212,191,0.25);white-space:nowrap;">{i+1}/{total} · {voice_label}</div>
 </div>
 <div style="font-size:13px;color:rgba(255,255,255,0.82);line-height:1.65;white-space:pre-wrap;">{tweet_body_html}</div>
@@ -583,7 +587,7 @@ def _refresh_oauth_token(refresh_token):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     return data["access_token"], data.get("refresh_token", refresh_token), data["expires_in"]
 
@@ -599,7 +603,7 @@ def _get_access_token_from_gist(gist_id: str, github_pat: str):
             "X-GitHub-Api-Version": "2022-11-28",
         }
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     content = data["files"]["hq_token.json"]["content"]
     token_data = json.loads(content)
@@ -696,7 +700,7 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
         return data["content"][0]["text"].strip()
     except urllib.error.HTTPError as e:
@@ -718,7 +722,7 @@ def _get_proxy_url() -> str:
         )
         cached = st.session_state.get("_proxy_url_cached_at", 0)
         if time.time() - cached > 300:  # re-fetch every 5 min
-            with _ur.urlopen(req, timeout=10) as resp:
+            with _ur.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read())
             url_file = data["files"].get("hq_proxy_url.json", {}).get("content")
             if url_file:
@@ -763,7 +767,7 @@ def _get_oauth_token() -> str:
                 headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 new_creds = json.loads(resp.read())
             access_token = new_creds.get("access_token") or new_creds.get("accessToken", access_token)
             oauth.update(new_creds)
@@ -820,7 +824,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=90) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
@@ -857,7 +861,7 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
             "x-stainless-package-version": "0.74.0", "x-stainless-retry-count": "0",
         }, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=90) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
@@ -880,7 +884,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=90) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     if "error" in data:
         raise Exception(data["error"])
@@ -902,7 +906,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             headers["X-Proxy-Key"] = proxy_key
         try:
             req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read())
             if data.get("ok", False):
                 return True, ""
@@ -934,7 +938,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         headers["X-Proxy-Key"] = proxy_key
     try:
         req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/{action}", data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
         return data.get("ok", False)
     except Exception:
@@ -1041,33 +1045,66 @@ def _gist_headers():
     return {"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
 
-def load_inspiration_gist() -> list:
+def _load_bank_items(kind: str) -> list:
+    if kind == "repurpose":
+        local_name = "repurpose_queue.json"
+        gist_name = "hq_repurpose.json"
+    else:
+        local_name = "inspiration_vault.json"
+        gist_name = "hq_inspiration.json"
+    if is_guest():
+        return load_json(local_name, [])
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
         data = resp.json()
-        if "hq_inspiration.json" in data.get("files", {}):
-            return json.loads(data["files"]["hq_inspiration.json"]["content"])
+        if gist_name in data.get("files", {}):
+            return json.loads(data["files"][gist_name]["content"])
     except Exception:
         pass
     return []
 
-def save_inspiration_gist(items: list):
+
+def _save_bank_items(kind: str, items: list):
+    if kind == "repurpose":
+        local_name = "repurpose_queue.json"
+        gist_name = "hq_repurpose.json"
+    else:
+        local_name = "inspiration_vault.json"
+        gist_name = "hq_inspiration.json"
+    if is_guest():
+        save_json(local_name, items)
+        return
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        payload = json.dumps({"files": {"hq_inspiration.json": {"content": json.dumps(items, indent=2, default=str)}}})
-        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=10)
+        payload = json.dumps({"files": {gist_name: {"content": json.dumps(items, indent=2, default=str)}}})
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
     except Exception:
         pass
 
 
+def load_inspiration_gist() -> list:
+    return _load_bank_items("inspiration")
+
+def save_inspiration_gist(items: list):
+    _save_bank_items("inspiration", items)
+
+
 def _load_actions_gist() -> dict:
-    """Load liked/replied tweet ID sets from Gist."""
-    if "_actions_cache" in st.session_state:
+    """Load liked/replied tweet IDs. Guests use local isolated storage; owner uses Gist."""
+    _handle = get_current_handle()
+    if st.session_state.get("_actions_cache_handle") == _handle and "_actions_cache" in st.session_state:
         return st.session_state["_actions_cache"]
+    if is_guest():
+        result = load_json("actions.json", {})
+        result.setdefault("liked", [])
+        result.setdefault("replied", [])
+        st.session_state["_actions_cache"] = result
+        st.session_state["_actions_cache_handle"] = _handle
+        return result
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
         data = resp.json()
         content = data.get("files", {}).get("hq_actions.json", {}).get("content", "{}")
         result = json.loads(content)
@@ -1076,12 +1113,17 @@ def _load_actions_gist() -> dict:
     result.setdefault("liked", [])
     result.setdefault("replied", [])
     st.session_state["_actions_cache"] = result
+    st.session_state["_actions_cache_handle"] = _handle
     return result
 
 
 def _save_actions_gist(actions: dict):
-    """Persist liked/replied IDs to Gist so they survive Streamlit restarts."""
+    """Persist liked/replied IDs. Guests use local isolated storage; owner uses Gist."""
     st.session_state["_actions_cache"] = actions
+    st.session_state["_actions_cache_handle"] = get_current_handle()
+    if is_guest():
+        save_json("actions.json", actions)
+        return
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({"files": {"hq_actions.json": {"content": json.dumps(actions, indent=2)}}})
@@ -1146,7 +1188,7 @@ def load_engagement_lists() -> dict:
     return {k: dict(v) for k, v in _ENGAGEMENT_DEFAULTS.items()}
 
 def save_engagement_lists(lists: dict):
-    ENGAGEMENT_LISTS_PATH.write_text(json.dumps(lists, indent=2))
+    _get_engagement_lists_path().write_text(json.dumps(lists, indent=2))
 
 
 def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
@@ -1163,7 +1205,7 @@ def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
             "https://api.twitterapi.io/twitter/list/tweets_timeline",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
             params={"listId": list_id},
-            timeout=30,
+            timeout=8,
         )
         if resp.status_code == 200:
             return resp.json().get("tweets", [])
@@ -1180,7 +1222,7 @@ def fetch_tweets(query: str, count: int = 50) -> list:
             "https://api.twitterapi.io/twitter/tweet/advanced_search",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
             params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
-            timeout=30,
+            timeout=8,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -1199,7 +1241,7 @@ def fetch_user_info(handle: str) -> dict:
             "https://api.twitterapi.io/twitter/user/info",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
             params={"userName": handle},
-            timeout=15,
+            timeout=8,
         )
         if resp.status_code == 200:
             return resp.json().get("data", {})
@@ -2699,6 +2741,7 @@ def _build_voice_mod(voice: str) -> str:
     if is_guest():
         _h = get_current_handle()
         raw = (raw
+            .replace("Tyler Polumbus", f"@{_h}")
             .replace("Tyler's", f"@{_h}'s")
             .replace("Tyler is", f"@{_h} is")
             .replace("Tyler has", f"@{_h} has")
@@ -2722,6 +2765,7 @@ def _build_voice_mod(voice: str) -> str:
             .replace("former player", "insider")
             .replace("former NFL", "experienced")
         )
+        raw = re.sub(r"\bTyler\b", f"@{_h}", raw)
     return raw
 
 def _build_voice_mod_raw(voice: str) -> str:
@@ -4638,7 +4682,7 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
     """Fetch and parse an RSS feed, return list of headline strings."""
     try:
         import xml.etree.ElementTree as _ET
-        _resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        _resp = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         _root = _ET.fromstring(_resp.content)
         _ns = {"media": "http://search.yahoo.com/mrss/"}
         _items = _root.findall(".//item")[:max_items]
@@ -4805,8 +4849,11 @@ def _fetch_inspiration_feed():
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def _load_inspo_from_gist() -> tuple:
+def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
     """Load cached inspiration ideas from gist — instant, survives session resets."""
+    if is_guest():
+        _data = load_json("inspo_cache.json", {})
+        return _data.get("ideas", []), _data.get("n_tweets", 0), _data.get("n_headlines", 0)
     try:
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         _r = requests.get(f"https://api.github.com/gists/{_gid}", headers=_gist_headers(), timeout=8)
@@ -4832,6 +4879,15 @@ def _load_inspo_from_gist() -> tuple:
 
 def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     """Persist inspiration ideas to gist for instant loads."""
+    if is_guest():
+        from datetime import timezone as _tz3
+        save_json("inspo_cache.json", {
+            "ideas": ideas,
+            "n_tweets": n_tweets,
+            "n_headlines": n_headlines,
+            "generated_at": datetime.now(_tz3.utc).isoformat(),
+        })
+        return
     try:
         from datetime import timezone as _tz3
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
@@ -4843,7 +4899,7 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
         pass
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _run_inspiration_claude():
+def _run_inspiration_claude(_cache_key: str = ""):
     """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
@@ -4956,11 +5012,22 @@ Return only the JSON array, no other text."""
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
+    _inspo_handle = get_current_handle()
+    _inspo_topics = load_json("topics.json", {}) if is_guest() else {}
+    _inspo_cache_key = json.dumps({
+        "handle": _inspo_handle,
+        "guest": is_guest(),
+        "topics": _inspo_topics,
+    }, sort_keys=True)
+    if st.session_state.get("inspo_handle") != _inspo_handle:
+        for _k in ["inspo_ideas", "inspo_meta", "inspo_page"]:
+            st.session_state.pop(_k, None)
+        st.session_state["inspo_handle"] = _inspo_handle
 
     # Load ideas: session state > gist cache > Claude (slowest, last resort)
     if "inspo_ideas" not in st.session_state:
         # Try gist first — instant load if fresh ideas exist
-        _gist_ideas, _gist_nt, _gist_nh = _load_inspo_from_gist()
+        _gist_ideas, _gist_nt, _gist_nh = _load_inspo_from_gist(_inspo_cache_key)
         if _gist_ideas:
             st.session_state["inspo_ideas"] = _gist_ideas
             st.session_state["inspo_meta"] = (_gist_nt, _gist_nh)
@@ -4968,7 +5035,7 @@ def _ci_inspiration_dialog():
         else:
             # No gist cache — generate fresh (slow, but only happens once)
             with st.spinner("Post Ascend AI is working..."):
-                _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude()
+                _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_inspo_cache_key)
             if not _all_ideas:
                 st.error("Couldn't generate ideas — try again.")
                 return
@@ -4987,7 +5054,7 @@ def _ci_inspiration_dialog():
         st.session_state.pop("inspo_ideas", None)
         st.session_state["inspo_page"] = 0
         with st.spinner("Generating fresh ideas..."):
-            _fresh, _nt2, _nh2 = _run_inspiration_claude()
+            _fresh, _nt2, _nh2 = _run_inspiration_claude(_inspo_cache_key)
         if _fresh:
             st.session_state["inspo_ideas"] = _fresh
             st.session_state["inspo_meta"] = (_nt2, _nh2)
@@ -5106,14 +5173,8 @@ def _ci_bank_dialog():
     folder = st.selectbox("Folder", _folder_opts, key="ci_folder")
 
     if folder in ("Idea Bank Vault", "Rewrite Queue"):
-        gist_file = "hq_inspiration.json" if folder == "Idea Bank Vault" else "hq_repurpose.json"
-        try:
-            gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-            resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-            gist_data = resp.json()
-            inspo_items = json.loads(gist_data["files"][gist_file]["content"]) if gist_file in gist_data.get("files", {}) else []
-        except Exception:
-            inspo_items = []
+        _bank_kind = "inspiration" if folder == "Idea Bank Vault" else "repurpose"
+        inspo_items = _load_bank_items(_bank_kind)
         if not inspo_items:
             st.markdown(f'<div class="output-box">No items in {folder} yet.</div>', unsafe_allow_html=True)
         else:
@@ -5141,15 +5202,8 @@ def _ci_bank_dialog():
     else:
         ideas = load_json("saved_ideas.json", [])
         if folder == "All Ideas":
-            inspo_as_ideas = []
-            try:
-                gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-                resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
-                gist_data = resp.json()
-                raw = json.loads(gist_data["files"]["hq_inspiration.json"]["content"]) if "hq_inspiration.json" in gist_data.get("files", {}) else []
-                inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
-            except Exception:
-                pass
+            raw = _load_bank_items("inspiration")
+            inspo_as_ideas = [{"text": i.get("text",""), "category": "Idea Bank", "format": i.get("author",""), "saved_at": i.get("saved_at","")} for i in raw]
             filtered = ideas + inspo_as_ideas
             filtered.sort(key=lambda x: x.get("saved_at",""), reverse=True)
         else:
@@ -6199,22 +6253,27 @@ def sync_tweet_history(quick=False):
 def _load_tweet_history_gist() -> list:
     """Load tweet history from Gist (persistent across Streamlit redeploys).
     Guests skip Gist — their data lives in isolated local dirs only."""
-    if "_tweet_history_cache" in st.session_state:
+    _handle = get_current_handle()
+    if st.session_state.get("_tweet_history_cache_handle") == _handle and "_tweet_history_cache" in st.session_state:
         return st.session_state["_tweet_history_cache"]
     # Guests: local file only (no gist)
     if is_guest():
-        return load_json("tweet_history.json", [])
+        tweets = load_json("tweet_history.json", [])
+        st.session_state["_tweet_history_cache"] = tweets
+        st.session_state["_tweet_history_cache_handle"] = _handle
+        return tweets
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=15)
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
         file_meta = resp.json().get("files", {}).get("hq_tweet_history.json", {})
         if file_meta:
             # Always use raw_url — Gist API truncates files over ~1MB in content field
             raw_url = file_meta.get("raw_url", "")
             if raw_url:
-                raw_resp = requests.get(raw_url, timeout=30)
+                raw_resp = requests.get(raw_url, timeout=8)
                 tweets = json.loads(raw_resp.text)
                 st.session_state["_tweet_history_cache"] = tweets
+                st.session_state["_tweet_history_cache_handle"] = _handle
                 return tweets
     except Exception:
         pass
@@ -6240,6 +6299,7 @@ def _save_tweet_history_gist(tweets: list):
     Guests save locally only — no gist write."""
     slimmed = [_slim_tweet(t) for t in tweets]
     st.session_state["_tweet_history_cache"] = slimmed
+    st.session_state["_tweet_history_cache_handle"] = get_current_handle()
     save_json("tweet_history.json", slimmed)
     # Guests: local only, skip gist
     if is_guest():
@@ -6247,7 +6307,7 @@ def _save_tweet_history_gist(tweets: list):
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({"files": {"hq_tweet_history.json": {"content": json.dumps(slimmed)}}})
-        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=15)
+        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
     except Exception:
         pass
 
@@ -6272,7 +6332,7 @@ def fetch_tweet_by_id(tweet_id: str) -> dict:
             resp = requests.get(
                 "https://api.twitterapi.io/twitter/tweet/advanced_search",
                 headers={"X-API-Key": TWITTER_API_IO_KEY},
-                params=params, timeout=15,
+                params=params, timeout=8,
             )
             if resp.status_code != 200:
                 break
@@ -6880,14 +6940,13 @@ def page_account_pulse():
         _my_stats_help_dialog()
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
-    # Auto-load on first visit this session
     _ap_handle = get_current_handle()
-    if "ap_user" not in st.session_state:
-        with st.spinner("Loading account data..."):
-            user = fetch_user_info(_ap_handle)
-            tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
-            st.session_state["ap_user"] = user
-            st.session_state["ap_tweets"] = tweets
+    _ap_ready_key = f"ap_ready::{_ap_handle}"
+    _ap_loaded_key = f"ap_loaded::{_ap_handle}"
+    _ap_user_key = f"ap_user::{_ap_handle}"
+    _ap_tweets_key = f"ap_tweets::{_ap_handle}"
+    if _ap_ready_key not in st.session_state:
+        st.session_state[_ap_ready_key] = True
 
     # --- Refresh as primary dock button ---
     st.markdown('''<div class="cs-icon-dock cs-ap-dock" style="display:flex;gap:8px;justify-content:center;margin:8px 0 16px;">
@@ -6901,15 +6960,17 @@ def page_account_pulse():
         with st.spinner("Refreshing..."):
             user = fetch_user_info(_ap_handle)
             tweets = fetch_tweets(f"from:{_ap_handle}", count=50)
-            st.session_state["ap_user"] = user
-            st.session_state["ap_tweets"] = tweets
+            st.session_state[_ap_user_key] = user
+            st.session_state[_ap_tweets_key] = tweets
+            st.session_state[_ap_loaded_key] = True
             st.rerun()
 
-    user = st.session_state.get("ap_user", {})
-    tweets = st.session_state.get("ap_tweets", [])
+    user = st.session_state.get(_ap_user_key, {})
+    tweets = st.session_state.get(_ap_tweets_key, [])
 
     if not user:
-        st.markdown('<div style="color:#555778;font-size:13px;padding:12px 0;">Could not load account data — check your API key.</div>', unsafe_allow_html=True)
+        _msg = "Tap Refresh to load your latest account stats." if st.session_state.get(_ap_ready_key) else "Preparing stats..."
+        st.markdown(f'<div style="color:#555778;font-size:13px;padding:12px 0;">{_msg}</div>', unsafe_allow_html=True)
         return
 
     followers = user.get("followers", user.get("followersCount", user.get("followers_count", 0)))
@@ -7961,7 +8022,7 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
                 "https://api.twitterapi.io/twitter/tweet/advanced_search",
                 headers={"X-API-Key": TWITTER_API_IO_KEY},
                 params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": cursor},
-                timeout=30,
+                timeout=8,
             )
             if resp.status_code != 200:
                 break
@@ -8131,7 +8192,7 @@ def _fetch_parent_tweet(tweet_id):
             "https://api.twitterapi.io/twitter/tweets",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
             params={"tweet_ids": str(tweet_id)},
-            timeout=15,
+            timeout=8,
         )
         if resp.status_code == 200:
             tweets = resp.json().get("tweets", [])
@@ -8351,8 +8412,16 @@ def page_signals_prompts():
     if st.button("sig_next", key="sig_refresh"):
         _force_refresh = True
 
+    _sig_ready_key = "_sig_fetch_ready"
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
-    _need_fetch = _force_refresh or (time.time() - _cache_ts > 300) or not st.session_state.get("_sig_beat_tweets")
+    _has_cached_signals = bool(st.session_state.get("_sig_beat_tweets")) or bool(st.session_state.get("_sig_nat_tweets"))
+    _cache_stale = (time.time() - _cache_ts > 300) if _cache_ts else False
+    _need_fetch = _force_refresh or (_has_cached_signals and _cache_stale)
+    if not _has_cached_signals and not _need_fetch:
+        if st.session_state.get(_sig_ready_key):
+            _need_fetch = True
+        else:
+            st.session_state[_sig_ready_key] = True
     if _need_fetch:
         with st.spinner("Scanning Twitter signals..."):
             try:
@@ -8384,6 +8453,9 @@ def page_signals_prompts():
     national_tweets = _dedup_signals(st.session_state.get("_sig_nat_tweets", []))
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
+
+    if not beat_tweets and not national_tweets and st.session_state.get(_sig_ready_key):
+        st.markdown('<div style="color:#555778;font-size:13px;padding:0 0 12px 0;">Tap Next Page to load the latest live signals.</div>', unsafe_allow_html=True)
 
     # ── Signal 1: Beat Reporter Heat Map ──
     if st.session_state.sig_tab == "Beat":
@@ -8629,7 +8701,7 @@ def _get_proxy_health_debug() -> dict:
             headers={"ngrok-skip-browser-warning": "1"},
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
         return {"ok": True, "proxy_url": proxy_url, "data": data}
     except Exception as e:
@@ -8691,7 +8763,7 @@ def _run_debug_test_suite() -> list:
 
     try:
         gist_id = st.secrets.get("GIST_ID", "")
-        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=10)
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
         ok = resp.status_code == 200
         results.append({"test": "Gist read", "status": "ok" if ok else "error", "detail": f"HTTP {resp.status_code}"})
     except Exception as e:
@@ -8706,7 +8778,7 @@ def _run_debug_test_suite() -> list:
                 }
             }
         })
-        resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=10)
+        resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
         ok = resp.status_code == 200
         results.append({"test": "Gist write", "status": "ok" if ok else "error", "detail": f"HTTP {resp.status_code}"})
     except Exception as e:
