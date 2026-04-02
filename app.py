@@ -1780,6 +1780,28 @@ def _act(name):
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
 _owner_debug_zone = ""
+_owner_signals_icon = ""
+_owner_signals_panel = ""
+_mobile_signals_link = ""
+_nav_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer", "Reply Mode", "Idea Bank",
+              "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
+if is_owner():
+    _owner_signals_icon = f"""
+    <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-ico {{_act('Signals & Prompts')}}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+      </svg>
+    </a>
+    """
+    _owner_signals_panel = f"""
+      <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-panel-item {{_act('Signals & Prompts')}}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Signals & Prompts
+      </a>
+    """
+    _mobile_signals_link = f'\n  <a href="/?{_tok_qp}page=Signals+%26+Prompts" target="_self" style="{{_lnk}}">Signals & Prompts</a>'
+    _nav_pages.insert(4, "Signals & Prompts")
 
 _sidebar_html = f"""
 <style>
@@ -1916,12 +1938,7 @@ _sidebar_html = f"""
         <line x1="16" y1="13" x2="8" y2="13" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
       </svg>
     </a>
-    <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-ico {_act('Signals & Prompts')}" target="_self">
-      <div class="mp-active-pip"></div>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
-      </svg>
-    </a>
+    {_owner_signals_icon}
     <div class="mp-panel">
       <div class="mp-panel-header">CREATE</div>
       <a href="/?{_tok_qp}page=Creator+Studio" class="mp-panel-item {_act('Creator Studio')}" target="_self">
@@ -1940,10 +1957,7 @@ _sidebar_html = f"""
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#6B8AAA" stroke-width="1.5"/><line x1="16" y1="13" x2="8" y2="13" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Article Writer
       </a>
-      <a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-panel-item {_act('Signals & Prompts')}" target="_self">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Signals & Prompts
-      </a>
+      {_owner_signals_panel}
     </div>
   </div>
 
@@ -2077,13 +2091,10 @@ with st.sidebar:
         st.rerun()
     # Hidden buttons for each page — JS wires sidebar links to click these
     # instead of doing full page reloads (eliminates white flash)
-    _all_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer",
-                  "Signals & Prompts", "Reply Mode", "Idea Bank",
-                  "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
     def _nav_to(pg):
         st.session_state.current_page = pg
         st.session_state._nav_override = True
-    for _pg in _all_pages:
+    for _pg in _nav_pages:
         st.button(_pg, key=f"_nav_{_pg}", on_click=_nav_to, args=(_pg,),
                   type="secondary", use_container_width=True)
 
@@ -2123,7 +2134,7 @@ _stc.html("""<script>
   function wireNav(){
     var sidebar=doc.querySelector('section[data-testid="stSidebar"]');
     if(!sidebar) return;
-    var pageNames=['Creator Studio','Raw Thoughts','Content Coach','Article Writer','Signals & Prompts','Reply Mode','Idea Bank','Post History','Algorithm Score','Account Audit','My Stats','Profile Analyzer'];
+    var pageNames={json.dumps(_nav_pages)};
     /* Hide nav buttons visually but keep clickable */
     sidebar.querySelectorAll('button').forEach(function(btn){
       var t=btn.textContent.trim();
@@ -2250,7 +2261,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
-  <a href="/?{_tok_qp}page=Signals+%26+Prompts" target="_self" style="{_lnk}">Signals & Prompts</a>
+  {_mobile_signals_link}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -2273,7 +2284,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page == "Debug Console" and not is_owner():
+if page in {"Debug Console", "Signals & Prompts"} and not is_owner():
     page = "Creator Studio"
     st.session_state.current_page = page
 
@@ -8714,8 +8725,9 @@ page_map = {
     "Profile Analyzer": page_account_researcher,
     "Reply Mode": page_reply_guy,
     "Idea Bank": page_inspiration,
-    "Signals & Prompts": page_signals_prompts,
 }
+if is_owner():
+    page_map["Signals & Prompts"] = page_signals_prompts
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
