@@ -5274,6 +5274,96 @@ def _raw_thoughts_help_dialog():
         st.caption("Raw Thoughts walkthrough video is not available in this deployment yet.")
 
 
+@st.dialog("Post History Walkthrough", width="large")
+def _post_history_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to sync post history, scan your best performers, and use the AI analysis tools to understand what is already working.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _post_history_help_video = _load_local_video_bytes("post-history-walkthrough.mp4")
+    if _post_history_help_video:
+        st.video(_post_history_help_video)
+    else:
+        st.caption("Post History walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Algorithm Score Walkthrough", width="large")
+def _algorithm_score_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to paste in a draft, run Grades, and read the score, weaknesses, and optimized rewrite before posting.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _algorithm_score_help_video = _load_local_video_bytes("algorithm-score-walkthrough.mp4")
+    if _algorithm_score_help_video:
+        st.video(_algorithm_score_help_video)
+    else:
+        st.caption("Algorithm Score walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("My Stats Walkthrough", width="large")
+def _my_stats_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to refresh your account snapshot, review performance metrics, and use the pulse view to spot trends fast.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _my_stats_help_video = _load_local_video_bytes("my-stats-walkthrough.mp4")
+    if _my_stats_help_video:
+        st.video(_my_stats_help_video)
+    else:
+        st.caption("My Stats walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Profile Analyzer Walkthrough", width="large")
+def _profile_analyzer_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to enter a handle, run research, and read the strategy, voice, and tactical takeaways from another account.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _profile_analyzer_help_video = _load_local_video_bytes("profile-analyzer-walkthrough.mp4")
+    if _profile_analyzer_help_video:
+        st.video(_profile_analyzer_help_video)
+    else:
+        st.caption("Profile Analyzer walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Signals & Prompts Walkthrough", width="large")
+def _signals_prompts_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to scan beat and national signals, flip views, and turn live angles into creator-ready prompts.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _signals_help_video = _load_local_video_bytes("signals-prompts-walkthrough.mp4")
+    if _signals_help_video:
+        st.video(_signals_help_video)
+    else:
+        st.caption("Signals & Prompts walkthrough video is not available in this deployment yet.")
+
+
+@st.dialog("Debug Console Walkthrough", width="large")
+def _debug_console_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch how to use the owner debug console to inspect AI routing, proxy health, pipeline status, and live backend checks.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _debug_help_video = _load_local_video_bytes("debug-console-walkthrough.mp4")
+    if _debug_help_video:
+        st.video(_debug_help_video)
+    else:
+        st.caption("Debug Console walkthrough video is not available in this deployment yet.")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -6246,6 +6336,15 @@ def classify_tweet(tweet):
 def page_tweet_history():
     st.markdown('<div class="main-header">YOUR POST <span>HISTORY</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your knowledge base. Every AI feature in this app learns from these tweets.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="th_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_th_help_video", key="th_help_video"):
+        _post_history_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # Load stored tweets
     tweets = get_tweet_knowledge_base()
@@ -6494,6 +6593,15 @@ def page_tweet_history():
 def page_algo_analyzer():
     st.markdown('<div class="main-header">ALGORITHM <span>SCORE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Run your content through the algorithm lens before you post.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="aa_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_aa_help_video", key="aa_help_video"):
+        _algorithm_score_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     st.markdown('<div style="background:#0d1929;border-left:3px solid #00E5CC;border-radius:8px;padding:14px 16px;font-size:12px;color:#5a8090;margin-bottom:16px;"><strong style="color:#00E5CC;">Example output:</strong> Score 72/100 — Strong hook, weak payoff. Opens with a bold claim but the final line doesn\'t land. Suggestion: End with a question to drive replies.</div>', unsafe_allow_html=True)
     content = st.text_area("Content to Analyze:", height=160, key="aa_input",
@@ -6756,6 +6864,15 @@ Return ONLY valid JSON, no markdown, no code fences, no explanation before or af
 def page_account_pulse():
     st.markdown('<div class="main-header">MY <span>STATS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Your account stats at a glance.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="ap_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_ap_help_video", key="ap_help_video"):
+        _my_stats_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # Auto-load on first visit this session
     _ap_handle = get_current_handle()
@@ -6882,6 +6999,15 @@ Give:
 def page_account_researcher():
     st.markdown('<div class="main-header">PROFILE <span>ANALYZER</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Research any X account. Understand their strategy.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="ar_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_ar_help_video", key="ar_help_video"):
+        _profile_analyzer_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     handle = st.text_input("Enter X handle:", placeholder="@username", key="ar_handle_input", label_visibility="collapsed")
 
@@ -8152,6 +8278,15 @@ def _signal_brief_dialog(_nonce):
 def page_signals_prompts():
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="sig_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_sig_help_video", key="sig_help_video"):
+        _signals_prompts_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # ── Handle incoming signal from Chrome extension URL params ──
     _sig_text = st.query_params.get("sig_text", "")
@@ -8587,6 +8722,15 @@ def page_debug_console():
 
     st.markdown('<div class="main-header">DEBUG <span>CONSOLE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Owner-only visibility into routing, services, runtime state, and live backend probes.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
+            <span class="cs-bot" data-bot="dbg_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
+        </div>''',
+        unsafe_allow_html=True,
+    )
+    if st.button("bot_dbg_help_video", key="dbg_help_video"):
+        _debug_console_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     b1, b2 = st.columns(2)
     with b1:
