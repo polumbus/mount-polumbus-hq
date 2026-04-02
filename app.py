@@ -6019,7 +6019,7 @@ def sync_tweet_history(quick=False):
                 resp = requests.get(
                     "https://api.twitterapi.io/twitter/tweet/advanced_search",
                     headers={"X-API-Key": TWITTER_API_IO_KEY},
-                    params=params, timeout=30,
+                    params=params, timeout=8,
                 )
                 if resp.status_code != 200:
                     break
@@ -8798,44 +8798,23 @@ if is_owner():
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
-# Sync strategy:
-# @st.cache_data(ttl=3600) means this runs AT MOST once per hour across ALL page loads.
-# st.session_state resets on every navigation (full page reload on Streamlit Cloud),
-# so the old session_state guard was useless — the sync ran on every click.
-@st.cache_data(ttl=3600, show_spinner=False)
+# Tweet sync — deferred to AFTER page renders so it never blocks load.
+# On first render, page loads instantly. On second interaction, sync runs if needed.
 def _auto_sync_tweets():
-    # Guests: already synced during onboarding, just do a quick refresh
-    if is_guest():
-        try:
+    try:
+        if is_guest():
             existing = load_json("tweet_history.json", [])
             if len(existing) >= 20:
                 sync_tweet_history(quick=True)
-            # If < 20 tweets, onboarding should have caught this
-        except Exception:
-            pass
-        return
-    # Owner: check gist for tweet count and sync accordingly
-    try:
-        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        resp = requests.get(
-            f"https://api.github.com/gists/{gist_id}",
-            headers=_gist_headers(), timeout=10
-        )
-        file_meta = resp.json().get("files", {}).get("hq_tweet_history.json", {})
-        existing_count = 0
-        if file_meta:
-            raw_url = file_meta.get("raw_url", "")
-            if raw_url:
-                raw_resp = requests.get(raw_url, timeout=20)
-                existing_count = len(json.loads(raw_resp.text))
-        if existing_count < 50:
-            sync_tweet_history(quick=False)
-        else:
-            sync_tweet_history(quick=True)
+            return
+        # Owner: always quick sync (fetch latest ~10 tweets). Fast, 1 API call.
+        sync_tweet_history(quick=True)
     except Exception:
         pass
 
-_auto_sync_tweets()
+if st.session_state.get("auth_role") and "_tweet_sync_done" not in st.session_state:
+    st.session_state["_tweet_sync_done"] = True
+    _auto_sync_tweets()
 
 st.markdown("""<div class="main-watermark">
   <svg width="80" height="70" viewBox="0 0 100 88" fill="none">
