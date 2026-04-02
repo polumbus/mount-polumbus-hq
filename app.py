@@ -5154,21 +5154,29 @@ def _ci_bank_dialog():
                     st.rerun(scope="app")
 
 
+@st.dialog("Creator Studio Walkthrough", width="large")
+def _ci_help_dialog():
+    st.markdown(
+        '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
+        'Watch the Creator Studio workflow for concept entry, voice selection, Build, Refresh Options, and Grades.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _creator_help_video = _load_local_video_bytes("creator-studio-walkthrough.mp4")
+    if _creator_help_video:
+        st.video(_creator_help_video)
+    else:
+        st.caption("Creator Studio walkthrough video is not available in this deployment yet.")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
-    with st.expander("Need help? Watch the Creator Studio walkthrough", expanded=False):
-        st.markdown(
-            '<div style="color:#8FA6C6;font-size:14px;margin-bottom:10px;">'
-            'Watch the full Creator Studio tutorial without leaving the page. It walks through concept entry, voice selection, Build, Refresh Options, and Grades.'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        _creator_help_video = _load_local_video_bytes("creator-studio-walkthrough.mp4")
-        if _creator_help_video:
-            st.video(_creator_help_video)
-        else:
-            st.caption("Creator Studio walkthrough video is not available in this deployment yet.")
+    _help_col, _spacer = st.columns([1, 8])
+    with _help_col:
+        if st.button("Watch Walkthrough", key="ci_help_video", type="secondary", use_container_width=True):
+            _ci_help_dialog()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # Consume staging key FIRST — before any widget is registered
     _idea_from_url = st.query_params.get("idea", "")
