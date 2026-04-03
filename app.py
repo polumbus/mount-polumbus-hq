@@ -5216,21 +5216,15 @@ def _ci_inspiration_dialog():
         st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
 
     # ── Footer actions ──
-    _rb1, _rb2 = st.columns(2)
-    def _inspo_next_page():
-        st.session_state["inspo_page"] = st.session_state.get("inspo_page", 0) + 1
-        st.session_state["_ci_show_inspiration"] = True  # re-open dialog after full app rerun
-    with _rb1:
-        st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_next_page)
-    with _rb2:
-        if st.button("Refresh Feed", use_container_width=True, key="inspo_clear_cache"):
-            _fetch_inspiration_feed.clear()
-            _run_inspiration_claude.clear()
-            st.session_state.pop("inspo_ideas", None)
-            st.session_state.pop("inspo_meta", None)
-            st.session_state.pop("inspo_page", None)
-            st.session_state["_ci_show_inspiration"] = True
-            st.rerun(scope="app")
+    def _inspo_regenerate():
+        """Nuke cached ideas and regenerate a completely fresh set."""
+        _run_inspiration_claude.clear()
+        st.session_state.pop("inspo_ideas", None)
+        st.session_state.pop("inspo_meta", None)
+        st.session_state["inspo_page"] = 0
+        st.session_state["_ci_show_inspiration"] = True
+    if st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_regenerate):
+        pass
 
 
 @st.dialog("Creator Studio", width="large")
