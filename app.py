@@ -5053,6 +5053,50 @@ Return ONLY JSON:
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+@st.dialog("Build a Tweet", width="large")
+def _ci_build_dialog():
+    """Mini-form to guide users into providing the right raw material for BUILD."""
+    st.markdown(
+        '<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:16px;">'
+        'Give us a topic and we\'ll create 3 unique tweet options. The more context you add, the better the results.</div>',
+        unsafe_allow_html=True)
+
+    _bd_topic = st.text_input("What's the topic?", placeholder="e.g. Jokic MVP case, Broncos draft needs, Sean Payton play calling", key="build_topic")
+
+    _bd_take = st.text_input("What's your take? (optional)", placeholder="e.g. he's the clear frontrunner, we need a TE round 1", key="build_take")
+
+    _bd_col1, _bd_col2 = st.columns(2)
+    with _bd_col1:
+        _bd_tension = st.text_input("What's the debate? (optional)", placeholder="e.g. media keeps ignoring him, fans disagree", key="build_tension")
+    with _bd_col2:
+        _bd_stats = st.text_input("Any specific stats or facts? (optional)", placeholder="e.g. averaging a triple double, 48-28 record", key="build_stats")
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+    if st.button("BUILD IT", key="build_submit", use_container_width=True, type="primary", disabled=not _bd_topic.strip()):
+        # Assemble the structured brief from form fields
+        _parts = []
+        if _bd_topic.strip():
+            _parts.append(f"TOPIC: {_bd_topic.strip()}")
+        if _bd_tension.strip():
+            _parts.append(f"TENSION: {_bd_tension.strip()}")
+        if _bd_stats.strip():
+            _parts.append(f"KEY STATS: {_bd_stats.strip()}")
+        if _bd_take.strip():
+            _parts.append(f"ANGLE: {_bd_take.strip()}")
+
+        _assembled = "\n".join(_parts) if len(_parts) > 1 else _bd_topic.strip()
+
+        # If they only gave a topic with no extras, use it as a simple concept
+        if not _bd_take.strip() and not _bd_tension.strip() and not _bd_stats.strip():
+            _assembled = _bd_topic.strip()
+
+        st.session_state["ci_text"] = _assembled
+        st.session_state["_ci_pending"] = ("build", _assembled,
+            st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
+        st.rerun()
+
+
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
@@ -5551,17 +5595,22 @@ def page_compose_ideas():
 
         # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
         def _click_action(action):
-            if st.session_state.get("ci_text", "").strip():
-                st.session_state["_ci_pending"] = (action, st.session_state.get("ci_text", ""),
+            _ci_input = st.session_state.get("ci_text", "").strip()
+            if _ci_input:
+                # Smart nudge: if GO VIRAL with very short input, suggest BUILD instead
+                if action == "banger" and len(_ci_input.split()) < 8:
+                    st.session_state["_ci_show_build_dialog"] = True
+                    return
+                st.session_state["_ci_pending"] = (action, _ci_input,
                     st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Optimize your draft for maximum engagement" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
           </div>
-          <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="build" title="Turn a topic or idea into finished tweets from scratch" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
           </div>
@@ -5577,7 +5626,9 @@ def page_compose_ideas():
 
         # Hidden Streamlit buttons for dock click handling (inside real container)
         st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
-        st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
+        def _click_build():
+            st.session_state["_ci_show_build_dialog"] = True
+        st.button("dock_build", key="ci_build", on_click=_click_build)
         st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
         st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
 
@@ -5652,6 +5703,9 @@ def page_compose_ideas():
             _reopen_dialog["fmt"],
             _reopen_dialog["voice"],
         )
+
+    if st.session_state.pop("_ci_show_build_dialog", False):
+        _ci_build_dialog()
 
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
