@@ -494,5 +494,38 @@ body.rg-insp-active .block-container { padding-right: 270px !important; }
 hr { border-color: #14203A !important; }
 [data-testid="stExpander"] summary p { color: #00E5CC !important; }
 
+/* ═══════════════════════════════════════════════
+   CUSTOM TOOLTIPS — Dark themed, matches app
+═══════════════════════════════════════════════ */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #0d1829;
+  border: 1px solid rgba(45,212,191,0.2);
+  color: rgba(255,255,255,0.75);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
 </style>
 """, unsafe_allow_html=True)
