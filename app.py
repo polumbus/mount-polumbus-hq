@@ -5557,19 +5557,19 @@ def page_compose_ideas():
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
           </div>
-          <div class="cs-idock-btn" data-dock="build" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
           </div>
-          <div class="cs-idock-btn" data-dock="rewrite" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="rewrite" title="Rewrite your draft in a different format or angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span>
           </div>
-          <div class="cs-idock-btn" data-dock="grades" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="grades" title="Score your draft on engagement, hook, and viral potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
           </div>
@@ -5584,10 +5584,10 @@ def page_compose_ideas():
         # ── Divider + Bottom bar as HTML ──
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
         <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
-          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
-          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
-          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
+          <span class="cs-bot" data-bot="save" title="Save this draft to your idea bank for later" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+          <span class="cs-bot" data-bot="bank" title="Browse your saved ideas and inspiration vault" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
+          <span class="cs-bot" data-bot="hot" title="See trending topics and AI-generated tweet ideas" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
+          <span class="cs-bot" data-bot="post" title="Post this draft directly to X" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for bottom bar (inside real container)
