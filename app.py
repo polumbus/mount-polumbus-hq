@@ -4001,11 +4001,21 @@ EXAMPLE WITHOUT STATS:
 
 TOO SAFE (don't do this): Just adding "But" or a period to the draft. Not an improvement.
 TOO FAR (don't do this): Replacing the voice with a generic recap."""
-        banger_prompt = f"""This is a tweet concept. Make it score 9+ on every X algorithm metric.
+        # Detect if input is a rough idea vs polished draft
+        _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
+        _has_brief = any(d in tweet_text for d in _brief_delimiters)
+        if _has_brief:
+            _input_block = f"STRUCTURED BRIEF:\n{tweet_text}"
+            _task_framing = "Extract the strongest take from this brief and write 2 distinct, high-performing tweets from scratch."
+        elif len(tweet_text.split()) < 15:
+            _input_block = f'CONCEPT: "{tweet_text}"'
+            _task_framing = "This is a raw concept. Turn it into 2 distinct, polished, high-performing tweets. Each should take a different angle while keeping the core idea."
+        else:
+            _input_block = f'DRAFT: "{tweet_text}"'
+            _task_framing = "This draft is a CONCEPT — the take, the angle, the topic. Turn it into 2 polished, high-performing tweets. Keep the point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below."
+        banger_prompt = f"""{_task_framing}
 
-Draft: "{tweet_text}"
-
-This draft is a CONCEPT — the take, the angle, the topic. Your job is to turn that concept into a polished, high-performing tweet. Keep the point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below.
+{_input_block}
 {_bg_examples}
 {_live_stats_block}
 {format_mod}
@@ -4015,49 +4025,47 @@ STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - ONLY use stats that appear in LIVE STATS above or in the draft. Do not invent, estimate, or round any numbers.
 - If LIVE STATS provide a team record (e.g. 48-28), use it. If they don't provide player averages, PFF grades, or rankings — you CANNOT use those.
 - A tweet with a concrete observation is ALWAYS better than a tweet with a fabricated stat.
-- If a voice rule asks for a "specific number" and no real one is available, use a named event, a team record, or a concrete observation instead. Never invent a number to fill the slot.
-{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. 'The Broncos offensive line is the reason Bo Nix ran for his life in December' is a valid symptom. 'Bottom-10 in pass protection' is NOT valid unless that ranking appears in LIVE STATS." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Sarcastic voice builds humor from observations and framing, not invented numbers." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available. If no player stats exist, describe what you see without citing specific figures." if voice == "Hype" else ""}
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Build humor from observations and framing." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
 
 Rules:
+- 2 options, each a UNIQUE angle — NOT rewrites of each other
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
 - Hook & Pattern Breakers (first line stops the scroll)
 - Structure each option to match the FORMAT PATTERNS above
 {_char_rule}
 
-{"THREAD FORMAT: Inside each option, separate individual tweets with the marker ---TWEET--- between them. Example: first tweet text here---TWEET---second tweet text here---TWEET---third tweet text here" if fmt == "Thread" else ""}
+{"THREAD FORMAT: Inside each option, separate individual tweets with the marker ---TWEET--- between them." if fmt == "Thread" else ""}
 
-VOICE-SPECIFIC ENDING OVERRIDE:
-{"CRITICAL VOICE PICK RULE: ALWAYS prefer the option ending with a period over one ending with a question mark. A question ending in Critical voice is a structural failure regardless of engagement potential. Period ending wins every time. This overrides all other pick criteria." if voice == "Critical" else ""}
-{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. If a pattern calls for a question closer, replace it with a declarative outside-reaction statement. WRONG: 'How does the most dominant player not drag this roster over the line?' RIGHT: 'Every team in the West designed their rotations around stopping him. That is not a problem you scheme for unless the threat is real.'" if voice == "Hype" else ""}
+{"CRITICAL VOICE: ALL options MUST end with a period. No question closers." if voice == "Critical" else ""}{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis." if voice == "Hype" else ""}
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "which top tweet pattern this is modeled after",
-  "option2": "full tweet text here",
-  "option2_pattern": "which top tweet pattern this is modeled after",
-  "pick": "1 or 2 — {'MUST be the period-ending option (Critical voice rule overrides all other criteria)' if voice == 'Critical' else 'just the number, no explanation'}",
-  "pick_reason": "one sentence — {'why this option matches Critical voice structure (period ending = correct)' if voice == 'Critical' else 'why this option scores higher on the X algorithm'}"
+  "option1": "full tweet text — ready to post",
+  "option1_pattern": "short label for the angle",
+  "option2": "full tweet text — different angle, ready to post",
+  "option2_pattern": "short label for the angle",
+  "pick": "1 or 2 — {'MUST be the period-ending option' if voice == 'Critical' else 'just the number'}",
+  "pick_reason": "one sentence why this option scores highest on the X algorithm"
 }}"""
         _sys_prompt = get_system_for_voice(voice, voice_mod)
-        _max_tok = 2000 if fmt == "Thread" else 400
+        _max_tok = 2000 if fmt == "Thread" else 500
         raw = call_claude(banger_prompt, system=_sys_prompt, max_tokens=_max_tok)
         banger_data = _parse_banger_json(raw)
         if banger_data and banger_data.get("option1"):
             for _ok in ["option1", "option2"]:
                 if banger_data.get(_ok):
                     banger_data[_ok] = _sanitize_output(banger_data[_ok])
-            # FIX 1: Critical voice — force pick to period-ending option
+            # Critical voice — force pick to period-ending option
             if voice == "Critical" and banger_data.get("option1") and banger_data.get("option2"):
-                _o1_ends_period = banger_data["option1"].rstrip().endswith(".")
-                _o2_ends_period = banger_data["option2"].rstrip().endswith(".")
-                _o1_ends_question = banger_data["option1"].rstrip().endswith("?")
-                _o2_ends_question = banger_data["option2"].rstrip().endswith("?")
-                if _o1_ends_period and _o2_ends_question:
+                _o1p = banger_data["option1"].rstrip().endswith(".")
+                _o2p = banger_data["option2"].rstrip().endswith(".")
+                _o1q = banger_data["option1"].rstrip().endswith("?")
+                _o2q = banger_data["option2"].rstrip().endswith("?")
+                if _o1p and _o2q:
                     banger_data["pick"] = "1"
                     banger_data["pick_reason"] = "Critical voice: period ending is structurally correct."
-                elif _o2_ends_period and _o1_ends_question:
+                elif _o2p and _o1q:
                     banger_data["pick"] = "2"
                     banger_data["pick_reason"] = "Critical voice: period ending is structurally correct."
             st.session_state["ci_banger_data"] = banger_data
@@ -5557,7 +5565,7 @@ def page_compose_ideas():
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Turn your idea or draft into 3 viral-optimized tweets" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
           </div>
@@ -5577,7 +5585,7 @@ def page_compose_ideas():
 
         # Hidden Streamlit buttons for dock click handling (inside real container)
         st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
-        st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
+        st.button("dock_build", key="ci_build", on_click=_click_action, args=("banger",))
         st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
         st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
 
