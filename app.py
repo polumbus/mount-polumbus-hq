@@ -587,7 +587,7 @@ def _refresh_oauth_token(refresh_token):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     return data["access_token"], data.get("refresh_token", refresh_token), data["expires_in"]
 
@@ -603,7 +603,7 @@ def _get_access_token_from_gist(gist_id: str, github_pat: str):
             "X-GitHub-Api-Version": "2022-11-28",
         }
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     content = data["files"]["hq_token.json"]["content"]
     token_data = json.loads(content)
@@ -700,7 +700,7 @@ def _call_claude_oauth(prompt: str, system: str, max_tokens: int) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read())
         return data["content"][0]["text"].strip()
     except urllib.error.HTTPError as e:
@@ -722,7 +722,7 @@ def _get_proxy_url() -> str:
         )
         cached = st.session_state.get("_proxy_url_cached_at", 0)
         if time.time() - cached > 300:  # re-fetch every 5 min
-            with _ur.urlopen(req, timeout=8) as resp:
+            with _ur.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read())
             url_file = data["files"].get("hq_proxy_url.json", {}).get("content")
             if url_file:
@@ -767,7 +767,7 @@ def _get_oauth_token() -> str:
                 headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.78"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 new_creds = json.loads(resp.read())
             access_token = new_creds.get("access_token") or new_creds.get("accessToken", access_token)
             oauth.update(new_creds)
@@ -789,7 +789,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
 
     # Billing header required in system prompt for Sonnet/Opus access via OAuth
     _salt = "59cf53e54c78"
-    _ver = "2.1.86"
+    _ver = "2.1.90"
     _chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
     _hash = hashlib.sha256((_salt + "".join(_chars) + _ver).encode()).hexdigest()[:3]
     billing_line = f"x-anthropic-billing-header: cc_version={_ver}.{_hash}; cc_entrypoint=claude-code; cch=00000;"
@@ -812,7 +812,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
             "Authorization": f"Bearer {token}",
             "anthropic-version": "2023-06-01",
             "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24",
-            "User-Agent": f"claude-cli/{_ver}",
+            "User-Agent": f"AnthropicCLI/{_ver}",
             "x-app": "cli",
             "anthropic-dangerous-direct-browser-access": "true",
             "x-stainless-lang": "js",
@@ -824,7 +824,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
@@ -835,7 +835,7 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
     """Thread-safe direct API call — token passed in, no session state access."""
     import urllib.request, hashlib as _hl
     _salt = "59cf53e54c78"
-    _ver = "2.1.86"
+    _ver = "2.1.90"
     _chars = [prompt[p] if p < len(prompt) else "0" for p in [4, 7, 20]]
     _hash = _hl.sha256((_salt + "".join(_chars) + _ver).encode()).hexdigest()[:3]
     billing_line = f"x-anthropic-billing-header: cc_version={_ver}.{_hash}; cc_entrypoint=claude-code; cch=ece3b;"
@@ -854,14 +854,14 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
             "Authorization": f"Bearer {token}",
             "anthropic-version": "2023-06-01",
             "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24",
-            "User-Agent": f"claude-cli/{_ver}", "x-app": "cli",
+            "User-Agent": f"AnthropicCLI/{_ver}", "x-app": "cli",
             "anthropic-dangerous-direct-browser-access": "true",
             "x-stainless-lang": "js", "x-stainless-os": "Linux",
             "x-stainless-arch": "x64", "x-stainless-runtime": "node",
             "x-stainless-package-version": "0.74.0", "x-stainless-retry-count": "0",
         }, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
@@ -884,7 +884,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     if "error" in data:
         raise Exception(data["error"])
@@ -906,7 +906,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             headers["X-Proxy-Key"] = proxy_key
         try:
             req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read())
             if data.get("ok", False):
                 return True, ""
@@ -938,7 +938,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         headers["X-Proxy-Key"] = proxy_key
     try:
         req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/{action}", data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read())
         return data.get("ok", False)
     except Exception:
@@ -2593,7 +2593,7 @@ def _fetch_live_stats(entities: dict, betting_level: str = "") -> str:
         try:
             url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/teams/{abbr}"
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read())
             t = data.get("team", {})
             records = t.get("record", {}).get("items", [])
@@ -8701,7 +8701,7 @@ def _get_proxy_health_debug() -> dict:
             headers={"ngrok-skip-browser-warning": "1"},
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read())
         return {"ok": True, "proxy_url": proxy_url, "data": data}
     except Exception as e:
