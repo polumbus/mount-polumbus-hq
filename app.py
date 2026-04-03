@@ -4934,13 +4934,28 @@ Use these patterns to structure every hook. Match the opener style, line break p
     _wh_handle = get_current_handle()
     _wh_is_g = is_guest()
     _wh_angle = "their unique perspective and expertise" if _wh_is_g else "Tyler's unique angle as a former player and Denver media host"
-    _prompt = f"""@{_wh_handle} needs 7 tweet ideas from what's hot RIGHT NOW.
+    _wh_system = f"""You are @{_wh_handle}'s content strategist. Return only a JSON array, no other text.
+
+{_WHATS_HOT_VOICE_GUIDE}"""
+
+    # Split feed in half and run two parallel Sonnet calls for speed
+    _tweet_lines_a = _tweet_lines[:len(_tweet_lines)//2]
+    _tweet_lines_b = _tweet_lines[len(_tweet_lines)//2:]
+    _rss_a = (_rss_headlines or [])[:5]
+    _rss_b = (_rss_headlines or [])[5:10]
+    _tweet_block_a = "\n".join(_tweet_lines_a) if _tweet_lines_a else "(none)"
+    _tweet_block_b = "\n".join(_tweet_lines_b) if _tweet_lines_b else "(none)"
+    _rss_block_a = "\n".join(_rss_a) if _rss_a else "(none)"
+    _rss_block_b = "\n".join(_rss_b) if _rss_b else "(none)"
+
+    def _build_wh_prompt(tweets, headlines, count):
+        return f"""@{_wh_handle} needs {count} tweet ideas from what's hot RIGHT NOW.
 
 FEED:
-{_tweet_block}
+{tweets}
 
 HEADLINES:
-{_rss_block}
+{headlines}
 
 Rules:
 - hook = ORIGINAL tweet draft in @{_wh_handle}'s voice (not a copy of feed text)
@@ -4950,13 +4965,53 @@ Rules:
 Return ONLY JSON:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
 
-    _system = f"""You are @{_wh_handle}'s content strategist. Return only a JSON array of exactly 7 objects, no other text.
-
-{_WHATS_HOT_VOICE_GUIDE}"""
+    import concurrent.futures as _wh_cf
+    _tok = None
     try:
-        _raw = _call_claude_direct(_prompt, _system, max_tokens=1200, model="claude-haiku-4-5-20251001")
+        _tok = _get_oauth_token() or _get_access_token()
     except Exception:
-        _raw = call_claude(_prompt, _system, max_tokens=1200, model="claude-haiku-4-5-20251001")
+        pass
+
+    def _wh_call(prompt_text):
+        try:
+            if _tok:
+                return _call_with_token(_tok, prompt_text, _wh_system, 700)
+            return _call_claude_direct(prompt_text, _wh_system, max_tokens=700)
+        except Exception:
+            try:
+                return call_claude(prompt_text, _wh_system, max_tokens=700)
+            except Exception:
+                return ""
+
+    _prompt_a = _build_wh_prompt(_tweet_block_a, _rss_block_a, 4)
+    _prompt_b = _build_wh_prompt(_tweet_block_b, _rss_block_b, 4)
+
+    with _wh_cf.ThreadPoolExecutor(max_workers=2) as _wh_ex:
+        _fut_a = _wh_ex.submit(_wh_call, _prompt_a)
+        _fut_b = _wh_ex.submit(_wh_call, _prompt_b)
+        _raw_a = _fut_a.result()
+        _raw_b = _fut_b.result()
+
+    # Merge results
+    _raw = ""
+    _ideas_merged = []
+    for _raw_part in [_raw_a, _raw_b]:
+        if not _raw_part:
+            continue
+        _clean_part = _raw_part.strip()
+        if _clean_part.startswith("```"):
+            _clean_part = _clean_part.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        try:
+            _ideas_merged.extend(json.loads(_clean_part))
+        except Exception:
+            _m = re.search(r'\[[\s\S]*\]', _raw_part)
+            if _m:
+                try:
+                    _ideas_merged.extend(json.loads(_m.group(0)))
+                except Exception:
+                    pass
+    # Convert merged ideas back to raw JSON for existing parser compatibility
+    _raw = json.dumps(_ideas_merged) if _ideas_merged else ""
 
     _ideas = []
     try:
