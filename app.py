@@ -4934,40 +4934,29 @@ Use these patterns to structure every hook. Match the opener style, line break p
     _wh_handle = get_current_handle()
     _wh_is_g = is_guest()
     _wh_angle = "their unique perspective and expertise" if _wh_is_g else "Tyler's unique angle as a former player and Denver media host"
-    _prompt = f"""@{_wh_handle} needs 14 tweet ideas from what's happening RIGHT NOW.
+    _prompt = f"""@{_wh_handle} needs 7 tweet ideas from what's hot RIGHT NOW.
 
-FEED (last 24h):
+FEED:
 {_tweet_block}
 
 HEADLINES:
-{_rss_block}{_fmt_block}
-
-For each idea automatically select the most appropriate voice:
-- DEFAULT: Stats, observations, analytical reads, insider perspective
-- CRITICAL: Failures, bad decisions, accountability moments, underperformance
-- HOMER: Positive signals being overlooked, momentum, good news the casual fan is missing
-- SARCASTIC: Ridiculous narratives, obvious takes presented as revelations, absurd situations
+{_rss_block}
 
 Rules:
-- hook = complete ORIGINAL Normal Tweet draft written in @{_wh_handle}'s voice — NEVER copy or paraphrase feed tweet text directly. Use the feed as inspiration for the topic only.
-- If the feed item is a retweet or starts with RT — ignore it completely and use a different feed item.
-- why = under 10 words, {_wh_angle}.
+- hook = ORIGINAL tweet draft in @{_wh_handle}'s voice (not a copy of feed text)
+- voice = Default/Critical/Hype/Sarcastic (pick best fit)
+- why = under 10 words, {_wh_angle}
 
-Return ONLY a JSON array of exactly 14 objects:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"full tweet draft in the selected voice","why":"short angle under 10 words"}}]"""
+Return ONLY JSON:
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
 
-    _wh_sys_ctx = build_user_context()
-    _system = f"""You are @{_wh_handle}'s content strategist.
+    _system = f"""You are @{_wh_handle}'s content strategist. Return only a JSON array of exactly 7 objects, no other text.
 
-{_wh_sys_ctx}
-
-{_WHATS_HOT_VOICE_GUIDE}
-
-Return only the JSON array, no other text."""
+{_WHATS_HOT_VOICE_GUIDE}"""
     try:
-        _raw = _call_claude_direct(_prompt, _system, max_tokens=1800)
+        _raw = _call_claude_direct(_prompt, _system, max_tokens=1200, model="claude-haiku-4-5-20251001")
     except Exception:
-        _raw = call_claude(_prompt, _system, max_tokens=1800)
+        _raw = call_claude(_prompt, _system, max_tokens=1200, model="claude-haiku-4-5-20251001")
 
     _ideas = []
     try:
@@ -5048,19 +5037,10 @@ def _ci_inspiration_dialog():
     _page = st.session_state.get("inspo_page", 0)
     _per_page = 7
 
-    # If cached ideas are from old 7-idea prompt, clear and regenerate with 14
-    if len(_all_ideas) <= _per_page and _page > 0:
-        _run_inspiration_claude.clear()
-        st.session_state.pop("inspo_ideas", None)
-        st.session_state["inspo_page"] = 0
-        with st.spinner("Generating fresh ideas..."):
-            _fresh, _nt2, _nh2 = _run_inspiration_claude(_inspo_cache_key)
-        if _fresh:
-            st.session_state["inspo_ideas"] = _fresh
-            st.session_state["inspo_meta"] = (_nt2, _nh2)
-            _all_ideas = _fresh
-            _n_tweets, _n_heads = _nt2, _nh2
+    # Wrap page if beyond available ideas
+    if _page > 0 and _page * _per_page >= len(_all_ideas):
         _page = 0
+        st.session_state["inspo_page"] = 0
 
     _start = (_page * _per_page) % max(len(_all_ideas), 1)
     _ideas = (_all_ideas + _all_ideas)[_start:_start + _per_page]  # wrap-around slice
