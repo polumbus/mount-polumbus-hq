@@ -2445,7 +2445,7 @@ def page_brain_dump():
     # ── Bottom bar ──
     st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
     <div class="cs-bottom-bar cs-bd-bottom" style="display:flex;gap:8px;justify-content:center;">
-      <span class="cs-bot" data-bot="bd_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
+      <span class="cs-bot" data-bot="bd_save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save<span class="pa-tip">Save Draft To Your Idea Bank</span></span>
       <span class="cs-bot" data-bot="bd_new" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↺ New</span>
       <span class="cs-bot" data-bot="bd_saved" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Saved Thoughts</span>
     </div>''', unsafe_allow_html=True)
@@ -5638,21 +5638,21 @@ def page_compose_ideas():
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" data-tooltip="Polish Your Draft Into A High-Performance Post" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span><span class="pa-tip">Polish Your Draft Into A High-Performance Post</span>
           </div>
-          <div class="cs-idock-btn" data-dock="build" data-tooltip="Create Tweets From A Topic, Idea, Or Bullet Points" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="build" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Create Tweets From A Topic, Idea, Or Bullet Points</span>
           </div>
-          <div class="cs-idock-btn" data-dock="rewrite" data-tooltip="Remix Your Draft Into A New Format Or Angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="rewrite" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span><span class="pa-tip">Remix Your Draft Into A New Format Or Angle</span>
           </div>
-          <div class="cs-idock-btn" data-dock="grades" data-tooltip="Grade Your Draft On Hook, Voice, And Viral Potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="grades" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
           </div>
         </div>''', unsafe_allow_html=True)
 
@@ -5667,10 +5667,10 @@ def page_compose_ideas():
         # ── Divider + Bottom bar as HTML ──
         st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
         <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="save" data-tooltip="Save Draft To Your Idea Bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save</span>
-          <span class="cs-bot" data-bot="bank" data-tooltip="Open Your Saved Ideas And Inspiration Vault" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank</span>
-          <span class="cs-bot" data-bot="hot" data-tooltip="Trending Topics And Fresh Tweet Ideas" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot</span>
-          <span class="cs-bot" data-bot="post" data-tooltip="Post Directly To X" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post</span>
+          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save<span class="pa-tip">Save Draft To Your Idea Bank</span></span>
+          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank<span class="pa-tip">Open Your Saved Ideas And Inspiration Vault</span></span>
+          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot<span class="pa-tip">Trending Topics And Fresh Tweet Ideas</span></span>
+          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post<span class="pa-tip">Post Directly To X</span></span>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for bottom bar (inside real container)
@@ -6802,7 +6802,7 @@ def page_algo_analyzer():
     st.markdown('''<div class="cs-icon-dock cs-algo-dock" style="display:flex;gap:8px;justify-content:center;margin:16px 0;">
       <div class="cs-idock-btn cs-idock-primary" data-dock="aa_analyze" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#060A12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
+        <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
       </div>
     </div>''', unsafe_allow_html=True)
 
@@ -7784,14 +7784,14 @@ def page_reply_guy():
             # Action row — icon dock buttons
             _liked_html = f'<div style="width:40px;height:40px;border-radius:12px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);display:flex;align-items:center;justify-content:center;"><span style="color:#4ade80;font-size:16px;">♥</span></div>' if et_already_liked else f'<div class="cs-bot" data-bot="rg_etl_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" stroke="#5a7090" stroke-width="2"/></svg></div>'
             st.markdown(f'''<div style="display:flex;gap:6px;margin-top:6px;">
-              <div class="cs-bot" data-bot="rg_etg_{i}" data-tooltip="Generate AI Reply Suggestion" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <div class="cs-bot" data-bot="rg_etg_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#5a7090" stroke-width="2" stroke-linejoin="round"/></svg>
               </div>
               {_liked_html}
-              <div class="cs-bot" data-bot="rg_ets_{i}" data-tooltip="Post Reply To X" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <div class="cs-bot" data-bot="rg_ets_{i}" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="#060A12" stroke-width="2"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="#060A12" stroke-width="2"/></svg>
               </div>
-              <div class="cs-bot" data-bot="rg_etrd_{i}" data-tooltip="Mark As Handled" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <div class="cs-bot" data-bot="rg_etrd_{i}" style="width:40px;height:40px;border-radius:12px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
             </div>''', unsafe_allow_html=True)

@@ -497,11 +497,7 @@ hr { border-color: #14203A !important; }
 /* ═══════════════════════════════════════════════
    CUSTOM TOOLTIPS — Dark themed, matches app
 ═══════════════════════════════════════════════ */
-[data-tooltip] {
-  position: relative;
-}
-[data-tooltip]::after {
-  content: attr(data-tooltip);
+.pa-tip {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 50%;
@@ -523,7 +519,8 @@ hr { border-color: #14203A !important; }
   z-index: 9999;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
 }
-[data-tooltip]:hover::after {
+.cs-idock-btn:hover .pa-tip,
+.cs-bot:hover .pa-tip {
   opacity: 1;
 }
 
