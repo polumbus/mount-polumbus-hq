@@ -8601,7 +8601,7 @@ def page_signals_prompts():
                 _sc, _sbg = _SPORT_PILL_COLORS.get(_stag, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;margin-left:6px;">{_stag}</span>'
             _tweet_url = tw.get("twitterUrl", tw.get("url", ""))
-            _view_link = f' &middot; <a href="{_tweet_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;">view</a>' if _tweet_url else ""
+            _view_link = f' &middot; <a href="{_tweet_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tweet_url else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_spill}</span>
@@ -8637,7 +8637,7 @@ def page_signals_prompts():
                 _sc_n, _sbg_n = _SPORT_PILL_COLORS.get(_stag_n, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill_n = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg_n};color:{_sc_n};font-weight:600;margin-right:6px;">{_stag_n}</span>'
             _tweet_url_n = tw.get("twitterUrl", tw.get("url", ""))
-            _view_link_n = f' &middot; <a href="{_tweet_url_n}" target="_blank" style="color:#C49E3C;text-decoration:none;">view</a>' if _tweet_url_n else ""
+            _view_link_n = f' &middot; <a href="{_tweet_url_n}" target="_blank" style="color:#C49E3C;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tweet_url_n else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
