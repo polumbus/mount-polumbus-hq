@@ -4904,6 +4904,8 @@ def _run_inspiration_claude(_cache_key: str = ""):
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
+    _tweet_sources = {}  # index -> {author, text, url}
+    _tidx = 0
     for _t in _all_tweets[:40]:
         _text = _t.get("text", "")
         if not _text:
@@ -4914,9 +4916,15 @@ def _run_inspiration_claude(_cache_key: str = ""):
             continue
         _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
         _likes = _t.get("likeCount", _t.get("like_count", 0))
-        _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
+        _turl = _t.get("twitterUrl", _t.get("url", ""))
+        _tweet_lines.append(f"[T{_tidx}] @{_author} ({_likes}L): {_text[:100]}")
+        _tweet_sources[f"T{_tidx}"] = {"author": _author, "text": _text[:120], "url": _turl}
+        _tidx += 1
         if len(_tweet_lines) >= 20:
             break
+    # Store for rendering later
+    st.session_state["_wh_tweet_sources"] = _tweet_sources
+    st.session_state["_wh_headline_sources"] = _rss_headlines[:10] if _rss_headlines else []
 
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
@@ -4961,9 +4969,10 @@ Rules:
 - hook = ORIGINAL tweet draft in @{_wh_handle}'s voice (not a copy of feed text)
 - voice = Default/Critical/Hype/Sarcastic (pick best fit)
 - why = under 10 words, {_wh_angle}
+- source_ref = the [T0], [T1] etc tag or headline that inspired this idea (required)
 
 Return ONLY JSON:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle","source_ref":"T0 or headline text"}}]"""
 
     import concurrent.futures as _wh_cf
     _tok = None
@@ -5135,6 +5144,29 @@ def _ci_build_dialog():
             st.error("Couldn't generate tweets. Try again or add more detail.")
 
 
+def _build_source_recap(idea):
+    """Build an HTML recap showing which tweet/headline inspired this idea."""
+    ref = idea.get("source_ref", "")
+    if not ref:
+        return ""
+    _sources = st.session_state.get("_wh_tweet_sources", {})
+    _headlines = st.session_state.get("_wh_headline_sources", [])
+    # Check if ref matches a tweet tag like T0, T1
+    if ref in _sources:
+        s = _sources[ref]
+        _link = f' <a href="{s["url"]}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-weight:600;">view ↗</a>' if s.get("url") else ""
+        return (f'<div style="font-size:10px;color:rgba(255,255,255,0.25);border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;line-height:1.5;">'
+                f'Inspired by @{s["author"]}: "{s["text"][:80]}{"..." if len(s.get("text",""))>80 else ""}"{_link}</div>')
+    # Check if ref is a headline
+    for h in _headlines:
+        if ref.lower() in h.lower() or h.lower() in ref.lower():
+            return (f'<div style="font-size:10px;color:rgba(255,255,255,0.25);border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;line-height:1.5;">'
+                    f'Inspired by headline: "{h[:100]}"</div>')
+    # Fallback: show the raw ref
+    return (f'<div style="font-size:10px;color:rgba(255,255,255,0.25);border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;line-height:1.5;">'
+            f'Inspired by: {ref[:100]}</div>')
+
+
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
@@ -5221,7 +5253,8 @@ def _ci_inspiration_dialog():
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_vbg};color:{_vfg};border:1px solid {_vborder};margin-left:4px;">{_voice.upper()}</span>'
               f'</div>'
               f'<div style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.7;letter-spacing:0.01em;margin-bottom:8px;">{_hook}</div>'
-              f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:12px;">{_why}</div>'
+              f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{_why}</div>'
+              f'{_build_source_recap(_idea)}'
             f'</div>',
             unsafe_allow_html=True)
 
