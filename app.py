@@ -8600,13 +8600,15 @@ def page_signals_prompts():
             if _stag:
                 _sc, _sbg = _SPORT_PILL_COLORS.get(_stag, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;margin-left:6px;">{_stag}</span>'
+            _tweet_url = tw.get("twitterUrl", tw.get("url", ""))
+            _view_link = f' &middot; <a href="{_tweet_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;">view</a>' if _tweet_url else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_spill}</span>
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
                 </div>
                 <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs{_view_link}</div>
                 <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_beat_{idx}", key=f"sig_beat_{idx}"):
@@ -8634,13 +8636,15 @@ def page_signals_prompts():
             if _stag_n:
                 _sc_n, _sbg_n = _SPORT_PILL_COLORS.get(_stag_n, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill_n = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg_n};color:{_sc_n};font-weight:600;margin-right:6px;">{_stag_n}</span>'
+            _tweet_url_n = tw.get("twitterUrl", tw.get("url", ""))
+            _view_link_n = f' &middot; <a href="{_tweet_url_n}" target="_blank" style="color:#C49E3C;text-decoration:none;">view</a>' if _tweet_url_n else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
                     <div>{_spill_n}<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span></div>
                 </div>
                 <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies{_view_link_n}</div>
                 <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_nat_{idx}", key=f"sig_nat_{idx}"):
