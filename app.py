@@ -13,7 +13,7 @@ import urllib.error
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
-                  get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores,
+                  get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
                   odds_available, odds_format_block,
                   get_google_trends, get_reddit_trending, get_newsapi_headlines,
                   get_coingecko_trending)
@@ -1838,6 +1838,7 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
+    _nav_pages.insert(5, "Gameday Mode")
 _nav_pages_js = json.dumps(_nav_pages)
 
 _sidebar_html = f"""
@@ -2299,6 +2300,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
+  {'<a href="/?'+_tok_qp+'page=Gameday+Mode" target="_self" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -2321,7 +2323,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode"} and not is_owner():
     page = "Creator Studio"
     st.session_state.current_page = page
 
@@ -9160,6 +9162,334 @@ def page_debug_console():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# GAMEDAY MODE
+# ═══════════════════════════════════════════════════════════════════════════
+
+_GAMEDAY_TEAMS = {
+    "nfl": {"DEN": {"name": "Broncos", "color": "#FB4F14", "sport": "NFL"}},
+    "nba": {"DEN": {"name": "Nuggets", "color": "#0E2240", "sport": "NBA"}},
+    "nhl": {"COL": {"name": "Avalanche", "color": "#6F263D", "sport": "NHL"}},
+}
+
+# CU Buffs use college-football endpoint, handled separately
+_GAMEDAY_CFB = {"COLO": {"name": "CU Buffs", "color": "#CFB87C", "sport": "CFB"}}
+
+_GD_SCORE_CACHE = {"data": None, "ts": 0}
+
+
+def _gd_fetch_live_scores():
+    """Fetch live scores for all Denver teams. Cached 60 seconds."""
+    if _GD_SCORE_CACHE["data"] is not None and (time.time() - _GD_SCORE_CACHE["ts"]) < 60:
+        return _GD_SCORE_CACHE["data"]
+    results = []
+    # Standard ESPN sports
+    for league, teams in _GAMEDAY_TEAMS.items():
+        try:
+            scores = espn_scores(league, limit=15)
+            for g in (scores or []):
+                h_abbr = g.get("home", {}).get("abbr", "")
+                a_abbr = g.get("away", {}).get("abbr", "")
+                for abbr, info in teams.items():
+                    if abbr in (h_abbr, a_abbr):
+                        is_home = h_abbr == abbr
+                        opp = g["away"] if is_home else g["home"]
+                        us = g["home"] if is_home else g["away"]
+                        results.append({
+                            "team": info["name"], "sport": info["sport"], "color": info["color"],
+                            "our_score": us.get("score", "0"), "opp_score": opp.get("score", "0"),
+                            "opponent": opp.get("name", "Unknown"), "opp_abbr": opp.get("abbr", ""),
+                            "home": is_home, "status": g.get("status", "Scheduled"),
+                            "completed": g.get("completed", False),
+                            "broadcast": g.get("broadcast", ""),
+                            "date": g.get("date", ""),
+                        })
+        except Exception:
+            pass
+    # CU Buffs — college football
+    try:
+        cfb_url = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+        data = requests.get(cfb_url, params={"limit": 40}, headers={"User-Agent": "PostAscend/1.0"}, timeout=8).json()
+        for event in data.get("events", []):
+            comp = event.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            home_c = away_c = {}
+            for c in competitors:
+                td = {"name": c.get("team", {}).get("displayName", ""), "abbr": c.get("team", {}).get("abbreviation", ""), "score": c.get("score", "0")}
+                if c.get("homeAway") == "home":
+                    home_c = td
+                else:
+                    away_c = td
+            for abbr, info in _GAMEDAY_CFB.items():
+                if abbr in (home_c.get("abbr", ""), away_c.get("abbr", "")):
+                    is_home = home_c.get("abbr") == abbr
+                    us = home_c if is_home else away_c
+                    opp = away_c if is_home else home_c
+                    status_obj = event.get("status", {})
+                    results.append({
+                        "team": info["name"], "sport": info["sport"], "color": info["color"],
+                        "our_score": us.get("score", "0"), "opp_score": opp.get("score", "0"),
+                        "opponent": opp.get("name", "Unknown"), "opp_abbr": opp.get("abbr", ""),
+                        "home": is_home, "status": status_obj.get("type", {}).get("description", "Scheduled"),
+                        "completed": status_obj.get("type", {}).get("completed", False),
+                        "broadcast": comp.get("broadcasts", [{}])[0].get("names", [""])[0] if comp.get("broadcasts") else "",
+                        "date": event.get("date", ""),
+                    })
+    except Exception:
+        pass
+    _GD_SCORE_CACHE["data"] = results
+    _GD_SCORE_CACHE["ts"] = time.time()
+    return results
+
+
+def _gd_game_state(game):
+    """Return 'pre', 'live', or 'post' for a game."""
+    s = game.get("status", "").lower()
+    if game.get("completed"):
+        return "post"
+    if any(k in s for k in ["in progress", "halftime", "end of", "delayed"]):
+        return "live"
+    if any(k in s for k in ["final"]):
+        return "post"
+    return "pre"
+
+
+def _gd_fetch_game_tweets(team_name, sport):
+    """Fetch tweets about a specific team. Returns list of tweet dicts."""
+    sport_map = {"NFL": "Broncos", "NBA": "Nuggets", "NHL": "Avalanche", "CFB": "\"CU Buffs\" OR \"Colorado Buffaloes\""}
+    kw = sport_map.get(sport, team_name)
+    query = f"({kw}) -is:retweet"
+    tweets, _ = _fetch_signals(query, count=50, max_age_hours=6, pages=1)
+    return tweets
+
+
+@st.dialog("Gameday Draft", width="large")
+def _gd_draft_dialog(_nonce):
+    """Draft dialog for gameday tweets — uses Post Ascend voice system."""
+    game = st.session_state.get("_gd_selected_game")
+    tweet = st.session_state.get("_gd_selected_tweet")
+    if not game:
+        st.warning("No game selected.")
+        return
+
+    # Check for results from previous build
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+        _sig_fmt = st.session_state.get("_gd_last_fmt", "Normal Tweet")
+        _sig_voice = st.session_state.get("_gd_last_voice", "Default")
+        _ci_output_panel_impl("build", "", _sig_fmt, _sig_voice)
+        return
+
+    # Build context
+    state = _gd_game_state(game)
+    score_line = f"{game['team']} {game['our_score']} — {game['opponent']} {game['opp_score']}" if state != "pre" else f"{game['team']} vs {game['opponent']}"
+    status_line = game.get("status", "")
+
+    if tweet:
+        author = tweet.get("author", {}).get("userName", "") or ""
+        brief = f"""GAMEDAY {game['sport']}: {score_line} ({status_line})
+SIGNAL: @{author} — {tweet.get('text', '')[:280]}
+ENGAGEMENT: {tweet.get('replyCount', 0)} replies, {tweet.get('retweetCount', 0)} RTs
+ANGLE: React to this moment as it's happening. In-game energy."""
+    else:
+        brief = f"""GAMEDAY {game['sport']}: {score_line} ({status_line})
+CONTEXT: {"Live game in progress" if state == "live" else "Final score" if state == "post" else "Pre-game"}
+ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == "live" else "Post-game take — what just happened and what it means" if state == "post" else "Pre-game prediction or storyline"}"""
+
+    st.markdown(f"""<div style="background:#0D1E36;border:1px solid #1E3050;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:12px;color:#2DD4BF;font-weight:600;margin-bottom:6px;">{game['sport']} — {status_line}</div>
+        <div style="font-size:20px;color:#e8e8f0;font-weight:700;">{score_line}</div>
+    </div>""", unsafe_allow_html=True)
+
+    edited_brief = st.text_area("Edit brief:", value=brief, height=120, key="gd_brief_edit")
+
+    _custom_voices = load_json("voice_styles.json", [])
+    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread"]
+    _v_idx = _voice_opts.index(st.session_state.get("gd_voice", "Default")) if st.session_state.get("gd_voice", "Default") in _voice_opts else 0
+    _f_idx = _fmt_opts.index(st.session_state.get("gd_fmt", "Normal Tweet")) if st.session_state.get("gd_fmt", "Normal Tweet") in _fmt_opts else 1
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        gd_voice = st.selectbox("Voice", _voice_opts, index=_v_idx, key="gd_voice")
+    with vc2:
+        gd_fmt = st.selectbox("Format", _fmt_opts, index=_f_idx, key="gd_fmt")
+
+    if st.button("Build", use_container_width=True, key="gd_build", type="primary"):
+        final_brief = st.session_state.get("gd_brief_edit", edited_brief)
+        st.session_state["_gd_last_fmt"] = gd_fmt
+        st.session_state["_gd_last_voice"] = gd_voice
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        with st.spinner("Building your gameday tweets..."):
+            _run_ci_ai("build", final_brief, gd_fmt, gd_voice)
+        st.session_state["_gd_reopen_results"] = True
+        st.rerun()
+
+
+def page_gameday():
+    """Gameday Mode — live scores, game tweets, and fast drafting."""
+
+    st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Live scores, game tweets, and fast reaction drafts — all in one place.</div>', unsafe_allow_html=True)
+
+    # --- Reopen draft dialog with results ---
+    if st.session_state.pop("_gd_reopen_results", False):
+        _gd_draft_dialog(str(time.time()))
+
+    # --- Fetch live scores ---
+    games = _gd_fetch_live_scores()
+
+    if not games:
+        st.markdown("""<div style="text-align:center;padding:60px 20px;">
+            <div style="font-size:48px;margin-bottom:16px;">📺</div>
+            <div style="font-size:18px;color:#667;font-weight:600;">No Denver games today</div>
+            <div style="font-size:13px;color:#445;margin-top:8px;">Gameday Mode activates automatically when the Broncos, Nuggets, Avalanche, or CU Buffs are playing.</div>
+        </div>""", unsafe_allow_html=True)
+
+        # Show upcoming schedule
+        st.markdown("---")
+        st.markdown("**Upcoming Denver Games**")
+        for sport_key, abbr, name in [("nfl", "DEN", "Broncos"), ("nba", "DEN", "Nuggets"), ("nhl", "COL", "Avalanche")]:
+            try:
+                info = espn_team(sport_key, abbr)
+                if info and info.get("next_event"):
+                    st.markdown(f"**{name}** ({info.get('record', '')}) — Next: {info['next_event']}")
+            except Exception:
+                pass
+        return
+
+    # --- Scoreboard ---
+    st.markdown("""<style>
+    .gd-score-card{background:#0D1E36;border:1px solid #1E3050;border-radius:10px;padding:16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.2s;}
+    .gd-score-card:hover{border-color:#2DD4BF;}
+    .gd-live-dot{width:8px;height:8px;background:#FF4444;border-radius:50%;display:inline-block;margin-right:6px;animation:gd-pulse 1.5s infinite;}
+    @keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+    .gd-score-num{font-size:28px;font-weight:800;color:#e8e8f0;font-variant-numeric:tabular-nums;}
+    .gd-team-name{font-size:13px;color:#8899aa;font-weight:600;}
+    .gd-status{font-size:11px;color:#667;margin-top:4px;}
+    .gd-sport-tag{font-size:9px;padding:2px 8px;border-radius:10px;font-weight:700;display:inline-block;}
+    </style>""", unsafe_allow_html=True)
+
+    # Sort: live first, then pre, then post
+    _state_order = {"live": 0, "pre": 1, "post": 2}
+    games.sort(key=lambda g: _state_order.get(_gd_game_state(g), 1))
+
+    # Track selected game
+    if "_gd_active_game" not in st.session_state and games:
+        # Auto-select first live game, or first game
+        live = [g for g in games if _gd_game_state(g) == "live"]
+        st.session_state["_gd_active_game"] = (live[0] if live else games[0])["team"]
+
+    for idx, g in enumerate(games):
+        state = _gd_game_state(g)
+        live_dot = '<span class="gd-live-dot"></span>' if state == "live" else ""
+        status_color = "#FF4444" if state == "live" else "#2DD4BF" if state == "pre" else "#667"
+        status_text = g["status"]
+
+        _card_html = f"""<div class="gd-score-card" id="gd_card_{idx}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span class="gd-sport-tag" style="background:{g['color']}20;color:{g['color']};">{g['sport']}</span>
+                <span style="font-size:11px;color:{status_color};font-weight:600;">{live_dot}{status_text}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="text-align:center;flex:1;">
+                    <div class="gd-team-name">{g['team']}</div>
+                    <div class="gd-score-num">{g['our_score']}</div>
+                </div>
+                <div style="font-size:14px;color:#445;padding:0 12px;">{'@' if g['home'] else 'vs'}</div>
+                <div style="text-align:center;flex:1;">
+                    <div class="gd-team-name">{g['opponent']}</div>
+                    <div class="gd-score-num">{g['opp_score']}</div>
+                </div>
+            </div>
+            {f'<div class="gd-status">📡 {g["broadcast"]}</div>' if g.get("broadcast") else ""}
+        </div>"""
+        st.markdown(_card_html, unsafe_allow_html=True)
+
+        if st.button(f"Select {g['team']}", key=f"gd_select_{idx}", type="secondary", use_container_width=True):
+            st.session_state["_gd_active_game"] = g["team"]
+            st.session_state.pop("_gd_tweets", None)
+            st.rerun()
+
+    st.markdown("---")
+
+    # --- Active game section ---
+    active_name = st.session_state.get("_gd_active_game", "")
+    active_game = next((g for g in games if g["team"] == active_name), games[0] if games else None)
+    if not active_game:
+        return
+
+    state = _gd_game_state(active_game)
+
+    # --- Quick Draft (no tweet needed) ---
+    st.markdown(f"**Quick Take — {active_game['team']}**")
+    qc1, qc2 = st.columns([3, 1])
+    with qc2:
+        if st.button("Draft Take", key="gd_quick_draft", type="primary", use_container_width=True):
+            st.session_state["_gd_selected_game"] = active_game
+            st.session_state["_gd_selected_tweet"] = None
+            for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            _gd_draft_dialog(str(time.time()))
+
+    # --- Tweet Feed ---
+    st.markdown(f"**{active_game['sport']} Feed** — {active_game['team']}")
+
+    # Manual refresh
+    rc1, rc2 = st.columns([3, 1])
+    with rc2:
+        _do_refresh = st.button("Refresh Feed", key="gd_refresh", use_container_width=True)
+
+    # Fetch or use cache
+    _cache_key = f"_gd_tweets_{active_name}"
+    _cache_ts_key = f"_gd_tweets_ts_{active_name}"
+    if _do_refresh or _cache_key not in st.session_state:
+        with st.spinner("Loading tweets..."):
+            tweets = _gd_fetch_game_tweets(active_game["team"], active_game["sport"])
+            # Sort by engagement
+            tweets.sort(key=lambda t: t.get("replyCount", 0) + t.get("retweetCount", 0), reverse=True)
+            st.session_state[_cache_key] = tweets
+            st.session_state[_cache_ts_key] = time.time()
+
+    tweets = st.session_state.get(_cache_key, [])
+    _ts = st.session_state.get(_cache_ts_key, 0)
+    if _ts:
+        _ago_min = int((time.time() - _ts) / 60)
+        st.markdown(f"<div style='font-size:10px;color:#445;margin-bottom:8px;'>Last refreshed: {_ago_min}m ago | {len(tweets)} tweets</div>", unsafe_allow_html=True)
+
+    if not tweets:
+        st.markdown("<div style='text-align:center;padding:20px;color:#556;'>No recent tweets found. Hit Refresh to check again.</div>", unsafe_allow_html=True)
+
+    for idx, t in enumerate(tweets[:15]):
+        author = t.get("author", {}).get("userName", "") or t.get("user", {}).get("screen_name", "")
+        text = t.get("text", "")
+        replies = t.get("replyCount", 0)
+        rts = t.get("retweetCount", 0)
+        _ago = _relative_time(t.get("createdAt", ""))
+        _tw_url = t.get("tweetUrl") or t.get("url") or ""
+
+        _view_link = f' <a href="{_tw_url}" target="_blank" rel="noopener" style="font-size:10px;color:#2DD4BF;text-decoration:none;margin-left:6px;">view ↗</a>' if _tw_url else ""
+
+        st.markdown(f"""<div style="background:#0A1628;border:1px solid #1E3050;border-radius:8px;padding:12px;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_view_link}</span>
+                <span style="font-size:9px;color:#445;">{_ago}</span>
+            </div>
+            <div style="font-size:13px;color:#d8d8e8;margin:6px 0;line-height:1.4;">{text[:300]}</div>
+            <div style="font-size:10px;color:#556;">{replies} replies · {rts} RTs</div>
+        </div>""", unsafe_allow_html=True)
+
+        if st.button(f"React to this", key=f"gd_react_{idx}", type="secondary"):
+            st.session_state["_gd_selected_game"] = active_game
+            st.session_state["_gd_selected_tweet"] = t
+            for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            _gd_draft_dialog(str(time.time()))
+
+    # --- Auto-refresh scoreboard via empty container ---
+    if any(_gd_game_state(g) == "live" for g in games):
+        st.markdown("<div style='font-size:10px;color:#334;text-align:center;margin-top:12px;'>Scores auto-refresh every 60 seconds. Tweet feed refreshes manually.</div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 page_map = {
@@ -9177,6 +9507,7 @@ page_map = {
 }
 if is_owner():
     page_map["Signals & Prompts"] = page_signals_prompts
+    page_map["Gameday Mode"] = page_gameday
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
