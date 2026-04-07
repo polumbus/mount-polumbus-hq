@@ -9339,6 +9339,9 @@ ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == 
 
 def page_gameday():
     """Gameday Mode — live scores, game tweets, and fast drafting."""
+    _gd_btn = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
+    _gd_btn_pri = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;"
+    _gd_btn_sm = "margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
 
     st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live scores, game tweets, and fast reaction drafts.</div>', unsafe_allow_html=True)
@@ -9354,18 +9357,16 @@ def page_gameday():
             <div style="font-size:16px;color:#3a5070;font-weight:600;">No Denver games today</div>
             <div style="font-size:12px;color:#2a3a50;margin-top:8px;">Broncos, Nuggets, Avalanche, or CU Buffs football.</div>
         </div>""", unsafe_allow_html=True)
-        # Upcoming schedule
         for sport_key, abbr, name in [("nfl", "DEN", "Broncos"), ("nba", "DEN", "Nuggets"), ("nhl", "COL", "Avalanche")]:
             try:
                 info = espn_team(sport_key, abbr)
                 if info and info.get("next_event"):
-                    st.markdown(f"""<div class="tweet-card"><div style="font-size:12px;color:#2DD4BF;font-weight:600;">{name}</div>
-                        <div style="font-size:11px;color:#667;margin-top:4px;">{info.get('record', '')} — Next: {info['next_event']}</div></div>""", unsafe_allow_html=True)
+                    st.markdown(f'<div class="tweet-card"><div style="font-size:12px;color:#2DD4BF;font-weight:600;">{name}</div>'
+                        f'<div style="font-size:11px;color:#667;margin-top:4px;">{info.get("record", "")} — Next: {info["next_event"]}</div></div>', unsafe_allow_html=True)
             except Exception:
                 pass
         return
 
-    # Sort: live first, then pre, then post
     _state_order = {"live": 0, "pre": 1, "post": 2}
     games.sort(key=lambda g: _state_order.get(_gd_game_state(g), 1))
 
@@ -9383,8 +9384,9 @@ def page_gameday():
         _active = g["team"] == st.session_state.get("_gd_active_game", "")
         _border = "border-top-color:#2DD4BF;border-color:rgba(45,212,191,0.2);" if _active else ""
         _sc, _sbg = {"NFL": ("#FB4F14", "rgba(251,79,20,0.12)"), "NBA": ("#1D428A", "rgba(29,66,138,0.12)"), "NHL": ("#6F263D", "rgba(111,38,61,0.12)"), "CFB": ("#CFB87C", "rgba(207,184,124,0.12)")}.get(g["sport"], ("#667", "rgba(102,104,136,0.12)"))
-
         _bcast = f'<div style="font-size:10px;color:#445;margin-top:6px;">{g["broadcast"]}</div>' if g.get("broadcast") else ""
+        _sel_style = _gd_btn_pri if _active else _gd_btn
+        _sel_key = f"gd_sel_{idx}"
         st.markdown(f'<div class="tweet-card" style="cursor:pointer;{_border}">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
             f'<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;">{g["sport"]}</span>'
@@ -9395,31 +9397,34 @@ def page_gameday():
             f'<div style="font-size:12px;color:#334;padding:0 12px;">{"@" if g["home"] else "vs"}</div>'
             f'<div style="text-align:center;flex:1;"><div style="font-size:12px;color:#8899aa;font-weight:600;">{g["opponent"]}</div>'
             f'<div style="font-size:26px;font-weight:800;color:#e8e8f0;font-variant-numeric:tabular-nums;">{g["opp_score"]}</div></div></div>'
-            f'{_bcast}</div>', unsafe_allow_html=True)
-        if st.button(f"Select {g['team']}", key=f"gd_select_{idx}"):
+            f'{_bcast}'
+            f'<span class="cs-bot" data-bot="{_sel_key}" style="{_sel_style}">SELECT</span>'
+            f'</div>', unsafe_allow_html=True)
+        if st.button(_sel_key, key=_sel_key):
             st.session_state["_gd_active_game"] = g["team"]
             st.session_state.pop(f"_gd_tweets_{g['team']}", None)
             st.rerun()
 
-    # ── Active game section ──
+    # ── Active game feed ──
     active_name = st.session_state.get("_gd_active_game", "")
     active_game = next((g for g in games if g["team"] == active_name), games[0] if games else None)
     if not active_game:
         return
 
-    # ── Quick Draft + Refresh row ──
     st.markdown(f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">{active_game["sport"]} FEED — {active_game["team"].upper()}</div>', unsafe_allow_html=True)
 
-    _ac1, _ac2, _ac3 = st.columns([1, 1, 2])
-    with _ac1:
-        if st.button("Draft Take", key="gd_quick_draft", type="primary", use_container_width=True):
-            st.session_state["_gd_selected_game"] = active_game
-            st.session_state["_gd_selected_tweet"] = None
-            for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
-                st.session_state.pop(_k, None)
-            _gd_draft_dialog(str(time.time()))
-    with _ac2:
-        _do_refresh = st.button("Refresh", key="gd_refresh", use_container_width=True)
+    # Action bar — cs-bot pills
+    st.markdown(f'<div style="display:flex;gap:8px;margin-bottom:14px;">'
+        f'<span class="cs-bot" data-bot="gd_draft" style="{_gd_btn_pri}">Draft Take</span>'
+        f'<span class="cs-bot" data-bot="gd_refresh" style="{_gd_btn}">Refresh</span>'
+        f'</div>', unsafe_allow_html=True)
+    if st.button("gd_draft", key="gd_draft"):
+        st.session_state["_gd_selected_game"] = active_game
+        st.session_state["_gd_selected_tweet"] = None
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        _gd_draft_dialog(str(time.time()))
+    _do_refresh = st.button("gd_refresh", key="gd_refresh")
 
     # Fetch or use cache
     _cache_key = f"_gd_tweets_{active_name}"
@@ -9448,15 +9453,17 @@ def page_gameday():
         _ago = _relative_time(t.get("createdAt", ""))
         _tw_url = t.get("tweetUrl") or t.get("url") or ""
         _view_link = f' &middot; <a href="{_tw_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tw_url else ""
-
         _ellip = '...' if len(t.get('text', '')) > 280 else ''
+        _rkey = f"gd_r_{idx}"
         st.markdown(f'<div class="tweet-card" style="cursor:pointer;">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
             f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}</span>'
             f'<span style="font-size:9px;color:#445;">{_ago}</span></div>'
             f'<div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{_ellip}</div>'
-            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs{_view_link}</div></div>', unsafe_allow_html=True)
-        if st.button(f"React", key=f"gd_react_{idx}"):
+            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs{_view_link}</div>'
+            f'<span class="cs-bot" data-bot="{_rkey}" style="{_gd_btn_sm}">React</span>'
+            f'</div>', unsafe_allow_html=True)
+        if st.button(_rkey, key=_rkey):
             st.session_state["_gd_selected_game"] = active_game
             st.session_state["_gd_selected_tweet"] = t
             for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
@@ -9466,10 +9473,7 @@ def page_gameday():
     if any(_gd_game_state(g) == "live" for g in games):
         st.markdown("<div style='font-size:10px;color:#2a3a50;text-align:center;margin-top:16px;'>Scores refresh every 60s. Tweets refresh manually.</div>", unsafe_allow_html=True)
 
-    # CSS: pulse animation + hide raw Streamlit buttons
-    st.markdown("""<style>
-    @keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
-    </style>""", unsafe_allow_html=True)
+    st.markdown('<style>@keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}</style>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
