@@ -2273,6 +2273,14 @@ _stc.html("""<script>
         }
       });
     });
+    /* Hide buttons that are wired to cs-bot spans (gd_, sig_beat_, sig_nat_, sig_tab_, sig_next) */
+    for(var i=0;i<btns.length;i++){
+      var t=btns[i].textContent.trim();
+      if(/^(gd_|sig_beat_|sig_nat_|sig_tab_|sig_next)/.test(t)){
+        var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].closest('[data-testid="element-container"]')||btns[i].parentElement.parentElement;
+        if(el&&!el._csHidden){el._csHidden=true;el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';}
+      }
+    }
   }
   /* Run immediately + debounced on DOM changes (not every mutation) */
   setTimeout(processDOM,300);setTimeout(processDOM,800);setTimeout(processDOM,2000);
