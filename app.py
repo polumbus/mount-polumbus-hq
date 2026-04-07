@@ -1824,6 +1824,8 @@ _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if
 _owner_debug_zone = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
+_owner_gameday_icon = ""
+_owner_gameday_panel = ""
 _nav_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer", "Reply Mode", "Idea Bank",
               "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
 if is_owner():
@@ -1839,6 +1841,17 @@ if is_owner():
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
     _nav_pages.insert(5, "Gameday Mode")
+    _owner_gameday_icon = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-ico {_act('Gameday Mode')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
+        <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+      </svg>
+    </a>"""
+    _owner_gameday_panel = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-panel-item {_act('Gameday Mode')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Gameday Mode
+      </a>"""
 _nav_pages_js = json.dumps(_nav_pages)
 
 _sidebar_html = f"""
@@ -1977,6 +1990,7 @@ _sidebar_html = f"""
       </svg>
     </a>
     {_owner_signals_icon}
+    {_owner_gameday_icon}
     <div class="mp-panel">
       <div class="mp-panel-header">CREATE</div>
       <a href="/?{_tok_qp}page=Creator+Studio" class="mp-panel-item {_act('Creator Studio')}" target="_self">
@@ -1996,6 +2010,7 @@ _sidebar_html = f"""
         Article Writer
       </a>
       {_owner_signals_panel}
+      {_owner_gameday_panel}
     </div>
   </div>
 
