@@ -9290,16 +9290,105 @@ def _gd_game_state(game):
     return "pre"
 
 
-def _gd_fetch_game_tweets(team_name, sport):
-    """Fetch tweets about a specific team. Returns list of tweet dicts."""
-    sport_map = {
-        "NFL": "Broncos", "NBA": "Nuggets", "NHL": "Avalanche",
-        "CFB": "(\"CU Buffs\" OR \"Colorado Buffaloes\" OR \"Buffs football\" OR Shedeur OR \"Deion Sanders\")",
-    }
-    kw = sport_map.get(sport, team_name)
-    query = f"{kw} -is:retweet"
-    tweets, _ = _fetch_signals(query, count=50, max_age_hours=6, pages=1)
-    return tweets
+# Sport-specific reporter handles for gameday feed (Layer 2 — The Facts)
+_GD_REPORTERS = {
+    "NFL": ["mikeklis", "bylucaevans", "ZacStevensDNVR", "AllbrightNFL", "TroyRenck", "MaseDenver",
+            "KyleNewmanDP", "CodyRoarkNFL", "ParkerJGabriel", "christomasson", "JamieLynchTV",
+            "AdamSchefter", "RapSheet", "TomPelissero", "JayGlazer", "NFL"],
+    "NBA": ["HarrisonWind", "msinger", "BennettDurando", "VBenedetto", "chrisadempsey",
+            "katywinge", "VicLombardi", "TJMcBrideNBA", "DNVR_Nuggets", "MooseColorado",
+            "ShamsCharania", "BrianWindhorst", "espn", "NBAonTNT"],
+    "NHL": ["PeterRBaugh", "evanrawal", "cmasisak22", "adater", "megangley", "Jack_Carlough",
+            "DNVR_Avalanche"],
+    "CFB": ["BrianHowell33", "adamcm777", "Danny_Penza", "buffzone", "SeanKeeler"],
+}
+
+# Team-specific keywords — exclusive terms that WON'T match other Denver teams
+_GD_TEAM_KEYWORDS = {
+    "NFL": {"include": ["Broncos", "\"Bo Nix\"", "\"Sean Payton\"", "\"Courtland Sutton\"", "\"Pat Surtain\""],
+            "exclude": ["Nuggets", "Jokic", "Avalanche", "Avs", "MacKinnon", "Makar", "\"CU Buffs\""]},
+    "NBA": {"include": ["Nuggets", "Jokic", "\"Jamal Murray\"", "\"Aaron Gordon\"", "\"Michael Malone\""],
+            "exclude": ["Broncos", "\"Bo Nix\"", "Avalanche", "Avs", "MacKinnon", "\"CU Buffs\""]},
+    "NHL": {"include": ["Avalanche", "Avs", "MacKinnon", "Makar", "\"Cale Makar\"", "\"Nathan MacKinnon\""],
+            "exclude": ["Broncos", "\"Bo Nix\"", "Nuggets", "Jokic", "\"CU Buffs\""]},
+    "CFB": {"include": ["\"CU Buffs\"", "\"Colorado Buffaloes\"", "Shedeur", "\"Deion Sanders\"", "\"Buffs football\""],
+            "exclude": ["Broncos", "Nuggets", "Avalanche", "Avs"]},
+}
+
+
+def _gd_fetch_game_tweets(game):
+    """Fetch tweets for a specific game — conversation + reporters, no cross-contamination.
+
+    Layer 1 (The Conversation): broad keyword search for team + opponent + key players.
+    Layer 2 (The Facts): beat reporters filtered to this sport.
+    Both layers merged, sorted by engagement velocity (replies/min).
+    """
+    sport = game.get("sport", "NFL")
+    opponent = game.get("opponent", "")
+    state = _gd_game_state(game)
+    max_hours = 2 if state == "live" else 4
+
+    kw = _GD_TEAM_KEYWORDS.get(sport, {"include": [game["team"]], "exclude": []})
+    include_terms = kw["include"]
+    exclude_terms = kw["exclude"]
+
+    # Add opponent name to broaden conversation capture (cross-fanbase debate)
+    if opponent and opponent not in " ".join(include_terms):
+        opp_clean = opponent.replace("'", "")
+        include_terms = include_terms + [f'"{opp_clean}"']
+
+    # Build Layer 1 query: broad conversation (any account)
+    include_str = " OR ".join(include_terms)
+    exclude_str = " ".join(f"-{t}" for t in exclude_terms)
+    conv_query = f"({include_str}) {exclude_str} -is:retweet"
+
+    # Build Layer 2 query: beat reporters for this sport
+    reporters = _GD_REPORTERS.get(sport, [])
+    reporter_from = " OR ".join(f"from:{h}" for h in reporters[:15])  # TwitterAPI.io has query length limits
+    reporter_query = f"({reporter_from}) -is:retweet" if reporters else ""
+
+    all_tweets = []
+    seen_ids = set()
+
+    # Fetch Layer 1 — The Conversation
+    try:
+        conv_tweets, _ = _fetch_signals(conv_query, count=50, max_age_hours=max_hours, pages=1)
+        for t in conv_tweets:
+            tid = t.get("id") or t.get("tweetId") or t.get("text", "")[:50]
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                t["_gd_source"] = "conversation"
+                all_tweets.append(t)
+    except Exception:
+        pass
+
+    # Fetch Layer 2 — The Facts (reporters)
+    if reporter_query:
+        try:
+            rep_tweets, _ = _fetch_signals(reporter_query, count=30, max_age_hours=max_hours, pages=1)
+            for t in rep_tweets:
+                tid = t.get("id") or t.get("tweetId") or t.get("text", "")[:50]
+                if tid not in seen_ids:
+                    seen_ids.add(tid)
+                    t["_gd_source"] = "reporter"
+                    all_tweets.append(t)
+        except Exception:
+            pass
+
+    # Sort by engagement velocity: replies per minute since posted
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    for t in all_tweets:
+        replies = t.get("replyCount", 0) + t.get("retweetCount", 0)
+        try:
+            created = datetime.strptime(t.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
+            minutes_old = max((now - created).total_seconds() / 60, 1)
+            t["_gd_velocity"] = replies / minutes_old
+        except Exception:
+            t["_gd_velocity"] = replies  # fallback to raw count
+
+    all_tweets.sort(key=lambda t: t.get("_gd_velocity", 0), reverse=True)
+    return all_tweets
 
 
 @st.dialog("Gameday Draft", width="large")
@@ -9456,7 +9545,7 @@ def page_gameday():
     _cache_ts_key = f"_gd_tweets_ts_{active_name}"
     if _do_refresh or _cache_key not in st.session_state:
         with st.spinner("Loading tweets..."):
-            tweets = _gd_fetch_game_tweets(active_game["team"], active_game["sport"])
+            tweets = _gd_fetch_game_tweets(active_game)
             tweets.sort(key=lambda t: t.get("replyCount", 0) + t.get("retweetCount", 0), reverse=True)
             st.session_state[_cache_key] = tweets
             st.session_state[_cache_ts_key] = time.time()
@@ -9480,10 +9569,14 @@ def page_gameday():
         _view_link = f' &middot; <a href="{_tw_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tw_url else ""
         _ellip = '...' if len(t.get('text', '')) > 280 else ''
         _rkey = f"gd_r_{idx}"
+        _src = t.get("_gd_source", "")
+        _src_tag = '<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;margin-left:6px;">REPORTER</span>' if _src == "reporter" else ""
+        _vel = t.get("_gd_velocity", 0)
+        _vel_tag = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(239,68,68,0.12);color:#EF4444;font-weight:600;">HOT</span>' if _vel > 5 else ""
         st.markdown(f'<div class="tweet-card" style="cursor:pointer;">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-            f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}</span>'
-            f'<span style="font-size:9px;color:#445;">{_ago}</span></div>'
+            f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_src_tag}</span>'
+            f'<span style="display:flex;align-items:center;gap:6px;">{_vel_tag}<span style="font-size:9px;color:#445;">{_ago}</span></span></div>'
             f'<div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{_ellip}</div>'
             f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs{_view_link}</div>'
             f'<span class="cs-bot" data-bot="{_rkey}" style="{_gd_btn_sm}">React</span>'
