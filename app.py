@@ -9200,8 +9200,21 @@ _GAMEDAY_CFB = {"COLO": {"name": "CU Buffs", "color": "#CFB87C", "sport": "CFB"}
 _GD_SCORE_CACHE = {"data": None, "ts": 0}
 
 
+def _gd_is_today(date_str):
+    """Check if an ESPN date string is within today (±12 hours to handle timezones)."""
+    if not date_str:
+        return False
+    try:
+        from datetime import timezone, timedelta
+        game_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        return abs((game_dt - now).total_seconds()) < 43200  # 12 hours
+    except Exception:
+        return False
+
+
 def _gd_fetch_live_scores():
-    """Fetch live scores for all Denver teams. Cached 60 seconds."""
+    """Fetch live scores for all Denver teams playing TODAY. Cached 60 seconds."""
     if _GD_SCORE_CACHE["data"] is not None and (time.time() - _GD_SCORE_CACHE["ts"]) < 60:
         return _GD_SCORE_CACHE["data"]
     results = []
@@ -9209,6 +9222,8 @@ def _gd_fetch_live_scores():
         try:
             scores = espn_scores(league, limit=15)
             for g in (scores or []):
+                if not _gd_is_today(g.get("date", "")):
+                    continue
                 h_abbr = g.get("home", {}).get("abbr", "")
                 a_abbr = g.get("away", {}).get("abbr", "")
                 for abbr, info in teams.items():
@@ -9231,6 +9246,8 @@ def _gd_fetch_live_scores():
         cfb_url = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
         data = requests.get(cfb_url, params={"limit": 40}, headers={"User-Agent": "PostAscend/1.0"}, timeout=8).json()
         for event in data.get("events", []):
+            if not _gd_is_today(event.get("date", "")):
+                continue
             comp = event.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
             home_c = away_c = {}
