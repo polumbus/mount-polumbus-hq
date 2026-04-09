@@ -257,50 +257,13 @@ def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
         _owner_homer_examples = _guest_ex_block
         _owner_sarcastic_examples = _guest_ex_block
     else:
-        _owner_critical_examples = """EXAMPLES (copy this exact energy):
-- "We passed on 52% of third downs last year and went 8-9. Meanwhile Kansas City ran on 3rd-and-short 74% of the time and won the Super Bowl. That gap is a choice. Who owns it?"
-- "The Broncos have had 5 different offensive coordinators in 8 years. And we keep wondering why the offense looks confused. That's on the front office. Connect the dots."
-- "Bo Nix threw for 3,000 yards last season. Good. But 18 of those touchdowns came against bottom-10 defenses. Payton needs to answer for that schedule construction."
-"""
-        _owner_homer_examples = """EXAMPLES (copy this exact energy):
-- "Jokic dropped 30, 12, and 10 last night. On a Tuesday. The team drawing Denver in round 2 just changed their entire defensive game plan."
-- "Bo Nix's third down completion rate jumped 12% in the second half. Every defensive coordinator in the AFC pulled up that film tonight."
-- "MacKinnon and Makar both locked in at the same time in April for the first time in three years. The rest of the West is recalculating everything."
-"""
-        _owner_sarcastic_examples = """EXAMPLES (copy this exact energy):
-- "Turns out the Patriots offense doesn't suck because of a snow storm."
-- "That cornerback needs to call someone he trusts right now. Not about football."
-- "Starting to feel like Bo Nix really should have played with a broken ankle."
-- "Bold of Skip to finally come out and say it."
-"""
+        from config import CRITICAL_EXAMPLES, HOMER_EXAMPLES, SARCASTIC_EXAMPLES
+        _owner_critical_examples = CRITICAL_EXAMPLES
+        _owner_homer_examples = HOMER_EXAMPLES
+        _owner_sarcastic_examples = SARCASTIC_EXAMPLES
 
-    voice_blocks = {
-        "Critical": f"""CRITICAL VOICE — DIRECT MODE:
-{_owner_critical_examples}
-CRITICAL VOICE RULES:
-- Always open with a SPECIFIC number, stat, or named failure — never a vague complaint
-- Identify the structural cause — not "they need to be better"
-- End by naming the specific person or entity who owns it. Period. Full stop. Never ellipsis.
-- Authority IMPLIED through specificity — never stated
-- Tone: disappointed not angry. Calm, credible, constructive.""",
-
-        "Hype": f"""HOMER VOICE — HYPE MODE:
-{_owner_homer_examples}
-HOMER VOICE RULES:
-- Ground optimism in something SPECIFIC — a person, a stat, a moment
-- End by showing the OPPOSITION'S reaction — their worry is the proof
-- Authority IMPLIED through specificity — never stated
-- Tone: infectious, grounded confidence. Earned optimism, not blind cheerleading.""",
-
-        "Sarcastic": f"""SARCASTIC VOICE — DRY HUMOR MODE:
-{_owner_sarcastic_examples}
-SARCASTIC VOICE RULES:
-- Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
-- Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
-- Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
-- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
-- Drop it and walk away. Never explain the joke.""",
-    }
+    from config import VOICE_BLOCKS
+    voice_blocks = VOICE_BLOCKS
 
     block = voice_blocks.get(voice_name, "")
     if block:
@@ -8591,16 +8554,10 @@ def page_signals_prompts():
     if st.button("sig_next", key="sig_refresh"):
         _force_refresh = True
 
-    _sig_ready_key = "_sig_fetch_ready"
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
     _has_cached_signals = bool(st.session_state.get("_sig_beat_tweets")) or bool(st.session_state.get("_sig_nat_tweets"))
     _cache_stale = (time.time() - _cache_ts > 300) if _cache_ts else False
-    _need_fetch = _force_refresh or (_has_cached_signals and _cache_stale)
-    if not _has_cached_signals and not _need_fetch:
-        if st.session_state.get(_sig_ready_key):
-            _need_fetch = True
-        else:
-            st.session_state[_sig_ready_key] = True
+    _need_fetch = _force_refresh or not _has_cached_signals or (_has_cached_signals and _cache_stale)
     if _need_fetch:
         with st.spinner("Scanning Twitter signals..."):
             try:
