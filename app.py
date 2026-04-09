@@ -1803,14 +1803,14 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
-    _owner_gameday_icon = """<a href="http://100.68.77.18:8503" class="mp-ico" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_icon = """<a href="https://live-gameday.postascend.io" class="mp-ico" target="_blank" rel="noopener noreferrer">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>"""
-    _owner_gameday_panel = """<a href="http://100.68.77.18:8503" class="mp-panel-item" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_panel = """<a href="https://live-gameday.postascend.io" class="mp-panel-item" target="_blank" rel="noopener noreferrer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Gameday Mode
       </a>"""
@@ -2285,7 +2285,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
-  {'<a href="http://100.68.77.18:8503" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
+  {'<a href="https://live-gameday.postascend.io" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>

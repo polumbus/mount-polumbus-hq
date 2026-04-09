@@ -15,6 +15,16 @@ Tyler Polumbus — former NFL OL (8 seasons, Super Bowl 50 champion), radio host
 
 **OpenClaw** — 10 Discord agents at `~/.openclaw/`. Gateway on port 18789. Automates content workflow.
 
+### Gameday Public Access
+
+- Public gameday URL: `https://live-gameday.postascend.io`
+- Protected by Cloudflare Access
+- Local Streamlit origin: `http://127.0.0.1:8503`
+- Tunnel config: `~/.cloudflared/config.yml`
+- Tunnel service: `systemctl --user status cloudflared-gameday.service`
+- Tunnel binary: `/home/polfam/.local/bin/cloudflared`
+- HQ sidebar Gameday link opens the public Access-protected hostname in a new tab
+
 ---
 
 ## Setup & Connectivity
