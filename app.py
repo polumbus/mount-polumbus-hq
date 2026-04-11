@@ -7,9 +7,11 @@ import time
 import uuid
 import hashlib
 import concurrent.futures
+import traceback
 import requests
 import tomli
 import urllib.error
+import urllib.parse
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
@@ -17,7 +19,7 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   odds_available, odds_format_block,
                   get_google_trends, get_reddit_trending, get_newsapi_headlines,
                   get_coingecko_trending)
-from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG,
+from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG, GAMEDAY_URL,
                     _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
@@ -855,7 +857,7 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet via proxy or local xurl. Returns (success, error_msg)."""
+    """Post a new tweet via proxy or shared local helper. Returns (success, error_msg)."""
     import urllib.request
     proxy_url = _get_proxy_url()
     if proxy_url:
@@ -879,12 +881,18 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             return False, f"Proxy HTTP {e.code}: {_err}"
         except Exception as e:
             return False, f"Proxy error: {e}"
-    if os.path.exists(XURL):
-        result = subprocess.run([XURL, "post", text], capture_output=True, text=True, timeout=8)
+    helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
+    if os.path.exists(helper):
+        result = subprocess.run(
+            ["python3", helper, "--text", text],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
         if result.returncode == 0:
             return True, ""
-        return False, result.stderr.strip() or result.stdout.strip() or "xurl failed"
-    return False, "No proxy available and xurl not found"
+        return False, result.stderr.strip() or result.stdout.strip() or "local tweet helper failed"
+    return False, "No proxy available and local tweet helper not found"
 
 
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
@@ -905,10 +913,11 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
             data = json.loads(resp.read())
         return data.get("ok", False)
     except Exception:
-        # Fall back to local xurl if available
-        if os.path.exists(XURL):
-            cmd = [XURL, action, tweet_id] + ([text] if text else [])
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        # Fall back to the shared local helper for replies if available.
+        helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
+        if action == "reply" and os.path.exists(helper):
+            cmd = ["python3", helper, "--text", text, "--reply-to", tweet_id]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return result.returncode == 0
         return False
 
@@ -1164,6 +1173,7 @@ def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
         _m = _re.search(r'(\d{10,})', list_id)
         list_id = _m.group(1) if _m else list_id
     try:
+        _record_twitter_api_call("list/tweets_timeline", "fetch_tweets_from_list", extra={"list_id": str(list_id)})
         resp = requests.get(
             "https://api.twitterapi.io/twitter/list/tweets_timeline",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
@@ -1181,6 +1191,7 @@ def fetch_tweets(query: str, count: int = 50) -> list:
     if not TWITTER_API_IO_KEY:
         return []
     try:
+        _record_twitter_api_call("tweet/advanced_search", "fetch_tweets", query=query, extra={"count": min(count, 100)})
         resp = requests.get(
             "https://api.twitterapi.io/twitter/tweet/advanced_search",
             headers={"X-API-Key": TWITTER_API_IO_KEY},
@@ -1267,9 +1278,132 @@ def _hash_pw(username: str, password: str) -> str:
 
 
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
+_CANONICAL_ORIGIN = os.getenv("POSTASCEND_CANONICAL_ORIGIN", "http://localhost:8501").strip()
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
+
+
+def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_qp: bool = False):
+    import streamlit.components.v1 as _stc_auth
+
+    _payload_json = json.dumps(payload or {}, separators=(",", ":")).replace("</", "<\\/")
+    _mode_json = json.dumps(mode)
+    _invalid_json = "true" if invalid_qp else "false"
+    _stc_auth.html(
+        """<script>
+(function(){
+  var mode = __MODE__;
+  var payload = __PAYLOAD__;
+  var invalidQP = __INVALID_QP__;
+  var KEY = "mp_auth";
+
+  function writeCookie(value, maxAge){
+    try{
+      var cookie = "mp_auth=" + encodeURIComponent(value) + "; path=/; SameSite=Lax";
+      if(typeof maxAge === "number") cookie += "; max-age=" + maxAge;
+      window.parent.document.cookie = cookie;
+    }catch(e){}
+  }
+
+  function readCookie(){
+    try{
+      var prefix = "mp_auth=";
+      var parts = window.parent.document.cookie.split(";");
+      for(var i=0;i<parts.length;i++){
+        var part = parts[i].trim();
+        if(part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
+      }
+    }catch(e){}
+    return "";
+  }
+
+  function clearStoredAuth(){
+    try{ window.parent.localStorage.removeItem(KEY); }catch(e){}
+    try{ writeCookie("", 0); }catch(e){}
+  }
+
+  function stripAuthParams(){
+    try{
+      var current = new URL(window.parent.location.href);
+      ["token", "user", "guest_id"].forEach(function(key){ current.searchParams.delete(key); });
+      window.parent.location.replace(current.toString());
+    }catch(e){}
+  }
+
+  if(mode === "persist"){
+    try{
+      var value = JSON.stringify(payload || {});
+      window.parent.localStorage.setItem(KEY, value);
+      writeCookie(value, 31536000);
+    }catch(e){}
+    return;
+  }
+
+  if(mode === "clear"){
+    clearStoredAuth();
+    stripAuthParams();
+    return;
+  }
+
+  if(mode === "restore"){
+    if(invalidQP){
+      stripAuthParams();
+      return;
+    }
+    try{
+      var current = new URL(window.parent.location.href);
+      if(current.searchParams.get("token")) return;
+      var raw = window.parent.localStorage.getItem(KEY) || readCookie();
+      if(!raw) return;
+      var saved = JSON.parse(raw);
+      if(!saved || !saved.token || !saved.role) return;
+      current.searchParams.set("token", saved.token);
+      if(saved.user) current.searchParams.set("user", saved.user);
+      else current.searchParams.delete("user");
+      if(saved.guest_id) current.searchParams.set("guest_id", saved.guest_id);
+      window.parent.location.replace(current.toString());
+    }catch(e){}
+  }
+})();
+</script>"""
+        .replace("__MODE__", _mode_json)
+        .replace("__PAYLOAD__", _payload_json)
+        .replace("__INVALID_QP__", _invalid_json),
+        height=0,
+    )
+
+
+def _render_canonical_origin_bridge():
+    if not _CANONICAL_ORIGIN:
+        return
+
+    _origin_json = json.dumps(_CANONICAL_ORIGIN)
+    st.html(
+        """<script>
+(function(){
+  try{
+    var canonical = new URL(__CANONICAL__);
+    var current = new URL(window.parent.location.href);
+    var isCloud = /streamlit\\.app$/i.test(current.hostname);
+    var isMobile = false;
+    try{
+      isMobile = window.parent.matchMedia("(max-width: 768px)").matches;
+    }catch(e){}
+    if(isCloud || isMobile) return;
+    if(current.origin === canonical.origin) return;
+    canonical.pathname = current.pathname;
+    canonical.search = current.search;
+    canonical.hash = current.hash;
+    window.location.replace(canonical.toString());
+  }catch(e){}
+})();
+</script>""".replace("__CANONICAL__", _origin_json),
+        unsafe_allow_javascript=True,
+    )
+
+
+_render_canonical_origin_bridge()
 
 # Restore session: 1) query params, 2) cookie (via st.context.cookies)
 if not st.session_state["auth_role"]:
@@ -1277,6 +1411,8 @@ if not st.session_state["auth_role"]:
     _tok_user = st.query_params.get("user", "")
     if _tok and _tok == _OWNER_TOKEN:
         st.session_state["auth_role"] = "owner"
+        st.session_state["auth_username"] = "owner"
+        st.query_params["user"] = "owner"
     elif _tok and _tok_user:
         _accts = _load_accounts()
         if _tok_user in _accts and _accts[_tok_user].get("token") == _tok:
@@ -1291,13 +1427,15 @@ if not st.session_state["auth_role"]:
         try:
             _cookie_raw = st.context.cookies.get("mp_auth", "")
             if _cookie_raw:
-                _cookie_data = json.loads(_auth_urlp.unquote(_cookie_raw))
+                _cookie_data = json.loads(urllib.parse.unquote(_cookie_raw))
                 _c_role = _cookie_data.get("role", "")
                 _c_token = _cookie_data.get("token", "")
                 _c_user = _cookie_data.get("user", "")
                 if _c_role == "owner" and _c_token == _OWNER_TOKEN:
                     st.session_state["auth_role"] = "owner"
+                    st.session_state["auth_username"] = "owner"
                     st.query_params["token"] = _c_token
+                    st.query_params["user"] = "owner"
                 elif _c_role == "guest" and _c_user:
                     _accts = _load_accounts()
                     if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
@@ -1312,11 +1450,17 @@ if not st.session_state["auth_role"]:
             pass
 
 if not st.session_state["auth_role"]:
+    _clear_client_auth = bool(st.session_state.pop("_clear_client_auth", False))
+    _invalid_auth_qp = bool(st.query_params.get("token")) and not _clear_client_auth
     st.markdown("""<style>
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
     .stApp [data-testid="stAppViewContainer"] { opacity: 1 !important; }
     </style>""", unsafe_allow_html=True)
+    if _clear_client_auth:
+        _render_client_auth_bridge("clear")
+    else:
+        _render_client_auth_bridge("restore", invalid_qp=_invalid_auth_qp)
     st.markdown("""<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;">
     <div style="text-align:center;max-width:360px;">
     <div style="margin:0 auto 16px;">
@@ -1341,7 +1485,9 @@ if not st.session_state["auth_role"]:
                 st.error("Enter both username and password.")
             elif _login_user.lower().strip() == "owner" and _OWNER_PW and _login_pw == _OWNER_PW:
                 st.session_state["auth_role"] = "owner"
+                st.session_state["auth_username"] = "owner"
                 st.query_params["token"] = _OWNER_TOKEN
+                st.query_params["user"] = "owner"
                 st.rerun()
             else:
                 _accts = _load_accounts()
@@ -1418,6 +1564,20 @@ def get_current_handle() -> str:
     return TYLER_HANDLE
 
 
+if st.session_state.get("auth_role") and st.query_params.get("token"):
+    _persist_auth_payload = {
+        "role": st.session_state.get("auth_role", ""),
+        "token": st.query_params.get("token", ""),
+        "user": st.session_state.get("auth_username", ""),
+    }
+    if st.session_state.get("auth_role") == "guest":
+        _persist_accounts = _load_accounts()
+        _persist_user = st.session_state.get("auth_username", "")
+        if _persist_user in _persist_accounts:
+            _persist_auth_payload["guest_id"] = _persist_accounts[_persist_user].get("guest_id", "")
+    _render_client_auth_bridge("persist", payload=_persist_auth_payload)
+
+
 def get_data_dir() -> Path:
     """Returns the data directory for the current user. Guests get isolated storage."""
     if is_guest():
@@ -1427,6 +1587,50 @@ def get_data_dir() -> Path:
             guest_dir.mkdir(parents=True, exist_ok=True)
             return guest_dir
     return DATA_DIR
+
+
+def _tweet_sync_meta_path() -> Path:
+    return get_data_dir() / "tweet_sync_meta.json"
+
+
+def _load_tweet_sync_meta() -> dict:
+    path = _tweet_sync_meta_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_tweet_sync_meta(meta: dict):
+    try:
+        _tweet_sync_meta_path().write_text(json.dumps(meta, indent=2, default=str))
+    except Exception:
+        pass
+
+
+def _mark_tweet_sync_completed(mode: str):
+    meta = _load_tweet_sync_meta()
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    meta["last_quick_sync_at"] = now_iso
+    meta["last_sync_mode"] = mode
+    if mode == "full":
+        meta["last_full_sync_at"] = now_iso
+    _save_tweet_sync_meta(meta)
+
+
+def _quick_tweet_sync_due(hours: int = 72) -> bool:
+    meta = _load_tweet_sync_meta()
+    last_sync_at = meta.get("last_quick_sync_at", "")
+    if not last_sync_at:
+        return True
+    try:
+        last_dt = datetime.fromisoformat(last_sync_at)
+    except ValueError:
+        return True
+    return datetime.now() - last_dt >= timedelta(hours=hours)
 
 
 # ─── Guest Registry ───────────────────────────────────────────────────────
@@ -1803,14 +2007,14 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
-    _owner_gameday_icon = """<a href="https://live-gameday.postascend.io" class="mp-ico" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_icon = f"""<a href="{GAMEDAY_URL}" class="mp-ico mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>"""
-    _owner_gameday_panel = """<a href="https://live-gameday.postascend.io" class="mp-panel-item" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_panel = f"""<a href="{GAMEDAY_URL}" class="mp-panel-item mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Gameday Mode
       </a>"""
@@ -2093,6 +2297,7 @@ with st.sidebar:
             st.markdown(f'<div style="text-align:center;margin:-6px 0 8px;font-size:11px;color:#6E7681;">{_g_username}</div>', unsafe_allow_html=True)
     if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
         st.session_state["auth_role"] = None
+        st.session_state["_clear_client_auth"] = True
         st.session_state.pop("_auth_token", None)
         st.session_state.pop("auth_username", None)
         st.session_state.pop("user_handle", None)
@@ -2114,11 +2319,31 @@ with st.sidebar:
                   type="secondary", use_container_width=True)
 
 # ── Desktop flyout panels (JS, same-origin iframe) ──────────────────────────
+_auth_payload = {
+    "role": st.session_state.get("auth_role", ""),
+    "token": st.query_params.get("token", ""),
+    "user": st.session_state.get("auth_username", ""),
+}
+if st.session_state.get("auth_role") == "guest":
+    _guest_accounts = _load_accounts()
+    _guest_user = st.session_state.get("auth_username", "")
+    if _guest_user in _guest_accounts:
+        _auth_payload["guest_id"] = _guest_accounts[_guest_user].get("guest_id", "")
+_auth_payload_js = json.dumps(_auth_payload, separators=(",", ":")).replace("</", "<\\/")
+
 import streamlit.components.v1 as _stc
 _stc.html("""<script>
 (function(){
   var doc=window.parent.document;
   var win=window.parent;
+  var authPayload=__AUTH_PAYLOAD__;
+  try{
+    if(authPayload && authPayload.token && authPayload.role){
+      var authValue=JSON.stringify(authPayload);
+      win.localStorage.setItem("mp_auth", authValue);
+      doc.cookie="mp_auth="+encodeURIComponent(authValue)+"; path=/; max-age=31536000; SameSite=Lax";
+    }
+  }catch(e){}
 
   /* ── Desktop flyout panels (skip on mobile) ── */
   var _isDesktop=win.innerWidth>768;
@@ -2134,8 +2359,14 @@ _stc.html("""<script>
       panel.style.opacity='0';panel.style.pointerEvents='none';
       panel.style.transform='translateX(-4px)';
       panel.style.transition='opacity 0.12s,transform 0.12s';
-      panel.querySelectorAll('a').forEach(function(a){a.setAttribute('target','_self');});
-      zone.querySelectorAll('a.mp-ico').forEach(function(a){a.setAttribute('target','_self');});
+      panel.querySelectorAll('a').forEach(function(a){
+        if(a.dataset.externalTop==='1') return;
+        a.setAttribute('target','_self');
+      });
+      zone.querySelectorAll('a.mp-ico').forEach(function(a){
+        if(a.dataset.externalTop==='1') return;
+        a.setAttribute('target','_self');
+      });
       var t=null;
       function show(){clearTimeout(t);var r=zone.getBoundingClientRect();panel.style.top=r.top+'px';panel.style.left=(r.right+8)+'px';panel.style.opacity='1';panel.style.transform='translateX(0)';panel.style.pointerEvents='all';}
       function hide(){t=setTimeout(function(){panel.style.opacity='0';panel.style.transform='translateX(-4px)';panel.style.pointerEvents='none';},300);}
@@ -2184,6 +2415,26 @@ _stc.html("""<script>
           var tok=url.searchParams.get('token')||new URLSearchParams(win.location.search).get('token')||'';
           if(tok) url.searchParams.set('token',tok);
           win.location.href=url.toString();
+        }
+      });
+    });
+    doc.querySelectorAll('a[data-external-top="1"]').forEach(function(a){
+      if(a._externalTopWired) return;
+      a._externalTopWired=true;
+      a.addEventListener('click',function(e){
+        e.preventDefault();
+        var href=a.href;
+        try{
+          var opened=window.top.open(href,'_blank','noopener,noreferrer');
+          if(opened){
+            try{ opened.opener=null; }catch(_e){}
+            return;
+          }
+        }catch(_e){}
+        try{
+          window.top.location.href=href;
+        }catch(_e){
+          win.location.href=href;
         }
       });
     });
@@ -2253,7 +2504,7 @@ _stc.html("""<script>
   });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
-</script>""".replace("__PAGE_NAMES__", _nav_pages_js), height=0)
+</script>""".replace("__PAGE_NAMES__", _nav_pages_js).replace("__AUTH_PAYLOAD__", _auth_payload_js), height=0)
 
 # ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
 _lnk = "display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;"
@@ -2285,7 +2536,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
-  {'<a href="https://live-gameday.postascend.io" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
+  {'<a href="'+GAMEDAY_URL+'" class="mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -2309,6 +2560,10 @@ st.markdown(f"""
 
 page = st.session_state.current_page
 if page in {"Debug Console", "Signals & Prompts"} and not is_owner():
+    _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
+        "auth_role": st.session_state.get("auth_role", ""),
+        "query_page": st.query_params.get("page", ""),
+    })
     page = "Creator Studio"
     st.session_state.current_page = page
 
@@ -6305,6 +6560,7 @@ def sync_tweet_history(quick=False):
                 params = {"query": query, "queryType": "Latest", "count": "50"}
                 if cursor:
                     params["cursor"] = cursor
+                _record_twitter_api_call("tweet/advanced_search", "sync_tweet_history", query=query, extra={"cursor": bool(cursor)})
                 resp = requests.get(
                     "https://api.twitterapi.io/twitter/tweet/advanced_search",
                     headers={"X-API-Key": TWITTER_API_IO_KEY},
@@ -6372,6 +6628,7 @@ def sync_tweet_history(quick=False):
                 unique.append(t)
         unique = unique[:500]
         _save_tweet_history_gist(unique)
+        _mark_tweet_sync_completed("quick" if quick else "full")
         _save_debug_status("tweet_sync", {
             "status": "ok",
             "at": datetime.now().isoformat(timespec="seconds"),
@@ -8147,18 +8404,26 @@ def page_inspiration():
 _BEAT_REPORTERS = 'from:mikeklis OR from:bylucaevans OR from:ZacStevensDNVR OR from:AllbrightNFL OR from:TroyRenck OR from:MaseDenver OR from:christomasson OR from:KyleNewmanDP OR from:CodyRoarkNFL OR from:NickOehlerTV OR from:JamieLynchTV OR from:markkiszla OR from:ParkerJGabriel OR from:HarrisonWind OR from:BennettDurando OR from:VBenedetto OR from:chrisadempsey OR from:katywinge OR from:VicLombardi OR from:TJMcBrideNBA OR from:msinger OR from:MooseColorado OR from:DNVR_Nuggets OR from:PeterRBaugh OR from:evanrawal OR from:cmasisak22 OR from:adater OR from:megangley OR from:Jack_Carlough OR from:BrianHowell33 OR from:adamcm777 OR from:SeanKeeler OR from:Danny_Penza OR from:buffzone'
 _NATIONAL_QUERY = '(Broncos OR Nuggets OR Avalanche OR "CU Buffs" OR "Bo Nix" OR "Sean Payton" OR "Nikola Jokic" OR "Nathan MacKinnon" OR "Courtland Sutton" OR "Jamal Murray") (from:AdamSchefter OR from:RapSheet OR from:TomPelissero OR from:JayGlazer OR from:AlbertBreer OR from:JeremyFowler OR from:MikeGarafolo OR from:PSchrags OR from:jeffdarlington OR from:DanGrazianoESPN OR from:DMRussini OR from:FieldYates OR from:ProFootballTalk OR from:nflnetwork OR from:NFL OR from:CharlesRobinson OR from:MikeSilver OR from:SiriusXMNFL OR from:ShamsCharania OR from:BrianWindhorst OR from:ChrisBHaynes OR from:TheSteinLine OR from:JakeLFischer OR from:espn OR from:NBAonTNT) -is:retweet'
 _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0, "beat_cursor": "", "nat_cursor": ""}
+_LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
 
 
 def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
     """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results.
     Returns (tweets, last_cursor) tuple."""
+    global _LAST_SIGNALS_ERROR
     if not TWITTER_API_IO_KEY:
+        _LAST_SIGNALS_ERROR = {
+            "status": "missing_key",
+            "detail": "TWITTER_API_IO_KEY is not configured.",
+            "at": datetime.now().isoformat(timespec="seconds"),
+        }
         return [], ""
     try:
         from datetime import timedelta, timezone
         all_tweets = []
         cursor = start_cursor
         for _ in range(pages):
+            _record_twitter_api_call("tweet/advanced_search", "signals_fetch", query=query, extra={"count": min(count, 100), "cursor": bool(cursor)})
             resp = requests.get(
                 "https://api.twitterapi.io/twitter/tweet/advanced_search",
                 headers={"X-API-Key": TWITTER_API_IO_KEY},
@@ -8166,8 +8431,18 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
                 timeout=8,
             )
             if resp.status_code != 200:
+                detail = resp.text[:240].strip()
+                status = "api_error"
+                if resp.status_code == 402 and "Credits is not enough" in detail:
+                    status = "credits_depleted"
+                _LAST_SIGNALS_ERROR = {
+                    "status": status,
+                    "detail": f"HTTP {resp.status_code}: {detail}",
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                }
                 break
             data = resp.json()
+            _LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
             all_tweets.extend(data.get("tweets", []))
             cursor = data.get("next_cursor", "")
             if not cursor:
@@ -8183,8 +8458,12 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
             except (ValueError, TypeError):
                 pass
         return fresh, cursor
-    except Exception:
-        pass
+    except Exception as e:
+        _LAST_SIGNALS_ERROR = {
+            "status": "exception",
+            "detail": str(e)[:240],
+            "at": datetime.now().isoformat(timespec="seconds"),
+        }
     return [], ""
 
 
@@ -8216,34 +8495,26 @@ def _relative_time(created_at_str):
         return "time unknown"
 
 
-def _get_trend_pill(topic_keywords):
-    """Check tweet volume for timing indicator: Rising / Peak / Fading."""
-    if not topic_keywords or not TWITTER_API_IO_KEY:
+def _estimate_trend_pill(tweet):
+    """Infer Rising / Peak / Fading from the tweet itself with no extra API call."""
+    if not isinstance(tweet, dict):
         return "peak", "Peak"
     try:
-        recent, _ = _fetch_signals(topic_keywords, count=10)
-        if not recent:
-            return "fading", "Fading"
-        # Check how many tweets are < 1hr old vs total
-        from datetime import timezone
-        now = datetime.now(timezone.utc)
-        recent_count = 0
-        for t in recent[:10]:
-            try:
-                created = datetime.fromisoformat(t.get("createdAt", "").replace("Z", "+00:00"))
-                if (now - created).total_seconds() < 3600:
-                    recent_count += 1
-            except Exception:
-                pass
-        ratio = recent_count / max(len(recent[:10]), 1)
-        if ratio > 0.5:
-            return "rising", "Rising"
-        elif ratio > 0.2:
-            return "peak", "Peak"
-        else:
-            return "fading", "Fading"
+        created = datetime.strptime(tweet.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
+        age_hours = max(0, (datetime.now(created.tzinfo) - created).total_seconds() / 3600)
     except Exception:
+        age_hours = 6
+
+    replies = int(tweet.get("replyCount", 0) or 0)
+    rts = int(tweet.get("retweetCount", 0) or 0)
+    qts = int(tweet.get("quoteCount", 0) or 0)
+    engagement = replies + rts + qts
+
+    if age_hours <= 2 and engagement >= 15:
+        return "rising", "Rising"
+    if age_hours <= 12 and engagement >= 5:
         return "peak", "Peak"
+    return "fading", "Fading"
 
 
 _STOP_WORDS = {"the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of", "and", "or", "with", "this", "that", "from", "by", "has", "have", "had", "his", "her", "its", "will", "be", "been"}
@@ -8486,6 +8757,11 @@ def _signal_brief_dialog(_nonce):
 
 
 def page_signals_prompts():
+    _append_debug_event("signals_page", "enter", "page_signals_prompts entered", {
+        "auth_role": st.session_state.get("auth_role", ""),
+        "current_page": st.session_state.get("current_page", ""),
+        "query_page": st.query_params.get("page", ""),
+    })
     st.markdown('<div class="main-header">SIGNALS <span>& PROMPTS</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Live hot topics auto-generate structured briefs for Creator Studio.</div>', unsafe_allow_html=True)
     st.markdown(
@@ -8500,6 +8776,7 @@ def page_signals_prompts():
 
     # ── Handle incoming signal from Chrome extension URL params ──
     _sig_text = st.query_params.get("sig_text", "")
+    _opened_from_extension = bool(_sig_text)
     if _sig_text:
         _sig_author = st.query_params.get("sig_author", "unknown")
         _sig_replies = st.query_params.get("sig_replies", "0")
@@ -8556,14 +8833,34 @@ def page_signals_prompts():
     _cache_ts = st.session_state.get("_sig_cache_ts", 0)
     _has_cached_signals = bool(st.session_state.get("_sig_beat_tweets")) or bool(st.session_state.get("_sig_nat_tweets"))
     _cache_stale = (time.time() - _cache_ts > 300) if _cache_ts else False
-    _need_fetch = _force_refresh or not _has_cached_signals or (_has_cached_signals and _cache_stale)
+    _need_fetch = _force_refresh or (
+        not _opened_from_extension and (not _has_cached_signals or _cache_stale)
+    )
     if _need_fetch:
         with st.spinner("Scanning Twitter signals..."):
             try:
+                _LAST_SIGNALS_ERROR["status"] = ""
+                _LAST_SIGNALS_ERROR["detail"] = ""
+                _LAST_SIGNALS_ERROR["at"] = ""
                 _start_beat = st.session_state.get("_sig_beat_cursor", "") if _force_refresh else ""
                 _start_nat = st.session_state.get("_sig_nat_cursor", "") if _force_refresh else ""
-                _beat, _beat_cur = _fetch_signals(_BEAT_REPORTERS, count=100, pages=3, start_cursor=_start_beat)
-                _nat, _nat_cur = _fetch_signals(_NATIONAL_QUERY, count=100, pages=2, max_age_hours=168, start_cursor=_start_nat)
+                _beat_pages = 2 if _force_refresh else 1
+                _nat_pages = 2 if _force_refresh else 1
+                _beat_count = 80 if _force_refresh else 60
+                _nat_count = 80 if _force_refresh else 40
+                _beat, _beat_cur = _fetch_signals(
+                    _BEAT_REPORTERS,
+                    count=_beat_count,
+                    pages=_beat_pages,
+                    start_cursor=_start_beat,
+                )
+                _nat, _nat_cur = _fetch_signals(
+                    _NATIONAL_QUERY,
+                    count=_nat_count,
+                    pages=_nat_pages,
+                    max_age_hours=168,
+                    start_cursor=_start_nat,
+                )
                 st.session_state["_sig_beat_tweets"] = _beat
                 st.session_state["_sig_nat_tweets"] = _nat
                 st.session_state["_sig_beat_cursor"] = _beat_cur
@@ -8589,8 +8886,19 @@ def page_signals_prompts():
     beat_sorted = sorted(beat_tweets, key=lambda t: t.get("replyCount", 0), reverse=True)[:10]
     national_sorted = sorted(national_tweets, key=lambda t: t.get("retweetCount", 0) + t.get("quoteCount", 0), reverse=True)[:10]
 
-    if not beat_tweets and not national_tweets and st.session_state.get(_sig_ready_key):
-        st.markdown('<div style="color:#555778;font-size:13px;padding:0 0 12px 0;">Tap Next Page to load the latest live signals.</div>', unsafe_allow_html=True)
+    if not beat_tweets and not national_tweets:
+        if _LAST_SIGNALS_ERROR.get("status") == "credits_depleted":
+            st.error("Signals cannot load because TwitterAPI.io credits are depleted. Recharge TwitterAPI.io to restore live signals.")
+            st.caption(_LAST_SIGNALS_ERROR.get("detail", ""))
+        if _opened_from_extension:
+            _freshness_msg = "Imported signal ready. Tap Next Page only if you also want the live board."
+        else:
+            _freshness = "cached" if _cache_ts and not _cache_stale else "not loaded"
+            _freshness_msg = f"Live signals are {_freshness}. Tap Next Page to scan Twitter only when you want a fresh pull."
+        st.markdown(
+            f'<div style="color:#555778;font-size:13px;padding:0 0 12px 0;">{_freshness_msg}</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Signal 1: Beat Reporter Heat Map ──
     if st.session_state.sig_tab == "Beat":
@@ -8605,8 +8913,7 @@ def page_signals_prompts():
             rts = tw.get("retweetCount", 0)
             _ago = _relative_time(tw.get("createdAt", ""))
             # Timing pill
-            keywords = " ".join(text.split()[:4])
-            trend_key, trend_label = _get_trend_pill(keywords) if idx == 0 else ("peak", "Peak")  # Only check timing for top signal to save API calls
+            trend_key, trend_label = _estimate_trend_pill(tw) if idx == 0 else ("peak", "Peak")
             pill_colors = {"rising": ("#10B981", "rgba(16,185,129,0.12)"), "peak": ("#FBBF24", "rgba(251,191,36,0.12)"), "fading": ("#EF4444", "rgba(239,68,68,0.12)")}
             pc, pbg = pill_colors.get(trend_key, pill_colors["peak"])
             _stag = _quick_sport_tag(tw.get("text", ""))
@@ -8785,6 +9092,91 @@ def _append_debug_event(kind: str, status: str, detail: str, meta: dict | None =
         _debug_events_path().write_text(json.dumps(events[-60:], indent=2, default=str))
     except Exception:
         pass
+
+
+def _twitter_usage_path() -> Path:
+    return get_data_dir() / "twitter_api_usage.json"
+
+
+def _load_twitter_usage() -> dict:
+    path = _twitter_usage_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_twitter_usage(payload: dict):
+    try:
+        _twitter_usage_path().write_text(json.dumps(payload, indent=2, default=str))
+    except Exception:
+        pass
+
+
+def _record_twitter_api_call(endpoint: str, caller: str, query: str = "", extra: dict | None = None):
+    try:
+        state = _load_twitter_usage()
+        today = date.today().isoformat()
+        daily = state.setdefault("daily", {}).setdefault(today, {})
+        key = f"{caller}:{endpoint}"
+        daily[key] = int(daily.get(key, 0)) + 1
+        recent = state.setdefault("recent", [])
+        recent.append({
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "caller": caller,
+            "endpoint": endpoint,
+            "query": query[:140],
+            "extra": extra or {},
+        })
+        state["recent"] = recent[-40:]
+        state["last_call"] = state["recent"][-1]
+        _save_twitter_usage(state)
+    except Exception:
+        pass
+
+
+def _get_twitter_usage_alert() -> dict | None:
+    state = _load_twitter_usage()
+    today = date.today().isoformat()
+    daily = state.get("daily", {}).get(today, {})
+    if not isinstance(daily, dict) or not daily:
+        return None
+
+    total_calls = sum(int(v) for v in daily.values())
+    signals_calls = sum(int(v) for k, v in daily.items() if str(k).startswith("signals_fetch:"))
+    sync_calls = sum(int(v) for k, v in daily.items() if str(k).startswith("sync_tweet_history:"))
+
+    if total_calls >= 300 or signals_calls >= 100 or sync_calls >= 40:
+        level = "error"
+    elif total_calls >= 150 or signals_calls >= 50 or sync_calls >= 20:
+        level = "warning"
+    else:
+        return None
+
+    triggers = []
+    if total_calls >= 150:
+        triggers.append(f"{total_calls} HQ Twitter calls today")
+    if signals_calls >= 50:
+        triggers.append(f"{signals_calls} Signals fetch calls today")
+    if sync_calls >= 20:
+        triggers.append(f"{sync_calls} tweet-history sync calls today")
+
+    last_call = state.get("last_call", {}) if isinstance(state.get("last_call", {}), dict) else {}
+    last_caller = last_call.get("caller", "unknown")
+    last_at = last_call.get("at", "unknown time")
+    title = "TwitterAPI.io usage is elevated in HQ"
+    message = " | ".join(triggers) if triggers else "HQ Twitter usage crossed the alert threshold."
+
+    return {
+        "level": level,
+        "title": title,
+        "message": message,
+        "last_caller": last_caller,
+        "last_at": last_at,
+    }
 
 
 def _debug_file_info(filename: str) -> dict:
@@ -8970,6 +9362,10 @@ def page_debug_console():
     debug_status = _load_debug_status()
     tweet_sync_status = debug_status.get("tweet_sync", {})
     signals_fetch_status = debug_status.get("signals_fetch", {})
+    twitter_usage = _load_twitter_usage()
+    twitter_today = twitter_usage.get("daily", {}).get(date.today().isoformat(), {})
+    twitter_last_call = twitter_usage.get("last_call", {})
+    twitter_top_route = max(twitter_today.items(), key=lambda item: item[1])[0] if twitter_today else "n/a"
     proxy_health = _get_proxy_health_debug()
     last_route = st.session_state.get("_ai_last_route", "no AI call yet")
     last_route_at = st.session_state.get("_ai_last_at", "")
@@ -9038,6 +9434,9 @@ def page_debug_console():
             {"check": "Signals cache age (s)", "value": round(max(0, time.time() - st.session_state.get("_sig_cache_ts", 0)), 1) if st.session_state.get("_sig_cache_ts") else "missing"},
             {"check": "Signals beat cache", "value": len(st.session_state.get("_sig_beat_tweets", []))},
             {"check": "Signals national cache", "value": len(st.session_state.get("_sig_nat_tweets", []))},
+            {"check": "Twitter API calls today", "value": sum(int(v) for v in twitter_today.values())},
+            {"check": "Top Twitter route today", "value": twitter_top_route},
+            {"check": "Last Twitter caller", "value": twitter_last_call.get("caller", "none")},
             {"check": "Recent debug events", "value": len(_load_debug_events())},
         ], use_container_width=True, hide_index=True)
 
@@ -9179,41 +9578,88 @@ st.markdown("""<div class="pa-brand-bar">
   <span class="pa-brand-text">POST <span>ASCEND</span></span>
 </div>""", unsafe_allow_html=True)
 
-page_fn = page_map.get(page)
-if page_fn:
-    page_fn()
+try:
+    if is_owner():
+        twitter_alert = _get_twitter_usage_alert()
+        if twitter_alert:
+            alert_text = (
+                f"{twitter_alert['title']}: {twitter_alert['message']}. "
+                f"Last HQ caller: {twitter_alert['last_caller']} at {twitter_alert['last_at']}."
+            )
+            if twitter_alert["level"] == "error":
+                st.error(alert_text)
+            else:
+                st.warning(alert_text)
+            st.caption("This alert is based on HQ-only Twitter call tracing. Open Debug Console for exact route counts.")
 
-_footer_handle = get_current_handle()
-if is_guest():
-    st.markdown(f"""
+    page_fn = page_map.get(page)
+    if page_fn:
+        try:
+            page_fn()
+        except Exception as e:
+            _render_error = f"{type(e).__name__}: {e}"
+            if page == "Signals & Prompts":
+                _save_debug_status("signals_fetch", {
+                    "status": "error",
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                    "detail": _render_error[:300],
+                    "force_refresh": False,
+                })
+            st.error(f"{page} failed to render: {_render_error}")
+            with st.expander("Render Traceback", expanded=False):
+                st.code(traceback.format_exc())
+
+    _footer_handle = get_current_handle()
+    if is_guest():
+        st.markdown(f"""
 <div class="hq-footer">
   <a href="https://x.com/{_footer_handle}" target="_blank">@{_footer_handle}</a>
 </div>
 """, unsafe_allow_html=True)
-else:
-    st.markdown(f"""
+    else:
+        st.markdown(f"""
 <div class="hq-footer">
   <a href="https://x.com/{_footer_handle}" target="_blank">@{_footer_handle}</a>
   <span style="color:#1E3050;">|</span>
   <span style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:#4a5160;font-size:12px;">POST <span style="color:#2DD4BF;">ASCEND</span></span>
 </div>
 """, unsafe_allow_html=True)
-
-# Reveal everything now that all content is rendered.
-st.markdown("""<style>
+finally:
+    # Reveal the UI even if a page render or footer path throws.
+    st.markdown("""<style>
 [data-testid="stSidebar"]{opacity:1!important;pointer-events:auto!important}
 .stApp [data-testid="stAppViewContainer"]{opacity:1!important}
 </style>""", unsafe_allow_html=True)
 
-# Tweet sync — skipped on first render so login is instant.
-# Runs on the SECOND rerun (any widget click after page loads).
-if st.session_state.get("auth_role"):
+# Periodic quick sync:
+# - never on first render
+# - only once every 72 hours per user
+# - only on pages that actually benefit from fresh tweet history
+_auto_sync_pages = {
+    "Creator Studio",
+    "Content Coach",
+    "Article Writer",
+    "Post History",
+    "Account Audit",
+    "My Stats",
+    "Profile Analyzer",
+}
+_auto_sync_due = (
+    st.session_state.get("auth_role")
+    and page in _auto_sync_pages
+    and bool(get_current_handle())
+    and _quick_tweet_sync_due(hours=72)
+)
+if _auto_sync_due:
     if st.session_state.get("_tweet_sync_ready"):
-        if "_tweet_sync_done" not in st.session_state:
-            st.session_state["_tweet_sync_done"] = True
+        if not st.session_state.get("_tweet_sync_session_attempted"):
+            st.session_state["_tweet_sync_session_attempted"] = True
             try:
                 sync_tweet_history(quick=True)
             except Exception:
                 pass
     else:
         st.session_state["_tweet_sync_ready"] = True
+else:
+    st.session_state.pop("_tweet_sync_ready", None)
+    st.session_state.pop("_tweet_sync_session_attempted", None)
