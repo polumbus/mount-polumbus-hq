@@ -1137,7 +1137,7 @@ def load_engagement_lists() -> dict:
             # Guests: return their lists as-is, no Tyler defaults backfilled
             if is_guest():
                 return loaded
-            migrated = {}
+            migrated = {k: dict(v) for k, v in _ENGAGEMENT_DEFAULTS.items()}
             for k, v in loaded.items():
                 if isinstance(v, str):
                     # Restore known list_id from defaults when migrating old handle-string format
@@ -1148,9 +1148,6 @@ def load_engagement_lists() -> dict:
                     if not entry.get('list_id') and k in _ENGAGEMENT_DEFAULTS:
                         entry['list_id'] = _ENGAGEMENT_DEFAULTS[k]['list_id']
                     migrated[k] = entry
-            for k, v in _ENGAGEMENT_DEFAULTS.items():
-                if k not in migrated:
-                    migrated[k] = dict(v)
             return migrated
         except Exception:
             pass
@@ -1298,28 +1295,62 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
   var invalidQP = __INVALID_QP__;
   var KEY = "mp_auth";
 
+  function windowChain(){
+    var wins = [window];
+    try{ if(window.parent && wins.indexOf(window.parent) === -1) wins.push(window.parent); }catch(e){}
+    try{ if(window.top && wins.indexOf(window.top) === -1) wins.push(window.top); }catch(e){}
+    return wins;
+  }
+
   function writeCookie(value, maxAge){
-    try{
-      var cookie = "mp_auth=" + encodeURIComponent(value) + "; path=/; SameSite=Lax";
-      if(typeof maxAge === "number") cookie += "; max-age=" + maxAge;
-      window.parent.document.cookie = cookie;
-    }catch(e){}
+    windowChain().forEach(function(win){
+      try{
+        var cookie = "mp_auth=" + encodeURIComponent(value) + "; path=/; SameSite=Lax";
+        if(typeof maxAge === "number") cookie += "; max-age=" + maxAge;
+        if(win.location && win.location.protocol === "https:") cookie += "; Secure";
+        win.document.cookie = cookie;
+      }catch(e){}
+    });
   }
 
   function readCookie(){
-    try{
-      var prefix = "mp_auth=";
-      var parts = window.parent.document.cookie.split(";");
-      for(var i=0;i<parts.length;i++){
-        var part = parts[i].trim();
-        if(part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
-      }
-    }catch(e){}
+    var prefix = "mp_auth=";
+    var wins = windowChain();
+    for(var w=0; w<wins.length; w++){
+      try{
+        var parts = wins[w].document.cookie.split(";");
+        for(var i=0;i<parts.length;i++){
+          var part = parts[i].trim();
+          if(part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
+        }
+      }catch(e){}
+    }
+    return "";
+  }
+
+  function writeLocal(value){
+    windowChain().forEach(function(win){
+      try{ win.localStorage.setItem(KEY, value); }catch(e){}
+      try{ win.sessionStorage.setItem(KEY, value); }catch(e){}
+    });
+  }
+
+  function readLocal(){
+    var wins = windowChain();
+    for(var i=0;i<wins.length;i++){
+      try{
+        var raw = wins[i].localStorage.getItem(KEY) || wins[i].sessionStorage.getItem(KEY);
+        if(raw) return raw;
+      }catch(e){}
+    }
     return "";
   }
 
   function clearStoredAuth(){
-    try{ window.parent.localStorage.removeItem(KEY); }catch(e){}
+    windowChain().forEach(function(win){
+      try{ win.localStorage.removeItem(KEY); }catch(e){}
+      try{ win.sessionStorage.removeItem(KEY); }catch(e){}
+    });
     try{ writeCookie("", 0); }catch(e){}
   }
 
@@ -1334,7 +1365,7 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
   if(mode === "persist"){
     try{
       var value = JSON.stringify(payload || {});
-      window.parent.localStorage.setItem(KEY, value);
+      writeLocal(value);
       writeCookie(value, 31536000);
     }catch(e){}
     return;
@@ -1347,14 +1378,11 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
   }
 
   if(mode === "restore"){
-    if(invalidQP){
-      stripAuthParams();
-      return;
-    }
     try{
-      var current = new URL(window.parent.location.href);
+      var hostWin = window.top || window.parent || window;
+      var current = new URL(hostWin.location.href);
       if(current.searchParams.get("token")) return;
-      var raw = window.parent.localStorage.getItem(KEY) || readCookie();
+      var raw = readLocal() || readCookie();
       if(!raw) return;
       var saved = JSON.parse(raw);
       if(!saved || !saved.token || !saved.role) return;
@@ -1362,8 +1390,11 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
       if(saved.user) current.searchParams.set("user", saved.user);
       else current.searchParams.delete("user");
       if(saved.guest_id) current.searchParams.set("guest_id", saved.guest_id);
-      window.parent.location.replace(current.toString());
+      hostWin.location.replace(current.toString());
     }catch(e){}
+    if(invalidQP){
+      stripAuthParams();
+    }
   }
 })();
 </script>"""
@@ -2007,14 +2038,15 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
-    _owner_gameday_icon = f"""<a href="{GAMEDAY_URL}" class="mp-ico mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer">
+    _nav_pages.insert(5, "Gameday Mode")
+    _owner_gameday_icon = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-ico {_act('Gameday Mode')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>"""
-    _owner_gameday_panel = f"""<a href="{GAMEDAY_URL}" class="mp-panel-item mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_panel = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-panel-item {_act('Gameday Mode')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Gameday Mode
       </a>"""
@@ -2536,7 +2568,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
-  {'<a href="'+GAMEDAY_URL+'" class="mp-external-top" data-external-top="1" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
+  {'<a href="/?'+_tok_qp+'page=Gameday+Mode" target="_self" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -2559,7 +2591,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode"} and not is_owner():
     _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
@@ -7715,7 +7747,15 @@ def page_reply_guy():
     # ── List selection as HTML pills ──
     _list_keys = list(st.session_state.custom_lists.keys())
     if "rg_source_sel" not in st.session_state:
-        st.session_state.rg_source_sel = _list_keys[0] if _list_keys else ""
+        if not is_guest() and "Broncos Reporters" in _list_keys:
+            st.session_state.rg_source_sel = "Broncos Reporters"
+        else:
+            st.session_state.rg_source_sel = _list_keys[0] if _list_keys else ""
+    elif st.session_state.rg_source_sel not in _list_keys:
+        if not is_guest() and "Broncos Reporters" in _list_keys:
+            st.session_state.rg_source_sel = "Broncos Reporters"
+        else:
+            st.session_state.rg_source_sel = _list_keys[0] if _list_keys else ""
     _lon = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
     _loff = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;background:#0e1a2e;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;"
     _list_html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">'
@@ -7782,6 +7822,7 @@ def page_reply_guy():
 
     _list_data = st.session_state.custom_lists.get(list_source, {})
     _list_id   = _list_data.get("list_id", "") if isinstance(_list_data, dict) else ""
+    _search_q = _list_data.get("search_query", "") if isinstance(_list_data, dict) else ""
     _cap_col, _del_col = st.columns([3, 1])
     with _cap_col:
         if _list_id:
@@ -7809,7 +7850,6 @@ def page_reply_guy():
                 st.session_state.pop("rg_confirm_delete", None)
                 st.rerun()
 
-    _search_q = _list_data.get("search_query", "") if isinstance(_list_data, dict) else ""
     if do_load:
         if not _list_id and not _search_q:
             st.error("No X List ID or search query for this feed. Use + New to set one.")
@@ -7840,9 +7880,15 @@ def page_reply_guy():
                         except Exception:
                             return False
                 all_tweets = []
+                _author_counts = {}
+                _max_per_author = 2 if list_source == "Broncos Reporters" else 4
                 for t in raw_tweets:
                     if _fresh(t):
                         author = t.get("author", {})
+                        _author_key = author.get("userName", author.get("username", "")) or "unknown"
+                        if _author_counts.get(_author_key, 0) >= _max_per_author:
+                            continue
+                        _author_counts[_author_key] = _author_counts.get(_author_key, 0) + 1
                         all_tweets.append({
                             "id": t.get("id", ""),
                             "text": t.get("text", ""),
@@ -7851,17 +7897,24 @@ def page_reply_guy():
                             "retweetCount": t.get("retweetCount", 0),
                             "replyCount": t.get("replyCount", 0),
                             "viewCount": t.get("viewCount", 0),
-                            "_target_account": author.get("userName", author.get("username", "")),
+                            "_target_account": _author_key,
                             "author": author,
                             "media": t.get("media", t.get("extendedEntities", {}).get("media", []) if isinstance(t.get("extendedEntities"), dict) else []),
                         })
                 st.session_state["rg_tweets"] = all_tweets
                 st.session_state["rg_loaded_at"] = datetime.now().strftime("%I:%M %p")
                 _oldest = raw_tweets[-1].get("createdAt", "?") if raw_tweets else "none"
+                _top_author = ""
+                _top_author_count = 0
+                if _author_counts:
+                    _top_author, _top_author_count = max(_author_counts.items(), key=lambda item: item[1])
                 st.session_state["rg_debug"] = (
                     f"DEBUG: fetched {len(raw_tweets)} from list, {len(all_tweets)} passed 24hr filter, "
-                    f"oldest={_oldest}, cutoff={_cutoff.isoformat()}"
+                    f"oldest={_oldest}, cutoff={_cutoff.isoformat()}, top_author={_top_author}:{_top_author_count}, "
+                    f"max_per_author={_max_per_author}"
                 )
+                if _top_author_count >= max(5, int(max(len(all_tweets), 1) * 0.4)):
+                    st.warning(f"Feed was heavily concentrated in @{_top_author}. Reply Mode capped repeats to keep the feed usable.")
 
     # ── My Tweet Replies data fetch (buttons now in merged top bar above) ──
     if load_all or load_verified:
@@ -9543,6 +9596,407 @@ def page_debug_console():
 # GAMEDAY MODE
 # ═══════════════════════════════════════════════════════════════════════════
 
+_GAMEDAY_TEAMS = {
+    "nfl": {"DEN": {"name": "Broncos", "color": "#FB4F14", "sport": "NFL"}},
+    "nba": {"DEN": {"name": "Nuggets", "color": "#0E2240", "sport": "NBA"}},
+    "nhl": {"COL": {"name": "Avalanche", "color": "#6F263D", "sport": "NHL"}},
+}
+
+_GAMEDAY_CFB = {"COLO": {"name": "CU Buffs", "color": "#CFB87C", "sport": "CFB"}}
+_GD_SCORE_CACHE = {"data": None, "ts": 0}
+
+
+def _gd_is_today(date_str):
+    if not date_str:
+        return False
+    try:
+        from datetime import timezone
+        game_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        return abs((game_dt - now).total_seconds()) < 43200
+    except Exception:
+        return False
+
+
+def _gd_fetch_live_scores():
+    if _GD_SCORE_CACHE["data"] is not None and (time.time() - _GD_SCORE_CACHE["ts"]) < 60:
+        return _GD_SCORE_CACHE["data"]
+    results = []
+    for league, teams in _GAMEDAY_TEAMS.items():
+        try:
+            scores = espn_scores(league, limit=15)
+            for g in (scores or []):
+                if not _gd_is_today(g.get("date", "")):
+                    continue
+                h_abbr = g.get("home", {}).get("abbr", "")
+                a_abbr = g.get("away", {}).get("abbr", "")
+                for abbr, info in teams.items():
+                    if abbr in (h_abbr, a_abbr):
+                        is_home = h_abbr == abbr
+                        opp = g["away"] if is_home else g["home"]
+                        us = g["home"] if is_home else g["away"]
+                        results.append({
+                            "team": info["name"],
+                            "sport": info["sport"],
+                            "color": info["color"],
+                            "our_score": us.get("score", "0"),
+                            "opp_score": opp.get("score", "0"),
+                            "opponent": opp.get("name", "Unknown"),
+                            "opp_abbr": opp.get("abbr", ""),
+                            "home": is_home,
+                            "status": g.get("status", "Scheduled"),
+                            "completed": g.get("completed", False),
+                            "broadcast": g.get("broadcast", ""),
+                        })
+        except Exception:
+            pass
+    try:
+        cfb_url = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+        data = requests.get(cfb_url, params={"limit": 40}, headers={"User-Agent": "PostAscend/1.0"}, timeout=8).json()
+        for event in data.get("events", []):
+            if not _gd_is_today(event.get("date", "")):
+                continue
+            comp = event.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            home_c = away_c = {}
+            for c in competitors:
+                td = {
+                    "name": c.get("team", {}).get("displayName", ""),
+                    "abbr": c.get("team", {}).get("abbreviation", ""),
+                    "score": c.get("score", "0"),
+                }
+                if c.get("homeAway") == "home":
+                    home_c = td
+                else:
+                    away_c = td
+            for abbr, info in _GAMEDAY_CFB.items():
+                if abbr in (home_c.get("abbr", ""), away_c.get("abbr", "")):
+                    is_home = home_c.get("abbr") == abbr
+                    us = home_c if is_home else away_c
+                    opp = away_c if is_home else home_c
+                    status_obj = event.get("status", {})
+                    results.append({
+                        "team": info["name"],
+                        "sport": info["sport"],
+                        "color": info["color"],
+                        "our_score": us.get("score", "0"),
+                        "opp_score": opp.get("score", "0"),
+                        "opponent": opp.get("name", "Unknown"),
+                        "opp_abbr": opp.get("abbr", ""),
+                        "home": is_home,
+                        "status": status_obj.get("type", {}).get("description", "Scheduled"),
+                        "completed": status_obj.get("type", {}).get("completed", False),
+                        "broadcast": comp.get("broadcasts", [{}])[0].get("names", [""])[0] if comp.get("broadcasts") else "",
+                    })
+    except Exception:
+        pass
+    _GD_SCORE_CACHE["data"] = results
+    _GD_SCORE_CACHE["ts"] = time.time()
+    return results
+
+
+def _gd_game_state(game):
+    s = game.get("status", "").lower()
+    if game.get("completed"):
+        return "post"
+    if any(k in s for k in ["in progress", "halftime", "end of", "delayed"]):
+        return "live"
+    if "final" in s:
+        return "post"
+    return "pre"
+
+
+_GD_REPORTERS = {
+    "NFL": ["mikeklis", "bylucaevans", "ZacStevensDNVR", "AllbrightNFL", "TroyRenck", "MaseDenver",
+            "KyleNewmanDP", "CodyRoarkNFL", "ParkerJGabriel", "christomasson", "JamieLynchTV",
+            "AdamSchefter", "RapSheet", "TomPelissero", "JayGlazer", "NFL"],
+    "NBA": ["HarrisonWind", "msinger", "BennettDurando", "VBenedetto", "chrisadempsey",
+            "katywinge", "VicLombardi", "TJMcBrideNBA", "DNVR_Nuggets", "MooseColorado",
+            "ShamsCharania", "BrianWindhorst", "espn", "NBAonTNT"],
+    "NHL": ["PeterRBaugh", "evanrawal", "cmasisak22", "adater", "megangley", "Jack_Carlough", "DNVR_Avalanche"],
+    "CFB": ["BrianHowell33", "adamcm777", "Danny_Penza", "buffzone", "SeanKeeler"],
+}
+
+_GD_TEAM_KEYWORDS = {
+    "NFL": {"include": ["Broncos", "\"Bo Nix\"", "\"Sean Payton\"", "\"Courtland Sutton\"", "\"Pat Surtain\""],
+            "exclude": ["Nuggets", "Jokic", "Avalanche", "Avs", "MacKinnon", "Makar", "\"CU Buffs\""]},
+    "NBA": {"include": ["Nuggets", "Jokic", "\"Jamal Murray\"", "\"Aaron Gordon\"", "\"Michael Malone\""],
+            "exclude": ["Broncos", "\"Bo Nix\"", "Avalanche", "Avs", "MacKinnon", "\"CU Buffs\""]},
+    "NHL": {"include": ["Avalanche", "Avs", "MacKinnon", "Makar", "\"Cale Makar\"", "\"Nathan MacKinnon\""],
+            "exclude": ["Broncos", "\"Bo Nix\"", "Nuggets", "Jokic", "\"CU Buffs\""]},
+    "CFB": {"include": ["\"CU Buffs\"", "\"Colorado Buffaloes\"", "Shedeur", "\"Deion Sanders\"", "\"Buffs football\""],
+            "exclude": ["Broncos", "Nuggets", "Avalanche", "Avs"]},
+}
+
+
+def _gd_fetch_game_tweets(game):
+    sport = game.get("sport", "NFL")
+    opponent = game.get("opponent", "")
+    state = _gd_game_state(game)
+    max_hours = 2 if state == "live" else 4
+
+    kw = _GD_TEAM_KEYWORDS.get(sport, {"include": [game["team"]], "exclude": []})
+    include_terms = list(kw["include"])
+    exclude_terms = kw["exclude"]
+    if opponent and opponent not in " ".join(include_terms):
+        include_terms.append(f'"{opponent.replace(chr(39), "")}"')
+
+    include_str = " OR ".join(include_terms)
+    exclude_str = " ".join(f"-{t}" for t in exclude_terms)
+    conv_query = f"({include_str}) {exclude_str} -is:retweet"
+
+    reporters = _GD_REPORTERS.get(sport, [])
+    reporter_from = " OR ".join(f"from:{h}" for h in reporters[:15])
+    reporter_query = f"({reporter_from}) -is:retweet" if reporters else ""
+
+    all_tweets = []
+    seen_ids = set()
+    try:
+        conv_tweets, _ = _fetch_signals(conv_query, count=50, max_age_hours=max_hours, pages=1)
+        for t in conv_tweets:
+            tid = t.get("id") or t.get("tweetId") or t.get("text", "")[:50]
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                t["_gd_source"] = "conversation"
+                all_tweets.append(t)
+    except Exception:
+        pass
+    if reporter_query:
+        try:
+            rep_tweets, _ = _fetch_signals(reporter_query, count=30, max_age_hours=max_hours, pages=1)
+            for t in rep_tweets:
+                tid = t.get("id") or t.get("tweetId") or t.get("text", "")[:50]
+                if tid not in seen_ids:
+                    seen_ids.add(tid)
+                    t["_gd_source"] = "reporter"
+                    all_tweets.append(t)
+        except Exception:
+            pass
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    for t in all_tweets:
+        replies = t.get("replyCount", 0) + t.get("retweetCount", 0)
+        try:
+            created = datetime.strptime(t.get("createdAt", ""), "%a %b %d %H:%M:%S %z %Y")
+            minutes_old = max((now - created).total_seconds() / 60, 1)
+            t["_gd_velocity"] = replies / minutes_old
+        except Exception:
+            t["_gd_velocity"] = replies
+
+    all_tweets.sort(key=lambda t: t.get("_gd_velocity", 0), reverse=True)
+    return all_tweets
+
+
+@st.dialog("Gameday Draft", width="large")
+def _gd_draft_dialog(_nonce):
+    game = st.session_state.get("_gd_selected_game")
+    tweet = st.session_state.get("_gd_selected_tweet")
+    if not game:
+        st.warning("No game selected.")
+        return
+
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+        _sig_fmt = st.session_state.get("_gd_last_fmt", "Normal Tweet")
+        _sig_voice = st.session_state.get("_gd_last_voice", "Default")
+        _ci_output_panel_impl("build", "", _sig_fmt, _sig_voice)
+        return
+
+    state = _gd_game_state(game)
+    score_line = f"{game['team']} {game['our_score']} — {game['opponent']} {game['opp_score']}" if state != "pre" else f"{game['team']} vs {game['opponent']}"
+    status_line = game.get("status", "")
+
+    if tweet:
+        author = tweet.get("author", {}).get("userName", "") or ""
+        brief = f"""GAMEDAY {game['sport']}: {score_line} ({status_line})
+SIGNAL: @{author} — {tweet.get('text', '')[:280]}
+ENGAGEMENT: {tweet.get('replyCount', 0)} replies, {tweet.get('retweetCount', 0)} RTs
+ANGLE: React to this moment as it's happening. In-game energy."""
+    else:
+        brief = f"""GAMEDAY {game['sport']}: {score_line} ({status_line})
+CONTEXT: {"Live game in progress" if state == "live" else "Final score" if state == "post" else "Pre-game"}
+ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == "live" else "Post-game take — what just happened and what it means" if state == "post" else "Pre-game prediction or storyline"}"""
+
+    st.markdown(f"""<div style="background:#161B22;border:1px solid rgba(45,212,191,0.08);border-radius:14px;padding:16px 20px;margin-bottom:12px;">
+        <div style="font-size:11px;color:#2DD4BF;font-weight:600;letter-spacing:1px;margin-bottom:6px;">{game['sport']} — {status_line}</div>
+        <div style="font-size:20px;color:#e8e8f0;font-weight:700;">{score_line}</div>
+    </div>""", unsafe_allow_html=True)
+
+    edited_brief = st.text_area("Edit brief:", value=brief, height=120, key="gd_brief_edit")
+
+    _custom_voices = load_json("voice_styles.json", [])
+    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread"]
+    _v_idx = _voice_opts.index(st.session_state.get("gd_voice", "Default")) if st.session_state.get("gd_voice", "Default") in _voice_opts else 0
+    _f_idx = _fmt_opts.index(st.session_state.get("gd_fmt", "Normal Tweet")) if st.session_state.get("gd_fmt", "Normal Tweet") in _fmt_opts else 1
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        gd_voice = st.selectbox("Voice", _voice_opts, index=_v_idx, key="gd_voice")
+    with vc2:
+        gd_fmt = st.selectbox("Format", _fmt_opts, index=_f_idx, key="gd_fmt")
+
+    if st.button("Build", use_container_width=True, key="gd_build", type="primary"):
+        final_brief = st.session_state.get("gd_brief_edit", edited_brief)
+        st.session_state["_gd_last_fmt"] = gd_fmt
+        st.session_state["_gd_last_voice"] = gd_voice
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        with st.spinner("Building your gameday tweets..."):
+            _run_ci_ai("build", final_brief, gd_fmt, gd_voice)
+        st.session_state["_gd_reopen_results"] = True
+        st.rerun()
+
+
+def page_gameday():
+    _gd_btn = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
+    _gd_btn_pri = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;"
+    _gd_btn_sm = "margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
+
+    st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Live scores, game tweets, and fast reaction drafts.</div>', unsafe_allow_html=True)
+
+    if st.session_state.pop("_gd_reopen_results", False):
+        _gd_draft_dialog(str(time.time()))
+
+    games = _gd_fetch_live_scores()
+    if not games:
+        st.markdown("""<div style="text-align:center;padding:60px 20px;">
+            <div style="font-size:16px;color:#3a5070;font-weight:600;">No Denver games today</div>
+            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">Broncos, Nuggets, Avalanche, or CU Buffs football.</div>
+        </div>""", unsafe_allow_html=True)
+        for sport_key, abbr, name in [("nfl", "DEN", "Broncos"), ("nba", "DEN", "Nuggets"), ("nhl", "COL", "Avalanche")]:
+            try:
+                info = espn_team(sport_key, abbr)
+                if info and info.get("next_event"):
+                    st.markdown(
+                        f'<div class="tweet-card"><div style="font-size:12px;color:#2DD4BF;font-weight:600;">{name}</div>'
+                        f'<div style="font-size:11px;color:#667;margin-top:4px;">{info.get("record", "")} — Next: {info["next_event"]}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+            except Exception:
+                pass
+        return
+
+    _state_order = {"live": 0, "pre": 1, "post": 2}
+    games.sort(key=lambda g: _state_order.get(_gd_game_state(g), 1))
+
+    if "_gd_active_game" not in st.session_state and games:
+        live = [g for g in games if _gd_game_state(g) == "live"]
+        st.session_state["_gd_active_game"] = (live[0] if live else games[0])["team"]
+
+    st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin-bottom:10px;">SCOREBOARD</div>', unsafe_allow_html=True)
+
+    for idx, g in enumerate(games):
+        state = _gd_game_state(g)
+        live_dot = '<span style="width:8px;height:8px;background:#FF4444;border-radius:50%;display:inline-block;margin-right:6px;animation:gd-pulse 1.5s infinite;"></span>' if state == "live" else ""
+        status_color = "#FF4444" if state == "live" else "#2DD4BF" if state == "pre" else "#556"
+        _active = g["team"] == st.session_state.get("_gd_active_game", "")
+        _border = "border-top-color:#2DD4BF;border-color:rgba(45,212,191,0.2);" if _active else ""
+        _sc, _sbg = {
+            "NFL": ("#FB4F14", "rgba(251,79,20,0.12)"),
+            "NBA": ("#1D428A", "rgba(29,66,138,0.12)"),
+            "NHL": ("#6F263D", "rgba(111,38,61,0.12)"),
+            "CFB": ("#CFB87C", "rgba(207,184,124,0.12)"),
+        }.get(g["sport"], ("#667", "rgba(102,104,136,0.12)"))
+        _bcast = f'<div style="font-size:10px;color:#445;margin-top:6px;">{g["broadcast"]}</div>' if g.get("broadcast") else ""
+        _sel_style = _gd_btn_pri if _active else _gd_btn
+        _sel_key = f"gd_sel_{idx}"
+        st.markdown(
+            f'<div class="tweet-card" style="cursor:pointer;{_border}">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+            f'<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;">{g["sport"]}</span>'
+            f'<span style="font-size:11px;color:{status_color};font-weight:600;">{live_dot}{g["status"]}</span></div>'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+            f'<div style="text-align:center;flex:1;"><div style="font-size:12px;color:#8899aa;font-weight:600;">{g["team"]}</div>'
+            f'<div style="font-size:26px;font-weight:800;color:#e8e8f0;font-variant-numeric:tabular-nums;">{g["our_score"]}</div></div>'
+            f'<div style="font-size:12px;color:#334;padding:0 12px;">{"@" if g["home"] else "vs"}</div>'
+            f'<div style="text-align:center;flex:1;"><div style="font-size:12px;color:#8899aa;font-weight:600;">{g["opponent"]}</div>'
+            f'<div style="font-size:26px;font-weight:800;color:#e8e8f0;font-variant-numeric:tabular-nums;">{g["opp_score"]}</div></div></div>'
+            f'{_bcast}'
+            f'<span class="cs-bot" data-bot="{_sel_key}" style="{_sel_style}">SELECT</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(_sel_key, key=_sel_key):
+            st.session_state["_gd_active_game"] = g["team"]
+            st.session_state.pop(f"_gd_tweets_{g['team']}", None)
+            st.rerun()
+
+    active_name = st.session_state.get("_gd_active_game", "")
+    active_game = next((g for g in games if g["team"] == active_name), games[0] if games else None)
+    if not active_game:
+        return
+
+    st.markdown(f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">{active_game["sport"]} FEED — {active_game["team"].upper()}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex;gap:8px;margin-bottom:14px;">'
+        f'<span class="cs-bot" data-bot="gd_draft" style="{_gd_btn_pri}">Draft Take</span>'
+        f'<span class="cs-bot" data-bot="gd_refresh" style="{_gd_btn}">Refresh</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("gd_draft", key="gd_draft"):
+        st.session_state["_gd_selected_game"] = active_game
+        st.session_state["_gd_selected_tweet"] = None
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            st.session_state.pop(_k, None)
+        _gd_draft_dialog(str(time.time()))
+    _do_refresh = st.button("gd_refresh", key="gd_refresh")
+
+    _cache_key = f"_gd_tweets_{active_name}"
+    _cache_ts_key = f"_gd_tweets_ts_{active_name}"
+    if _do_refresh or _cache_key not in st.session_state:
+        with st.spinner("Loading tweets..."):
+            tweets = _gd_fetch_game_tweets(active_game)
+            tweets.sort(key=lambda t: t.get("replyCount", 0) + t.get("retweetCount", 0), reverse=True)
+            st.session_state[_cache_key] = tweets
+            st.session_state[_cache_ts_key] = time.time()
+
+    tweets = st.session_state.get(_cache_key, [])
+    _ts = st.session_state.get(_cache_ts_key, 0)
+    if _ts:
+        _ago_min = int((time.time() - _ts) / 60)
+        st.markdown(f"<div style='font-size:10px;color:#3a5070;margin-bottom:8px;'>{_ago_min}m ago · {len(tweets)} tweets</div>", unsafe_allow_html=True)
+
+    if not tweets:
+        st.markdown("<div style='font-size:12px;color:#3a5070;font-style:italic;padding:16px 0;'>No recent tweets. Hit Refresh to check again.</div>", unsafe_allow_html=True)
+
+    for idx, t in enumerate(tweets[:12]):
+        author = t.get("author", {}).get("userName", "") or t.get("user", {}).get("screen_name", "")
+        text = t.get("text", "")[:280]
+        replies = t.get("replyCount", 0)
+        rts = t.get("retweetCount", 0)
+        _ago = _relative_time(t.get("createdAt", ""))
+        _tw_url = t.get("tweetUrl") or t.get("url") or ""
+        _view_link = f' &middot; <a href="{_tw_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tw_url else ""
+        _ellip = "..." if len(t.get("text", "")) > 280 else ""
+        _rkey = f"gd_r_{idx}"
+        _src = t.get("_gd_source", "")
+        _src_tag = '<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;margin-left:6px;">REPORTER</span>' if _src == "reporter" else ""
+        _vel = t.get("_gd_velocity", 0)
+        _vel_tag = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(239,68,68,0.12);color:#EF4444;font-weight:600;">HOT</span>' if _vel > 5 else ""
+        st.markdown(
+            f'<div class="tweet-card" style="cursor:pointer;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_src_tag}</span>'
+            f'<span style="display:flex;align-items:center;gap:6px;">{_vel_tag}<span style="font-size:9px;color:#445;">{_ago}</span></span></div>'
+            f'<div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{_ellip}</div>'
+            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs{_view_link}</div>'
+            f'<span class="cs-bot" data-bot="{_rkey}" style="{_gd_btn_sm}">React</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(_rkey, key=_rkey):
+            st.session_state["_gd_selected_game"] = active_game
+            st.session_state["_gd_selected_tweet"] = t
+            for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+                st.session_state.pop(_k, None)
+            _gd_draft_dialog(str(time.time()))
+
+    if any(_gd_game_state(g) == "live" for g in games):
+        st.markdown("<div style='font-size:10px;color:#2a3a50;text-align:center;margin-top:16px;'>Scores refresh every 60s. Tweets refresh manually.</div>", unsafe_allow_html=True)
+    st.markdown('<style>@keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}</style>', unsafe_allow_html=True)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
@@ -9561,6 +10015,7 @@ page_map = {
 }
 if is_owner():
     page_map["Signals & Prompts"] = page_signals_prompts
+    page_map["Gameday Mode"] = page_gameday
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
