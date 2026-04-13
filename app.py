@@ -4343,15 +4343,100 @@ def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
     def _fix_if(score: int, fix: str) -> str:
         return "No changes needed" if score >= 8 else fix
 
+    def _find_topic(text_value: str) -> str:
+        _t = text_value.lower()
+        _topics = [
+            ("denver broncos", "Broncos"),
+            ("broncos", "Broncos"),
+            ("denver nuggets", "Nuggets"),
+            ("nuggets", "Nuggets"),
+            ("avalanche", "Avs"),
+            ("avs", "Avs"),
+            ("buffs", "Buffs"),
+            ("jokic", "Jokic"),
+            ("murray", "Murray"),
+            ("bo nix", "Bo Nix"),
+            ("sean payton", "Sean Payton"),
+        ]
+        for _k, _v in _topics:
+            if _k in _t:
+                return _v
+        return ""
+
+    def _line_with_number() -> str:
+        for _line in lines:
+            if re.search(r"\d", _line):
+                return _line
+        return ""
+
+    def _line_with_topic() -> str:
+        _topic = _find_topic(text)
+        if not _topic:
+            return ""
+        for _line in lines:
+            if _topic.lower() in _line.lower():
+                return _line
+        return ""
+
+    def _replace_opening_line_suggestion() -> str:
+        _num_line = _line_with_number()
+        if _num_line and _num_line != first_line:
+            return f'Replace opening line with: "{_num_line}"'
+        _topic_line = _line_with_topic()
+        if _topic_line and _topic_line != first_line:
+            return f'Replace opening line with: "{_topic_line}"'
+        if first_line:
+            return f'Rewrite opening line as a shorter, punchier version of: "{first_line}"'
+        return "Add a short opening line that starts with a hard fact or named player."
+
+    def _replace_final_line_with_question() -> str:
+        _topic = _find_topic(text)
+        _base_q = "Can they stay healthy long enough to win it all?"
+        if _topic:
+            if "championship" in text.lower():
+                _base_q = f"Can the {_topic} stay healthy long enough to win a championship?"
+            else:
+                _base_q = f"Do the {_topic} actually have enough to make a real run?"
+        return f'Replace final line with: "{_base_q}"'
+
+    def _move_stat_line_up() -> str:
+        _num_line = _line_with_number()
+        if _num_line:
+            return f'Move this line directly under the opener: "{_num_line}"'
+        _line2 = lines[1] if len(lines) > 1 else ""
+        if _line2:
+            return f'Move this line directly under the opener: "{_line2}"'
+        return "Add one concrete stat line directly after the opener."
+
+    def _remove_links_hashtags_fix() -> str:
+        _links = re.findall(r"(https?://\S+|www\.\S+)", text)
+        _tags = re.findall(r"(#\w+)", text)
+        if _links:
+            return f'Remove link: "{_links[0]}"'
+        if _tags:
+            return f'Remove hashtags: "{", ".join(_tags[:3])}"'
+        return "Remove links and hashtags to avoid suppression."
+
+    def _voice_line_fix() -> str:
+        _hedge_match = re.search(r"\b(maybe|might|could|probably|possibly|sort of|kind of|i think|i feel)\b", text.lower())
+        if _hedge_match:
+            _hedge = _hedge_match.group(0)
+            for _line in lines:
+                if _hedge in _line.lower():
+                    _clean = re.sub(r"\b(maybe|might|could|probably|possibly|sort of|kind of|i think|i feel)\b", "", _line, flags=re.IGNORECASE)
+                    _clean = re.sub(r"\s+", " ", _clean).strip()
+                    return f'Rewrite this line without hedging: "{_clean}"'
+        return "Tighten one sentence to be more direct and confident."
+
     grades = [
-        {"name": "Hook Strength", "score": hook_score, "detail": _detail(f"Opening line is {'specific' if strong_open else 'generic'} and first beat is {len(first_line)} chars."), "fix": _fix_if(hook_score, "Start with one hard fact, named player, or stat in the first line so the scroll stops immediately.")},
-        {"name": "Conversation Catalyst", "score": convo_score, "detail": _detail(f"Question rate benchmark is {_fp_q}%. This tweet uses {question_count} question mark(s)."), "fix": _fix_if(convo_score, "End on one sharp question or debate hook that invites people to argue back.")},
-        {"name": "Bookmark Worthiness", "score": bookmark_score, "detail": _detail(f"Found {stat_hits} numeric/stat signal(s) and {line_breaks} extra structural beat(s)."), "fix": _fix_if(bookmark_score, "Add one concrete stat, tendency, or insight people would want to save and reuse later.")},
-        {"name": "Share/Quote Potential", "score": share_score, "detail": _detail("Shareability rises when the take is specific, confident, and easy to quote."), "fix": _fix_if(share_score, "Tighten the strongest sentence into a cleaner quotable claim with less setup.")},
-        {"name": "Engagement Triggers", "score": engage_score, "detail": _detail(f"Questions: {question_count}. Exclamation points: {exclaim_count}. Extra beats: {line_breaks}."), "fix": _fix_if(engage_score, "Add one structural trigger like a question, contrast line, or cleaner line break pattern.")},
-        {"name": "Algorithm Compliance", "score": compliance_score, "detail": _detail(f"Links: {link_count}. Hashtags: {hashtag_count}. Excess punctuation penalty: {compliance_penalty}."), "fix": _fix_if(compliance_score, "Remove links, extra hashtags, and any noisy punctuation that can suppress reach.")},
+        {"name": "Hook Strength", "score": hook_score, "detail": _detail(f"Opening line is {'specific' if strong_open else 'generic'} and first beat is {len(first_line)} chars."), "fix": _fix_if(hook_score, _replace_opening_line_suggestion())},
+        {"name": "Conversation Catalyst", "score": convo_score, "detail": _detail(f"Question rate benchmark is {_fp_q}%. This tweet uses {question_count} question mark(s)."), "fix": _fix_if(convo_score, _replace_final_line_with_question())},
+        {"name": "Bookmark Worthiness", "score": bookmark_score, "detail": _detail(f"Found {stat_hits} numeric/stat signal(s) and {line_breaks} extra structural beat(s)."), "fix": _fix_if(bookmark_score, _move_stat_line_up())},
+        {"name": "Share/Quote Potential", "score": share_score, "detail": _detail("Shareability rises when the take is specific, confident, and easy to quote."), "fix": _fix_if(share_score, _replace_opening_line_suggestion())},
+        {"name": "Engagement Triggers", "score": engage_score, "detail": _detail(f"Questions: {question_count}. Exclamation points: {exclaim_count}. Extra beats: {line_breaks}."), "fix": _fix_if(engage_score, _replace_final_line_with_question())},
+        {"name": "Algorithm Compliance", "score": compliance_score, "detail": _detail(f"Links: {link_count}. Hashtags: {hashtag_count}. Excess punctuation penalty: {compliance_penalty}."), "fix": _fix_if(compliance_score, _remove_links_hashtags_fix())},
         {"name": "Dwell Time Potential", "score": dwell_score, "detail": _detail(dwell_detail), "fix": _fix_if(dwell_score, dwell_fix)},
-        {"name": "Voice Match", "score": voice_score, "detail": _detail(f"Hedges found: {hedges}. Ellipsis benchmark: {_fp_ell}%. Ellipses used: {ellipsis_count}."), "fix": _fix_if(voice_score, "Cut hedging and make the phrasing more direct, punchy, and confident in Tyler's normal rhythm.")},
+        {"name": "Voice Match", "score": voice_score, "detail": _detail(f"Hedges found: {hedges}. Ellipsis benchmark: {_fp_ell}%. Ellipses used: {ellipsis_count}."), "fix": _fix_if(voice_score, _voice_line_fix())},
     ]
 
     algorithm_score = int(round(sum(g["score"] for g in grades[:7]) / 7.0 * 10))
