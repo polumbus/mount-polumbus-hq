@@ -5215,9 +5215,24 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 _accepted_grades = [g for i, g in enumerate(grades) if i in accepted and g.get("fix", "")]
                 if not _accepted_grades:
                     _accepted_grades = [g for g in grades if g.get("fix", "")]
-                _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
-                _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
-                _updated = call_claude(_prompt, max_tokens=400)
+                _updated = None
+                _working = _base
+                _all_local = True
+                for _g in _accepted_grades:
+                    _fix_text = _g.get("fix", "")
+                    if not _fix_text:
+                        continue
+                    _local = _apply_local_fix(_working, _fix_text)
+                    if _local is None:
+                        _all_local = False
+                        break
+                    _working = _local
+                if _all_local:
+                    _updated = _working
+                else:
+                    _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
+                    _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
+                    _updated = call_claude(_prompt, max_tokens=400)
             else:
                 _local_applied = _apply_local_fix(_base, fix_instruction)
                 if _local_applied:
