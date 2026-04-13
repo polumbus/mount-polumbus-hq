@@ -5145,15 +5145,86 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         def _apply_fix(fix_instruction, clear_all=False):
             _base = st.session_state.get("ci_text", "")
             _voice_guard = "Preserve Tyler's exact voice and punctuation habits. Never introduce hyphen, en dash, or em dash separators in tweet copy."
+            def _extract_quoted(text_value: str) -> str:
+                _m = re.search(r'"([^"]+)"', text_value)
+                return _m.group(1).strip() if _m else ""
+
+            def _apply_local_fix(base_text: str, fix_text: str) -> str | None:
+                if not base_text or not fix_text:
+                    return None
+                _lines = base_text.splitlines()
+                _non_empty_idx = [i for i, l in enumerate(_lines) if l.strip()]
+                if not _non_empty_idx:
+                    _non_empty_idx = [0]
+                    _lines = [base_text]
+
+                _first_idx = _non_empty_idx[0]
+                _last_idx = _non_empty_idx[-1]
+
+                if fix_text.startswith("Replace opening line with:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        _lines[_first_idx] = _rep
+                        return "\n".join(_lines).strip()
+
+                if fix_text.startswith("Replace final line with:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        _lines[_last_idx] = _rep
+                        return "\n".join(_lines).strip()
+
+                if fix_text.startswith("Move this line directly under the opener:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        _lines = [l for l in _lines if l.strip() != _rep.strip()]
+                        _non_empty_idx = [i for i, l in enumerate(_lines) if l.strip()]
+                        _first_idx = _non_empty_idx[0] if _non_empty_idx else 0
+                        _lines.insert(_first_idx + 1, _rep)
+                        return "\n".join(_lines).strip()
+
+                if fix_text.startswith("Remove link:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        return base_text.replace(_rep, "").strip()
+
+                if fix_text.startswith("Remove hashtags:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        _tags = [t.strip() for t in _rep.split(",") if t.strip()]
+                        _out = base_text
+                        for _t in _tags:
+                            _out = _out.replace(_t, "")
+                        return re.sub(r"\s{2,}", " ", _out).strip()
+
+                if fix_text.startswith("Rewrite this line without hedging:"):
+                    _rep = _extract_quoted(fix_text)
+                    if _rep:
+                        # Replace the first line containing common hedges.
+                        _hedges = ["maybe", "might", "could", "probably", "possibly", "sort of", "kind of", "i think", "i feel"]
+                        for i, _l in enumerate(_lines):
+                            if any(h in _l.lower() for h in _hedges):
+                                _lines[i] = _rep
+                                return "\n".join(_lines).strip()
+                        # Fallback: replace last line
+                        _lines[_last_idx] = _rep
+                        return "\n".join(_lines).strip()
+
+                return None
+
             if clear_all:
                 _accepted_grades = [g for i, g in enumerate(grades) if i in accepted and g.get("fix", "")]
                 if not _accepted_grades:
                     _accepted_grades = [g for g in grades if g.get("fix", "")]
                 _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
                 _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
+                _updated = call_claude(_prompt, max_tokens=400)
             else:
-                _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
-            _updated = call_claude(_prompt, max_tokens=400)
+                _local_applied = _apply_local_fix(_base, fix_instruction)
+                if _local_applied:
+                    _updated = _local_applied
+                else:
+                    _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
+                    _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 # Use staging key — widget-owned "ci_text" gets overwritten on rerun
                 _updated = _updated.strip()
