@@ -5172,6 +5172,81 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     except Exception:
         pass
 
+
+def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list:
+    """
+    Build a small deterministic fallback idea set from the fetched feed.
+
+    This keeps What's Hot usable when the AI route returns empty or malformed
+    output instead of hard-failing the dialog.
+    """
+    _ideas = []
+    _seen_hooks = set()
+
+    for _t in _all_tweets[:12]:
+        _text = (_t.get("text") or "").strip()
+        if not _text or _text.startswith("RT ") or _text.startswith("@"):
+            continue
+        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
+        _snippet = _text.replace("\n", " ").strip()
+        if len(_snippet) > 170:
+            _snippet = _snippet[:167].rstrip() + "..."
+        _hook = f"Seeing this from @{_author} makes me think there's a bigger angle here: {_snippet}"
+        if _hook in _seen_hooks:
+            continue
+        _seen_hooks.add(_hook)
+        _ideas.append({
+            "topic": "Feed reaction",
+            "source": "twitter",
+            "voice": "Default",
+            "hook": _hook,
+            "why": "fresh angle from feed",
+            "source_ref": f"@{_author}",
+        })
+        if len(_ideas) >= 5:
+            return _ideas
+
+    for _headline in _rss_headlines[:8]:
+        _headline = (_headline or "").strip()
+        if not _headline:
+            continue
+        _hook = f"There's a real conversation hiding inside this headline: {_headline}"
+        if _hook in _seen_hooks:
+            continue
+        _seen_hooks.add(_hook)
+        _ideas.append({
+            "topic": "Headline angle",
+            "source": "news",
+            "voice": "Default",
+            "hook": _hook[:280],
+            "why": "timely headline angle",
+            "source_ref": _headline[:80],
+        })
+        if len(_ideas) >= 5:
+            break
+
+    return _ideas
+
+
+def _parse_inspiration_ideas(_raw: str) -> list:
+    _ideas = []
+    try:
+        _clean = (_raw or "").strip()
+        if _clean.startswith("```"):
+            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        _ideas = json.loads(_clean)
+        if isinstance(_ideas, dict):
+            _ideas = _ideas.get("ideas", [])
+    except Exception:
+        try:
+            _m = re.search(r'\[[\s\S]*\]', _raw or "")
+            if _m:
+                _ideas = json.loads(_m.group(0))
+        except Exception:
+            pass
+    return _ideas if isinstance(_ideas, list) else []
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude(_cache_key: str = ""):
     """Fetch feed + call the shared HQ AI router. Cached 30 min in-session, also saved to gist for cross-session."""
@@ -5239,18 +5314,12 @@ Return ONLY JSON:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle","source_ref":"T0 or headline text"}}]"""
 
     _raw = call_claude(_prompt, _wh_system, max_tokens=1400)
+    _ideas = _parse_inspiration_ideas(_raw)
 
-    _ideas = []
-    try:
-        _clean = _raw.strip()
-        if _clean.startswith("```"):
-            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        _ideas = json.loads(_clean)
-    except Exception:
+    if not _ideas:
         try:
-            _m = re.search(r'\[[\s\S]*\]', _raw)
-            if _m:
-                _ideas = json.loads(_m.group(0))
+            _raw = _call_claude_proxy(_prompt, _wh_system, 1400, "claude-sonnet-4-6")
+            _ideas = _parse_inspiration_ideas(_raw)
         except Exception:
             pass
 
@@ -5272,6 +5341,9 @@ Return ONLY JSON:
             _idea["hook"] = _hook
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
+
+    if not _ideas:
+        _ideas = _fallback_inspiration_ideas(_all_tweets, _rss_headlines)
 
     # Save to gist for instant loads on future visits
     if _ideas:
