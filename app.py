@@ -1520,7 +1520,17 @@ if not st.session_state["auth_role"]:
 
 if not st.session_state["auth_role"]:
     _clear_client_auth = bool(st.session_state.pop("_clear_client_auth", False))
-    _invalid_auth_qp = bool(st.query_params.get("token")) and not _clear_client_auth
+    _invalid_auth_qp = False
+    if not _clear_client_auth:
+        _tok = st.query_params.get("token", "")
+        _tok_user = st.query_params.get("user", "")
+        if _tok:
+            if _tok == _OWNER_TOKEN and (_tok_user in ("", "owner")):
+                _invalid_auth_qp = False
+            else:
+                _accts = _load_accounts()
+                if not (_tok_user and _tok_user in _accts and _accts[_tok_user].get("token") == _tok):
+                    _invalid_auth_qp = True
     st.markdown("""<style>
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
