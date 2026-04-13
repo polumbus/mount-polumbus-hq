@@ -4249,6 +4249,31 @@ Return ONLY valid JSON:
 ]}}"""
 
 
+def _normalize_grade_score(score) -> int:
+    """Normalize category grade scores to the UI's expected 1-10 scale."""
+    try:
+        value = float(score)
+    except Exception:
+        return 0
+    if value > 10:
+        value = value / 10.0
+    value = max(0.0, min(10.0, value))
+    return int(round(value))
+
+
+def _normalize_grade_items(grades: list) -> list:
+    """Return a shallow-normalized copy of grade items for display."""
+    normalized = []
+    for item in grades or []:
+        if isinstance(item, dict):
+            entry = dict(item)
+            entry["score"] = _normalize_grade_score(entry.get("score", 0))
+            normalized.append(entry)
+        else:
+            normalized.append(item)
+    return normalized
+
+
 def _run_ci_ai(action, tweet_text, fmt, voice):
     """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
     # Force clear all previous results before every new generation
@@ -4873,7 +4898,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         gd = st.session_state["ci_grades"]
         algo_score = gd.get("algorithm_score", 0)
         voice_score = gd.get("voice_score", gd.get("tyler_score", 0))
-        grades = gd.get("grades", [])
+        grades = _normalize_grade_items(gd.get("grades", []))
         combined_score = round((algo_score + voice_score) / 2) if algo_score or voice_score else 0
         _voice_score_label = "Voice Match" if is_guest() else "Tyler Voice"
 
