@@ -5024,6 +5024,24 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         accepted = st.session_state["ci_grade_accepted"]
         skipped = st.session_state["ci_grade_skipped"]
 
+        def _is_actionable_grade(idx: int) -> bool:
+            if not (0 <= idx < len(grades)):
+                return False
+            _fix = (grades[idx].get("fix", "") or "").strip().lower()
+            return idx not in accepted and idx not in skipped and bool(_fix) and _fix != "no changes needed"
+
+        def _first_actionable_grade_index() -> int:
+            for _i, _g in enumerate(grades):
+                _fix = (_g.get("fix", "") or "").strip().lower()
+                if _i in accepted or _i in skipped or not _fix or _fix == "no changes needed":
+                    continue
+                return _i
+            return 0
+
+        if not _is_actionable_grade(sel_idx):
+            sel_idx = _first_actionable_grade_index()
+            st.session_state["ci_grade_selected"] = sel_idx
+
         def _pill_color(s):
             if s >= 7: return ("rgba(45,212,191,0.12)", "#2DD4BF")
             if s >= 5: return ("rgba(251,191,36,0.12)", "#FBBF24")
