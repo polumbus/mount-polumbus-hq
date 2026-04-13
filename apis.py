@@ -659,11 +659,9 @@ def get_reddit_trending(niche: str = "general", topics: list = None) -> list:
     return results[:12]
 
 
-def get_newsapi_headlines(topics: list = None, niche: str = "general") -> list:
-    """Get headlines from NewsAPI.org. Requires NEWSAPI_KEY in secrets."""
+def get_newsapi_headlines(topics: list = None, niche: str = "general", api_key: str = "") -> list:
+    """Get headlines from NewsAPI.org using an already-resolved API key."""
     try:
-        import streamlit as st
-        api_key = st.secrets.get("NEWSAPI_KEY", "")
         if not api_key:
             return []
         # Build query from topics or niche

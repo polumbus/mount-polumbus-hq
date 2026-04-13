@@ -744,7 +744,7 @@ def _get_oauth_token() -> str:
         return ""
 
 
-def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", _token: str = None) -> str:
+def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", _token: str = None, timeout: int = 30) -> str:
     """Call Claude API directly via OAuth bearer token — fastest path, no subprocess."""
     import urllib.request
     import hashlib
@@ -789,7 +789,7 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read())
     if "content" in data and data["content"]:
         return data["content"][0].get("text", "")
@@ -833,7 +833,7 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
     raise Exception(f"API error: {data.get('error', data)}")
 
 
-def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
+def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", timeout: int = 30) -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
@@ -849,11 +849,48 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
     req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read())
     if "error" in data:
         raise Exception(data["error"])
     return data["text"]
+
+
+def _call_claude_inspiration(prompt: str, system: str, max_tokens: int = 1000, model: str = "claude-sonnet-4-6") -> str:
+    """
+    What's Hot should stay Anthropic-first but fail fast.
+
+    Use the direct Anthropic route first, then a short proxy retry, then let the
+    deterministic feed fallback take over instead of walking the full long AI
+    router chain.
+    """
+    try:
+        return _call_claude_direct(prompt, system or "", max_tokens, model, timeout=12)
+    except Exception:
+        pass
+    try:
+        return _call_claude_proxy(prompt, system or "", max_tokens, model, timeout=12)
+    except Exception:
+        return ""
+
+
+def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: str = "claude-sonnet-4-6") -> str:
+    """
+    Grades must be reliable.
+
+    Do not use the general Streamlit-aware router from worker threads because
+    it touches session state. Use only thread-safe direct/proxy calls here.
+    """
+    tok = _get_oauth_token() or _get_access_token()
+    if tok:
+        try:
+            return _call_claude_direct(prompt, system, max_tokens, model, _token=tok, timeout=15)
+        except Exception:
+            pass
+    try:
+        return _call_claude_proxy(prompt, system, max_tokens, model, timeout=15)
+    except Exception:
+        return ""
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
@@ -4164,6 +4201,54 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
     return _prompt_a, _prompt_b
 
 
+def _build_grades_fallback_prompt(fmt: str, pp: dict, tweet_text: str, char_count: int, has_q: str, has_ell: str) -> str:
+    """Single-call fallback prompt when the parallel grades split fails to parse."""
+    _pp = pp or {}
+    _fp_q = _pp.get("top_question_pct", 28)
+    _fp_ell = _pp.get("top_ellipsis_pct", 28)
+    _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _fp_avg = _pp.get("top_avg_chars", 162)
+    _fp_lo, _fp_hi = _fp_range
+
+    if fmt == "Punchy Tweet":
+        _fmt_note = f"Punchy Tweet under 160 chars. Top punchy tweets avg {_fp_avg} chars."
+    elif fmt == "Normal Tweet":
+        _fmt_note = f"Normal Tweet target {max(_fp_lo, 161)}-{min(_fp_hi, 260)} chars. Top normal tweets avg {_fp_avg} chars."
+    elif fmt == "Long Tweet":
+        _fmt_note = f"Long Tweet target 600-1200 chars. Top long tweets avg {_fp_avg} chars."
+    elif fmt == "Thread":
+        _fmt_note = "Thread format. Tweet 1 is the hook and matters most."
+    elif fmt == "Article":
+        _fmt_note = "Article format. Headline and intro are the hook."
+    else:
+        _fmt_note = f"{fmt} format."
+
+    return f"""Grade this tweet for X algorithm performance.
+
+X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
+
+BENCHMARKS:
+- top tweets question rate: {_fp_q}%
+- top tweets ellipsis rate: {_fp_ell}%
+- optimal char range: {_fp_lo}-{_fp_hi}
+- format note: {_fmt_note}
+
+[TWEET]: "{tweet_text}" ({char_count} chars)
+Has question mark: {has_q} | Has ellipsis: {has_ell}
+
+Return ONLY valid JSON:
+{{"algorithm_score":0,"voice_score":0,"grades":[
+{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact first-line fix"}},
+{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},
+{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},
+{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}},
+{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},
+{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},
+{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},
+{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}
+]}}"""
+
+
 def _run_ci_ai(action, tweet_text, fmt, voice):
     """Run AI generation and store results in session state. Must be called before _ci_output_panel."""
     # Force clear all previous results before every new generation
@@ -4370,20 +4455,13 @@ Return ONLY this JSON, no other text:
                 except Exception:
                     return None
 
-            _tok = _get_oauth_token() or _get_access_token()
-
-            def _grade_call(prompt, tok):
-                """Try direct OAuth API, fall back to proxy — never raises."""
-                if tok:
-                    try:
-                        return _call_claude_direct(prompt, _grades_system, 700, _token=tok)
-                    except Exception:
-                        pass
-                return call_claude(prompt, _grades_system, 700)
+            def _grade_call(prompt):
+                """Thread-safe Grades path only."""
+                return _call_claude_grades(prompt, _grades_system, 700)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
-                _fa = _ex.submit(_grade_call, _prompt_a, _tok)
-                _fb = _ex.submit(_grade_call, _prompt_b, _tok)
+                _fa = _ex.submit(_grade_call, _prompt_a)
+                _fb = _ex.submit(_grade_call, _prompt_b)
                 _ra, _rb = _fa.result(), _fb.result()
             _da, _db = _parse(_ra), _parse(_rb)
 
@@ -4402,7 +4480,25 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                result = "Grades failed — try again"
+                _fallback_prompt = _build_grades_fallback_prompt(fmt, pp, tweet_text, _char_count, _has_q, _has_ell)
+                _fallback_raw = _call_claude_grades(_fallback_prompt, _grades_system, 1100)
+                _fallback_data = _parse(_fallback_raw)
+                if _fallback_data and "grades" in _fallback_data:
+                    _voice_score = _fallback_data.get("voice_score", _fallback_data.get("tyler_score", 0))
+                    gdata = {
+                        "algorithm_score": _fallback_data.get("algorithm_score", 0),
+                        "voice_score": _voice_score,
+                        "tyler_score": _voice_score,
+                        "grades": _fallback_data["grades"],
+                    }
+                    _cache = st.session_state.get("ci_grades_cache", {})
+                    _cache[_grade_hash] = gdata
+                    st.session_state["ci_grades_cache"] = _cache
+                    st.session_state["ci_grades"] = gdata
+                    for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                        st.session_state.pop(_k, None)
+                else:
+                    result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip() and fmt == "Article":
         # Article format: single long-form article from concept
@@ -5062,6 +5158,11 @@ def _fetch_inspiration_feed():
     _user_topics = _topics_data.get("topics", []) if _is_g else []
     _is_sports_niche = not _is_g or "sport" in _user_niche.lower()
     _is_crypto_niche = _is_g and ("crypto" in _user_niche.lower() or "finance" in _user_niche.lower())
+    try:
+        _newsapi_key = st.secrets.get("NEWSAPI_KEY", "")
+    except Exception:
+        _newsapi_key = ""
+
     with _cf.ThreadPoolExecutor(max_workers=20) as _ex:
         _list_futs = [_ex.submit(_fetch_list, lid) for lid in _all_list_ids]
         _search_futs = [_ex.submit(fetch_tweets, q, 15) for q in _search_queries]
@@ -5074,7 +5175,7 @@ def _fetch_inspiration_feed():
         _trends_fut = _ex.submit(get_google_trends)
         _reddit_fut = _ex.submit(get_reddit_trending, _user_niche, _user_topics)
         # NewsAPI — if key available
-        _newsapi_fut = _ex.submit(get_newsapi_headlines, _user_topics, _user_niche)
+        _newsapi_fut = _ex.submit(get_newsapi_headlines, _user_topics, _user_niche, _newsapi_key)
         # CoinGecko — finance/crypto niche
         if _is_crypto_niche:
             _crypto_fut = _ex.submit(get_coingecko_trending)
@@ -5313,15 +5414,8 @@ Rules:
 Return ONLY JSON:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle","source_ref":"T0 or headline text"}}]"""
 
-    _raw = call_claude(_prompt, _wh_system, max_tokens=1400)
+    _raw = _call_claude_inspiration(_prompt, _wh_system, max_tokens=1000)
     _ideas = _parse_inspiration_ideas(_raw)
-
-    if not _ideas:
-        try:
-            _raw = _call_claude_proxy(_prompt, _wh_system, 1400, "claude-sonnet-4-6")
-            _ideas = _parse_inspiration_ideas(_raw)
-        except Exception:
-            pass
 
     for _idea in list(_ideas):
         _hook = _idea.get("hook", "")
@@ -7686,12 +7780,20 @@ def page_reply_guy():
     XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
     if "custom_lists" not in st.session_state:
         st.session_state.custom_lists = load_engagement_lists()
-    # Restore any known list_ids that got wiped (migration safety net) — owner only
+    # Keep owner defaults hydrated and ordered first so Reply Mode can't drift
+    # into a broken feed mix from stale session or file state.
     if not is_guest():
-        for _k, _v in _ENGAGEMENT_DEFAULTS.items():
-            if _k in st.session_state.custom_lists and isinstance(st.session_state.custom_lists[_k], dict):
-                if not st.session_state.custom_lists[_k].get('list_id'):
-                    st.session_state.custom_lists[_k]['list_id'] = _v['list_id']
+        _merged_lists = {k: dict(v) for k, v in _ENGAGEMENT_DEFAULTS.items()}
+        for _k, _v in st.session_state.custom_lists.items():
+            if isinstance(_v, dict):
+                _entry = dict(_v)
+            else:
+                _entry = {"legacy_handles": _v}
+            if _k in _merged_lists and not _entry.get("list_id"):
+                _entry["list_id"] = _merged_lists[_k].get("list_id", "")
+            _merged_lists[_k] = _entry
+        if _merged_lists != st.session_state.custom_lists:
+            st.session_state.custom_lists = _merged_lists
 
     st.markdown('<div class="main-header">REPLY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Build your daily reply habit. 50 replies a day grows the account.</div>', unsafe_allow_html=True)
@@ -9636,9 +9738,17 @@ def _gd_is_today(date_str):
         return False
     try:
         from datetime import timezone
+        from zoneinfo import ZoneInfo
         game_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
         now = datetime.now(timezone.utc)
-        return abs((game_dt - now).total_seconds()) < 43200
+        denver = ZoneInfo("America/Denver")
+        game_local = game_dt.astimezone(denver)
+        now_local = now.astimezone(denver)
+        if game_local.date() == now_local.date():
+            return True
+        # Keep a just-finished late game visible for a short grace window so
+        # the page does not abruptly go empty the morning after a Denver game.
+        return 0 <= (now - game_dt).total_seconds() <= 12 * 3600
     except Exception:
         return False
 
