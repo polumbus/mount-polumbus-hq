@@ -833,7 +833,7 @@ def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, mode
     raise Exception(f"API error: {data.get('error', data)}")
 
 
-def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", timeout: int = 30) -> str:
+def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", timeout: int = 90) -> str:
     """Call local Claude proxy server (for Streamlit Cloud — uses CLI on Tyler's machine)."""
     import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
