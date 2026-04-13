@@ -5010,6 +5010,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         # ── RIGHT PANEL ──
         with _right_col:
             if grades and 0 <= sel_idx < len(grades):
+                _preview_text = (st.session_state.get("ci_text") or st.session_state.get("_ci_text_stage") or "").strip()
                 _sg = grades[sel_idx]
                 _sname = _sg.get("name", "")
                 _sscore = _sg.get("score", 0)
@@ -5032,6 +5033,17 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                     </div>
                   </div>
                 </div>""", unsafe_allow_html=True)
+
+                if _preview_text:
+                    _preview_html = html.escape(_preview_text).replace("\n", "<br>")
+                    st.markdown(
+                        '<div style="font-size:8px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.22);font-weight:600;margin:12px 0 4px;">Current Tweet Preview</div>'
+                        f'<div style="border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);padding:14px 16px;">'
+                        f'<div style="font-size:14px;color:rgba(255,255,255,0.92);line-height:1.7;white-space:normal;">{_preview_html}</div>'
+                        f'<div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.3);">{len(_preview_text)} characters</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
 
                 # WHY THIS SCORE — between score and fix
                 if _sdetail:
