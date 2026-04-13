@@ -4466,6 +4466,11 @@ Return ONLY this JSON, no other text:
             _da, _db = _parse(_ra), _parse(_rb)
 
             if _da and _db and "grades" in _da and "grades" in _db:
+                _append_debug_event("grades", "ok", "parallel_split_ok", {
+                    "fmt": fmt,
+                    "len_a": len(_ra or ""),
+                    "len_b": len(_rb or ""),
+                })
                 _voice_score = _da.get("voice_score", _da.get("tyler_score", 0))
                 gdata = {
                     "algorithm_score": _da.get("algorithm_score", 0),
@@ -4498,7 +4503,42 @@ Return ONLY this JSON, no other text:
                     for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                         st.session_state.pop(_k, None)
                 else:
-                    result = "Grades failed — try again"
+                    _append_debug_event("grades", "error", "parallel_split_parse_failed", {
+                        "fmt": fmt,
+                        "len_a": len(_ra or ""),
+                        "len_b": len(_rb or ""),
+                        "len_fallback_fast": len(_fallback_raw or ""),
+                    })
+                    try:
+                        _fallback_raw_main = call_claude(_fallback_prompt, _grades_system, 1100)
+                    except Exception as _e:
+                        _append_debug_event("grades", "error", f"main_thread_fallback_exception {_e}", {"fmt": fmt})
+                        _fallback_raw_main = ""
+                    _fallback_data_main = _parse(_fallback_raw_main)
+                    if _fallback_data_main and "grades" in _fallback_data_main:
+                        _append_debug_event("grades", "ok", "main_thread_fallback_ok", {
+                            "fmt": fmt,
+                            "len_main": len(_fallback_raw_main or ""),
+                        })
+                        _voice_score = _fallback_data_main.get("voice_score", _fallback_data_main.get("tyler_score", 0))
+                        gdata = {
+                            "algorithm_score": _fallback_data_main.get("algorithm_score", 0),
+                            "voice_score": _voice_score,
+                            "tyler_score": _voice_score,
+                            "grades": _fallback_data_main["grades"],
+                        }
+                        _cache = st.session_state.get("ci_grades_cache", {})
+                        _cache[_grade_hash] = gdata
+                        st.session_state["ci_grades_cache"] = _cache
+                        st.session_state["ci_grades"] = gdata
+                        for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
+                            st.session_state.pop(_k, None)
+                    else:
+                        _append_debug_event("grades", "error", "main_thread_fallback_parse_failed", {
+                            "fmt": fmt,
+                            "len_main": len(_fallback_raw_main or ""),
+                        })
+                        result = "Grades failed — try again"
 
     elif action == "build" and tweet_text.strip() and fmt == "Article":
         # Article format: single long-form article from concept
