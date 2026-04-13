@@ -5485,8 +5485,12 @@ def _ci_inspiration_dialog():
             with st.spinner("Post Ascend AI is working..."):
                 _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_inspo_cache_key)
             if not _all_ideas:
-                st.error("Couldn't generate ideas — try again.")
-                return
+                _run_inspiration_claude.clear()
+                with st.spinner("Retrying..."):
+                    _all_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_inspo_cache_key)
+                if not _all_ideas:
+                    st.error("Couldn't generate ideas — try again.")
+                    return
             st.session_state["inspo_ideas"] = _all_ideas
             st.session_state["inspo_meta"] = (_n_tweets, _n_heads)
             st.session_state["inspo_page"] = 0
@@ -7984,6 +7988,11 @@ def page_reply_guy():
                     f'<span style="color:#445;font-size:10px;">{_ii+1}.</span> {_idea}</div>',
                     unsafe_allow_html=True)
                 if st.button("⚡ Go Viral", key=f"rg_viral_{_ii}", use_container_width=True, type="primary"):
+                    st.session_state.pop("_ci_show_build_dialog", None)
+                    st.session_state.pop("_ci_show_inspiration", None)
+                    st.session_state.pop("_ci_show_bank", None)
+                    st.session_state.pop("_ci_pending", None)
+                    st.session_state.pop("_ci_reopen_dialog", None)
                     st.session_state["rg_viral_idea"] = _idea
                     st.session_state["rg_viral_fmt"] = "Normal Tweet"
                     st.session_state["rg_viral_voice"] = "Default"
