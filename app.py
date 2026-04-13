@@ -4906,9 +4906,33 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 # Use staging key — widget-owned "ci_text" gets overwritten on rerun
-                st.session_state["_ci_text_stage"] = _updated.strip()
-            for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
-                st.session_state.pop(_k, None)
+                _updated = _updated.strip()
+                st.session_state["_ci_text_stage"] = _updated
+                if clear_all:
+                    for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
+                        st.session_state.pop(_k, None)
+                else:
+                    _accepted = set(accepted)
+                    _accepted.add(sel_idx)
+                    st.session_state["ci_grade_accepted"] = _accepted
+                    _next_idx = sel_idx
+                    for _i, _g in enumerate(grades):
+                        _fix = (_g.get("fix", "") or "").strip().lower()
+                        if _i in _accepted or _i in skipped or not _fix or _fix == "no changes needed":
+                            continue
+                        _next_idx = _i
+                        break
+                    st.session_state["ci_grade_selected"] = _next_idx
+                    st.session_state["_ci_reopen_dialog"] = {
+                        "action": "grades",
+                        "tweet_text": _updated,
+                        "fmt": fmt,
+                        "voice": voice,
+                    }
+            else:
+                if clear_all:
+                    for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
+                        st.session_state.pop(_k, None)
             st.rerun(scope="app")
 
         # ── SCORE STRIP — 3 cards ──
