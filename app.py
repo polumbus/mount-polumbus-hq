@@ -1,6 +1,7 @@
 import streamlit as st
 import subprocess
 import json
+import html
 import re
 import os
 import time
@@ -4551,7 +4552,18 @@ Return ONLY this JSON, no other text:
                 st.session_state.pop(_k, None)
         else:
             # ── Lean system prompt (grading only needs voice context, not full Tyler bio) ──
-            _grades_system = f"You are grading tweets for @{get_current_handle()}. Match their voice: direct, no fluff, punchy sentences, never hedges." if is_guest() else "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, never hedges."
+            if is_guest():
+                _grades_system = (
+                    f"You are grading tweets for @{get_current_handle()}. Match their voice: direct, no fluff, "
+                    "punchy sentences, never hedges. Never use hyphen, en dash, or em dash separators in "
+                    "tweet copy or fix suggestions."
+                )
+            else:
+                _grades_system = (
+                    "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), "
+                    "Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, "
+                    "never hedges. Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions."
+                )
             _has_q = "yes" if "?" in tweet_text else "no"
             _has_ell = "yes" if "..." in tweet_text else "no"
             _char_count = len(tweet_text)
@@ -5019,14 +5031,15 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
         def _apply_fix(fix_instruction, clear_all=False):
             _base = st.session_state.get("ci_text", "")
+            _voice_guard = "Preserve Tyler's exact voice and punctuation habits. Never introduce hyphen, en dash, or em dash separators in tweet copy."
             if clear_all:
                 _accepted_grades = [g for i, g in enumerate(grades) if i in accepted and g.get("fix", "")]
                 if not _accepted_grades:
                     _accepted_grades = [g for g in grades if g.get("fix", "")]
                 _all = "\n".join([f'- {g.get("name","")}: {g.get("fix","")}' for g in _accepted_grades])
-                _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\nReturn ONLY the updated tweet text, nothing else.'
+                _prompt = f'Tweet: "{_base}"\n\nApply ALL of these edits:\n{_all}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
             else:
-                _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\nReturn ONLY the updated tweet text, nothing else.'
+                _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
             _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 # Use staging key — widget-owned "ci_text" gets overwritten on rerun
