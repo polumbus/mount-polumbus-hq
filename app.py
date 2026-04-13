@@ -5115,9 +5115,12 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             st.session_state["ci_grade_accepted"] = set()
         if "ci_grade_skipped" not in st.session_state:
             st.session_state["ci_grade_skipped"] = set()
+        if "ci_grade_history" not in st.session_state:
+            st.session_state["ci_grade_history"] = []
         sel_idx = st.session_state["ci_grade_selected"]
         accepted = st.session_state["ci_grade_accepted"]
         skipped = st.session_state["ci_grade_skipped"]
+        history = st.session_state["ci_grade_history"]
 
         def _is_actionable_grade(idx: int) -> bool:
             if not (0 <= idx < len(grades)):
@@ -5243,6 +5246,15 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             if _updated:
                 # Use staging key — widget-owned "ci_text" gets overwritten on rerun
                 _updated = _updated.strip()
+                history.append({
+                    "text": _base,
+                    "accepted": list(accepted),
+                    "skipped": list(skipped),
+                    "selected": sel_idx,
+                })
+                if len(history) > 10:
+                    del history[:-10]
+                st.session_state["ci_grade_history"] = history
                 st.session_state["_ci_text_stage"] = _updated
                 if clear_all:
                     for _k in ["ci_grades", "ci_grade_selected", "ci_grade_accepted", "ci_grade_skipped"]:
@@ -5390,6 +5402,22 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                             st.rerun()
                     elif _is_accepted:
                         st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Applied</div>', unsafe_allow_html=True)
+
+                if history:
+                    if st.button("Undo last fix", key="ci_gundo", use_container_width=True):
+                        snap = history.pop()
+                        st.session_state["ci_grade_history"] = history
+                        st.session_state["_ci_text_stage"] = snap.get("text", "")
+                        st.session_state["ci_grade_accepted"] = set(snap.get("accepted", []))
+                        st.session_state["ci_grade_skipped"] = set(snap.get("skipped", []))
+                        st.session_state["ci_grade_selected"] = int(snap.get("selected", 0) or 0)
+                        st.session_state["_ci_reopen_dialog"] = {
+                            "action": "grades",
+                            "tweet_text": snap.get("text", ""),
+                            "fmt": fmt,
+                            "voice": voice,
+                        }
+                        st.rerun(scope="app")
 
                 else:
                     # No fix needed
