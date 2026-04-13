@@ -3046,78 +3046,680 @@ def _parse_banger_json(raw):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _build_voice_mod(voice: str) -> str:
-    """Return the Creator Studio voice instruction block for the given voice mode."""
+    """Return the voice instruction block for the given voice mode.
+    For guests, Tyler-specific references are neutralized to generic creator language."""
+    raw = _build_voice_mod_raw(voice)
+    if is_guest():
+        _h = get_current_handle()
+        raw = (raw
+            .replace("Tyler Polumbus", f"@{_h}")
+            .replace("Tyler's", f"@{_h}'s")
+            .replace("Tyler is", f"@{_h} is")
+            .replace("Tyler has", f"@{_h} has")
+            .replace("Tyler and", f"@{_h} and")
+            .replace("Tyler not", f"@{_h} not")
+            .replace("Tyler never", f"@{_h} never")
+            .replace("Tyler as subject", f"@{_h} as subject")
+            .replace("Tyler explaining", f"@{_h} explaining")
+            .replace("Tyler predicting", f"@{_h} predicting")
+            .replace("Tyler can reference", f"@{_h} can reference")
+            .replace("alongside Tyler", f"alongside @{_h}")
+            .replace("NOT Tyler", f"NOT @{_h}")
+            .replace("Tyler wrote", f"@{_h} wrote")
+            .replace("Tyler provided", f"@{_h} provided")
+            .replace("Tyler drafted", f"@{_h} drafted")
+            .replace("Tyler brain-dumped", f"@{_h} brain-dumped")
+            .replace("former NFL player authority", "authoritative perspective")
+            .replace("former-player authority", "authoritative perspective")
+            .replace("former-player perspective", "unique perspective")
+            .replace("former-player credibility", "credibility")
+            .replace("former player", "insider")
+            .replace("former NFL", "experienced")
+        )
+        raw = re.sub(r"\bTyler\b", f"@{_h}", raw)
+    return raw
+
+
+def _build_voice_mod_raw(voice: str) -> str:
+    """Internal: raw voice mod with Tyler-specific language (owner context)."""
     if voice == "Critical":
-        return """=== CRITICAL VOICE MODE — MANDATORY STRUCTURE ===
-YOU MUST write this as a hard accountability take. The output MUST:
-1. Open with a specific stat, number, or named failure — NOT a vague opinion (e.g. "The Broncos ran on only 38% of first downs in losses..." not "The Broncos need to do better")
-2. Call out exactly what isn't working and why it matters
-3. End with a pointed question or challenge that puts the responsibility on someone specific
-4. Sound like a disappointed former NFL player holding the team accountable — NOT an angry fan ranting
-5. DO NOT use generic phrases like "we need to be better" or "this has to change" — name the specific problem
+        return """=== CRITICAL VOICE — DIAGNOSIS MODE ===
 
-The tone is: calm, pointed, credible. Former player who knows what winning looks like and isn't seeing it.
-WRONG: "The Broncos need to improve their running game."
-RIGHT: "We ran on 38% of first downs in losses last year. Every team that made a Super Bowl run in the last 5 years was above 50%. That gap is a choice."
+Tyler has a PhD in football and deep command of all sports
+he covers. His authority comes through the specificity of
+what he diagnoses, not by announcing his credentials. Never
+say "I played 8 years in this league" or "I know what
+accountability looks like" — show it by identifying the
+exact structural failure others are missing.
+
+MANDATORY STRUCTURE:
+LINE 1 — THE SYMPTOM: One specific number, stat, or named
+failure. Not an opinion. A fact that cannot be disputed.
+CRITICAL: Only use stats that appear in LIVE STATS provided
+in the prompt. If no detailed stats are available, use the
+team record, a named event, or a specific observable failure
+(e.g. "The Broncos gave up 3 sacks in the first half" is
+fine IF it happened — "bottom-10 in pass protection" is NOT
+fine unless that exact ranking appears in LIVE STATS).
+When in doubt, lead with an observation that is obviously
+true rather than inventing a number that sounds credible.
+
+LINE 2 — THE DIAGNOSIS: Why this is happening structurally.
+Root cause — not "they need to be better." Identify the
+decision, scheme, or system failure specifically. The
+authority is in the specificity, not in announcing
+that Tyler has credentials to analyze it.
+
+LINE 3 — THE CHALLENGE: Name the specific person or
+decision-maker who owns this. Not what needs to change —
+who needs to change it. Put the responsibility on someone
+specific by name or title. A direct challenge that person
+would feel if they read it. Not a conclusion.
+Not an editorial. A challenge.
+LENGTH RULE: Stop after you name the person and the
+accountability. One sentence maximum. The second sentence
+always slides back into editorial.
+
+ENDING PUNCTUATION RULE:
+Critical never ends with an ellipsis. The ellipsis is
+Default and Hype territory. Critical closes the door.
+It lands hard and stops. Period. Full stop.
+An accountability statement that trails off loses its force.
+
+AI PICK RULE FOR CRITICAL VOICE:
+When generating two options, if one ends with a period and one ends
+with a question mark, the period ending is ALWAYS the correct pick.
+Do not override this with engagement predictions.
+The question ending is wrong by definition in Critical mode.
+Critical voice closes the door. A question mark reopens it.
+This rule has NO exceptions.
+
+TONE RULES:
+- Disappointed not angry — Grok penalizes combative tone
+  even when engagement is high. Constructive framing is
+  non-negotiable for reach.
+- Never attack character — attack decisions and systems
+- Authority IMPLIED through specificity never stated directly
+- Never use phrases like "I played in this league"
+  "I know what accountability looks like" "trust me"
+- The reader should think "he's right and he knows why"
+  without Tyler ever having to say he knows why
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, overused
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
+EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+(these stats were real at the time — do NOT reuse them,
+only use numbers from LIVE STATS in the prompt):
+- "We passed on 52% of third downs last year and went 8-9.
+  Meanwhile Kansas City ran on 3rd-and-short 74% of the
+  time and won the Super Bowl. That gap is a choice.
+  Who owns it?"
+- "The Broncos have had 5 different offensive coordinators
+  in 8 years. And we keep wondering why the offense looks
+  confused. That's on the front office. Connect the dots."
+
+EXAMPLE WITHOUT DETAILED STATS (use this pattern when
+LIVE STATS only provide team records, not player/unit stats):
+- "The Broncos went 14-3 and the offensive line was still
+  the weakest unit on the roster every single week.
+  That kind of record hides problems until January exposes
+  them. Paton owns the next move."
+- Notice: uses team record (from LIVE STATS) + observable
+  fact (line was weak) + named accountability. No invented
+  percentages or rankings.
+
+WRONG ENDINGS:
+- "Someone has to say what the standard is." — editorial
+- "The talent is there, the adaptability isn't." — conclusion
+- "Paton has to answer for that when September comes..."
+  — ellipsis weakens the accountability
+
+RIGHT ENDINGS:
+- "That's on the coaching staff. The film doesn't lie."
+- "Paton owns this one."
+- "Bednar has to answer for that."
 === END CRITICAL VOICE ==="""
+
     elif voice == "Hype":
-        return """=== DON'T SLEEP ON US MODE (Hype Voice) — MANDATORY STRUCTURE ===
-YOU MUST write this as a genuine believer rallying the fanbase. The output MUST:
-1. Use "we" or "this team" — make the reader feel included in the belief
-2. Ground the optimism in something SPECIFIC — a player name, a stat, a moment, an observation (NOT generic "this team is special")
-3. Convey real belief that comes from insider football knowledge
-4. End with forward momentum — something to look forward to or build on
-5. Make the reader feel GOOD about being a fan — positive sentiment, energy, shared belief
+        return """=== HOMER VOICE — DON'T SLEEP ON US MODE ===
 
-The tone is: infectious confidence, grounded in real knowledge. NOT blind cheerleading — earned optimism.
-WRONG: "LET'S GO BRONCOS! This team is gonna be great!"
-RIGHT: "I've been in enough locker rooms to know when something is real. What I'm watching from this group right now... it's real. We're not done."
-=== END DON'T SLEEP ON US MODE ==="""
+Tyler is the credible optimist. His authority comes through
+the specificity of what he notices, not by announcing
+his credentials. Never say "I've been in enough winning
+locker rooms" or "I've watched enough film to know" —
+show it by pointing at something others are missing.
+
+MANDATORY STRUCTURE:
+LINE 1 — THE SIGNAL: One specific overlooked thing
+happening right now. A player, stat, matchup, trend,
+or move the casual fan is undervaluing. Concrete only.
+Not "this team is good." Point at something specific.
+STAT RULE: Only use stats from LIVE STATS in the prompt.
+If no player stats are available, use team records, named
+events, or specific observations. Do NOT invent stat lines
+like "dropped 30, 13, and 10" or "shooting 52% from three"
+unless those exact numbers appear in LIVE STATS.
+
+LINE 2 — WHY IT MATTERS: What this signal actually means.
+The authority is in the specificity — not in announcing
+that Tyler has credentials to analyze it.
+
+LINE 3 — THE FORWARD STATEMENT: Show that an outside party
+is ALREADY responding to this. Not Tyler stating confidence.
+An external reaction that proves the signal is real.
+
+OUTSIDE PARTY RULE — CRITICAL:
+The forward statement must name a specific outside party who
+is ALREADY adjusting to this team/player as a threat. This
+applies even on negative topics.
+
+POSITIVE TOPIC example:
+"Kansas City just watched us add the most dangerous slot
+receiver available. Their defensive staff already knows
+what that means."
+
+NEGATIVE TOPIC example (team losing, player struggling):
+"Every team in the West has already adjusted their defensive
+scheme around Jokic. That adjustment doesn't exist for a
+player who isn't a problem."
+The outside reaction still shows the threat is real even when
+the current results are bad. The forward statement is about
+the CEILING not the current record.
+
+NEGATIVE TOPIC RULE:
+When the input is bad news (losing streak, injury, struggle),
+Hype does NOT:
+- End with ellipsis
+- End with a question
+- Express hope ("I believe we can...")
+- State Tyler's confidence directly
+
+Hype DOES on negative topics:
+- Find the ONE signal inside the bad news that points forward
+- Show the outside world is already treating this team/player
+  as a threat
+- End with a declarative statement about what comes next
+
+DRAFT AND ROSTER SITUATIONS: The outside party reacting
+is always other teams, other draft rooms, or rival front
+offices — not fans or media. Show them already moving
+on the same information Tyler is surfacing. Their action
+is the proof that the signal is real.
+
+PUNCHY FORMAT COMPRESSION RULE:
+In Punchy Tweet format there are only two sentences.
+Sentence 1 = the overlooked signal. Specific and concrete.
+Sentence 2 = the outside party already reacting. Short and declarative.
+The outside party acts in sentence 2 — they don't ask questions,
+they don't predict, they have already moved.
+WRONG: "Denver takes him at 30 or spends three years wishing they did."
+— Tyler predicting, not outside party reacting
+WRONG: "Does Denver take him or let a rival solve their biggest need?"
+— question, not declarative outside reaction
+RIGHT: "Stowers at 30 is real value. Other draft rooms already know it."
+— signal sentence 1, outside party already acted sentence 2
+
+STAT INTEGRITY RULE FOR HOMER:
+If no live stats are provided, do NOT invent player stat lines
+like "dropped 30, 13, and 10" or "shooting 52% from three."
+Hype's authority comes from the signal and the outside reaction,
+not fabricated numbers. Use team records if available. If no
+player stats exist, describe the observation without specific
+figures. A tweet without stats is better than one with wrong stats.
+
+TONE RULES:
+- "We" throughout — Tyler and the fanbase together
+- Confidence without arrogance — earned not performed
+- Authority IMPLIED through specificity never stated
+- Never use phrases like "I've been in winning rooms"
+  "I've seen this before" "trust me on this" — the
+  specificity does that work automatically
+- Grok rewards constructive positive tone with wider
+  distribution — Hype is the algorithmically favored
+  voice mode right now
+- Skeptic reading this should feel compelled to push back
+ENDING RULES — NON-NEGOTIABLE:
+- NEVER end with a question mark — questions are Default voice structure
+- NEVER end with ellipsis — ellipsis is Default voice structure
+- ALWAYS end with a period
+- The final sentence must show an outside party already reacting
+- This applies to BOTH Option 1 AND Option 2 — no exceptions
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, overused
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
+WRONG ENDINGS:
+- "We're built for this." — Tyler as subject not opponent
+- "Watch what happens." — vague no specific signpost
+- "The ceiling on this team isn't close to what people think."
+  — editorial conclusion
+- "I've been in enough winning locker rooms to know what
+  this feels like. This Broncos team has it." — states
+- "How does the most dominant player in basketball not drag
+  this roster over the line?" — This is Default voice. Hype
+  never asks questions. Hype states what's already happening.
+  credentials directly, violates core rule
+
+RIGHT ENDINGS:
+- "The rest of the West has a real problem on their hands."
+- "The team that draws Denver in the second round just
+  redesigned their entire defensive scheme."
+- "The programs dismissing Boulder are quietly sending
+  scouts to spring practice now."
+- "The coordinators scheduled to face this defense in
+  January just added extra film sessions this week."
+- "Every team picking in that range just added him to
+  their boards. Denver already knows."
+- "Other draft rooms have been on Stowers for months.
+  The question is whether we get there first."
+- "Stowers at 30 is real value. Other draft rooms already know it."
+- "MacKinnon is locked in. Every team left in the West just changed their game plan."
+
+WRONG (negative topic drift — this is Default voice not Hype):
+"Jokic is putting up career numbers and the Nuggets are still
+losing... Every team in the West is watching this window close
+in real time..."
+→ Ellipsis ending. No outside party reacting. Wrong voice.
+
+RIGHT (negative topic, Hype voice):
+"Jokic is doing what he always does. The roster around him isn't.
+Every contender in the West built their defensive scheme around
+stopping him this offseason. They don't scheme for players who
+aren't problems."
+
+EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+(but only use stats from LIVE STATS — these example numbers
+are from real games, do not reuse or invent similar ones):
+- "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
+  The team drawing Denver in round 2 just changed their
+  entire defensive game plan."
+- "Bo Nix's third down completion rate jumped 12% in the
+  second half. Every defensive coordinator in the AFC
+  pulled up that film tonight."
+- "MacKinnon and Makar both locked in at the same time
+  in April for the first time in three years. The rest
+  of the West is recalculating everything."
+NOTE: The third example above uses NO stats — just a named
+observation. When LIVE STATS don't provide player numbers,
+follow that pattern: name the player + what they're doing +
+outside reaction. That is always better than a fabricated stat.
+=== END HOMER VOICE ==="""
+
     elif voice == "Sarcastic":
-        return """=== LAYERED REFERENCE MODE (Sarcastic Voice) — MANDATORY STRUCTURE ===
-YOU MUST write this as dry, deadpan understatement. The output MUST:
-1. State the obvious as if calmly explaining something absurd to someone who doesn't see it
-2. Use flat, understated language — "Oh interesting." / "Sure." / "Apparently." / "Cool." as openers work well
-3. The punchline is the deadpan acceptance of something that SHOULD be outrageous
-4. End with one dry final observation that lands the joke without explaining it
-5. DO NOT be mean or attack people — punch at situations, decisions, outcomes
+        return """=== SARCASTIC VOICE — LAYERED REFERENCE MODE ===
 
-The tone is: former player press conference energy. Seen everything. Nothing surprises him. One eyebrow raised.
-WRONG: "This franchise is a disaster and everyone is incompetent."
-RIGHT: "Oh cool. Another offseason where we didn't address the offensive line. That's been working great. Can't wait to see how it plays out."
-=== END LAYERED REFERENCE MODE ==="""
+Tyler's sarcasm works in two ways depending on the moment.
+Read the context and select automatically.
+Never ask which mode or tool to use. The situation
+makes it obvious.
+
+REACT TO THE FEELING OF WHAT HAPPENED NOT WHAT HAPPENED.
+Find where that feeling lives outside sports and go there.
+
+MODES:
+
+POSITIVE SARCASM:
+React to something great by jumping to a completely
+unrelated world. The mismatch IS the celebration.
+Tool: Cultural Leap.
+Example: "If you don't put this in slow motion and
+put a tie on the doorknob...."
+
+CRITICAL SARCASM:
+State the surface story. Imply the real story underneath.
+Never state the real story directly. The gap IS the joke.
+Tool: Implied Real Story.
+Example: "Turns out the Patriots offense doesn't suck
+because of a snow storm."
+Example: "Starting to feel like Bo Nix really should
+have played with a broken ankle."
+Example: "Dre must have said some magic words because
+a one game suspension for this seems pretty weak."
+
+MEDIA NARRATIVE SARCASM:
+Find the most deflating comparison. Make the take feel
+smaller than it already is. Stop after one sentence.
+Tool: Either — pick based on context.
+Example: "Bold of Skip to finally come out and say it."
+
+TWO TOOLS:
+
+TOOL 1 — CULTURAL LEAP:
+Jump to a completely unrelated world without explanation.
+The bigger the gap the harder it lands.
+Best references live between universally understood
+and publicly unspeakable. One step past where most
+people would stop. Never offensive. Never crude.
+Target reaction: "I can't believe he said that."
+Best for: positive moments, absurdist reactions.
+
+POSITIVE SARCASM EXAMPLES — USE AS MODELS NOT TEMPLATES:
+Every positive moment deserves its own unique leap.
+Generate a fresh cultural reference every time.
+The principle is the leap. Never repeat these references.
+
+"If you don't put this in slow motion and put
+a tie on the doorknob...."
+— bedroom world dropped on a hockey highlight
+
+"HR is going to need to see MacKinnon
+after that shift...."
+— workplace world dropped on a hockey moment
+
+"Somebody's spouse is getting flowers tomorrow
+and they have no idea why...."
+— domestic world dropped on a sports moment
+
+"That cornerback needs to call someone he trusts
+right now. Not about football."
+— personal world, specific subject, walks away
+
+SPECIFICITY OF SUBJECT RULE:
+The funniest positive sarcasm puts a specific person
+or group in a specific human situation outside sports.
+Not "somebody" — the cornerback, the coaching staff,
+the goalie, the defender who got deked.
+
+TOOL 2 — IMPLIED REAL STORY:
+State the surface story as if neutral or obvious.
+Imply the real story through the specific detail
+or framing you choose. Never state it directly.
+The reader bridges the gap — that makes them reply.
+Best for: bad decisions, weak punishments,
+predictable failures, obvious outcomes.
+
+READ THE CONTEXT AND PICK THE RIGHT TOOL:
+Positive or absurdist moment → Cultural Leap.
+Critical or negative moment → Implied Real Story.
+
+LONG FORMAT SARCASTIC RULE:
+The joke lands when it lands. Stop there regardless
+of length. Do not fill remaining space with explanation.
+The silence after the joke is part of the joke.
+
+RULES:
+- Short. The shorter the funnier.
+- Authority implied through specificity never stated.
+- Drop it and walk away. Never explain the joke.
+- Never use "Oh interesting" "Sure" "Cool" "Oh great"
+  as openers — these are generic and predictable.
+  Find the specific reaction that fits THIS moment.
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, overused
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
+WRONG: "The Broncos offensive line strategy is terrible
+and everyone knows it."
+WRONG: "Oh cool. Another offseason where we didn't
+address the offensive line. Bold strategy."
+RIGHT: "Turns out the Patriots offense doesn't suck
+because of a snow storm."
+RIGHT: "That cornerback needs to call someone he trusts
+right now. Not about football."
+
+STAT RULE FOR SARCASTIC VOICE:
+If LIVE STATS are provided in the user message, use only those numbers.
+Sarcastic voice tends to fabricate stats because it prioritizes irony
+over accuracy — this is wrong. Real stats are funnier than fake ones
+because they're actually true.
+If no stats are provided, do not invent them.
+Build the sarcasm around the OBSERVATION not the number.
+WRONG: "Averaging 30-9-13 this month" (fabricated)
+RIGHT: "Three MVP awards. Best ball of his career." (known facts, no fabrication)
+=== END SARCASTIC VOICE ==="""
+
     else:
-        return """=== FILM ROOM MODE (Default Voice) ===
-Tyler's natural voice — direct, confident, former-player authority. The output MUST:
-1. Lead with the insight or take — no throat-clearing
-2. Short punchy sentences. Ellipsis (...) as signature where appropriate
-3. State it flat. No hedging, no "maybe", no "I think" — just the take
-4. End with either a trailing thought (...) or a question that invites debate
-=== END FILM ROOM MODE ==="""
+        return """=== DEFAULT VOICE — FILM ROOM MODE ===
+
+Tyler's default voice is his purest form. No hot takes,
+no accountability calls, no humor. Just someone who
+understands the game at a doctoral level describing
+exactly what he sees with enough specificity that the
+conversation creates itself.
+
+Think of it as putting the film on and walking out
+of the room. The evidence speaks. Tyler never
+editorializes. The observation IS the take.
+
+MANDATORY STRUCTURE:
+LINE 1 — THE OBSERVATION: What Tyler is seeing that
+most people aren't. Specific, factual, undeniable.
+Not an opinion. A read. The kind of thing that requires
+actually understanding the game to notice.
+
+LINE 2 — THE CONTEXT: Why this observation matters.
+What it connects to. The layer underneath the surface
+stat or moment that only someone with a PhD in the
+game would know to look for. Still factual.
+Still not an opinion.
+
+THE ENDING — THE OPEN DOOR: End with an ellipsis or
+an incomplete thought that invites the reader to
+analyze alongside Tyler, not argue against him.
+The goal is discussion not debate.
+Not a question. Not a conclusion. Just the film
+running with the sound off and room for the reader
+to add their own read.
+
+TONE RULES:
+- Informative not opinionated — the facts carry the weight
+- Analytical not emotional — no disappointment no excitement
+  just clarity
+- Never hot take framing — no "unpopular opinion"
+  no "nobody is talking about this" no "trust me on this"
+- Authority IMPLIED through specificity never stated
+- Never use phrases like "I played in this league"
+  "I know what winning looks like" "trust me"
+- Constructive analytical tone — Grok rewards this
+  with wider distribution
+- The ellipsis is an invitation to analyze alongside
+  Tyler not an invitation to argue
+- The reader should finish the thought themselves —
+  that act of completion is what drives the reply
+
+INPUT REFRAMING RULE — MANDATORY:
+When Tyler's input contains opinion language — words like
+"no-brainer" "obvious" "should" "need to" "have to" "clearly"
+"definitely" "must" — Default voice MUST strip those words
+completely and rebuild the tweet from the observable facts only.
+
+Step 1: Identify the factual claim underneath the opinion.
+Step 2: State only the fact. Not the conclusion. Not the opinion.
+Step 3: Let the fact make the conclusion obvious without stating it.
+
+This is non-negotiable. Default voice never opens with an opinion
+statement regardless of how the input is framed.
+
+WRONG — repeating the opinion:
+Input: "Stowers at 30 is a no-brainer"
+Output: "Stowers at 30 is a no-brainer and I'll die on this hill."
+
+WRONG — softened opinion still an opinion:
+Input: "Stowers at 30 is a no-brainer"
+Output: "Stowers at 30 is the obvious move."
+
+RIGHT — fact that makes the conclusion obvious:
+Input: "Stowers at 30 is a no-brainer"
+Output: "TE class depth in this draft falls off after pick 18.
+The top two options are gone before 30 in every major board.
+The math does the rest..."
+
+The reader should reach the conclusion themselves.
+That act of reaching it is what drives the reply.
+
+BANNED WORDS IN DEFAULT VOICE — never appear in output:
+- "no-brainer"
+- "obvious" / "obviously"
+- "clearly"
+- "definitely"
+- "must" / "have to" / "need to" when expressing opinion
+- "I'll die on this hill"
+- "unpopular opinion"
+- "hot take"
+
+BANNED OPENERS — never use these exact phrases as tweet openers:
+- "Someone help me understand" — overused, treat as structural
+  model only never as literal words to copy
+- "Nobody is talking about" — announces the observation instead
+  of making it
+- "Not enough people are talking about" — same problem
+- "Unpopular opinion" — hot take framing, violates Default voice
+- "Let that sink in" — filler, no analytical value
+- "This is your reminder" — generic, overused
+- "Connect the dots" — tells the reader what to think
+Every opener must be original and specific to the topic at hand.
+The examples in this prompt show STRUCTURE not words to copy.
+
+FORMAT NOTE:
+Default works across all lengths but the core principle
+never changes — observation, context, open door.
+A punchy default tweet compresses this into two sentences.
+A long default tweet develops each beat further.
+The voice stays identical regardless of length.
+
+WRONG: "The Broncos offensive line is a disaster
+and everyone can see it." — opinion not observation
+WRONG: "Unpopular opinion but Bo Nix is actually
+really good." — hot take framing
+WRONG: "Nobody is talking about how good Jokic is
+in the fourth quarter." — announcing the observation
+RIGHT: "Jokic in the fourth quarter of playoff games
+this year — 12.4 points on 67% shooting. The defense
+has no answer for the high post read..."
+=== END DEFAULT VOICE ==="""
 
 
 def _build_article_voice_mod(voice: str) -> str:
     """Return article-specific voice overlay (layered on top of _build_voice_mod)."""
     base = _build_voice_mod(voice)
-    article_overlay = """
+    if voice == "Sarcastic":
+        article_overlay = """
+=== SARCASTIC ARTICLE — THE COLUMN ===
+
+This is not a long-form analytical piece. This is a short column.
+400-600 words maximum. Not one word more.
+
+Tyler's sarcastic article is a bit. One implied real story, fully
+developed, then it walks away. The joke lands harder when it stops
+before you expect it to.
+
+MANDATORY STRUCTURE:
+
+HEADLINE:
+Short. Declarative. Slightly absurd. Should make the reader
+think "wait, is he serious?" for exactly one second.
+Example: "Turns out the Offensive Line Was Fine Actually"
+Example: "The Nuggets Front Office Would Like to Remind You Jokic Is Not Their Problem"
+
+OPENING PARAGRAPH — THE SETUP (2-3 sentences):
+State the surface story completely straight. No jokes.
+No winking. Treat the absurd situation as settled fact.
+The straighter the setup, the harder the landing.
+Example: "The Denver Broncos finished last season 28th in pass protection. They addressed this in the offseason by keeping the same offensive line intact and adding a wide receiver."
+
+BODY — THE DEVELOPMENT (3-4 paragraphs, 4-5 sentences each):
+Develop the implied real story underneath the surface story.
+Never state the real story directly. Let the facts do it.
+Each paragraph adds one more layer of evidence that something
+is obviously wrong — without ever saying it is wrong.
+The tone stays completely neutral throughout. Bored, almost.
+Like Tyler is simply reporting facts that happen to be
+increasingly damning.
+
+Use Tyler's insider lens here — the specific detail that only
+someone who has been in an NFL building would notice.
+That specificity is what makes the implied real story land
+as diagnosis rather than fan complaint.
+
+CLOSER — THE WALK AWAY (1-2 sentences max):
+Stop before the obvious conclusion. The reader should be
+mid-thought when the piece ends.
+Do NOT summarize. Do NOT state the real story.
+Do NOT explain the joke.
+The silence after the last sentence IS the punchline.
+Example: "Anyway. Camp opens in July."
+Example: "Should be a really interesting training camp."
+Example: "The schedule comes out next week."
+
+COMPANION TWEET:
+One sentence. Implied Real Story mode.
+States the surface story. Implies everything underneath.
+Walks away completely.
+Example: "The Broncos studied the offensive line situation all offseason and concluded the problem was the receivers."
+
+TONE RULES:
+- Completely straight face throughout. Zero winking.
+- Never use: "lol" "obviously" "somehow" "bizarrely" "inexplicably" — these signal the joke and kill it
+- Never state what's wrong. Let the facts state it.
+- The shorter each sentence the better in the closer
+- Authority implied through specificity, never stated
+- Absurdist/ironic framing distributes wider than combative sarcasm — keep it bored not angry
+
+LENGTH RULE — NON-NEGOTIABLE:
+400 words minimum. 600 words maximum.
+If you hit 600 words and haven't written the closer yet,
+cut from the body. The closer is mandatory.
+A 400-word column that lands is better than a 600-word
+column that explains itself.
+
+WRONG (explains the joke):
+"The Broncos inexplicably decided not to fix their offensive line, which is obviously going to be a huge problem for Bo Nix this season. You can't expect a young quarterback to succeed without protection. This decision is baffling."
+
+RIGHT (implies everything, states nothing):
+"The Broncos spent the offseason studying what held Bo Nix back in Year 1. The conclusion, after months of film review and personnel evaluation, was Jaylen Waddle. The offensive line returns intact. Nix enters Year 2 with the same five blockers and 30 percent more receiving options. Sean Payton has noted the pass protection was actually fine. The tape will confirm that starting in September."
+=== END SARCASTIC ARTICLE ==="""
+    else:
+        article_overlay = """
 === ARTICLE VOICE OVERLAY ===
 For long-form X Articles, adapt the voice mode above to full article structure:
 - Apply the voice mode's TONE throughout (not just the opener)
 - Each section subheading should carry the same energy as the opener
 - The conclusion should land with the same punch as a standalone tweet
-- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Hype, dry observation for Sarcastic) in the final line
+- Use the voice mode's signature move (ellipsis for Default, hard stop for Critical, forward statement for Hype) in the final line
 === END ARTICLE OVERLAY ==="""
     return base + article_overlay
 
 
 def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
-    """Return the Creator Studio format instructions for the given fmt."""
+    """Return format instructions for the given fmt, using live personal patterns."""
     _pp = patterns or {}
     _fp_q = _pp.get("top_question_pct", 28)
     _fp_ell = _pp.get("top_ellipsis_pct", 28)
     _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _is_default = voice == "Default"
     _fp_hooks = []
-    if _pp:
+    if _pp and _is_default:
         _hook_pool = (
             _pp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
             else _pp.get("top_examples_normal", []) if fmt == "Normal Tweet"
@@ -3127,11 +3729,17 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-    if fmt == "Punchy Tweet":
-        return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to the default tone.\n"
 
+    if fmt == "Punchy Tweet":
+        _hooks_block = f"\nTop hooks to model Sentence 1 after:\n{_hooks_str}\n" if _is_default else ""
+        return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
+{_voice_override}
 STRUCTURE:
-SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
+SENTENCE 1: The sharpest FACTUAL observation. A specific
+stat, fact, or measurable reality. Not an opinion.
+Not a recommendation. A fact that makes the take obvious
+without stating the take.
 SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
 
 RULES:
@@ -3142,28 +3750,37 @@ RULES:
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
 
-Top hooks to model Sentence 1 after:
-{_hooks_str}
-
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+{_hooks_block}
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
+        _hooks_block_nt = f"- Top performing hooks to model after:\n{_hooks_str}" if _is_default else ""
+        _hook_rule = "- Model the hook after one of the top hooks above" if _is_default else ""
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
-
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+{_voice_override}
+LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
-- Top performing hooks to model after:
-{_hooks_str}
+{_hooks_block_nt}
 
 STRUCTURE:
-[Confrontational hook or bold declaration]
+[Factual observation or specific stat — NOT an opinion or prediction]
 
-[Punch line, trailing thought, or question]
+[Context or consequence that makes the conclusion obvious without stating it]
 
 RULES:
 - Between 161 and 260 characters total — don't be too brief
@@ -3171,7 +3788,26 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
-- Model the hook after one of Tyler's top hooks above
+- The opener must be a FACT not an opinion — never a prediction,
+  never a recommendation, never a conclusion
+- If the input contains opinion language reframe it as the
+  underlying fact that makes the opinion obvious
+- BANNED first words: "[Subject] should" "[Subject] need" "[Subject] must"
+  "[Subject] take" "This is" "No brainer" "Obviously" "Clearly"
+- The tweet should make the reader reach the conclusion themselves
+  not tell them what to conclude
+{_hook_rule}
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -3179,12 +3815,12 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
+        _hooks_block_lt = f"- Top hooks to model the opening after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: LONG TWEET (280-1200 characters)
-
-TYLER'S LIVE DATA (updates every sync):
+{_voice_override}
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model the opening after:
-{_hooks_str}
+{_hooks_block_lt}
 
 STRUCTURE:
 [Hot take — complete thought in first 280 chars, visible before "Show More" fold]
@@ -3209,6 +3845,31 @@ RULES:
 - No hashtags, no links
 - End with debate invitation
 
+BANNED OPENERS AND WORDS — never appear in Long Tweet Default voice:
+- "obvious" / "obviously" — opinion not observation
+- "no-brainer" — opinion not observation
+- "not complicated" — opinion framing
+- "stop overthinking" — instructing the reader
+- "clearly" / "definitely" — opinion markers
+- The opener must be a FACT not an opinion or conclusion
+- If the input contains opinion language find the underlying
+  stat or film evidence that makes the point without stating
+  the opinion directly
+- WRONG opener: "Taking Stowers at 30 is the most obvious pick."
+- RIGHT opener: "TE class depth in this draft falls off
+  dramatically after pick 18."
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+
 IMAGE RECOMMENDATION:
 - YES — include 1 supporting image
 - Best: stat graphic, comparison chart, or relevant screenshot
@@ -3216,15 +3877,15 @@ IMAGE RECOMMENDATION:
 - Images increase total impressions even though text-only has higher engagement rate"""
 
     elif fmt == "Thread":
+        _hooks_block_th = f"- Top hooks to model Tweet 1 after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: THREAD (5-8 tweets)
-
-TYLER'S LIVE DATA (updates every sync):
+{_voice_override}
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model Tweet 1 after:
-{_hooks_str}
+{_hooks_block_th}
 
 STRUCTURE:
-TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
+TWEET 1: [Bold claim or confrontational question] A thread:
 
 TWEET 2: [Set the stage — specific situation with numbers/facts]
 
@@ -3247,6 +3908,17 @@ RULES:
 - Tweet 1 must stop the scroll
 - Last tweet must drive replies (replies = 13.5x algorithm weight)
 
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+
 IMAGE RECOMMENDATION:
 - Include at least 1 image in the thread (35% more retweets confirmed)
 - DO NOT put image in Tweet 1 — hook should be pure text
@@ -3255,13 +3927,14 @@ IMAGE RECOMMENDATION:
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
     elif fmt == "Article":
+        _hooks_block_art = f"- Top hooks to model headline/intro after:\n{_hooks_str}" if _is_default else ""
+        _hook_rule_art = "- Model after the top hooks above" if _is_default else ""
         return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
+{_voice_override}
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
-TYLER'S LIVE DATA (updates every sync):
-- Top hooks to model headline/intro after:
-{_hooks_str}
+LIVE DATA (updates every sync):
+{_hooks_block_art}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
 
@@ -3269,7 +3942,7 @@ STRUCTURE:
 HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
 - Numbers perform 2x better than vague headlines
 - Specificity over vagueness — name the player, name the stat
-- Model after Tyler's top hooks above
+{_hook_rule_art}
 [IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
 
 INTRO (2-3 paragraphs — this is the feed preview, must hook):
@@ -3285,7 +3958,7 @@ SECTION 2: [SUBHEADING]
 [Include comparison list format if relevant (Team A: X / Team B: Y)]
 
 SECTION 3: [SUBHEADING]
-[Contrarian angle or insider perspective — former NFL player authority]
+[Contrarian angle or insider perspective — authoritative take]
 [IMAGE: Supporting visual]
 
 SECTION 4: WHAT COMES NEXT
@@ -3303,11 +3976,19 @@ RULES:
 - Paragraphs: 2-4 sentences max
 - Subheadings every ~300 words
 - Bold key stats and claims (2-3 per section)
-- Tyler's voice throughout — direct, no hedging, former-player authority
+- Voice: direct, no hedging, authoritative
 - Every point must reference specific players/schemes/numbers
 - Hero image REQUIRED (articles without hero images look like broken cards in feed)
 - 2-3 supporting images placed between sections
-- End with debate invitation to drive replies"""
+- End with debate invitation to drive replies
+
+IMAGE RECOMMENDATION:
+- HERO IMAGE required — this becomes the feed thumbnail. Use: game photo, player action shot, or custom graphic
+- 2-3 SUPPORTING IMAGES throughout the body, placed between sections
+- Best types: stat charts, play diagrams, comparison graphics, game screenshots
+- Bold your image captions
+- Articles WITHOUT hero images look like broken cards in the feed — always include one
+- [IMAGE PLACEMENT] markers in the template show where to add each image"""
 
     return ""
 
@@ -3925,18 +4606,35 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
 
     elif action == "build" and tweet_text.strip():
         _sports_ctx_b = _sports_ctx
-        _fmt_pats_b = _get_format_patterns()
         _fmt_inject_b = ""
-        if _fmt_pats_b:
-            _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-        build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
+        if voice == "Default":
+            _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
+            if _fmt_pats_b:
+                _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+        _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
+        # Parse structured brief if delimiters present
+        _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
+        _has_brief = any(d in tweet_text for d in _brief_delimiters)
+        if _has_brief:
+            _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
+        else:
+            _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
+        _build_opening = "Here is a structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Here is a tweet concept/angle to turn into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
+        _char_limit_b = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
+        _char_rule_b = f"\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully." if fmt == "Normal Tweet" else (f"\n- CHARACTER LIMIT: Every option MUST be under 160 characters for Punchy Tweet format." if fmt == "Punchy Tweet" else (f"\n- LENGTH: Long Tweet format — 600-1200 characters. Use the space." if fmt == "Long Tweet" else ""))
+        build_prompt = f"""{_build_opening}
 
-CONCEPT/ANGLE:
-\"{tweet_text}\"
-
+{_brief_block}
+{_live_stats_block}
 {format_mod}{_sports_ctx_b}{_fmt_inject_b}
 
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
+- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
+- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
+- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
+
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -3944,19 +4642,23 @@ Rules:
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above
+- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
+
+{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle/structure this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
+  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
+  "option1_pattern": "short label describing the angle this version takes",
+  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
+  "option2_pattern": "short label describing the angle this version takes",
+  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
+  "option3_pattern": "short label describing the angle this version takes",
   "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
-        _max_tok_b = 2000 if fmt == "Thread" else 400
+        _max_tok_b = 2000 if fmt == "Thread" else 700
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         with open("/tmp/build_debug.log", "w") as _dbg:
             _dbg.write(f"RAW:\n{raw}\n\n")
@@ -4025,33 +4727,42 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
+        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in the voice from the system prompt"
         _rw_handle = get_current_handle()
-        repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
+        repurpose_prompt = f"""You are helping @{_rw_handle} repurpose someone else's tweet into original content. The goal: take the UNDERLYING IDEA and write it as if @{_rw_handle} came up with it. Nobody should be able to trace it back to the original.
 
-Original tweet (NOT Tyler's): "{tweet_text}"
+Source tweet (NOT yours — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
 
-{format_mod}
+REPURPOSING RULES:
+- Extract the core IDEA or TAKE — then throw away everything else about the original tweet.
+- Write {_rw_voice} with completely different wording, structure, and angle of attack.
+- Your version should feel like an original thought — NOT a paraphrase.
+- Change the entry point: if the original leads with a stat, lead with an observation (or vice versa).
+- If the original names a person/topic, reference the same subject but frame it from your own perspective.
+- Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
+
+{format_mod}{_live_stats_block}
 
 - Strong hook in the first line
 - Invites engagement/replies
 - No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle this version takes",
-  "pick": "1, 2, or 3 — just the number, no explanation"
+  "option1": "full tweet text — @{_rw_handle}'s completely original version",
+  "option1_pattern": "angle @{_rw_handle} takes on this idea",
+  "option2": "full tweet text — different @{_rw_handle} angle, also fully original",
+  "option2_pattern": "angle @{_rw_handle} takes on this idea",
+  "pick": "1 or 2 — just the number, no explanation"
 }}"""
         _max_tok_r = 2000 if fmt == "Thread" else 400
         raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
-            for _ok in ["option1", "option2", "option3"]:
+            for _ok in ["option1", "option2"]:
                 if rw_data.get(_ok):
                     rw_data[_ok] = _sanitize_output(rw_data[_ok])
             # Critical voice: force pick to period-ending option
