@@ -5663,11 +5663,16 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
+_WHATS_HOT_CACHE_VERSION = "2026-04-03-exact-prompt-restore"
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
     """Load cached inspiration ideas from gist — instant, survives session resets."""
     if is_guest():
         _data = load_json("inspo_cache.json", {})
+        if _data.get("cache_version") != _WHATS_HOT_CACHE_VERSION:
+            return [], 0, 0
         return _data.get("ideas", []), _data.get("n_tweets", 0), _data.get("n_headlines", 0)
     try:
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
@@ -5675,6 +5680,8 @@ def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
         _files = _r.json().get("files", {})
         if "hq_inspo_cache.json" in _files:
             _data = json.loads(_files["hq_inspo_cache.json"]["content"])
+            if _data.get("cache_version") != _WHATS_HOT_CACHE_VERSION:
+                return [], 0, 0
             _ideas = _data.get("ideas", [])
             _ts = _data.get("generated_at", "")
             _n_tweets = _data.get("n_tweets", 0)
@@ -5697,6 +5704,7 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     if is_guest():
         from datetime import timezone as _tz3
         save_json("inspo_cache.json", {
+            "cache_version": _WHATS_HOT_CACHE_VERSION,
             "ideas": ideas,
             "n_tweets": n_tweets,
             "n_headlines": n_headlines,
@@ -5706,7 +5714,8 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     try:
         from datetime import timezone as _tz3
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        _data = {"ideas": ideas, "n_tweets": n_tweets, "n_headlines": n_headlines,
+        _data = {"cache_version": _WHATS_HOT_CACHE_VERSION,
+                 "ideas": ideas, "n_tweets": n_tweets, "n_headlines": n_headlines,
                  "generated_at": datetime.now(_tz3.utc).isoformat()}
         _payload = json.dumps({"files": {"hq_inspo_cache.json": {"content": json.dumps(_data, indent=2, default=str)}}})
         requests.patch(f"https://api.github.com/gists/{_gid}", data=_payload, headers=_gist_headers(), timeout=8)
@@ -5788,14 +5797,25 @@ def _parse_inspiration_ideas(_raw: str) -> list:
     return _ideas if isinstance(_ideas, list) else []
 
 
+def _is_bad_inspiration_hook(_hook: str) -> bool:
+    _hook_l = (_hook or "").strip().lower()
+    if not _hook_l:
+        return True
+    _banned_starts = (
+        "seeing this from @",
+        "@seeing this from @",
+        "there's a real conversation hiding inside this headline:",
+        "@there's a real conversation hiding inside this headline:",
+    )
+    return any(_hook_l.startswith(_bad) for _bad in _banned_starts)
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude(_cache_key: str = ""):
-    """Fetch feed + call the shared HQ AI router. Cached 30 min in-session, also saved to gist for cross-session."""
+    """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
 
     _tweet_lines = []
-    _tweet_sources = {}  # index -> {author, text, url}
-    _tidx = 0
     for _t in _all_tweets[:40]:
         _text = _t.get("text", "")
         if not _text:
@@ -5806,15 +5826,9 @@ def _run_inspiration_claude(_cache_key: str = ""):
             continue
         _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
         _likes = _t.get("likeCount", _t.get("like_count", 0))
-        _turl = _t.get("twitterUrl", _t.get("url", ""))
-        _tweet_lines.append(f"[T{_tidx}] @{_author} ({_likes}L): {_text[:100]}")
-        _tweet_sources[f"T{_tidx}"] = {"author": _author, "text": _text[:120], "url": _turl}
-        _tidx += 1
+        _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
         if len(_tweet_lines) >= 20:
             break
-    # Store for rendering later
-    st.session_state["_wh_tweet_sources"] = _tweet_sources
-    st.session_state["_wh_headline_sources"] = _rss_headlines[:10] if _rss_headlines else []
 
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
@@ -5836,30 +5850,98 @@ Use these patterns to structure every hook. Match the opener style, line break p
 
 {_WHATS_HOT_VOICE_GUIDE}"""
 
-    _prompt = f"""@{_wh_handle} needs 8 tweet ideas from what's hot RIGHT NOW.
+    # Split feed in half and run two parallel Sonnet calls for speed.
+    # This restores the April 3 What's Hot generation formula.
+    _tweet_lines_a = _tweet_lines[:len(_tweet_lines) // 2]
+    _tweet_lines_b = _tweet_lines[len(_tweet_lines) // 2:]
+    _rss_a = (_rss_headlines or [])[:5]
+    _rss_b = (_rss_headlines or [])[5:10]
+    _tweet_block_a = "\n".join(_tweet_lines_a) if _tweet_lines_a else "(none)"
+    _tweet_block_b = "\n".join(_tweet_lines_b) if _tweet_lines_b else "(none)"
+    _rss_block_a = "\n".join(_rss_a) if _rss_a else "(none)"
+    _rss_block_b = "\n".join(_rss_b) if _rss_b else "(none)"
+
+    def _build_wh_prompt(tweets, headlines, count):
+        return f"""@{_wh_handle} needs {count} tweet ideas from what's hot RIGHT NOW.
 
 FEED:
-{_tweet_block}
+{tweets}
 
 HEADLINES:
-{_rss_block}
-{_fmt_block}
+{headlines}
 
 Rules:
 - hook = ORIGINAL tweet draft in @{_wh_handle}'s voice (not a copy of feed text)
 - voice = Default/Critical/Hype/Sarcastic (pick best fit)
 - why = under 10 words, {_wh_angle}
-- source_ref = the [T0], [T1] etc tag or headline that inspired this idea (required)
 
 Return ONLY JSON:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle","source_ref":"T0 or headline text"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
 
-    _raw = _call_claude_inspiration(_prompt, _wh_system, max_tokens=1000)
-    _ideas = _parse_inspiration_ideas(_raw)
+    import concurrent.futures as _wh_cf
+    _tok = None
+    try:
+        _tok = _get_oauth_token() or _get_access_token()
+    except Exception:
+        pass
+
+    def _wh_call(prompt_text):
+        try:
+            if _tok:
+                return _call_with_token(_tok, prompt_text, _wh_system, 700)
+            return _call_claude_direct(prompt_text, _wh_system, max_tokens=700)
+        except Exception:
+            try:
+                return call_claude(prompt_text, _wh_system, max_tokens=700)
+            except Exception:
+                return ""
+
+    _prompt_a = _build_wh_prompt(_tweet_block_a, _rss_block_a, 4)
+    _prompt_b = _build_wh_prompt(_tweet_block_b, _rss_block_b, 4)
+
+    with _wh_cf.ThreadPoolExecutor(max_workers=2) as _wh_ex:
+        _fut_a = _wh_ex.submit(_wh_call, _prompt_a)
+        _fut_b = _wh_ex.submit(_wh_call, _prompt_b)
+        _raw_a = _fut_a.result()
+        _raw_b = _fut_b.result()
+
+    # Merge results from the two parallel calls.
+    _raw = ""
+    _ideas_merged = []
+    for _raw_part in [_raw_a, _raw_b]:
+        if not _raw_part:
+            continue
+        _clean_part = _raw_part.strip()
+        if _clean_part.startswith("```"):
+            _clean_part = _clean_part.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        try:
+            _ideas_merged.extend(json.loads(_clean_part))
+        except Exception:
+            _m = re.search(r'\[[\s\S]*\]', _raw_part)
+            if _m:
+                try:
+                    _ideas_merged.extend(json.loads(_m.group(0)))
+                except Exception:
+                    pass
+    _raw = json.dumps(_ideas_merged) if _ideas_merged else ""
+
+    _ideas = []
+    try:
+        _clean = _raw.strip()
+        if _clean.startswith("```"):
+            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        _ideas = json.loads(_clean)
+    except Exception:
+        try:
+            _m = re.search(r'\[[\s\S]*\]', _raw)
+            if _m:
+                _ideas = json.loads(_m.group(0))
+        except Exception:
+            pass
 
     for _idea in list(_ideas):
         _hook = _idea.get("hook", "")
-        if _hook.startswith("RT ") or _hook.startswith("@"):
+        if _hook.startswith("RT ") or _hook.startswith("@") or _is_bad_inspiration_hook(_hook):
             _ideas.remove(_idea)
             continue
         if not _hook.strip():
@@ -5875,9 +5957,6 @@ Return ONLY JSON:
             _idea["hook"] = _hook
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
-
-    if not _ideas:
-        _ideas = _fallback_inspiration_ideas(_all_tweets, _rss_headlines)
 
     # Save to gist for instant loads on future visits
     if _ideas:
@@ -5997,10 +6076,15 @@ def _ci_inspiration_dialog():
     _inspo_handle = get_current_handle()
     _inspo_topics = load_json("topics.json", {}) if is_guest() else {}
     _inspo_cache_key = json.dumps({
+        "algo_version": _WHATS_HOT_CACHE_VERSION,
         "handle": _inspo_handle,
         "guest": is_guest(),
         "topics": _inspo_topics,
     }, sort_keys=True)
+    if st.session_state.get("inspo_formula_version") != _WHATS_HOT_CACHE_VERSION:
+        for _k in ["inspo_ideas", "inspo_meta", "inspo_page"]:
+            st.session_state.pop(_k, None)
+        st.session_state["inspo_formula_version"] = _WHATS_HOT_CACHE_VERSION
     if st.session_state.get("inspo_handle") != _inspo_handle:
         for _k in ["inspo_ideas", "inspo_meta", "inspo_page"]:
             st.session_state.pop(_k, None)
@@ -6010,6 +6094,7 @@ def _ci_inspiration_dialog():
     if "inspo_ideas" not in st.session_state:
         # Try gist first — instant load if fresh ideas exist
         _gist_ideas, _gist_nt, _gist_nh = _load_inspo_from_gist(_inspo_cache_key)
+        _gist_ideas = [i for i in _gist_ideas if not _is_bad_inspiration_hook(i.get("hook", ""))]
         if _gist_ideas:
             st.session_state["inspo_ideas"] = _gist_ideas
             st.session_state["inspo_meta"] = (_gist_nt, _gist_nh)
