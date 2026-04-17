@@ -6092,8 +6092,9 @@ def _ci_inspiration_dialog():
 
     # Load ideas: session state > gist cache > Claude (slowest, last resort)
     if "inspo_ideas" not in st.session_state:
+        _force_fresh = st.session_state.pop("inspo_force_fresh", False)
         # Try gist first — instant load if fresh ideas exist
-        _gist_ideas, _gist_nt, _gist_nh = _load_inspo_from_gist(_inspo_cache_key)
+        _gist_ideas, _gist_nt, _gist_nh = ([], 0, 0) if _force_fresh else _load_inspo_from_gist(_inspo_cache_key)
         _gist_ideas = [i for i in _gist_ideas if not _is_bad_inspiration_hook(i.get("hook", ""))]
         if _gist_ideas:
             st.session_state["inspo_ideas"] = _gist_ideas
@@ -6202,11 +6203,14 @@ def _ci_inspiration_dialog():
     # ── Footer actions ──
     def _inspo_regenerate():
         """Nuke cached ideas and regenerate a completely fresh set."""
+        _load_inspo_from_gist.clear()
         _run_inspiration_claude.clear()
         st.session_state.pop("inspo_ideas", None)
         st.session_state.pop("inspo_meta", None)
         st.session_state["inspo_page"] = 0
+        st.session_state["inspo_force_fresh"] = True
         st.session_state["_ci_show_inspiration"] = True
+        st.rerun(scope="app")
     if st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_regenerate):
         pass
 
