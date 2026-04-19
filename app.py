@@ -3723,14 +3723,13 @@ For long-form X Articles, adapt the voice mode above to full article structure:
 
 
 def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
-    """Return format instructions for the given fmt, using live personal patterns."""
+    """Return the Creator Studio format instructions for the given fmt."""
     _pp = patterns or {}
     _fp_q = _pp.get("top_question_pct", 28)
     _fp_ell = _pp.get("top_ellipsis_pct", 28)
     _fp_range = _pp.get("optimal_char_range", (40, 250))
-    _is_default = voice == "Default"
     _fp_hooks = []
-    if _pp and _is_default:
+    if _pp:
         _hook_pool = (
             _pp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
             else _pp.get("top_examples_normal", []) if fmt == "Normal Tweet"
@@ -3740,17 +3739,11 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
 
-    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to the default tone.\n"
-
     if fmt == "Punchy Tweet":
-        _hooks_block = f"\nTop hooks to model Sentence 1 after:\n{_hooks_str}\n" if _is_default else ""
         return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
-{_voice_override}
+
 STRUCTURE:
-SENTENCE 1: The sharpest FACTUAL observation. A specific
-stat, fact, or measurable reality. Not an opinion.
-Not a recommendation. A fact that makes the take obvious
-without stating the take.
+SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
 SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
 
 RULES:
@@ -3761,37 +3754,28 @@ RULES:
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
 
-BANNED OPENERS — never use these exact phrases:
-- "Someone help me understand"
-- "Nobody is talking about"
-- "Not enough people are talking about"
-- "Unpopular opinion"
-- "Let that sink in"
-- "This is your reminder"
-- "Connect the dots"
-Model the STRUCTURE of top hook examples only — never copy
-the literal words. Every opener must be fresh and topic-specific.
-{_hooks_block}
+Top hooks to model Sentence 1 after:
+{_hooks_str}
+
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
-        _hooks_block_nt = f"- Top performing hooks to model after:\n{_hooks_str}" if _is_default else ""
-        _hook_rule = "- Model the hook after one of the top hooks above" if _is_default else ""
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
-{_voice_override}
-LIVE DATA (from synced tweet history — updates every sync):
+
+TYLER'S LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
-{_hooks_block_nt}
+- Top performing hooks to model after:
+{_hooks_str}
 
 STRUCTURE:
-[Factual observation or specific stat — NOT an opinion or prediction]
+[Confrontational hook or bold declaration]
 
-[Context or consequence that makes the conclusion obvious without stating it]
+[Punch line, trailing thought, or question]
 
 RULES:
 - Between 161 and 260 characters total — don't be too brief
@@ -3799,26 +3783,7 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
-- The opener must be a FACT not an opinion — never a prediction,
-  never a recommendation, never a conclusion
-- If the input contains opinion language reframe it as the
-  underlying fact that makes the opinion obvious
-- BANNED first words: "[Subject] should" "[Subject] need" "[Subject] must"
-  "[Subject] take" "This is" "No brainer" "Obviously" "Clearly"
-- The tweet should make the reader reach the conclusion themselves
-  not tell them what to conclude
-{_hook_rule}
-
-BANNED OPENERS — never use these exact phrases:
-- "Someone help me understand"
-- "Nobody is talking about"
-- "Not enough people are talking about"
-- "Unpopular opinion"
-- "Let that sink in"
-- "This is your reminder"
-- "Connect the dots"
-Model the STRUCTURE of top hook examples only — never copy
-the literal words. Every opener must be fresh and topic-specific.
+- Model the hook after one of Tyler's top hooks above
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -3826,12 +3791,12 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
-        _hooks_block_lt = f"- Top hooks to model the opening after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: LONG TWEET (280-1200 characters)
-{_voice_override}
-LIVE DATA (updates every sync):
+
+TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-{_hooks_block_lt}
+- Top hooks to model the opening after:
+{_hooks_str}
 
 STRUCTURE:
 [Hot take — complete thought in first 280 chars, visible before "Show More" fold]
@@ -3856,31 +3821,6 @@ RULES:
 - No hashtags, no links
 - End with debate invitation
 
-BANNED OPENERS AND WORDS — never appear in Long Tweet Default voice:
-- "obvious" / "obviously" — opinion not observation
-- "no-brainer" — opinion not observation
-- "not complicated" — opinion framing
-- "stop overthinking" — instructing the reader
-- "clearly" / "definitely" — opinion markers
-- The opener must be a FACT not an opinion or conclusion
-- If the input contains opinion language find the underlying
-  stat or film evidence that makes the point without stating
-  the opinion directly
-- WRONG opener: "Taking Stowers at 30 is the most obvious pick."
-- RIGHT opener: "TE class depth in this draft falls off
-  dramatically after pick 18."
-
-BANNED OPENERS — never use these exact phrases:
-- "Someone help me understand"
-- "Nobody is talking about"
-- "Not enough people are talking about"
-- "Unpopular opinion"
-- "Let that sink in"
-- "This is your reminder"
-- "Connect the dots"
-Model the STRUCTURE of top hook examples only — never copy
-the literal words. Every opener must be fresh and topic-specific.
-
 IMAGE RECOMMENDATION:
 - YES — include 1 supporting image
 - Best: stat graphic, comparison chart, or relevant screenshot
@@ -3888,15 +3828,15 @@ IMAGE RECOMMENDATION:
 - Images increase total impressions even though text-only has higher engagement rate"""
 
     elif fmt == "Thread":
-        _hooks_block_th = f"- Top hooks to model Tweet 1 after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: THREAD (5-8 tweets)
-{_voice_override}
-LIVE DATA (updates every sync):
+
+TYLER'S LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-{_hooks_block_th}
+- Top hooks to model Tweet 1 after:
+{_hooks_str}
 
 STRUCTURE:
-TWEET 1: [Bold claim or confrontational question] A thread:
+TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
 
 TWEET 2: [Set the stage — specific situation with numbers/facts]
 
@@ -3919,17 +3859,6 @@ RULES:
 - Tweet 1 must stop the scroll
 - Last tweet must drive replies (replies = 13.5x algorithm weight)
 
-BANNED OPENERS — never use these exact phrases:
-- "Someone help me understand"
-- "Nobody is talking about"
-- "Not enough people are talking about"
-- "Unpopular opinion"
-- "Let that sink in"
-- "This is your reminder"
-- "Connect the dots"
-Model the STRUCTURE of top hook examples only — never copy
-the literal words. Every opener must be fresh and topic-specific.
-
 IMAGE RECOMMENDATION:
 - Include at least 1 image in the thread (35% more retweets confirmed)
 - DO NOT put image in Tweet 1 — hook should be pure text
@@ -3938,14 +3867,13 @@ IMAGE RECOMMENDATION:
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
     elif fmt == "Article":
-        _hooks_block_art = f"- Top hooks to model headline/intro after:\n{_hooks_str}" if _is_default else ""
-        _hook_rule_art = "- Model after the top hooks above" if _is_default else ""
         return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-{_voice_override}
+
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
-LIVE DATA (updates every sync):
-{_hooks_block_art}
+TYLER'S LIVE DATA (updates every sync):
+- Top hooks to model headline/intro after:
+{_hooks_str}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
 
@@ -3953,7 +3881,7 @@ STRUCTURE:
 HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
 - Numbers perform 2x better than vague headlines
 - Specificity over vagueness — name the player, name the stat
-{_hook_rule_art}
+- Model after Tyler's top hooks above
 [IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
 
 INTRO (2-3 paragraphs — this is the feed preview, must hook):
@@ -3969,7 +3897,7 @@ SECTION 2: [SUBHEADING]
 [Include comparison list format if relevant (Team A: X / Team B: Y)]
 
 SECTION 3: [SUBHEADING]
-[Contrarian angle or insider perspective — authoritative take]
+[Contrarian angle or insider perspective — former NFL player authority]
 [IMAGE: Supporting visual]
 
 SECTION 4: WHAT COMES NEXT
@@ -3987,19 +3915,11 @@ RULES:
 - Paragraphs: 2-4 sentences max
 - Subheadings every ~300 words
 - Bold key stats and claims (2-3 per section)
-- Voice: direct, no hedging, authoritative
+- Tyler's voice throughout — direct, no hedging, former-player authority
 - Every point must reference specific players/schemes/numbers
 - Hero image REQUIRED (articles without hero images look like broken cards in feed)
 - 2-3 supporting images placed between sections
-- End with debate invitation to drive replies
-
-IMAGE RECOMMENDATION:
-- HERO IMAGE required — this becomes the feed thumbnail. Use: game photo, player action shot, or custom graphic
-- 2-3 SUPPORTING IMAGES throughout the body, placed between sections
-- Best types: stat charts, play diagrams, comparison graphics, game screenshots
-- Bold your image captions
-- Articles WITHOUT hero images look like broken cards in the feed — always include one
-- [IMAGE PLACEMENT] markers in the template show where to add each image"""
+- End with debate invitation to drive replies"""
 
     return ""
 
@@ -4812,25 +4732,14 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
     elif action == "build" and tweet_text.strip():
         _sports_ctx_b = _sports_ctx
         _fmt_inject_b = ""
-        if voice == "Default":
-            _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
-            if _fmt_pats_b:
-                _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-        _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
-        # Parse structured brief if delimiters present
-        _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
-        _has_brief = any(d in tweet_text for d in _brief_delimiters)
-        if _has_brief:
-            _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
-        else:
-            _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
-        _build_opening = "Here is a structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Here is a tweet concept/angle to turn into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
-        _char_limit_b = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
-        _char_rule_b = f"\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully." if fmt == "Normal Tweet" else (f"\n- CHARACTER LIMIT: Every option MUST be under 160 characters for Punchy Tweet format." if fmt == "Punchy Tweet" else (f"\n- LENGTH: Long Tweet format — 600-1200 characters. Use the space." if fmt == "Long Tweet" else ""))
-        build_prompt = f"""{_build_opening}
+        _fmt_pats_b = _get_format_patterns()
+        if _fmt_pats_b:
+            _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+        build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
 
-{_brief_block}
-{_live_stats_block}
+CONCEPT/ANGLE:
+\"{tweet_text}\"
+
 {format_mod}{_sports_ctx_b}{_fmt_inject_b}
 
 STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
@@ -4839,7 +4748,7 @@ STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
 {"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
 
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -4847,23 +4756,23 @@ Rules:
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
+- Structure each option to match the FORMAT PATTERNS above
 
 {"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
-CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that Tyler would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
-  "option1_pattern": "short label describing the angle this version takes",
-  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
-  "option2_pattern": "short label describing the angle this version takes",
-  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
-  "option3_pattern": "short label describing the angle this version takes",
+  "option1": "full tweet text here",
+  "option1_pattern": "angle/structure this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle/structure this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle/structure this version takes",
   "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
-        _max_tok_b = 2000 if fmt == "Thread" else 700
+        _max_tok_b = 2000 if fmt == "Thread" else 400
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         with open("/tmp/build_debug.log", "w") as _dbg:
             _dbg.write(f"RAW:\n{raw}\n\n")
@@ -4932,42 +4841,33 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
-        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in the voice from the system prompt"
         _rw_handle = get_current_handle()
-        repurpose_prompt = f"""You are helping @{_rw_handle} repurpose someone else's tweet into original content. The goal: take the UNDERLYING IDEA and write it as if @{_rw_handle} came up with it. Nobody should be able to trace it back to the original.
+        repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
 
-Source tweet (NOT yours — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
+Original tweet (NOT Tyler's): "{tweet_text}"
 
-REPURPOSING RULES:
-- Extract the core IDEA or TAKE — then throw away everything else about the original tweet.
-- Write {_rw_voice} with completely different wording, structure, and angle of attack.
-- Your version should feel like an original thought — NOT a paraphrase.
-- Change the entry point: if the original leads with a stat, lead with an observation (or vice versa).
-- If the original names a person/topic, reference the same subject but frame it from your own perspective.
-- Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
-
-{format_mod}{_live_stats_block}
+{format_mod}
 
 - Strong hook in the first line
 - Invites engagement/replies
 - No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
-{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
-
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text — @{_rw_handle}'s completely original version",
-  "option1_pattern": "angle @{_rw_handle} takes on this idea",
-  "option2": "full tweet text — different @{_rw_handle} angle, also fully original",
-  "option2_pattern": "angle @{_rw_handle} takes on this idea",
-  "pick": "1 or 2 — just the number, no explanation"
+  "option1": "full tweet text here",
+  "option1_pattern": "angle this version takes",
+  "option2": "full tweet text here",
+  "option2_pattern": "angle this version takes",
+  "option3": "full tweet text here",
+  "option3_pattern": "angle this version takes",
+  "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
         _max_tok_r = 2000 if fmt == "Thread" else 400
         raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
-            for _ok in ["option1", "option2"]:
+            for _ok in ["option1", "option2", "option3"]:
                 if rw_data.get(_ok):
                     rw_data[_ok] = _sanitize_output(rw_data[_ok])
             # Critical voice: force pick to period-ending option
