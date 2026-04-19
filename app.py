@@ -5739,9 +5739,9 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
             continue
         _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
         _snippet = _text.replace("\n", " ").strip()
-        if len(_snippet) > 170:
-            _snippet = _snippet[:167].rstrip() + "..."
-        _hook = f"Seeing this from @{_author} makes me think there's a bigger angle here: {_snippet}"
+        if len(_snippet) > 260:
+            _snippet = _snippet[:257].rstrip() + "..."
+        _hook = _snippet
         if _hook in _seen_hooks:
             continue
         _seen_hooks.add(_hook)
@@ -5750,7 +5750,7 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
             "source": "twitter",
             "voice": "Default",
             "hook": _hook,
-            "why": "fresh angle from feed",
+            "why": f"from @{_author}"[:80],
             "source_ref": f"@{_author}",
         })
         if len(_ideas) >= 5:
@@ -5760,7 +5760,7 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
         _headline = (_headline or "").strip()
         if not _headline:
             continue
-        _hook = f"There's a real conversation hiding inside this headline: {_headline}"
+        _hook = _headline[:280]
         if _hook in _seen_hooks:
             continue
         _seen_hooks.add(_hook)
@@ -5768,8 +5768,8 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
             "topic": "Headline angle",
             "source": "news",
             "voice": "Default",
-            "hook": _hook[:280],
-            "why": "timely headline angle",
+            "hook": _hook,
+            "why": "headline source",
             "source_ref": _headline[:80],
         })
         if len(_ideas) >= 5:
@@ -5886,15 +5886,7 @@ Return ONLY JSON:
         pass
 
     def _wh_call(prompt_text):
-        try:
-            if _tok:
-                return _call_with_token(_tok, prompt_text, _wh_system, 700)
-            return _call_claude_direct(prompt_text, _wh_system, max_tokens=700)
-        except Exception:
-            try:
-                return call_claude(prompt_text, _wh_system, max_tokens=700)
-            except Exception:
-                return ""
+        return _call_claude_inspiration(prompt_text, _wh_system, max_tokens=700)
 
     _prompt_a = _build_wh_prompt(_tweet_block_a, _rss_block_a, 4)
     _prompt_b = _build_wh_prompt(_tweet_block_b, _rss_block_b, 4)
@@ -5957,6 +5949,9 @@ Return ONLY JSON:
             _idea["hook"] = _hook
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
+
+    if not _ideas:
+        _ideas = _fallback_inspiration_ideas(_all_tweets, _rss_headlines)
 
     # Save to gist for instant loads on future visits
     if _ideas:
