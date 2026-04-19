@@ -260,13 +260,50 @@ def get_system_for_voice(voice_name: str, voice_mod: str) -> str:
         _owner_homer_examples = _guest_ex_block
         _owner_sarcastic_examples = _guest_ex_block
     else:
-        from config import CRITICAL_EXAMPLES, HOMER_EXAMPLES, SARCASTIC_EXAMPLES
-        _owner_critical_examples = CRITICAL_EXAMPLES
-        _owner_homer_examples = HOMER_EXAMPLES
-        _owner_sarcastic_examples = SARCASTIC_EXAMPLES
+        _owner_critical_examples = """EXAMPLES (copy this exact energy):
+- "We passed on 52% of third downs last year and went 8-9. Meanwhile Kansas City ran on 3rd-and-short 74% of the time and won the Super Bowl. That gap is a choice. Who owns it?"
+- "The Broncos have had 5 different offensive coordinators in 8 years. And we keep wondering why the offense looks confused. That's on the front office. Connect the dots."
+- "Bo Nix threw for 3,000 yards last season. Good. But 18 of those touchdowns came against bottom-10 defenses. Payton needs to answer for that schedule construction."
+"""
+        _owner_homer_examples = """EXAMPLES (copy this exact energy):
+- "Jokic dropped 30, 12, and 10 last night. On a Tuesday. The team drawing Denver in round 2 just changed their entire defensive game plan."
+- "Bo Nix's third down completion rate jumped 12% in the second half. Every defensive coordinator in the AFC pulled up that film tonight."
+- "MacKinnon and Makar both locked in at the same time in April for the first time in three years. The rest of the West is recalculating everything."
+"""
+        _owner_sarcastic_examples = """EXAMPLES (copy this exact energy):
+- "Turns out the Patriots offense doesn't suck because of a snow storm."
+- "That cornerback needs to call someone he trusts right now. Not about football."
+- "Starting to feel like Bo Nix really should have played with a broken ankle."
+- "Bold of Skip to finally come out and say it."
+"""
 
-    from config import VOICE_BLOCKS
-    voice_blocks = VOICE_BLOCKS
+    voice_blocks = {
+        "Critical": f"""CRITICAL VOICE — DIRECT MODE:
+{_owner_critical_examples}
+CRITICAL VOICE RULES:
+- Always open with a SPECIFIC number, stat, or named failure — never a vague complaint
+- Identify the structural cause — not "they need to be better"
+- End by naming the specific person or entity who owns it. Period. Full stop. Never ellipsis.
+- Authority IMPLIED through specificity — never stated
+- Tone: disappointed not angry. Calm, credible, constructive.""",
+
+        "Hype": f"""HOMER VOICE — HYPE MODE:
+{_owner_homer_examples}
+HOMER VOICE RULES:
+- Ground optimism in something SPECIFIC — a person, a stat, a moment
+- End by showing the OPPOSITION'S reaction — their worry is the proof
+- Authority IMPLIED through specificity — never stated
+- Tone: infectious, grounded confidence. Earned optimism, not blind cheerleading.""",
+
+        "Sarcastic": f"""SARCASTIC VOICE — DRY HUMOR MODE:
+{_owner_sarcastic_examples}
+SARCASTIC VOICE RULES:
+- Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
+- Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
+- Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
+- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
+- Drop it and walk away. Never explain the joke.""",
+    }
 
     block = voice_blocks.get(voice_name, "")
     if block:
@@ -3723,13 +3760,14 @@ For long-form X Articles, adapt the voice mode above to full article structure:
 
 
 def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
-    """Return the Creator Studio format instructions for the given fmt."""
+    """Return format instructions for the given fmt, using live personal patterns."""
     _pp = patterns or {}
     _fp_q = _pp.get("top_question_pct", 28)
     _fp_ell = _pp.get("top_ellipsis_pct", 28)
     _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _is_default = voice == "Default"
     _fp_hooks = []
-    if _pp:
+    if _pp and _is_default:
         _hook_pool = (
             _pp.get("top_examples_punchy", []) if fmt == "Punchy Tweet"
             else _pp.get("top_examples_normal", []) if fmt == "Normal Tweet"
@@ -3738,12 +3776,17 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
         )
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+    _voice_override = "" if _is_default else f"\nVOICE: You MUST write in {voice} voice as described in the system prompt. Do NOT fall back to the default tone.\n"
 
     if fmt == "Punchy Tweet":
+        _hooks_block = f"\nTop hooks to model Sentence 1 after:\n{_hooks_str}\n" if _is_default else ""
         return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
-
+{_voice_override}
 STRUCTURE:
-SENTENCE 1: The sharpest version of the take. Specific, declarative, no setup. Drop it cold.
+SENTENCE 1: The sharpest FACTUAL observation. A specific
+stat, fact, or measurable reality. Not an opinion.
+Not a recommendation. A fact that makes the take obvious
+without stating the take.
 SENTENCE 2: The engagement hook. A direct question, forced choice, or bold statement that makes someone feel they HAVE to respond.
 
 RULES:
@@ -3754,28 +3797,37 @@ RULES:
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
 
-Top hooks to model Sentence 1 after:
-{_hooks_str}
-
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+{_hooks_block}
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
 RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
 
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
+        _hooks_block_nt = f"- Top performing hooks to model after:\n{_hooks_str}" if _is_default else ""
+        _hook_rule = "- Model the hook after one of the top hooks above" if _is_default else ""
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
-
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+{_voice_override}
+LIVE DATA (from synced tweet history — updates every sync):
 - Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of top tweets use ellipsis (his signature)
-- Top performing hooks to model after:
-{_hooks_str}
+{_hooks_block_nt}
 
 STRUCTURE:
-[Confrontational hook or bold declaration]
+[Factual observation or specific stat — NOT an opinion or prediction]
 
-[Punch line, trailing thought, or question]
+[Context or consequence that makes the conclusion obvious without stating it]
 
 RULES:
 - Between 161 and 260 characters total — don't be too brief
@@ -3783,7 +3835,26 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
-- Model the hook after one of Tyler's top hooks above
+- The opener must be a FACT not an opinion — never a prediction,
+  never a recommendation, never a conclusion
+- If the input contains opinion language reframe it as the
+  underlying fact that makes the opinion obvious
+- BANNED first words: "[Subject] should" "[Subject] need" "[Subject] must"
+  "[Subject] take" "This is" "No brainer" "Obviously" "Clearly"
+- The tweet should make the reader reach the conclusion themselves
+  not tell them what to conclude
+{_hook_rule}
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -3791,12 +3862,12 @@ IMAGE RECOMMENDATION:
 - Reaction to news → OPTIONAL — screenshot of the news article headline"""
 
     elif fmt == "Long Tweet":
+        _hooks_block_lt = f"- Top hooks to model the opening after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: LONG TWEET (280-1200 characters)
-
-TYLER'S LIVE DATA (updates every sync):
+{_voice_override}
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model the opening after:
-{_hooks_str}
+{_hooks_block_lt}
 
 STRUCTURE:
 [Hot take — complete thought in first 280 chars, visible before "Show More" fold]
@@ -3821,6 +3892,31 @@ RULES:
 - No hashtags, no links
 - End with debate invitation
 
+BANNED OPENERS AND WORDS — never appear in Long Tweet Default voice:
+- "obvious" / "obviously" — opinion not observation
+- "no-brainer" — opinion not observation
+- "not complicated" — opinion framing
+- "stop overthinking" — instructing the reader
+- "clearly" / "definitely" — opinion markers
+- The opener must be a FACT not an opinion or conclusion
+- If the input contains opinion language find the underlying
+  stat or film evidence that makes the point without stating
+  the opinion directly
+- WRONG opener: "Taking Stowers at 30 is the most obvious pick."
+- RIGHT opener: "TE class depth in this draft falls off
+  dramatically after pick 18."
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+
 IMAGE RECOMMENDATION:
 - YES — include 1 supporting image
 - Best: stat graphic, comparison chart, or relevant screenshot
@@ -3828,15 +3924,15 @@ IMAGE RECOMMENDATION:
 - Images increase total impressions even though text-only has higher engagement rate"""
 
     elif fmt == "Thread":
+        _hooks_block_th = f"- Top hooks to model Tweet 1 after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: THREAD (5-8 tweets)
-
-TYLER'S LIVE DATA (updates every sync):
+{_voice_override}
+LIVE DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model Tweet 1 after:
-{_hooks_str}
+{_hooks_block_th}
 
 STRUCTURE:
-TWEET 1: [Bold claim or confrontational question modeled after Tyler's top hooks above] A thread:
+TWEET 1: [Bold claim or confrontational question] A thread:
 
 TWEET 2: [Set the stage — specific situation with numbers/facts]
 
@@ -3859,6 +3955,26 @@ RULES:
 - Tweet 1 must stop the scroll
 - Last tweet must drive replies (replies = 13.5x algorithm weight)
 
+BANNED OPENERS AND WORDS — same as Long Tweet Default voice:
+- "obvious" / "obviously"
+- "no-brainer"
+- "not complicated"
+- "stop overthinking"
+- "clearly" / "definitely"
+- The opener of Tweet 1 must be a fact or framed question,
+  not a generic opinion label
+
+BANNED OPENERS — never use these exact phrases:
+- "Someone help me understand"
+- "Nobody is talking about"
+- "Not enough people are talking about"
+- "Unpopular opinion"
+- "Let that sink in"
+- "This is your reminder"
+- "Connect the dots"
+Model the STRUCTURE of top hook examples only — never copy
+the literal words. Every opener must be fresh and topic-specific.
+
 IMAGE RECOMMENDATION:
 - Include at least 1 image in the thread (35% more retweets confirmed)
 - DO NOT put image in Tweet 1 — hook should be pure text
@@ -3867,13 +3983,13 @@ IMAGE RECOMMENDATION:
 - Image types that work: stat graphics, comparison charts, play diagrams, game screenshots"""
 
     elif fmt == "Article":
+        _hooks_block_ar = f"- Top hooks to model headline/intro after:\n{_hooks_str}" if _is_default else ""
         return f"""FORMAT: X ARTICLE (1,500-2,000 words / 6-8 minute read)
-
+{_voice_override}
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
-TYLER'S LIVE DATA (updates every sync):
-- Top hooks to model headline/intro after:
-{_hooks_str}
+LIVE DATA (updates every sync):
+{_hooks_block_ar}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
 
@@ -3881,7 +3997,7 @@ STRUCTURE:
 HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
 - Numbers perform 2x better than vague headlines
 - Specificity over vagueness — name the player, name the stat
-- Model after Tyler's top hooks above
+- Model after Tyler's top hooks above if Default voice
 [IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
 
 INTRO (2-3 paragraphs — this is the feed preview, must hook):
@@ -3915,7 +4031,8 @@ RULES:
 - Paragraphs: 2-4 sentences max
 - Subheadings every ~300 words
 - Bold key stats and claims (2-3 per section)
-- Tyler's voice throughout — direct, no hedging, former-player authority
+- Tyler's voice throughout — direct, no hedging, former-player authority.
+- If non-default voice, maintain that mode across the full article.
 - Every point must reference specific players/schemes/numbers
 - Hero image REQUIRED (articles without hero images look like broken cards in feed)
 - 2-3 supporting images placed between sections
@@ -4748,7 +4865,7 @@ STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
 {"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
 
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while matching Tyler's voice exactly. NOT rewrites of each other — each a unique execution of the idea.
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
 
 Rules:
 - Strong hook — first line stops the scroll
@@ -4756,23 +4873,23 @@ Rules:
 - 7th-9th grade reading level
 - End with something that makes people reply or argue
 - Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above
+- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
 
 {"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
 
-CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that Tyler would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle/structure this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle/structure this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle/structure this version takes",
+  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
+  "option1_pattern": "short label describing the angle this version takes",
+  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
+  "option2_pattern": "short label describing the angle this version takes",
+  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
+  "option3_pattern": "short label describing the angle this version takes",
   "pick": "1, 2, or 3 — just the number, no explanation"
 }}"""
-        _max_tok_b = 2000 if fmt == "Thread" else 400
+        _max_tok_b = 2000 if fmt == "Thread" else 700
         raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
         with open("/tmp/build_debug.log", "w") as _dbg:
             _dbg.write(f"RAW:\n{raw}\n\n")
@@ -4841,33 +4958,42 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "rewrite" and tweet_text.strip():
+        _rw_voice = f"in the {voice} voice described in the system prompt" if voice != "Default" else "in the voice from the system prompt"
         _rw_handle = get_current_handle()
-        repurpose_prompt = f"""Someone else wrote this tweet. Write 3 completely NEW tweets on the same subject in Tyler's voice — do NOT copy any original phrasing. Each takes a different angle.
+        repurpose_prompt = f"""You are helping @{_rw_handle} repurpose someone else's tweet into original content. The goal: take the UNDERLYING IDEA and write it as if @{_rw_handle} came up with it. Nobody should be able to trace it back to the original.
 
-Original tweet (NOT Tyler's): "{tweet_text}"
+Source tweet (NOT yours — do NOT copy ANY phrasing, structure, or sentence patterns): "{tweet_text}"
 
-{format_mod}
+REPURPOSING RULES:
+- Extract the core IDEA or TAKE — then throw away everything else about the original tweet.
+- Write {_rw_voice} with completely different wording, structure, and angle of attack.
+- Your version should feel like an original thought — NOT a paraphrase.
+- Change the entry point: if the original leads with a stat, lead with an observation (or vice versa).
+- If the original names a person/topic, reference the same subject but frame it from your own perspective.
+- Zero overlap in phrasing. If someone put them side by side, they should look like two people independently had the same thought.
+
+{format_mod}{_live_stats_block}
 
 - Strong hook in the first line
 - Invites engagement/replies
 - No hashtags, no emojis, no character count
 - 7th-9th grade reading level
 
+{"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
-  "option1_pattern": "angle this version takes",
-  "option2": "full tweet text here",
-  "option2_pattern": "angle this version takes",
-  "option3": "full tweet text here",
-  "option3_pattern": "angle this version takes",
-  "pick": "1, 2, or 3 — just the number, no explanation"
+  "option1": "full tweet text — @{_rw_handle}'s completely original version",
+  "option1_pattern": "angle @{_rw_handle} takes on this idea",
+  "option2": "full tweet text — different @{_rw_handle} angle, also fully original",
+  "option2_pattern": "angle @{_rw_handle} takes on this idea",
+  "pick": "1 or 2 — just the number, no explanation"
 }}"""
         _max_tok_r = 2000 if fmt == "Thread" else 400
         raw = call_claude(repurpose_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_r)
         rw_data = _parse_banger_json(raw)
         if rw_data and rw_data.get("option1"):
-            for _ok in ["option1", "option2", "option3"]:
+            for _ok in ["option1", "option2"]:
                 if rw_data.get(_ok):
                     rw_data[_ok] = _sanitize_output(rw_data[_ok])
             # Critical voice: force pick to period-ending option
@@ -5786,88 +5912,6 @@ Return ONLY JSON:
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
-@st.dialog("Build a Tweet", width="large")
-def _ci_build_dialog():
-    """Mini-form to guide users into providing the right raw material for BUILD."""
-    st.markdown(
-        '<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:16px;">'
-        'Give us a topic and we\'ll create 3 unique tweet options. The more context you add, the better the results.</div>',
-        unsafe_allow_html=True)
-
-    _bd_topic = st.text_input("What's the topic?", placeholder="e.g. Jokic MVP case, Broncos draft needs, Sean Payton play calling", key="build_topic")
-
-    _bd_take = st.text_input("What's your take? (optional)", placeholder="e.g. he's the clear frontrunner, we need a TE round 1", key="build_take")
-
-    _bd_col1, _bd_col2 = st.columns(2)
-    with _bd_col1:
-        _bd_tension = st.text_input("What's the debate? (optional)", placeholder="e.g. media keeps ignoring him, fans disagree", key="build_tension")
-    with _bd_col2:
-        _bd_stats = st.text_input("Any specific stats or facts? (optional)", placeholder="e.g. averaging a triple double, 48-28 record", key="build_stats")
-
-    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-
-    if st.button("BUILD IT", key="build_submit", use_container_width=True, type="primary", disabled=not _bd_topic.strip()):
-        # Assemble the structured brief from form fields
-        _parts = []
-        if _bd_topic.strip():
-            _parts.append(f"TOPIC: {_bd_topic.strip()}")
-        if _bd_tension.strip():
-            _parts.append(f"TENSION: {_bd_tension.strip()}")
-        if _bd_stats.strip():
-            _parts.append(f"KEY STATS: {_bd_stats.strip()}")
-        if _bd_take.strip():
-            _parts.append(f"ANGLE: {_bd_take.strip()}")
-
-        _assembled = "\n".join(_parts) if len(_parts) > 1 else _bd_topic.strip()
-
-        # If they only gave a topic with no extras, use it as a simple concept
-        if not _bd_take.strip() and not _bd_tension.strip() and not _bd_stats.strip():
-            _assembled = _bd_topic.strip()
-
-        _bd_fmt = st.session_state.get("ci_format", "Normal Tweet")
-        _bd_voice = st.session_state.get("ci_voice", "Default")
-
-        # Run AI generation inside the dialog so user sees the spinner
-        with st.spinner("Building your tweets..."):
-            st.session_state["ci_text"] = _assembled
-            _run_ci_ai("build", _assembled, _bd_fmt, _bd_voice)
-
-        # Show results inside the dialog
-        _bd_result = st.session_state.get("ci_banger_data")
-        if _bd_result:
-            st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:10px;">Your Options</div>',
-                unsafe_allow_html=True)
-            for _bdi in range(1, 4):
-                _bd_opt = _bd_result.get(f"option{_bdi}")
-                _bd_pat = _bd_result.get(f"option{_bdi}_pattern", "")
-                if not _bd_opt:
-                    continue
-                _bd_is_pick = str(_bd_result.get("pick", "")) == str(_bdi)
-                _bd_border = "rgba(45,212,191,0.4)" if _bd_is_pick else "rgba(255,255,255,0.07)"
-                _bd_pick_badge = '<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;background:rgba(45,212,191,0.15);color:rgba(45,212,191,0.8);border:1px solid rgba(45,212,191,0.3);margin-left:6px;">TOP PICK</span>' if _bd_is_pick else ""
-                st.markdown(
-                    f'<div style="border-radius:10px;border:1px solid {_bd_border};background:rgba(255,255,255,0.03);padding:14px;margin-bottom:8px;">'
-                    f'<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:6px;">{_bd_pat}{_bd_pick_badge}</div>'
-                    f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;white-space:pre-wrap;">{_bd_opt}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True)
-                if st.button(f"Use Option {_bdi}", key=f"build_use_{_bdi}", use_container_width=True,
-                             type="primary" if _bd_is_pick else "secondary"):
-                    st.session_state["ci_text"] = _bd_opt
-                    if _bd_voice in ("Default", "Critical", "Hype", "Sarcastic"):
-                        st.session_state["ci_voice"] = _bd_voice
-                    st.rerun(scope="app")
-        elif st.session_state.get("ci_result"):
-            st.markdown(f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;padding:12px;white-space:pre-wrap;">{st.session_state["ci_result"]}</div>', unsafe_allow_html=True)
-            if st.button("Use This", key="build_use_raw", use_container_width=True, type="primary"):
-                st.session_state["ci_text"] = st.session_state["ci_result"]
-                st.rerun(scope="app")
-        else:
-            st.error("Couldn't generate tweets. Try again or add more detail.")
-
-
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
@@ -6361,40 +6405,33 @@ def page_compose_ideas():
 
         # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
         def _click_action(action):
-            _ci_input = st.session_state.get("ci_text", "").strip()
-            if _ci_input:
-                # Smart nudge: if GO VIRAL with very short input, suggest BUILD instead
-                if action == "banger" and len(_ci_input.split()) < 8:
-                    st.session_state["_ci_show_build_dialog"] = True
-                    return
-                st.session_state["_ci_pending"] = (action, _ci_input,
+            if st.session_state.get("ci_text", "").strip():
+                st.session_state["_ci_pending"] = (action, st.session_state.get("ci_text", ""),
                     st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span><span class="pa-tip">Polish Your Draft Into A High-Performance Post</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
           </div>
-          <div class="cs-idock-btn" data-dock="build" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Create Tweets From A Topic, Idea, Or Bullet Points</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
           </div>
-          <div class="cs-idock-btn" data-dock="rewrite" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="rewrite" title="Rewrite your draft in a different format or angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span><span class="pa-tip">Remix Your Draft Into A New Format Or Angle</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span>
           </div>
-          <div class="cs-idock-btn" data-dock="grades" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+          <div class="cs-idock-btn" data-dock="grades" title="Score your draft on engagement, hook, and viral potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
           </div>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for dock click handling (inside real container)
         st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
-        def _click_build():
-            st.session_state["_ci_show_build_dialog"] = True
-        st.button("dock_build", key="ci_build", on_click=_click_build)
+        st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
         st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
         st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
 
@@ -6469,9 +6506,6 @@ def page_compose_ideas():
             _reopen_dialog["fmt"],
             _reopen_dialog["voice"],
         )
-
-    if st.session_state.pop("_ci_show_build_dialog", False):
-        _ci_build_dialog()
 
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
