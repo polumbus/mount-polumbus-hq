@@ -5663,11 +5663,15 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
+_WHATS_HOT_FORMULA_VERSION = "2026-04-06"
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
     """Load cached inspiration ideas from gist — instant, survives session resets."""
     if is_guest():
         _data = load_json("inspo_cache.json", {})
+        if _data.get("formula_version") != _WHATS_HOT_FORMULA_VERSION:
+            return [], 0, 0
         return _data.get("ideas", []), _data.get("n_tweets", 0), _data.get("n_headlines", 0)
     try:
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
@@ -5675,6 +5679,8 @@ def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
         _files = _r.json().get("files", {})
         if "hq_inspo_cache.json" in _files:
             _data = json.loads(_files["hq_inspo_cache.json"]["content"])
+            if _data.get("formula_version") != _WHATS_HOT_FORMULA_VERSION:
+                return [], 0, 0
             _ideas = _data.get("ideas", [])
             _ts = _data.get("generated_at", "")
             _n_tweets = _data.get("n_tweets", 0)
@@ -5697,6 +5703,7 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     if is_guest():
         from datetime import timezone as _tz3
         save_json("inspo_cache.json", {
+            "formula_version": _WHATS_HOT_FORMULA_VERSION,
             "ideas": ideas,
             "n_tweets": n_tweets,
             "n_headlines": n_headlines,
@@ -5706,67 +5713,17 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
     try:
         from datetime import timezone as _tz3
         _gid = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
-        _data = {"ideas": ideas, "n_tweets": n_tweets, "n_headlines": n_headlines,
-                 "generated_at": datetime.now(_tz3.utc).isoformat()}
+        _data = {
+            "formula_version": _WHATS_HOT_FORMULA_VERSION,
+            "ideas": ideas,
+            "n_tweets": n_tweets,
+            "n_headlines": n_headlines,
+            "generated_at": datetime.now(_tz3.utc).isoformat(),
+        }
         _payload = json.dumps({"files": {"hq_inspo_cache.json": {"content": json.dumps(_data, indent=2, default=str)}}})
         requests.patch(f"https://api.github.com/gists/{_gid}", data=_payload, headers=_gist_headers(), timeout=8)
     except Exception:
         pass
-
-
-def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list:
-    """
-    Build a small deterministic fallback idea set from the fetched feed.
-
-    This keeps What's Hot usable when the AI route returns empty or malformed
-    output instead of hard-failing the dialog.
-    """
-    _ideas = []
-    _seen_hooks = set()
-
-    for _t in _all_tweets[:12]:
-        _text = (_t.get("text") or "").strip()
-        if not _text or _text.startswith("RT ") or _text.startswith("@"):
-            continue
-        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
-        _snippet = _text.replace("\n", " ").strip()
-        if len(_snippet) > 170:
-            _snippet = _snippet[:167].rstrip() + "..."
-        _hook = f"Seeing this from @{_author} makes me think there's a bigger angle here: {_snippet}"
-        if _hook in _seen_hooks:
-            continue
-        _seen_hooks.add(_hook)
-        _ideas.append({
-            "topic": "Feed reaction",
-            "source": "twitter",
-            "voice": "Default",
-            "hook": _hook,
-            "why": "fresh angle from feed",
-            "source_ref": f"@{_author}",
-        })
-        if len(_ideas) >= 5:
-            return _ideas
-
-    for _headline in _rss_headlines[:8]:
-        _headline = (_headline or "").strip()
-        if not _headline:
-            continue
-        _hook = f"There's a real conversation hiding inside this headline: {_headline}"
-        if _hook in _seen_hooks:
-            continue
-        _seen_hooks.add(_hook)
-        _ideas.append({
-            "topic": "Headline angle",
-            "source": "news",
-            "voice": "Default",
-            "hook": _hook[:280],
-            "why": "timely headline angle",
-            "source_ref": _headline[:80],
-        })
-        if len(_ideas) >= 5:
-            break
-
-    return _ideas
 
 
 def _parse_inspiration_ideas(_raw: str) -> list:
@@ -5945,9 +5902,6 @@ Return ONLY JSON:
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
 
-    if not _ideas:
-        _ideas = _fallback_inspiration_ideas(_all_tweets, _rss_headlines)
-
     # Save to gist for instant loads on future visits
     if _ideas:
         _save_inspo_to_gist(_ideas, len(_all_tweets), len(_rss_headlines))
@@ -6066,6 +6020,7 @@ def _ci_inspiration_dialog():
     _inspo_handle = get_current_handle()
     _inspo_topics = load_json("topics.json", {}) if is_guest() else {}
     _inspo_cache_key = json.dumps({
+        "formula_version": _WHATS_HOT_FORMULA_VERSION,
         "handle": _inspo_handle,
         "guest": is_guest(),
         "topics": _inspo_topics,
