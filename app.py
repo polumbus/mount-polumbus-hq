@@ -5733,15 +5733,32 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
     _ideas = []
     _seen_hooks = set()
 
+    def _clean_source_text(_text: str, _limit: int = 220) -> str:
+        _text = (_text or "").replace("\n", " ").strip()
+        _text = re.sub(r"https?://\S+", "", _text).strip()
+        _text = re.sub(r"\s+", " ", _text).strip(" -:;,.")
+        if len(_text) > _limit:
+            _text = _text[:_limit].rstrip(" -:;,.") + "..."
+        return _text
+
+    def _draft_from_tweet(_text: str) -> str:
+        _base = _clean_source_text(_text, 180)
+        if not _base:
+            return ""
+        return f"{_base} That's the angle worth watching right now."
+
+    def _draft_from_headline(_text: str) -> str:
+        _base = _clean_source_text(_text, 190)
+        if not _base:
+            return ""
+        return f"{_base} The next move is the real story."
+
     for _t in _all_tweets[:12]:
         _text = (_t.get("text") or "").strip()
         if not _text or _text.startswith("RT ") or _text.startswith("@"):
             continue
         _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
-        _snippet = _text.replace("\n", " ").strip()
-        if len(_snippet) > 260:
-            _snippet = _snippet[:257].rstrip() + "..."
-        _hook = _snippet
+        _hook = _draft_from_tweet(_text)
         if _hook in _seen_hooks:
             continue
         _seen_hooks.add(_hook)
@@ -5760,7 +5777,7 @@ def _fallback_inspiration_ideas(_all_tweets: list, _rss_headlines: list) -> list
         _headline = (_headline or "").strip()
         if not _headline:
             continue
-        _hook = _headline[:280]
+        _hook = _draft_from_headline(_headline)
         if _hook in _seen_hooks:
             continue
         _seen_hooks.add(_hook)
@@ -5878,6 +5895,8 @@ Rules:
 Return ONLY JSON:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
 
+    _full_prompt = _build_wh_prompt(_tweet_block, _rss_block + _fmt_block, 8)
+
     import concurrent.futures as _wh_cf
     _tok = None
     try:
@@ -5949,6 +5968,29 @@ Return ONLY JSON:
             _idea["hook"] = _hook
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
+
+    if not _ideas:
+        # Cloud reliability fallback: do one non-threaded full-router retry
+        # before we drop to deterministic local drafts.
+        _raw_single = call_claude(_full_prompt, _wh_system, max_tokens=1000)
+        _ideas = _parse_inspiration_ideas(_raw_single)
+        for _idea in list(_ideas):
+            _hook = _idea.get("hook", "")
+            if _hook.startswith("RT ") or _hook.startswith("@") or _is_bad_inspiration_hook(_hook):
+                _ideas.remove(_idea)
+                continue
+            if not _hook.strip():
+                _ideas.remove(_idea)
+                continue
+            if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Hype", "Sarcastic"):
+                _idea["voice"] = "Default"
+        for _idea in _ideas:
+            _hook = _idea.get("hook", "")
+            if "\n" in _hook:
+                _hook = _hook.split("\n")[0].strip()
+                _idea["hook"] = _hook
+            if len(_hook) > 280:
+                _idea["hook"] = _hook[:277] + "..."
 
     if not _ideas:
         _ideas = _fallback_inspiration_ideas(_all_tweets, _rss_headlines)
