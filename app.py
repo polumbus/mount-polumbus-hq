@@ -5912,6 +5912,99 @@ Return ONLY JSON:
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+@st.dialog("Build a Tweet", width="large")
+def _ci_build_dialog():
+    """Mini-form to guide users into providing the right raw material for BUILD."""
+    st.markdown(
+        '<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:16px;">'
+        'Give us a topic and we\'ll create 3 unique tweet options. The more context you add, the better the results.</div>',
+        unsafe_allow_html=True)
+
+    _bd_topic = st.text_input(
+        "What's the topic?",
+        placeholder="e.g. Jokic MVP case, Broncos draft needs, Sean Payton play calling",
+        key="build_topic",
+    )
+    _bd_take = st.text_input(
+        "What's your take? (optional)",
+        placeholder="e.g. he's the clear frontrunner, we need a TE round 1",
+        key="build_take",
+    )
+
+    _bd_col1, _bd_col2 = st.columns(2)
+    with _bd_col1:
+        _bd_tension = st.text_input(
+            "What's the debate? (optional)",
+            placeholder="e.g. media keeps ignoring him, fans disagree",
+            key="build_tension",
+        )
+    with _bd_col2:
+        _bd_stats = st.text_input(
+            "Any specific stats or facts? (optional)",
+            placeholder="e.g. averaging a triple double, 48-28 record",
+            key="build_stats",
+        )
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+    if st.button("BUILD IT", key="build_submit", use_container_width=True, type="primary", disabled=not _bd_topic.strip()):
+        _parts = []
+        if _bd_topic.strip():
+            _parts.append(f"TOPIC: {_bd_topic.strip()}")
+        if _bd_tension.strip():
+            _parts.append(f"TENSION: {_bd_tension.strip()}")
+        if _bd_stats.strip():
+            _parts.append(f"KEY STATS: {_bd_stats.strip()}")
+        if _bd_take.strip():
+            _parts.append(f"ANGLE: {_bd_take.strip()}")
+
+        _assembled = "\n".join(_parts) if len(_parts) > 1 else _bd_topic.strip()
+        if not _bd_take.strip() and not _bd_tension.strip() and not _bd_stats.strip():
+            _assembled = _bd_topic.strip()
+
+        _bd_fmt = st.session_state.get("ci_format", "Normal Tweet")
+        _bd_voice = st.session_state.get("ci_voice", "Default")
+
+        with st.spinner("Building your tweets..."):
+            st.session_state["ci_text"] = _assembled
+            _run_ci_ai("build", _assembled, _bd_fmt, _bd_voice)
+
+        _bd_result = st.session_state.get("ci_banger_data")
+        if _bd_result:
+            st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:10px;">Your Options</div>',
+                unsafe_allow_html=True)
+            for _bdi in range(1, 4):
+                _bd_opt = _bd_result.get(f"option{_bdi}")
+                _bd_pat = _bd_result.get(f"option{_bdi}_pattern", "")
+                if not _bd_opt:
+                    continue
+                _bd_is_pick = str(_bd_result.get("pick", "")) == str(_bdi)
+                _bd_border = "rgba(45,212,191,0.4)" if _bd_is_pick else "rgba(255,255,255,0.07)"
+                _bd_pick_badge = '<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;background:rgba(45,212,191,0.15);color:rgba(45,212,191,0.8);border:1px solid rgba(45,212,191,0.3);margin-left:6px;">TOP PICK</span>' if _bd_is_pick else ""
+                st.markdown(
+                    f'<div style="border-radius:10px;border:1px solid {_bd_border};background:rgba(255,255,255,0.03);padding:14px;margin-bottom:8px;">'
+                    f'<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:6px;">{_bd_pat}{_bd_pick_badge}</div>'
+                    f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;white-space:pre-wrap;">{_bd_opt}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+                if st.button(f"Use Option {_bdi}", key=f"build_use_{_bdi}", use_container_width=True, type="primary" if _bd_is_pick else "secondary"):
+                    st.session_state["ci_text"] = _bd_opt
+                    if _bd_voice in ("Default", "Critical", "Hype", "Sarcastic"):
+                        st.session_state["ci_voice"] = _bd_voice
+                    st.rerun(scope="app")
+        elif st.session_state.get("ci_result"):
+            st.markdown(
+                f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;padding:12px;white-space:pre-wrap;">{st.session_state["ci_result"]}</div>',
+                unsafe_allow_html=True)
+            if st.button("Use This", key="build_use_raw", use_container_width=True, type="primary"):
+                st.session_state["ci_text"] = st.session_state["ci_result"]
+                st.rerun(scope="app")
+        else:
+            st.error("Couldn't generate tweets. Try again or add more detail.")
+
+
 @st.dialog("What's Hot Right Now", width="large")
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
@@ -6405,33 +6498,39 @@ def page_compose_ideas():
 
         # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
         def _click_action(action):
-            if st.session_state.get("ci_text", "").strip():
-                st.session_state["_ci_pending"] = (action, st.session_state.get("ci_text", ""),
+            _ci_input = st.session_state.get("ci_text", "").strip()
+            if _ci_input:
+                if action == "banger" and len(_ci_input.split()) < 8:
+                    st.session_state["_ci_show_build_dialog"] = True
+                    return
+                st.session_state["_ci_pending"] = (action, _ci_input,
                     st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
         <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
           <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span><span class="pa-tip">Polish Your Draft Into A High-Performance Post</span>
           </div>
           <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Create Tweets From A Topic, Idea, Or Bullet Points</span>
           </div>
           <div class="cs-idock-btn" data-dock="rewrite" title="Rewrite your draft in a different format or angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span><span class="pa-tip">Remix Your Draft Into A New Format Or Angle</span>
           </div>
           <div class="cs-idock-btn" data-dock="grades" title="Score your draft on engagement, hook, and viral potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
           </div>
         </div>''', unsafe_allow_html=True)
 
         # Hidden Streamlit buttons for dock click handling (inside real container)
         st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
-        st.button("dock_build", key="ci_build", on_click=_click_action, args=("build",))
+        def _click_build():
+            st.session_state["_ci_show_build_dialog"] = True
+        st.button("dock_build", key="ci_build", on_click=_click_build)
         st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
         st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
 
@@ -6506,6 +6605,9 @@ def page_compose_ideas():
             _reopen_dialog["fmt"],
             _reopen_dialog["voice"],
         )
+
+    if st.session_state.pop("_ci_show_build_dialog", False):
+        _ci_build_dialog()
 
     if st.session_state.pop("_ci_show_inspiration", False):
         _ci_inspiration_dialog()
