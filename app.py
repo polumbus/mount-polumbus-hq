@@ -8671,6 +8671,15 @@ def page_reply_guy():
                 st.image(img_url, use_container_width=True)
                 if _is_video:
                     st.markdown(f'<div style="font-size:11px;color:#888;margin-top:2px;">▶ video — <a href="{tweet_url}" target="_blank" style="color:#2DD4BF;">view on X</a></div>', unsafe_allow_html=True)
+            if tweet_url:
+                st.markdown(
+                    f'<a href="{tweet_url}" target="_blank" '
+                    f'style="margin-top:8px;height:40px;padding:0 14px;border-radius:12px;font-size:11px;'
+                    f'font-weight:700;letter-spacing:0.04em;text-transform:uppercase;'
+                    f'background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.28);color:#2DD4BF;'
+                    f'display:inline-flex;align-items:center;text-decoration:none;">Open in X</a>',
+                    unsafe_allow_html=True,
+                )
         with rc3:
             if st.session_state.get(f"{et_input_key}_p"):
                 st.session_state[et_input_key] = st.session_state.pop(f"{et_input_key}_p")
@@ -8820,6 +8829,15 @@ def page_reply_guy():
                     f'<div style="font-size:14px;color:#d8d8e8;line-height:1.5;">{rtext[:250]}</div>'
                     f'<a href="{reply_url}" target="_blank" class="tweet-link">↗ view tweet</a>',
                     unsafe_allow_html=True)
+                if reply_url:
+                    st.markdown(
+                        f'<a href="{reply_url}" target="_blank" '
+                        f'style="margin-top:8px;height:40px;padding:0 14px;border-radius:12px;font-size:11px;'
+                        f'font-weight:700;letter-spacing:0.04em;text-transform:uppercase;'
+                        f'background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.28);color:#2DD4BF;'
+                        f'display:inline-flex;align-items:center;text-decoration:none;">Open in X</a>',
+                        unsafe_allow_html=True,
+                    )
             with rc3:
                 if st.session_state.get(f"{input_key}_p"):
                     st.session_state[input_key] = st.session_state.pop(f"{input_key}_p")
@@ -9551,15 +9569,24 @@ def page_signals_prompts():
                 _sc, _sbg = _SPORT_PILL_COLORS.get(_stag, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg};color:{_sc};font-weight:600;margin-left:6px;">{_stag}</span>'
             _tweet_url = tw.get("twitterUrl", tw.get("url", ""))
-            _view_link = f' &middot; <a href="{_tweet_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tweet_url else ""
+            _open_x_btn = (
+                f'<a href="{_tweet_url}" target="_blank" '
+                f'style="margin-top:8px;margin-left:8px;height:44px;padding:0 16px;border-radius:14px;'
+                f'font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;'
+                f'background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.28);color:#2DD4BF;'
+                f'cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;">Open in X</a>'
+            ) if _tweet_url else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_spill}</span>
                     <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:{pbg};color:{pc};font-weight:600;">{trend_label}</span>
                 </div>
                 <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs{_view_link}</div>
-                <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{replies} replies &middot; {rts} RTs</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="cs-bot" data-bot="sig_beat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                    {_open_x_btn}
+                </div>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_beat_{idx}", key=f"sig_beat_{idx}"):
                 st.session_state["sig_selected"] = tw
@@ -9587,15 +9614,24 @@ def page_signals_prompts():
                 _sc_n, _sbg_n = _SPORT_PILL_COLORS.get(_stag_n, ("#666888", "rgba(102,104,136,0.12)"))
                 _spill_n = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:{_sbg_n};color:{_sc_n};font-weight:600;margin-right:6px;">{_stag_n}</span>'
             _tweet_url_n = tw.get("twitterUrl", tw.get("url", ""))
-            _view_link_n = f' &middot; <a href="{_tweet_url_n}" target="_blank" style="color:#C49E3C;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tweet_url_n else ""
+            _open_x_btn_n = (
+                f'<a href="{_tweet_url_n}" target="_blank" '
+                f'style="margin-top:8px;margin-left:8px;height:44px;padding:0 16px;border-radius:14px;'
+                f'font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;'
+                f'background:rgba(196,158,60,0.08);border:1px solid rgba(196,158,60,0.28);color:#C49E3C;'
+                f'cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;">Open in X</a>'
+            ) if _tweet_url_n else ""
             st.markdown(f'''<div class="tweet-card" style="cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:11px;color:#C49E3C;font-weight:600;">@{author}</span>
                     <div>{_spill_n}<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;">NATIONAL</span></div>
                 </div>
                 <div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{'...' if len(tw.get('text',''))>200 else ''}</div>
-                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies{_view_link_n}</div>
-                <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                <div style="margin-top:6px;font-size:10px;color:#666888;">{_ago}{' &middot; ' if _ago else ''}{rts} RTs &middot; {qts} QTs &middot; {replies} replies</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="cs-bot" data-bot="sig_nat_{idx}" style="margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;">USE SIGNAL</span>
+                    {_open_x_btn_n}
+                </div>
             </div>''', unsafe_allow_html=True)
             if st.button(f"sig_nat_{idx}", key=f"sig_nat_{idx}"):
                 st.session_state["sig_selected"] = tw
@@ -10552,7 +10588,10 @@ def page_gameday():
         rts = t.get("retweetCount", 0)
         _ago = _relative_time(t.get("createdAt", ""))
         _tw_url = t.get("tweetUrl") or t.get("url") or ""
-        _view_link = f' &middot; <a href="{_tw_url}" target="_blank" style="color:#2DD4BF;text-decoration:none;font-size:12px;font-weight:600;">view ↗</a>' if _tw_url else ""
+        _open_x_btn = (
+            f'<a href="{_tw_url}" target="_blank" '
+            f'style="margin-top:8px;margin-left:8px;{_gd_btn_pri}text-decoration:none;">Open in X</a>'
+        ) if _tw_url else ""
         _ellip = "..." if len(t.get("text", "")) > 280 else ""
         _rkey = f"gd_r_{idx}"
         _src = t.get("_gd_source", "")
@@ -10565,8 +10604,11 @@ def page_gameday():
             f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{author}{_src_tag}</span>'
             f'<span style="display:flex;align-items:center;gap:6px;">{_vel_tag}<span style="font-size:9px;color:#445;">{_ago}</span></span></div>'
             f'<div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{text}{_ellip}</div>'
-            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs{_view_link}</div>'
+            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies &middot; {rts} RTs</div>'
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
             f'<span class="cs-bot" data-bot="{_rkey}" style="{_gd_btn_sm}">React</span>'
+            f'{_open_x_btn}'
+            f'</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
