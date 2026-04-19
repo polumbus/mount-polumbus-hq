@@ -5813,22 +5813,8 @@ Return ONLY JSON:
 [{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
 
     import concurrent.futures as _wh_cf
-    _tok = None
-    try:
-        _tok = _get_oauth_token() or _get_access_token()
-    except Exception:
-        pass
-
     def _wh_call(prompt_text):
-        try:
-            if _tok:
-                return _call_with_token(_tok, prompt_text, _wh_system, 700)
-            return _call_claude_direct(prompt_text, _wh_system, max_tokens=700)
-        except Exception:
-            try:
-                return call_claude(prompt_text, _wh_system, max_tokens=700)
-            except Exception:
-                return ""
+        return _call_claude_inspiration(prompt_text, _wh_system, max_tokens=700)
 
     _prompt_a = _build_wh_prompt(_tweet_block_a, _rss_block_a, 4)
     _prompt_b = _build_wh_prompt(_tweet_block_b, _rss_block_b, 4)
