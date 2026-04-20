@@ -5793,6 +5793,78 @@ def _parse_inspiration_ideas(_raw: str) -> list:
     return []
 
 
+def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list:
+    """Build deterministic What's Hot ideas when AI routing is unavailable."""
+    _ideas = []
+    _seen_hooks = set()
+
+    def _pick_voice(text: str) -> str:
+        _text = (text or "").lower()
+        if any(_w in _text for _w in ["injury", "fired", "cut", "loss", "struggle", "problem", "issue", "mess", "bad"]):
+            return "Critical"
+        if any(_w in _text for _w in ["win", "surge", "dominant", "locked in", "comeback", "hot", "momentum", "breakout"]):
+            return "Hype"
+        if any(_w in _text for _w in ["rumor", "leak", "debate", "discourse", "controversy", "again"]):
+            return "Sarcastic"
+        return "Default"
+
+    def _topic_from_text(text: str) -> str:
+        _clean = re.sub(r"https?://\S+", "", text or "")
+        _clean = re.sub(r"[@#]", "", _clean)
+        _clean = re.sub(r"[^A-Za-z0-9'\- ]+", " ", _clean)
+        _words = [w for w in _clean.split() if len(w) > 2][:4]
+        return " ".join(_words[:3]).strip().title() or "Trending Angle"
+
+    def _build_hook(topic: str, voice: str, source: str) -> str:
+        if voice == "Critical":
+            return f"{topic} is the part of this {source} everyone wants to talk around. That usually means the real story is the uncomfortable one."
+        if voice == "Hype":
+            return f"{topic} is heating up for a reason. This feels like the kind of {source} that shifts the whole conversation fast."
+        if voice == "Sarcastic":
+            return f"{topic} is officially today's completely normal {source}. Nothing to see here except the same red flags getting louder."
+        return f"{topic} is one of the biggest things moving right now. The first reaction is obvious, but the better angle is what it means next."
+
+    def _build_why(topic: str, source: str) -> str:
+        _base = f"{source} momentum around {topic.lower()}"
+        _base = _base.replace("twitter", "timeline").replace("news", "headline")
+        return _base[:42]
+
+    def _append(text: str, source: str):
+        _topic = _topic_from_text(text)
+        _voice = _pick_voice(text)
+        _hook = _build_hook(_topic, _voice, source)
+        if _hook in _seen_hooks:
+            return
+        _seen_hooks.add(_hook)
+        _ideas.append({
+            "topic": _topic[:40],
+            "source": source,
+            "voice": _voice,
+            "hook": _hook[:280],
+            "why": _build_why(_topic, source),
+        })
+
+    for _tweet in _all_tweets:
+        _text = (_tweet.get("text", "") or "").strip()
+        if not _text or _text.startswith("RT ") or _text.startswith("@"):
+            continue
+        _append(_text, "twitter")
+        if len(_ideas) >= 8:
+            break
+
+    if len(_ideas) < 8:
+        for _headline in _rss_headlines:
+            _text = (_headline or "").strip()
+            if not _text:
+                continue
+            _src = "espn" if "espn" in _text.lower() else "news"
+            _append(_text, _src)
+            if len(_ideas) >= 8:
+                break
+
+    return _ideas
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude(_cache_key: str = ""):
     """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
@@ -5900,6 +5972,9 @@ Return ONLY JSON:
             _idea["hook"] = _hook
         if len(_hook) > 280:
             _idea["hook"] = _hook[:277] + "..."
+
+    if not _ideas:
+        _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)
 
     # Save to gist for instant loads on future visits
     if _ideas:
