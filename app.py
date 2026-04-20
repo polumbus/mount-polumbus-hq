@@ -5690,7 +5690,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-20"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-20-default-normal"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -5804,16 +5804,6 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
         "today", "right", "now", "news", "report", "reports", "reporting", "source", "sources",
     }
 
-    def _pick_voice(text: str) -> str:
-        _text = (text or "").lower()
-        if any(_w in _text for _w in ["injury", "fired", "cut", "loss", "struggle", "problem", "issue", "mess", "bad"]):
-            return "Critical"
-        if any(_w in _text for _w in ["win", "surge", "dominant", "locked in", "comeback", "hot", "momentum", "breakout"]):
-            return "Hype"
-        if any(_w in _text for _w in ["rumor", "leak", "debate", "discourse", "controversy", "again"]):
-            return "Sarcastic"
-        return "Default"
-
     def _clean_source_text(text: str) -> str:
         _clean = (text or "").strip()
         _clean = re.sub(r"https?://\S+", "", _clean)
@@ -5841,79 +5831,31 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
                 break
         return " ".join(w.title() for w in _words) or "Trending Angle"
 
-    def _follow_line(text: str, source: str, voice: str) -> str:
+    def _follow_line(text: str, source: str) -> str:
         _text = (text or "").lower()
         if any(_w in _text for _w in ["draft", "trade", "free agency", "contract", "extension", "signing"]):
-            _opts = {
-                "Critical": "Front offices tell on themselves with stuff like this long before the public catches up.",
-                "Hype": "That is the kind of roster move that changes how the league talks about you.",
-                "Sarcastic": "Sure feels like a very calm and totally settled personnel situation.",
-                "Default": "Those signals usually tell you what the building really believes about the roster.",
-            }
-            return _opts[voice]
+            return "Those details usually tell you what the building really believes about the roster"
         if any(_w in _text for _w in ["injury", "ankle", "knee", "hamstring", "questionable", "out"]):
-            _opts = {
-                "Critical": "Guys inside the building know exactly how serious that is before the public ever does.",
-                "Hype": "If he gets through this clean, the whole tone around this team changes fast.",
-                "Sarcastic": "But yeah, I'm sure everybody is being completely transparent about it.",
-                "Default": "Availability stories usually get real before the public language does.",
-            }
-            return _opts[voice]
+            return "Availability stories usually get real before the public language does"
         if any(_w in _text for _w in ["playoff", "rotation", "starting", "bench", "minutes", "series"]):
-            _opts = {
-                "Critical": "Playoff decisions show you who a staff trusts when the room gets tight.",
-                "Hype": "That is exactly how postseason momentum starts building before people admit it.",
-                "Sarcastic": "Nothing says stress-free basketball like another totally obvious rotation conversation.",
-                "Default": "Those choices matter because postseason trust is usually decided before the series starts.",
-            }
-            return _opts[voice]
+            return "Those choices matter because postseason trust is usually decided before the series starts"
         if any(_w in _text for _w in ["coach", "coordinator", "play calling", "scheme", "locker room"]):
-            _opts = {
-                "Critical": "You feel that kind of coaching story in meetings before it ever shows up in the quotes.",
-                "Hype": "When the room buys into that, the product looks different immediately.",
-                "Sarcastic": "Always a great sign when the coaching conversation starts writing itself.",
-                "Default": "Those are the details that usually tell you what the room actually thinks.",
-            }
-            return _opts[voice]
-        _opts = {
-            "Critical": "That usually points to a bigger truth people are trying not to say out loud yet.",
-            "Hype": "That's the kind of signal that gets opponents adjusting before fans even notice.",
-            "Sarcastic": "Completely normal internet behavior around a story that is obviously not getting louder by the hour.",
-            "Default": "That's where the real conversation starts, not where the first reaction lands.",
-        }
-        return _opts[voice]
+            return "Those are the details that usually tell you what the room actually thinks"
+        return "That is usually where the real conversation starts, not where the first reaction lands"
 
-    def _build_hook(text: str, topic: str, voice: str, source: str) -> str:
+    def _build_hook(text: str, topic: str, source: str) -> str:
         _lead = _clean_source_text(text)
         if not _lead:
             _lead = topic
         _lead = _lead.rstrip(".!?")
-        if len(_lead) > 110:
-            _lead = _lead[:107].rstrip(" ,;:") + "..."
-        _follow = _follow_line(text, source, voice)
-        _templates = {
-            "Critical": [
-                f"{_lead}. {_follow}",
-                f"{_lead}. That's not random noise. {_follow}",
-                f"{_lead}. People will dance around that part. {_follow}",
-            ],
-            "Hype": [
-                f"{_lead}. {_follow}",
-                f"{_lead}. That's when you know it's getting real. {_follow}",
-                f"{_lead}. If you're paying attention, {_follow[0].lower() + _follow[1:]}",
-            ],
-            "Sarcastic": [
-                f"{_lead}. {_follow}",
-                f"{_lead}. Totally normal. {_follow}",
-                f"{_lead}. Yep, nothing about that feels like it could spiral. {_follow}",
-            ],
-            "Default": [
-                f"{_lead}. {_follow}",
-                f"{_lead}. That's the part I keep coming back to. {_follow}",
-                f"{_lead}. That detail matters more than the first wave of takes. {_follow}",
-            ],
-        }
-        _pool = _templates.get(voice, _templates["Default"])
+        if len(_lead) > 120:
+            _lead = _lead[:117].rstrip(" ,;:") + "..."
+        _follow = _follow_line(text, source)
+        _pool = [
+            f"{_lead}\n{_follow}...",
+            f"{_lead}\nThat is the part I keep coming back to. {_follow.lower()}...",
+            f"{_lead}\nThat detail matters more than the first wave of takes. {_follow.lower()}...",
+        ]
         _idx = int(hashlib.md5(f"{source}|{topic}|{_lead}".encode()).hexdigest(), 16) % len(_pool)
         return _pool[_idx]
 
@@ -5924,8 +5866,8 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 
     def _append(text: str, source: str):
         _topic = _topic_from_text(text)
-        _voice = _pick_voice(text)
-        _hook = _build_hook(text, _topic, _voice, source)
+        _voice = "Default"
+        _hook = _build_hook(text, _topic, source)
         if _hook in _seen_hooks:
             return
         _seen_hooks.add(_hook)
@@ -5982,6 +5924,8 @@ def _run_inspiration_claude(_cache_key: str = ""):
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
     _fmt_patterns = _get_format_patterns_with_fallback("Normal Tweet")
+    _pp = analyze_personal_patterns()
+    _format_mod = _build_format_mod("Normal Tweet", _pp, "Default")
     _fmt_block = ""
     if _fmt_patterns:
         _fmt_block = f"""
@@ -5992,11 +5936,10 @@ FORMAT PATTERNS (from highest-engagement tweets RIGHT NOW — every hook MUST fo
 Use these patterns to structure every hook. Match the opener style, line break placement, length, and ending style that's working THIS WEEK."""
 
     _wh_handle = get_current_handle()
-    _wh_is_g = is_guest()
-    _wh_angle = "their unique perspective and expertise" if _wh_is_g else "Tyler's unique angle as a former player and Denver media host"
-    _wh_system = f"""You are @{_wh_handle}'s content strategist. Return only a JSON array, no other text.
+    _wh_system = get_system_for_voice("Default", "") + """
 
-{_WHATS_HOT_VOICE_GUIDE}"""
+You are generating What's Hot cards for Creator Studio.
+Return only a JSON array, no markdown, no commentary, no code fences."""
 
     # Split feed in half and run two parallel Sonnet calls for speed
     _tweet_lines_a = _tweet_lines[:len(_tweet_lines)//2]
@@ -6009,7 +5952,7 @@ Use these patterns to structure every hook. Match the opener style, line break p
     _rss_block_b = "\n".join(_rss_b) if _rss_b else "(none)"
 
     def _build_wh_prompt(tweets, headlines, count):
-        return f"""@{_wh_handle} needs {count} tweet ideas from what's hot RIGHT NOW.
+        return f"""@{_wh_handle} needs {count} finished tweets from what's hot RIGHT NOW.
 
 FEED:
 {tweets}
@@ -6017,13 +5960,19 @@ FEED:
 HEADLINES:
 {headlines}
 
+{_format_mod}{_fmt_block}
+
 Rules:
-- hook = ORIGINAL tweet draft in @{_wh_handle}'s voice (not a copy of feed text)
-- voice = Default/Critical/Hype/Sarcastic (pick best fit)
-- why = under 10 words, {_wh_angle}
+- Build each idea as a full, ready-to-post Normal Tweet in Default voice
+- Use the same observation -> context -> open-door structure as the main composer
+- hook = the ACTUAL tweet text @{_wh_handle} would post, written out in full
+- voice must always be "Default"
+- Never copy feed wording directly. Translate the signal into @{_wh_handle}'s natural phrasing
+- Keep each hook inside Normal Tweet constraints and use a line break when it improves the read
+- why = under 10 words describing the angle only
 
 Return ONLY JSON:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default/Critical/Hype/Sarcastic","hook":"tweet draft","why":"short angle"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default","hook":"full tweet text ready to post","why":"short angle"}}]"""
 
     import concurrent.futures as _wh_cf
     def _wh_call(prompt_text):
@@ -6055,8 +6004,7 @@ Return ONLY JSON:
         if not _hook.strip():
             _ideas.remove(_idea)
             continue
-        if "voice" not in _idea or _idea["voice"] not in ("Default", "Critical", "Hype", "Sarcastic"):
-            _idea["voice"] = "Default"
+        _idea["voice"] = "Default"
 
     for _idea in _ideas:
         _hook = _idea.get("hook", "")
@@ -6255,7 +6203,7 @@ def _ci_inspiration_dialog():
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_vbg};color:{_vfg};border:1px solid {_vborder};margin-left:4px;">{_voice.upper()}</span>'
               f'</div>'
-              f'<div style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.7;letter-spacing:0.01em;margin-bottom:8px;">{_hook}</div>'
+              f'<div style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.7;letter-spacing:0.01em;margin-bottom:8px;white-space:pre-line;">{_hook}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{_why}</div>'
             f'</div>',
             unsafe_allow_html=True)
@@ -6265,9 +6213,8 @@ def _ci_inspiration_dialog():
             if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
                 if _hook:
                     st.session_state["ci_text"] = _hook
-                    _idea_voice = _idea.get("voice", "Default")
-                    if _idea_voice in ("Default", "Critical", "Hype", "Sarcastic"):
-                        st.session_state["ci_voice"] = _idea_voice
+                    st.session_state["ci_format"] = "Normal Tweet"
+                    st.session_state["ci_voice"] = "Default"
                 st.rerun(scope="app")
         with _ib2:
             if pplx_available() and st.button("Verify", key=f"inspo_verify_{_i}", use_container_width=True):
