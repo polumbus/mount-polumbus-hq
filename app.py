@@ -3182,6 +3182,112 @@ def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
     return ""
 
 
+def _parse_build_batch_json(raw: str) -> list:
+    _clean = (raw or "").strip()
+    if not _clean:
+        return []
+    if _clean.startswith("```"):
+        _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    try:
+        _obj = json.loads(_clean)
+        if isinstance(_obj, dict):
+            _obj = _obj.get("items", [])
+        if isinstance(_obj, list):
+            return [x for x in _obj if isinstance(x, dict)]
+    except Exception:
+        pass
+    try:
+        _m = re.search(r"\[[\s\S]*\]", _clean)
+        if _m:
+            _obj = json.loads(_m.group(0))
+            if isinstance(_obj, list):
+                return [x for x in _obj if isinstance(x, dict)]
+    except Exception:
+        pass
+    return []
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _build_wh_hooks_batch_cached(seeds: tuple[str, ...], formula_version: str = "") -> list:
+    """Build multiple What's Hot hooks in one exact-rules batch call."""
+    _seeds = [s.strip() for s in (seeds or ()) if (s or "").strip()]
+    if not _seeds:
+        return []
+
+    voice = "Default"
+    fmt = "Normal Tweet"
+    voice_mod = _build_voice_mod(voice)
+    pp = analyze_personal_patterns()
+    format_mod = _build_format_mod(fmt, pp, voice)
+    _fmt_inject_b = ""
+    _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
+    if _fmt_pats_b:
+        _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+    _voice_task = "matching the voice in the system prompt exactly"
+    _char_rule_b = "\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully."
+    _jobs = []
+    for _idx, _seed in enumerate(_seeds, 1):
+        _jobs.append(f"JOB {_idx}\nCONCEPT/ANGLE:\n\"{_seed}\"")
+    _jobs_block = "\n\n".join(_jobs)
+    _handle = get_current_handle()
+    _prompt = f"""You are running multiple independent Creator Studio BUILD jobs in one batch.
+
+Apply the exact same BUILD rules to each job independently.
+
+JOBS:
+{_jobs_block}
+
+{format_mod}{_fmt_inject_b}
+
+STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
+- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
+- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
+- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
+
+TASK: For EACH job, write 3 distinct, finished tweets from that concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
+
+Rules:
+- Strong hook — first line stops the scroll
+- No hashtags, no emojis
+- 7th-9th grade reading level
+- End with something that makes people reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
+- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
+
+CRITICAL: Each option field must contain the ACTUAL TWEET TEXT that @{_handle} would post — not a description, not a pattern label, not instructions. Write the real tweet.
+
+Return ONLY this JSON array, no other text:
+[
+  {{
+    "job": 1,
+    "option1": "full tweet text",
+    "option1_pattern": "angle label",
+    "option2": "full tweet text",
+    "option2_pattern": "angle label",
+    "option3": "full tweet text",
+    "option3_pattern": "angle label",
+    "pick": "1, 2, or 3"
+  }}
+]"""
+    _raw = call_claude(_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=2600)
+    _items = _parse_build_batch_json(_raw)
+    _out = [""] * len(_seeds)
+    for _item in _items:
+        try:
+            _job = int(str(_item.get("job", "")).strip()) - 1
+        except Exception:
+            continue
+        if not (0 <= _job < len(_out)):
+            continue
+        _pick = str(_item.get("pick", "1")).strip()
+        if _pick not in ("1", "2", "3"):
+            _pick = "1"
+        _hook = (_item.get(f"option{_pick}") or _item.get("option1") or "").strip()
+        if _hook:
+            _out[_job] = _sanitize_output(_hook)
+    return _out
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # CREATOR STUDIO — BUILDER FUNCTIONS (voice, format, patterns, grades)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5728,7 +5834,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-20-fast-shared-build"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-20-batched-fast-build"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -5949,20 +6055,31 @@ def _run_inspiration_claude(_cache_key: str = ""):
         _updated = dict(_idea)
         _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
         _hook = ""
-        if _seed:
-            _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION)
-            if not _hook:
-                _hook = (_updated.get("hook") or _seed).strip()
+        _updated["_seed"] = _seed
         _updated["voice"] = "Default"
-        _updated["hook"] = _hook[:1200]
         return _updated
 
+    _prepared = [_materialize_idea(_idea) for _idea in _ideas]
+    _seeds = [(_item.get("_seed") or "").strip() for _item in _prepared if (_item.get("_seed") or "").strip()]
+    _built_hooks = []
+    for _i in range(0, len(_seeds), 4):
+        _batch = tuple(_seeds[_i:_i + 4])
+        _built_hooks.extend(_build_wh_hooks_batch_cached(_batch, _WHATS_HOT_FORMULA_VERSION))
     _materialized = []
-    _workers = max(1, min(7, len(_ideas)))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_workers) as _ex:
-        for _item in _ex.map(_materialize_idea, _ideas):
-            if _item.get("hook", "").strip():
-                _materialized.append(_item)
+    _hook_idx = 0
+    for _item in _prepared:
+        _seed = (_item.get("_seed") or "").strip()
+        if _seed:
+            _hook = _built_hooks[_hook_idx] if _hook_idx < len(_built_hooks) else ""
+            _hook_idx += 1
+        else:
+            _hook = ""
+        if not _hook:
+            _hook = (_item.get("hook") or _seed).strip()
+        _item["hook"] = _hook[:1200]
+        _item.pop("_seed", None)
+        if _item.get("hook", "").strip():
+            _materialized.append(_item)
     _ideas = _materialized or _ideas
 
     # Save to gist for instant loads on future visits
