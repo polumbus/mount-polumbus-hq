@@ -10,6 +10,17 @@ CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
 CODEX_FALLBACK_MODELS = ["gpt-5.1-codex-mini", "gpt-5.2"]
 
 
+def _dedupe_accidental_repeat(text: str) -> str:
+    text = (text or "").strip()
+    if not text:
+        return ""
+    if len(text) % 2 == 0:
+        half = len(text) // 2
+        if text[:half] == text[half:]:
+            return text[:half].strip()
+    return text
+
+
 def _decode_jwt_payload(token: str):
     parts = token.split(".")
     if len(parts) < 2:
@@ -108,7 +119,7 @@ def _parse_codex_response_text(raw: str) -> str:
         if evt.get("type") == "response.completed" and isinstance(evt.get("response"), dict):
             text = _extract_output_text(evt["response"])
             if text:
-                return text
+                return _dedupe_accidental_repeat(text)
     output_text = ""
     for evt in events:
         delta = evt.get("delta")
@@ -117,7 +128,7 @@ def _parse_codex_response_text(raw: str) -> str:
         text = evt.get("text")
         if isinstance(text, str):
             output_text += text
-    return output_text.strip()
+    return _dedupe_accidental_repeat(output_text)
 
 
 def call_chatgpt_oauth(prompt: str, system: str = "", model: str = None, timeout: int = 90) -> str:

@@ -5753,22 +5753,43 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
 
 
 def _parse_inspiration_ideas(_raw: str) -> list:
+    _clean = (_raw or "").strip()
+    if not _clean:
+        return []
+    if _clean.startswith("```"):
+        _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    _decoder = json.JSONDecoder()
+    _idx = 0
     _ideas = []
-    try:
-        _clean = (_raw or "").strip()
-        if _clean.startswith("```"):
-            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        _ideas = json.loads(_clean)
-        if isinstance(_ideas, dict):
-            _ideas = _ideas.get("ideas", [])
-    except Exception:
+    while _idx < len(_clean):
+        while _idx < len(_clean) and _clean[_idx].isspace():
+            _idx += 1
+        if _idx >= len(_clean):
+            break
         try:
-            _m = re.search(r'\[[\s\S]*\]', _raw or "")
-            if _m:
-                _ideas = json.loads(_m.group(0))
+            _obj, _next_idx = _decoder.raw_decode(_clean, _idx)
+            _idx = _next_idx
         except Exception:
-            pass
-    return _ideas if isinstance(_ideas, list) else []
+            _idx += 1
+            continue
+        if isinstance(_obj, dict):
+            _obj = _obj.get("ideas", [])
+        if isinstance(_obj, list):
+            _ideas.extend([_item for _item in _obj if isinstance(_item, dict)])
+
+    if _ideas:
+        return _ideas
+
+    try:
+        _obj = json.loads(_clean)
+        if isinstance(_obj, dict):
+            _obj = _obj.get("ideas", [])
+        if isinstance(_obj, list):
+            return [_item for _item in _obj if isinstance(_item, dict)]
+    except Exception:
+        pass
+    return []
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -5852,39 +5873,13 @@ Return ONLY JSON:
         _raw_b = _fut_b.result()
 
     # Merge results
-    _raw = ""
     _ideas_merged = []
     for _raw_part in [_raw_a, _raw_b]:
         if not _raw_part:
             continue
-        _clean_part = _raw_part.strip()
-        if _clean_part.startswith("```"):
-            _clean_part = _clean_part.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        try:
-            _ideas_merged.extend(json.loads(_clean_part))
-        except Exception:
-            _m = re.search(r'\[[\s\S]*\]', _raw_part)
-            if _m:
-                try:
-                    _ideas_merged.extend(json.loads(_m.group(0)))
-                except Exception:
-                    pass
-    # Convert merged ideas back to raw JSON for existing parser compatibility
-    _raw = json.dumps(_ideas_merged) if _ideas_merged else ""
+        _ideas_merged.extend(_parse_inspiration_ideas(_raw_part))
 
-    _ideas = []
-    try:
-        _clean = _raw.strip()
-        if _clean.startswith("```"):
-            _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        _ideas = json.loads(_clean)
-    except Exception:
-        try:
-            _m = re.search(r'\[[\s\S]*\]', _raw)
-            if _m:
-                _ideas = json.loads(_m.group(0))
-        except Exception:
-            pass
+    _ideas = _ideas_merged
 
     for _idea in list(_ideas):
         _hook = _idea.get("hook", "")

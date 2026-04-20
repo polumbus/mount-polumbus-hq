@@ -30,6 +30,7 @@ CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 PROXY_API_KEY = os.environ.get("HQ_PROXY_KEY", "")
 PORT = 7821
+CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
 TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 GIST_ID = "15fb167bbbfdaa79d5ce11c266c3f652"
@@ -41,13 +42,54 @@ _recovery_thread = None
 
 
 def _load_oauth_access_token():
-    """Read Claude OAuth access token from local credentials file."""
+    """Read Claude OAuth access token from local credentials file and refresh if needed."""
     try:
         creds_path = os.path.expanduser("~/.claude/.credentials.json")
         with open(creds_path, "r", encoding="utf-8") as f:
             creds = json.load(f)
         oauth = creds.get("claudeAiOauth", creds)
-        return oauth.get("accessToken", "")
+        access_token = oauth.get("accessToken", "")
+        expires_at = oauth.get("expiresAt", 0) or 0
+        refresh_token = oauth.get("refreshToken", "")
+        if access_token and expires_at and (time.time() * 1000) < (int(expires_at) - 300000):
+            return access_token
+        if not refresh_token:
+            return access_token
+
+        body = json.dumps({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": CLAUDE_OAUTH_CLIENT_ID,
+        }).encode()
+        req = urllib.request.Request(
+            "https://platform.claude.com/v1/oauth/token",
+            data=body,
+            headers={"Content-Type": "application/json", "User-Agent": "claude-code/2.1.90"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            fresh = json.loads(resp.read())
+
+        fresh_access = fresh.get("access_token") or fresh.get("accessToken") or access_token
+        if not fresh_access:
+            return access_token
+
+        oauth["accessToken"] = fresh_access
+        if fresh.get("refresh_token"):
+            oauth["refreshToken"] = fresh["refresh_token"]
+        elif fresh.get("refreshToken"):
+            oauth["refreshToken"] = fresh["refreshToken"]
+
+        expires_in = fresh.get("expires_in")
+        if fresh.get("expiresAt"):
+            oauth["expiresAt"] = fresh["expiresAt"]
+        elif expires_in:
+            oauth["expiresAt"] = int((time.time() + float(expires_in)) * 1000)
+
+        creds["claudeAiOauth"] = oauth
+        with open(creds_path, "w", encoding="utf-8") as f:
+            json.dump(creds, f, indent=2)
+        return fresh_access
     except Exception:
         return ""
 
