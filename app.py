@@ -3170,6 +3170,18 @@ Return ONLY this JSON, no other text:
     return build_data, raw
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
+    """Cache What's Hot final build output so repeat opens don't rerun the same seed."""
+    _build_data, _raw = _generate_build_data(seed, "Normal Tweet", "Default")
+    if _build_data and _build_data.get("option1"):
+        _pick = str(_build_data.get("pick", "1")).strip()
+        if _pick not in ("1", "2", "3"):
+            _pick = "1"
+        return (_build_data.get(f"option{_pick}") or _build_data.get("option1") or "").strip()
+    return ""
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # CREATOR STUDIO — BUILDER FUNCTIONS (voice, format, patterns, grades)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5716,7 +5728,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-20-shared-build"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-20-fast-shared-build"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -5931,107 +5943,14 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 def _run_inspiration_claude(_cache_key: str = ""):
     """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
-
-    _tweet_lines = []
-    for _t in _all_tweets[:40]:
-        _text = _t.get("text", "")
-        if not _text:
-            continue
-        if _text.startswith("RT "):
-            continue
-        if _text.startswith("@"):
-            continue
-        _author = _t.get("author", {}).get("userName", "") or _t.get("user", {}).get("screen_name", "")
-        _likes = _t.get("likeCount", _t.get("like_count", 0))
-        _tweet_lines.append(f"@{_author} ({_likes}L): {_text[:100]}")
-        if len(_tweet_lines) >= 20:
-            break
-
-    _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
-    _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
-
-    _wh_handle = get_current_handle()
-    _wh_system = get_system_for_voice("Default", "") + """
-
-You are generating What's Hot cards for Creator Studio.
-Return only a JSON array, no markdown, no commentary, no code fences."""
-
-    # Split feed in half and run two parallel Sonnet calls for speed
-    _tweet_lines_a = _tweet_lines[:len(_tweet_lines)//2]
-    _tweet_lines_b = _tweet_lines[len(_tweet_lines)//2:]
-    _rss_a = (_rss_headlines or [])[:5]
-    _rss_b = (_rss_headlines or [])[5:10]
-    _tweet_block_a = "\n".join(_tweet_lines_a) if _tweet_lines_a else "(none)"
-    _tweet_block_b = "\n".join(_tweet_lines_b) if _tweet_lines_b else "(none)"
-    _rss_block_a = "\n".join(_rss_a) if _rss_a else "(none)"
-    _rss_block_b = "\n".join(_rss_b) if _rss_b else "(none)"
-
-    def _build_wh_prompt(tweets, headlines, count):
-        return f"""@{_wh_handle} needs {count} timely content angles from what's hot RIGHT NOW.
-
-FEED:
-{tweets}
-
-HEADLINES:
-{headlines}
-
-Rules:
-- topic = 2-4 words naming the story
-- seed = a concise concept or angle only, NOT a finished tweet
-- voice must always be "Default"
-- Never copy feed wording directly. Translate the signal into an original angle
-- why = under 10 words describing the angle only
-
-Return ONLY JSON:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default","seed":"short concept or angle only","why":"short angle"}}]"""
-
-    import concurrent.futures as _wh_cf
-    def _wh_call(prompt_text):
-        return _call_claude_inspiration(prompt_text, _wh_system, max_tokens=700)
-
-    _prompt_a = _build_wh_prompt(_tweet_block_a, _rss_block_a, 4)
-    _prompt_b = _build_wh_prompt(_tweet_block_b, _rss_block_b, 4)
-
-    with _wh_cf.ThreadPoolExecutor(max_workers=2) as _wh_ex:
-        _fut_a = _wh_ex.submit(_wh_call, _prompt_a)
-        _fut_b = _wh_ex.submit(_wh_call, _prompt_b)
-        _raw_a = _fut_a.result()
-        _raw_b = _fut_b.result()
-
-    # Merge results
-    _ideas_merged = []
-    for _raw_part in [_raw_a, _raw_b]:
-        if not _raw_part:
-            continue
-        _ideas_merged.extend(_parse_inspiration_ideas(_raw_part))
-
-    _ideas = _ideas_merged
-
-    for _idea in list(_ideas):
-        _seed = (_idea.get("seed") or _idea.get("hook") or "").strip()
-        if _seed.startswith("RT ") or _seed.startswith("@"):
-            _ideas.remove(_idea)
-            continue
-        if not _seed:
-            _ideas.remove(_idea)
-            continue
-        _idea["seed"] = _seed
-        _idea["voice"] = "Default"
-
-    if not _ideas:
-        _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)
+    _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
 
     def _materialize_idea(_idea: dict) -> dict:
         _updated = dict(_idea)
         _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
         _hook = ""
         if _seed:
-            _build_data, _raw = _generate_build_data(_seed, "Normal Tweet", "Default")
-            if _build_data and _build_data.get("option1"):
-                _pick = str(_build_data.get("pick", "1")).strip()
-                if _pick not in ("1", "2", "3"):
-                    _pick = "1"
-                _hook = (_build_data.get(f"option{_pick}") or _build_data.get("option1") or "").strip()
+            _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION)
             if not _hook:
                 _hook = (_updated.get("hook") or _seed).strip()
         _updated["voice"] = "Default"
@@ -6039,7 +5958,8 @@ Return ONLY JSON:
         return _updated
 
     _materialized = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _ex:
+    _workers = max(1, min(7, len(_ideas)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_workers) as _ex:
         for _item in _ex.map(_materialize_idea, _ideas):
             if _item.get("hook", "").strip():
                 _materialized.append(_item)
