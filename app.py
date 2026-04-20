@@ -3090,6 +3090,86 @@ def _parse_banger_json(raw):
     return out if out.get("option1") else None
 
 
+def _generate_build_data(tweet_text: str, fmt: str, voice: str,
+                         *, voice_mod: str | None = None, pp: dict | None = None,
+                         live_stats_block: str = "", sports_ctx: str = ""):
+    """Run the exact Creator Studio build prompt and return parsed options + raw text."""
+    if not (tweet_text or "").strip():
+        return None, ""
+
+    voice_mod = voice_mod if voice_mod is not None else _build_voice_mod(voice)
+    pp = pp if pp is not None else analyze_personal_patterns()
+    format_mod = _build_format_mod(fmt, pp, voice)
+    _sports_ctx_b = sports_ctx
+    _fmt_inject_b = ""
+    if voice == "Default":
+        _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
+        if _fmt_pats_b:
+            _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+    _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
+    _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
+    _has_brief = any(d in tweet_text for d in _brief_delimiters)
+    if _has_brief:
+        _brief_block = f"STRUCTURED BRIEF:\n{tweet_text}"
+    else:
+        _brief_block = f"CONCEPT/ANGLE:\n\"{tweet_text}\""
+    _build_opening = "Here is a structured brief as source material. Extract the strongest take and write from scratch — 3 distinct variations." if _has_brief else "Here is a tweet concept/angle to turn into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations."
+    _char_rule_b = f"\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully." if fmt == "Normal Tweet" else (f"\n- CHARACTER LIMIT: Every option MUST be under 160 characters for Punchy Tweet format." if fmt == "Punchy Tweet" else (f"\n- LENGTH: Long Tweet format — 600-1200 characters. Use the space." if fmt == "Long Tweet" else ""))
+    build_prompt = f"""{_build_opening}
+
+{_brief_block}
+{live_stats_block}
+{format_mod}{_sports_ctx_b}{_fmt_inject_b}
+
+STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
+- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
+- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
+- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
+{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
+
+TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
+
+Rules:
+- Strong hook — first line stops the scroll
+- No hashtags, no emojis
+- 7th-9th grade reading level
+- End with something that makes people reply or argue
+- Algorithm optimized: strong opinion, relatable, invites engagement
+- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
+
+{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
+
+CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
+
+Return ONLY this JSON, no other text:
+{{
+  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
+  "option1_pattern": "short label describing the angle this version takes",
+  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
+  "option2_pattern": "short label describing the angle this version takes",
+  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
+  "option3_pattern": "short label describing the angle this version takes",
+  "pick": "1, 2, or 3 — just the number, no explanation"
+}}"""
+    _max_tok_b = 2000 if fmt == "Thread" else 700
+    raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
+    build_data = _parse_banger_json(raw)
+    if build_data and build_data.get("option1"):
+        for _ok in ["option1", "option2", "option3"]:
+            if build_data.get(_ok):
+                build_data[_ok] = _sanitize_output(build_data[_ok])
+        if voice == "Critical" and build_data.get("option1") and build_data.get("option2"):
+            _o1p = build_data["option1"].rstrip().endswith(".")
+            _o2p = build_data["option2"].rstrip().endswith(".")
+            _o1q = build_data["option1"].rstrip().endswith("?")
+            _o2q = build_data["option2"].rstrip().endswith("?")
+            if _o1p and _o2q:
+                build_data["pick"] = "1"
+            elif _o2p and _o1q:
+                build_data["pick"] = "2"
+    return build_data, raw
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # CREATOR STUDIO — BUILDER FUNCTIONS (voice, format, patterns, grades)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4848,70 +4928,16 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         result = _sanitize_output(raw.strip()) if raw else raw
 
     elif action == "build" and tweet_text.strip():
-        _sports_ctx_b = _sports_ctx
-        _fmt_inject_b = ""
-        _fmt_pats_b = _get_format_patterns()
-        if _fmt_pats_b:
-            _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-        build_prompt = f"""Tyler Polumbus has a tweet concept/angle he wants turned into a finished tweet. Materialize this concept into the actual tweet — 3 distinct variations.
-
-CONCEPT/ANGLE:
-\"{tweet_text}\"
-
-{format_mod}{_sports_ctx_b}{_fmt_inject_b}
-
-STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
-- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
-- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
-- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
-{"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. Named failures and observable facts count." if voice == "Critical" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available." if voice == "Hype" else ""}
-
-TASK: Write 3 distinct, finished tweets from this concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
-
-Rules:
-- Strong hook — first line stops the scroll
-- No hashtags, no emojis
-- 7th-9th grade reading level
-- End with something that makes people reply or argue
-- Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
-
-{"HOMER ENDING RULE: ALL options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: ALL options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
-
-CRITICAL: Each "option" field must contain the ACTUAL TWEET TEXT that @{get_current_handle()} would post — not a description of the tweet, not a pattern label, not instructions. Write the real tweet.
-
-Return ONLY this JSON, no other text:
-{{
-  "option1": "the actual tweet text @{get_current_handle()} would post — written out in full, ready to copy and paste to X",
-  "option1_pattern": "short label describing the angle this version takes",
-  "option2": "the actual tweet text @{get_current_handle()} would post — a different angle, written out in full",
-  "option2_pattern": "short label describing the angle this version takes",
-  "option3": "the actual tweet text @{get_current_handle()} would post — a third angle, written out in full",
-  "option3_pattern": "short label describing the angle this version takes",
-  "pick": "1, 2, or 3 — just the number, no explanation"
-}}"""
-        _max_tok_b = 2000 if fmt == "Thread" else 700
-        raw = call_claude(build_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=_max_tok_b)
-        with open("/tmp/build_debug.log", "w") as _dbg:
-            _dbg.write(f"RAW:\n{raw}\n\n")
-        build_data = _parse_banger_json(raw)
-        if build_data:
-            with open("/tmp/build_debug.log", "a") as _dbg:
-                _dbg.write(f"PARSED:\n{json.dumps(build_data, indent=2)}\n")
+        build_data, raw = _generate_build_data(
+            tweet_text,
+            fmt,
+            voice,
+            voice_mod=voice_mod,
+            pp=pp,
+            live_stats_block=_live_stats_block,
+            sports_ctx=_sports_ctx,
+        )
         if build_data and build_data.get("option1"):
-            for _ok in ["option1", "option2", "option3"]:
-                if build_data.get(_ok):
-                    build_data[_ok] = _sanitize_output(build_data[_ok])
-            # Critical voice: force pick to period-ending option
-            if voice == "Critical" and build_data.get("option1") and build_data.get("option2"):
-                _o1p = build_data["option1"].rstrip().endswith(".")
-                _o2p = build_data["option2"].rstrip().endswith(".")
-                _o1q = build_data["option1"].rstrip().endswith("?")
-                _o2q = build_data["option2"].rstrip().endswith("?")
-                if _o1p and _o2q:
-                    build_data["pick"] = "1"
-                elif _o2p and _o1q:
-                    build_data["pick"] = "2"
             st.session_state["ci_banger_data"] = build_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
@@ -5690,7 +5716,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-20-default-normal"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-20-shared-build"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -5875,6 +5901,7 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
             "topic": _topic[:40],
             "source": source,
             "voice": _voice,
+            "seed": _clean_source_text(text)[:220],
             "hook": _hook[:280],
             "why": _build_why(_topic, source),
         })
@@ -5923,18 +5950,6 @@ def _run_inspiration_claude(_cache_key: str = ""):
     _rss_block = "\n".join(_rss_headlines[:10]) if _rss_headlines else "(none)"
     _tweet_block = "\n".join(_tweet_lines) if _tweet_lines else "(none)"
 
-    _fmt_patterns = _get_format_patterns_with_fallback("Normal Tweet")
-    _pp = analyze_personal_patterns()
-    _format_mod = _build_format_mod("Normal Tweet", _pp, "Default")
-    _fmt_block = ""
-    if _fmt_patterns:
-        _fmt_block = f"""
-
-FORMAT PATTERNS (from highest-engagement tweets RIGHT NOW — every hook MUST follow these patterns):
-{_fmt_patterns}
-
-Use these patterns to structure every hook. Match the opener style, line break placement, length, and ending style that's working THIS WEEK."""
-
     _wh_handle = get_current_handle()
     _wh_system = get_system_for_voice("Default", "") + """
 
@@ -5952,7 +5967,7 @@ Return only a JSON array, no markdown, no commentary, no code fences."""
     _rss_block_b = "\n".join(_rss_b) if _rss_b else "(none)"
 
     def _build_wh_prompt(tweets, headlines, count):
-        return f"""@{_wh_handle} needs {count} finished tweets from what's hot RIGHT NOW.
+        return f"""@{_wh_handle} needs {count} timely content angles from what's hot RIGHT NOW.
 
 FEED:
 {tweets}
@@ -5960,19 +5975,15 @@ FEED:
 HEADLINES:
 {headlines}
 
-{_format_mod}{_fmt_block}
-
 Rules:
-- Build each idea as a full, ready-to-post Normal Tweet in Default voice
-- Use the same observation -> context -> open-door structure as the main composer
-- hook = the ACTUAL tweet text @{_wh_handle} would post, written out in full
+- topic = 2-4 words naming the story
+- seed = a concise concept or angle only, NOT a finished tweet
 - voice must always be "Default"
-- Never copy feed wording directly. Translate the signal into @{_wh_handle}'s natural phrasing
-- Keep each hook inside Normal Tweet constraints and use a line break when it improves the read
+- Never copy feed wording directly. Translate the signal into an original angle
 - why = under 10 words describing the angle only
 
 Return ONLY JSON:
-[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default","hook":"full tweet text ready to post","why":"short angle"}}]"""
+[{{"topic":"2-4 words","source":"twitter/espn/news","voice":"Default","seed":"short concept or angle only","why":"short angle"}}]"""
 
     import concurrent.futures as _wh_cf
     def _wh_call(prompt_text):
@@ -5997,25 +6008,42 @@ Return ONLY JSON:
     _ideas = _ideas_merged
 
     for _idea in list(_ideas):
-        _hook = _idea.get("hook", "")
-        if _hook.startswith("RT ") or _hook.startswith("@"):
+        _seed = (_idea.get("seed") or _idea.get("hook") or "").strip()
+        if _seed.startswith("RT ") or _seed.startswith("@"):
             _ideas.remove(_idea)
             continue
-        if not _hook.strip():
+        if not _seed:
             _ideas.remove(_idea)
             continue
+        _idea["seed"] = _seed
         _idea["voice"] = "Default"
-
-    for _idea in _ideas:
-        _hook = _idea.get("hook", "")
-        if "\n" in _hook:
-            _hook = _hook.split("\n")[0].strip()
-            _idea["hook"] = _hook
-        if len(_hook) > 280:
-            _idea["hook"] = _hook[:277] + "..."
 
     if not _ideas:
         _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)
+
+    def _materialize_idea(_idea: dict) -> dict:
+        _updated = dict(_idea)
+        _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
+        _hook = ""
+        if _seed:
+            _build_data, _raw = _generate_build_data(_seed, "Normal Tweet", "Default")
+            if _build_data and _build_data.get("option1"):
+                _pick = str(_build_data.get("pick", "1")).strip()
+                if _pick not in ("1", "2", "3"):
+                    _pick = "1"
+                _hook = (_build_data.get(f"option{_pick}") or _build_data.get("option1") or "").strip()
+            if not _hook:
+                _hook = (_updated.get("hook") or _seed).strip()
+        _updated["voice"] = "Default"
+        _updated["hook"] = _hook[:1200]
+        return _updated
+
+    _materialized = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _ex:
+        for _item in _ex.map(_materialize_idea, _ideas):
+            if _item.get("hook", "").strip():
+                _materialized.append(_item)
+    _ideas = _materialized or _ideas
 
     # Save to gist for instant loads on future visits
     if _ideas:
