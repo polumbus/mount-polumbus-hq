@@ -902,12 +902,13 @@ def _call_claude_inspiration(prompt: str, system: str, max_tokens: int = 1000, m
     deterministic feed fallback take over instead of walking the full long AI
     router chain.
     """
+    _inspo_timeout = 45
     try:
-        return _call_claude_direct(prompt, system or "", max_tokens, model, timeout=12)
+        return _call_claude_direct(prompt, system or "", max_tokens, model, timeout=_inspo_timeout)
     except Exception:
         pass
     try:
-        return _call_claude_proxy(prompt, system or "", max_tokens, model, timeout=12)
+        return _call_claude_proxy(prompt, system or "", max_tokens, model, timeout=_inspo_timeout)
     except Exception:
         return ""
 
