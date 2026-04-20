@@ -5690,7 +5690,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-03"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-20"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -5797,6 +5797,12 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
     """Build deterministic What's Hot ideas when AI routing is unavailable."""
     _ideas = []
     _seen_hooks = set()
+    _stop = {
+        "the", "and", "for", "with", "that", "this", "from", "into", "your", "have", "just",
+        "they", "them", "their", "about", "after", "before", "over", "under", "through",
+        "could", "would", "should", "because", "while", "where", "when", "what", "why",
+        "today", "right", "now", "news", "report", "reports", "reporting", "source", "sources",
+    }
 
     def _pick_voice(text: str) -> str:
         _text = (text or "").lower()
@@ -5808,31 +5814,118 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
             return "Sarcastic"
         return "Default"
 
-    def _topic_from_text(text: str) -> str:
-        _clean = re.sub(r"https?://\S+", "", text or "")
-        _clean = re.sub(r"[@#]", "", _clean)
-        _clean = re.sub(r"[^A-Za-z0-9'\- ]+", " ", _clean)
-        _words = [w for w in _clean.split() if len(w) > 2][:4]
-        return " ".join(_words[:3]).strip().title() or "Trending Angle"
+    def _clean_source_text(text: str) -> str:
+        _clean = (text or "").strip()
+        _clean = re.sub(r"https?://\S+", "", _clean)
+        _clean = re.sub(r"\s+", " ", _clean).strip(" -|:\n\t")
+        for _sep in (" | ", " - ", " — "):
+            if _sep in _clean:
+                _left, _right = _clean.rsplit(_sep, 1)
+                if len(_right.split()) <= 4:
+                    _clean = _left.strip()
+        _clean = re.sub(r"^(breaking|report|reports|reporting)[:\-\s]+", "", _clean, flags=re.I)
+        return _clean.strip()
 
-    def _build_hook(topic: str, voice: str, source: str) -> str:
-        if voice == "Critical":
-            return f"{topic} is the part of this {source} everyone wants to talk around. That usually means the real story is the uncomfortable one."
-        if voice == "Hype":
-            return f"{topic} is heating up for a reason. This feels like the kind of {source} that shifts the whole conversation fast."
-        if voice == "Sarcastic":
-            return f"{topic} is officially today's completely normal {source}. Nothing to see here except the same red flags getting louder."
-        return f"{topic} is one of the biggest things moving right now. The first reaction is obvious, but the better angle is what it means next."
+    def _topic_from_text(text: str) -> str:
+        _clean = _clean_source_text(text)
+        _caps = re.findall(r"\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}|[A-Z]{2,}(?:\s+[A-Z]{2,}){0,2}|[A-Z][a-z]+\s\d{4})\b", _clean)
+        for _candidate in _caps:
+            if len(_candidate.split()) <= 4 and _candidate.lower() not in _stop:
+                return _candidate.strip()
+        _words = []
+        for _word in re.findall(r"[A-Za-z0-9']+", _clean.lower()):
+            if len(_word) <= 2 or _word in _stop:
+                continue
+            _words.append(_word)
+            if len(_words) == 3:
+                break
+        return " ".join(w.title() for w in _words) or "Trending Angle"
+
+    def _follow_line(text: str, source: str, voice: str) -> str:
+        _text = (text or "").lower()
+        if any(_w in _text for _w in ["draft", "trade", "free agency", "contract", "extension", "signing"]):
+            _opts = {
+                "Critical": "Front offices tell on themselves with stuff like this long before the public catches up.",
+                "Hype": "That is the kind of roster move that changes how the league talks about you.",
+                "Sarcastic": "Sure feels like a very calm and totally settled personnel situation.",
+                "Default": "Those signals usually tell you what the building really believes about the roster.",
+            }
+            return _opts[voice]
+        if any(_w in _text for _w in ["injury", "ankle", "knee", "hamstring", "questionable", "out"]):
+            _opts = {
+                "Critical": "Guys inside the building know exactly how serious that is before the public ever does.",
+                "Hype": "If he gets through this clean, the whole tone around this team changes fast.",
+                "Sarcastic": "But yeah, I'm sure everybody is being completely transparent about it.",
+                "Default": "Availability stories usually get real before the public language does.",
+            }
+            return _opts[voice]
+        if any(_w in _text for _w in ["playoff", "rotation", "starting", "bench", "minutes", "series"]):
+            _opts = {
+                "Critical": "Playoff decisions show you who a staff trusts when the room gets tight.",
+                "Hype": "That is exactly how postseason momentum starts building before people admit it.",
+                "Sarcastic": "Nothing says stress-free basketball like another totally obvious rotation conversation.",
+                "Default": "Those choices matter because postseason trust is usually decided before the series starts.",
+            }
+            return _opts[voice]
+        if any(_w in _text for _w in ["coach", "coordinator", "play calling", "scheme", "locker room"]):
+            _opts = {
+                "Critical": "You feel that kind of coaching story in meetings before it ever shows up in the quotes.",
+                "Hype": "When the room buys into that, the product looks different immediately.",
+                "Sarcastic": "Always a great sign when the coaching conversation starts writing itself.",
+                "Default": "Those are the details that usually tell you what the room actually thinks.",
+            }
+            return _opts[voice]
+        _opts = {
+            "Critical": "That usually points to a bigger truth people are trying not to say out loud yet.",
+            "Hype": "That's the kind of signal that gets opponents adjusting before fans even notice.",
+            "Sarcastic": "Completely normal internet behavior around a story that is obviously not getting louder by the hour.",
+            "Default": "That's where the real conversation starts, not where the first reaction lands.",
+        }
+        return _opts[voice]
+
+    def _build_hook(text: str, topic: str, voice: str, source: str) -> str:
+        _lead = _clean_source_text(text)
+        if not _lead:
+            _lead = topic
+        _lead = _lead.rstrip(".!?")
+        if len(_lead) > 110:
+            _lead = _lead[:107].rstrip(" ,;:") + "..."
+        _follow = _follow_line(text, source, voice)
+        _templates = {
+            "Critical": [
+                f"{_lead}. {_follow}",
+                f"{_lead}. That's not random noise. {_follow}",
+                f"{_lead}. People will dance around that part. {_follow}",
+            ],
+            "Hype": [
+                f"{_lead}. {_follow}",
+                f"{_lead}. That's when you know it's getting real. {_follow}",
+                f"{_lead}. If you're paying attention, {_follow[0].lower() + _follow[1:]}",
+            ],
+            "Sarcastic": [
+                f"{_lead}. {_follow}",
+                f"{_lead}. Totally normal. {_follow}",
+                f"{_lead}. Yep, nothing about that feels like it could spiral. {_follow}",
+            ],
+            "Default": [
+                f"{_lead}. {_follow}",
+                f"{_lead}. That's the part I keep coming back to. {_follow}",
+                f"{_lead}. That detail matters more than the first wave of takes. {_follow}",
+            ],
+        }
+        _pool = _templates.get(voice, _templates["Default"])
+        _idx = int(hashlib.md5(f"{source}|{topic}|{_lead}".encode()).hexdigest(), 16) % len(_pool)
+        return _pool[_idx]
 
     def _build_why(topic: str, source: str) -> str:
-        _base = f"{source} momentum around {topic.lower()}"
+        _base = f"{topic.lower()} angle from {source}"
         _base = _base.replace("twitter", "timeline").replace("news", "headline")
         return _base[:42]
 
     def _append(text: str, source: str):
         _topic = _topic_from_text(text)
         _voice = _pick_voice(text)
-        _hook = _build_hook(_topic, _voice, source)
+        _hook = _build_hook(text, _topic, _voice, source)
         if _hook in _seen_hooks:
             return
         _seen_hooks.add(_hook)
