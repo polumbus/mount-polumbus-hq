@@ -4846,6 +4846,13 @@ STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - If a voice rule asks for a "specific number" and no real one is available, use a named event, a team record, or a concrete observation instead. Never invent a number to fill the slot.
 {"- CRITICAL VOICE: The 'symptom' does NOT have to be a number. 'The Broncos offensive line is the reason Bo Nix ran for his life in December' is a valid symptom. 'Bottom-10 in pass protection' is NOT valid unless that ranking appears in LIVE STATS." if voice == "Critical" else ""}{"- SARCASTIC VOICE: Do NOT fabricate stats. Sarcastic voice builds humor from observations and framing, not invented numbers." if voice == "Sarcastic" else ""}{"- HOMER VOICE: Do NOT invent player stat lines. Use team records if available. If no player stats exist, describe what you see without citing specific figures." if voice == "Hype" else ""}
 
+OPTION-SPECIFIC RULES:
+- OPTION 1: Stats are allowed ONLY if they naturally strengthen this exact subject. Use 1-2 precise stats max, and only when they feel organic instead of bolted on.
+- OPTION 1: If the subject is better served by pure observation, do NOT force stats into it.
+- OPTION 2: Do NOT add stats at all. No added records, rankings, percentages, averages, box-score lines, or extra numbers from LIVE STATS.
+- OPTION 2: If the original draft already includes a number that is central to the point, you may keep that original number, but do NOT introduce any new stats beyond the draft.
+- OPTION 2 should win on voice, structure, clarity, and tension — not on statistical authority.
+
 Rules:
 - Reading Level (7th-9th grade)
 - No Hashtags, Links, Tags, Emojis
@@ -4861,9 +4868,9 @@ VOICE-SPECIFIC ENDING OVERRIDE:
 
 Return ONLY this JSON, no other text:
 {{
-  "option1": "full tweet text here",
+  "option1": "full tweet text here — stats only if they genuinely fit the take",
   "option1_pattern": "which top tweet pattern this is modeled after",
-  "option2": "full tweet text here",
+  "option2": "full tweet text here — no added stats at all, just voice/structure/observation",
   "option2_pattern": "which top tweet pattern this is modeled after",
   "pick": "1 or 2 — {'MUST be the period-ending option (Critical voice rule overrides all other criteria)' if voice == 'Critical' else 'just the number, no explanation'}",
   "pick_reason": "one sentence — {'why this option matches Critical voice structure (period ending = correct)' if voice == 'Critical' else 'why this option scores higher on the X algorithm'}"
