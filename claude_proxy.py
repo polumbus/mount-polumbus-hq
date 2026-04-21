@@ -367,7 +367,8 @@ def _extract_created_tweet(payload):
     """Parse CreateTweet/Reply payload into a concrete published tweet result."""
     if not isinstance(payload, dict):
         return {}
-    create = payload.get("data", {}).get("create_tweet")
+    data = payload.get("data", {})
+    create = data.get("create_tweet") or data.get("notetweet_create")
     if not isinstance(create, dict):
         return {}
     tweet_node = None
@@ -405,6 +406,50 @@ def _extract_created_tweet(payload):
         "screen_name": screen_name,
         "tweet_url": tweet_url,
     }
+
+
+def _is_tweet_too_long_error(error_text):
+    text = (error_text or "").lower()
+    return "bit shorter" in text or "too long" in text or "(186)" in text
+
+
+def _send_tweet_creation(variables, features):
+    """
+    Use the same split X web uses: standard posts go through CreateTweet,
+    while premium/longform posts go through CreateNoteTweet.
+    """
+    tweet_text = variables.get("tweet_text", "") or ""
+    attempts = []
+    if len(tweet_text) > 280:
+        attempts.append("CreateNoteTweet")
+    attempts.append("CreateTweet")
+
+    tried = set()
+    last_error = "Unknown X posting error."
+    for operation in attempts:
+        if operation in tried:
+            continue
+        tried.add(operation)
+        ok, resp = _twitter_graphql(operation, variables, features)
+        if not ok:
+            last_error = resp[:200]
+            if operation == "CreateTweet" and _is_tweet_too_long_error(last_error) and "CreateNoteTweet" not in tried:
+                attempts.append("CreateNoteTweet")
+            continue
+        try:
+            payload = json.loads(resp)
+        except Exception:
+            return False, "X returned invalid JSON while posting.", operation, None
+
+        created = _extract_created_tweet(payload)
+        if created.get("tweet_id"):
+            return True, created, operation, payload
+
+        last_error = _extract_graphql_error(payload) or "X did not return a published tweet."
+        if operation == "CreateTweet" and _is_tweet_too_long_error(last_error) and "CreateNoteTweet" not in tried:
+            attempts.append("CreateNoteTweet")
+            continue
+    return False, last_error, None, None
 
 
 def _get_twitter_viewer_identity():
@@ -567,19 +612,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "media": {"media_entities": [], "possibly_sensitive": False},
                 "semantic_annotation_ids": [],
             }
-            ok, resp = _twitter_graphql("CreateTweet", variables, features)
+            ok, result, operation, _payload = _send_tweet_creation(variables, features)
             if not ok:
-                print(f"[tweet/post] transport_error={resp[:200]}")
-                self.send_json(500, {"error": resp[:200]})
-                return
-            try:
-                payload = json.loads(resp)
-            except Exception:
-                print(f"[tweet/post] invalid_json={resp[:200]}")
-                self.send_json(500, {"error": "X returned invalid JSON while posting."})
+                print(f"[tweet/post] failed operation={operation or 'none'} error={str(result)[:200]}")
+                self.send_json(500, {"error": str(result)[:200]})
                 return
 
-            created = _extract_created_tweet(payload)
+            created = result
             if created.get("tweet_id"):
                 if not created.get("screen_name"):
                     created.update(_get_twitter_viewer_identity())
@@ -587,11 +626,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     screen_name = created.get("screen_name", "")
                     if tweet_id and screen_name:
                         created["tweet_url"] = f"https://x.com/{screen_name}/status/{tweet_id}"
-                print(f"[tweet/post] success tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
+                print(f"[tweet/post] success operation={operation} tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
                 self.send_json(200, {"ok": True, **created})
             else:
-                error = _extract_graphql_error(payload) or "X did not return a published tweet."
-                print(f"[tweet/post] publish_missing error={error}")
+                error = "X did not return a published tweet."
+                print(f"[tweet/post] publish_missing operation={operation} error={error}")
                 self.send_json(500, {"error": error})
 
         elif self.path == "/tweet/reply":
@@ -623,19 +662,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "media": {"media_entities": [], "possibly_sensitive": False},
                 "semantic_annotation_ids": [],
             }
-            ok, resp = _twitter_graphql("CreateTweet", variables, features)
+            ok, result, operation, _payload = _send_tweet_creation(variables, features)
             if not ok:
-                print(f"[tweet/reply] transport_error={resp[:200]}")
-                self.send_json(500, {"error": resp[:200]})
-                return
-            try:
-                payload = json.loads(resp)
-            except Exception:
-                print(f"[tweet/reply] invalid_json={resp[:200]}")
-                self.send_json(500, {"error": "X returned invalid JSON while replying."})
+                print(f"[tweet/reply] failed operation={operation or 'none'} error={str(result)[:200]}")
+                self.send_json(500, {"error": str(result)[:200]})
                 return
 
-            created = _extract_created_tweet(payload)
+            created = result
             if created.get("tweet_id"):
                 if not created.get("screen_name"):
                     created.update(_get_twitter_viewer_identity())
@@ -643,11 +676,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     screen_name = created.get("screen_name", "")
                     if tweet_id and screen_name:
                         created["tweet_url"] = f"https://x.com/{screen_name}/status/{tweet_id}"
-                print(f"[tweet/reply] success tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
+                print(f"[tweet/reply] success operation={operation} tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
                 self.send_json(200, {"ok": True, **created})
             else:
-                error = _extract_graphql_error(payload) or "X did not return a published reply."
-                print(f"[tweet/reply] publish_missing error={error}")
+                error = "X did not return a published reply."
+                print(f"[tweet/reply] publish_missing operation={operation} error={error}")
                 self.send_json(500, {"error": error})
 
         elif self.path == "/tweet/like":
