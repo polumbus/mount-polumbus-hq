@@ -2102,9 +2102,29 @@ _cur_pg = st.session_state.current_page
 def _act(name):
     return "active" if _cur_pg == name else ""
 
+
+def _build_gameday_url() -> str:
+    params = {}
+    token = st.session_state.get("_auth_token") or st.query_params.get("token", "")
+    user = st.session_state.get("auth_username") or st.query_params.get("user", "")
+    guest_id = st.query_params.get("guest_id", "")
+    if token:
+        params["token"] = token
+    if user:
+        params["user"] = user
+    if guest_id:
+        params["guest_id"] = guest_id
+    base = GAMEDAY_URL.rstrip("/")
+    if not params:
+        return base
+    return f"{base}/?{urllib.parse.urlencode(params)}"
+
+
 # Token prefix for sidebar links — ensures auth survives page navigation
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
+_gameday_url = _build_gameday_url()
+_gameday_url_html = html.escape(_gameday_url, quote=True)
 _owner_debug_zone = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
@@ -2125,14 +2145,14 @@ if is_owner():
       </a>"""
     _nav_pages.insert(4, "Signals & Prompts")
     _nav_pages.insert(5, "Gameday Mode")
-    _owner_gameday_icon = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-ico {_act('Gameday Mode')}" target="_self">
+    _owner_gameday_icon = f"""<a href="{_gameday_url_html}" class="mp-ico {_act('Gameday Mode')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>"""
-    _owner_gameday_panel = f"""<a href="/?{_tok_qp}page=Gameday+Mode" class="mp-panel-item {_act('Gameday Mode')}" target="_self">
+    _owner_gameday_panel = f"""<a href="{_gameday_url_html}" class="mp-panel-item {_act('Gameday Mode')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Gameday Mode
       </a>"""
@@ -2654,7 +2674,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
-  {'<a href="/?'+_tok_qp+'page=Gameday+Mode" target="_self" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
+  {'<a href="'+_gameday_url_html+'" target="_self" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -10644,6 +10664,26 @@ ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == 
 
 
 def page_gameday():
+    _target = _build_gameday_url()
+    _target_json = json.dumps(_target)
+    _target_html = html.escape(_target, quote=True)
+    st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tool-desc">Opening the full live gameday app with pregame keys, generated tweets, and the complete game workflow.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="tweet-card"><div style="font-size:12px;color:#7c8ea5;">If you are not redirected automatically, <a href="{_target_html}" target="_self">open Gameday Mode</a>.</div></div>',
+        unsafe_allow_html=True,
+    )
+    import streamlit.components.v1 as _stc_gameday
+
+    _stc_gameday.html(
+        f"<script>window.top.location.replace({_target_json});</script>",
+        height=0,
+    )
+    return
+
     _gd_btn = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
     _gd_btn_pri = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;"
     _gd_btn_sm = "margin-top:8px;height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
