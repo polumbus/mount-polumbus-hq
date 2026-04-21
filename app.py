@@ -6613,6 +6613,155 @@ def _debug_console_help_dialog():
         st.caption("Debug Console walkthrough video is not available in this deployment yet.")
 
 
+@st.fragment
+def _render_creator_studio_editor():
+    # ── CENTERED SINGLE-COLUMN LAYOUT ──
+    _spacer_l, _center, _spacer_r = st.columns([0.5, 4, 0.5])
+    with _center:
+        # ── Text area ──
+        tweet_text = st.text_area(
+            "Your concept",
+            height=200,
+            key="ci_text",
+            placeholder="Drop your concept, angle, or raw thought...",
+            label_visibility="collapsed",
+        )
+        char_len = len(tweet_text)
+
+        # ── Circular character counter ──
+        _pct = min(char_len / 280 * 100, 100)
+        _offset = 100 - _pct
+        _cc = "#E8441A" if char_len >= 280 else "#C49E3C" if char_len >= 250 else "#2DD4BF"
+        st.markdown(f'''<div style="display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:8px;">
+          <div style="width:32px;height:32px;position:relative;">
+            <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:32px;height:32px;">
+              <circle cx="18" cy="18" r="16" fill="none" stroke="#1a2a45" stroke-width="3"/>
+              <circle cx="18" cy="18" r="16" fill="none" stroke="{_cc}" stroke-width="3"
+                stroke-dasharray="100" stroke-dashoffset="{_offset}" stroke-linecap="round"/>
+            </svg>
+            <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#5a7090;font-weight:600;">{char_len}</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
+
+        # ── Format pills (real Streamlit buttons, CSS makes them compact) ──
+        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+        _fmt_short = {"Punchy Tweet": "Punchy", "Normal Tweet": "Normal", "Long Tweet": "Long", "Thread": "Thread", "Article": "Article"}
+        _cur_fmt = st.session_state.get("ci_format", "Normal Tweet")
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Format</div>', unsafe_allow_html=True)
+        _fc = st.columns(len(_fmt_opts))
+        for _i, _fo in enumerate(_fmt_opts):
+            with _fc[_i]:
+                if st.button(_fmt_short[_fo], key=f"cs_fmt_{_i}",
+                             type="primary" if _fo == _cur_fmt else "secondary"):
+                    st.session_state["ci_format"] = _fo
+                    st.rerun(scope="fragment")
+
+        # ── Voice pills ──
+        _custom_voices = load_json("voice_styles.json", [])
+        _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
+        _cur_voice = st.session_state.get("ci_voice", "Default")
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
+        _vc = st.columns(len(_voice_opts))
+        for _i, _vo in enumerate(_voice_opts):
+            with _vc[_i]:
+                if st.button(_vo, key=f"cs_voice_{_i}",
+                             type="primary" if _vo == _cur_voice else "secondary"):
+                    st.session_state["ci_voice"] = _vo
+                    st.rerun(scope="fragment")
+
+        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+
+        # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
+        def _queue_action(action):
+            _ci_input = st.session_state.get("ci_text", "").strip()
+            if not _ci_input:
+                return
+            if action == "banger" and len(_ci_input.split()) < 8:
+                st.session_state["_ci_show_build_dialog"] = True
+                st.rerun(scope="app")
+            st.session_state["_ci_pending"] = (
+                action,
+                _ci_input,
+                st.session_state.get("ci_format", "Normal Tweet"),
+                st.session_state.get("ci_voice", "Default"),
+            )
+            st.rerun(scope="app")
+
+        st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
+        <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span><span class="pa-tip">Polish Your Draft Into A High-Performance Post</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Create Tweets From A Topic, Idea, Or Bullet Points</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="rewrite" title="Rewrite your draft in a different format or angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span><span class="pa-tip">Remix Your Draft Into A New Format Or Angle</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="grades" title="Score your draft on engagement, hook, and viral potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
+
+        # Hidden Streamlit buttons for dock click handling (inside real container)
+        if st.button("dock_banger", key="ci_banger"):
+            _queue_action("banger")
+        if st.button("dock_build", key="ci_build"):
+            st.session_state["_ci_show_build_dialog"] = True
+            st.rerun(scope="app")
+        if st.button("dock_rewrite", key="ci_repurpose"):
+            _queue_action("rewrite")
+        if st.button("dock_grades", key="ci_engage"):
+            _queue_action("grades")
+
+        # ── Divider + Bottom bar as HTML ──
+        st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
+        <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
+          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save<span class="pa-tip">Save Draft To Your Idea Bank</span></span>
+          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank<span class="pa-tip">Open Your Saved Ideas And Inspiration Vault</span></span>
+          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot<span class="pa-tip">Trending Topics And Fresh Tweet Ideas</span></span>
+          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post<span class="pa-tip">Post Directly To X</span></span>
+        </div>''', unsafe_allow_html=True)
+
+        # Hidden Streamlit buttons for bottom bar (inside real container)
+        if st.button("bot_save", key="ci_save"):
+            if tweet_text.strip():
+                ideas = load_json("saved_ideas.json", [])
+                ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
+                              "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
+                save_json("saved_ideas.json", ideas)
+                st.success("Saved.")
+        if st.button("bot_bank", key="ci_bank_btn"):
+            st.session_state["_ci_show_bank"] = True
+            st.rerun(scope="app")
+        if st.button("bot_hot", key="ci_inspiration"):
+            st.session_state["_ci_show_inspiration"] = True
+            st.rerun(scope="app")
+        if st.button("bot_post", key="ci_post_direct"):
+            if is_guest():
+                # Guests: open intent link in browser instead of direct post
+                import urllib.parse as _up_post
+                _enc_post = _up_post.quote(tweet_text.strip()[:280])
+                st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc_post}" target="_blank" style="display:inline-block;padding:8px 16px;background:#2DD4BF;border-radius:8px;color:#000;font-weight:600;text-decoration:none;">Open in X to Post</a>', unsafe_allow_html=True)
+            elif tweet_text.strip():
+                with st.spinner("Posting..."):
+                    _ok, _detail = _post_tweet(tweet_text.strip())
+                if _ok:
+                    if _detail.startswith("https://"):
+                        st.success("Posted to X.")
+                        st.markdown(f"[Open posted tweet]({_detail})")
+                    elif _detail:
+                        st.success(f"Posted to X as @{_detail}.")
+                    else:
+                        st.success("Posted to X.")
+                else:
+                    st.error(f"Post failed — {_detail}")
+
+
 def page_compose_ideas():
     st.markdown('<div class="main-header">CREATOR <span>STUDIO</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Draft, refine, and ship your best content.</div>', unsafe_allow_html=True)
@@ -6655,135 +6804,7 @@ def page_compose_ideas():
     if "ci_voice" not in st.session_state:
         st.session_state["ci_voice"] = "Default"
 
-    # ── CENTERED SINGLE-COLUMN LAYOUT ──
-    _spacer_l, _center, _spacer_r = st.columns([0.5, 4, 0.5])
-    with _center:
-        # ── Text area ──
-        tweet_text = st.text_area("Your concept", height=200, key="ci_text",
-            placeholder="Drop your concept, angle, or raw thought...", label_visibility="collapsed")
-        char_len = len(tweet_text)
-
-        # ── Circular character counter ──
-        _pct = min(char_len / 280 * 100, 100)
-        _offset = 100 - _pct
-        _cc = "#E8441A" if char_len >= 280 else "#C49E3C" if char_len >= 250 else "#2DD4BF"
-        st.markdown(f'''<div style="display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:8px;">
-          <div style="width:32px;height:32px;position:relative;">
-            <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:32px;height:32px;">
-              <circle cx="18" cy="18" r="16" fill="none" stroke="#1a2a45" stroke-width="3"/>
-              <circle cx="18" cy="18" r="16" fill="none" stroke="{_cc}" stroke-width="3"
-                stroke-dasharray="100" stroke-dashoffset="{_offset}" stroke-linecap="round"/>
-            </svg>
-            <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#5a7090;font-weight:600;">{char_len}</span>
-          </div>
-        </div>''', unsafe_allow_html=True)
-
-        # ── Format pills (real Streamlit buttons, CSS makes them compact) ──
-        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
-        _fmt_short = {"Punchy Tweet": "Punchy", "Normal Tweet": "Normal", "Long Tweet": "Long", "Thread": "Thread", "Article": "Article"}
-        _cur_fmt = st.session_state.get("ci_format", "Normal Tweet")
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Format</div>', unsafe_allow_html=True)
-        _fc = st.columns(len(_fmt_opts))
-        for _i, _fo in enumerate(_fmt_opts):
-            with _fc[_i]:
-                if st.button(_fmt_short[_fo], key=f"cs_fmt_{_i}",
-                             type="primary" if _fo == _cur_fmt else "secondary"):
-                    st.session_state["ci_format"] = _fo
-                    st.rerun()
-
-        # ── Voice pills ──
-        _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
-        _cur_voice = st.session_state.get("ci_voice", "Default")
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
-        _vc = st.columns(len(_voice_opts))
-        for _i, _vo in enumerate(_voice_opts):
-            with _vc[_i]:
-                if st.button(_vo, key=f"cs_voice_{_i}",
-                             type="primary" if _vo == _cur_voice else "secondary"):
-                    st.session_state["ci_voice"] = _vo
-                    st.rerun()
-
-        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
-
-        # ── Action dock: icon buttons rendered as HTML, hidden Streamlit buttons for click handling ──
-        def _click_action(action):
-            _ci_input = st.session_state.get("ci_text", "").strip()
-            if _ci_input:
-                if action == "banger" and len(_ci_input.split()) < 8:
-                    st.session_state["_ci_show_build_dialog"] = True
-                    return
-                st.session_state["_ci_pending"] = (action, _ci_input,
-                    st.session_state.get("ci_format", "Normal Tweet"), st.session_state.get("ci_voice", "Default"))
-
-        st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
-        <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-          <div class="cs-idock-btn cs-idock-primary" data-dock="banger" title="Generate 3 viral-optimized versions of your draft" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GO VIRAL</span><span class="pa-tip">Polish Your Draft Into A High-Performance Post</span>
-          </div>
-          <div class="cs-idock-btn" data-dock="build" title="Expand your idea into a longer, more detailed draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Create Tweets From A Topic, Idea, Or Bullet Points</span>
-          </div>
-          <div class="cs-idock-btn" data-dock="rewrite" title="Rewrite your draft in a different format or angle" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">REPURPOSE</span><span class="pa-tip">Remix Your Draft Into A New Format Or Angle</span>
-          </div>
-          <div class="cs-idock-btn" data-dock="grades" title="Score your draft on engagement, hook, and viral potential" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
-          </div>
-        </div>''', unsafe_allow_html=True)
-
-        # Hidden Streamlit buttons for dock click handling (inside real container)
-        st.button("dock_banger", key="ci_banger", on_click=_click_action, args=("banger",))
-        def _click_build():
-            st.session_state["_ci_show_build_dialog"] = True
-        st.button("dock_build", key="ci_build", on_click=_click_build)
-        st.button("dock_rewrite", key="ci_repurpose", on_click=_click_action, args=("rewrite",))
-        st.button("dock_grades", key="ci_engage", on_click=_click_action, args=("grades",))
-
-        # ── Divider + Bottom bar as HTML ──
-        st.markdown('''<div style="height:1px;background:#1a2a45;margin:24px 0 14px;"></div>
-        <div class="cs-bottom-bar" style="display:flex;gap:8px;justify-content:center;">
-          <span class="cs-bot" data-bot="save" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">↓ Save<span class="pa-tip">Save Draft To Your Idea Bank</span></span>
-          <span class="cs-bot" data-bot="bank" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.25);background:#0a1220;color:rgba(196,158,60,0.6);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Bank<span class="pa-tip">Open Your Saved Ideas And Inspiration Vault</span></span>
-          <span class="cs-bot" data-bot="hot" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;border:1px solid #1a2a45;background:#0a1220;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">What\'s Hot<span class="pa-tip">Trending Topics And Fresh Tweet Ideas</span></span>
-          <span class="cs-bot" data-bot="post" style="height:52px;padding:0 18px;border-radius:14px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);color:#060A12;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:none;">𝕏 Post<span class="pa-tip">Post Directly To X</span></span>
-        </div>''', unsafe_allow_html=True)
-
-        # Hidden Streamlit buttons for bottom bar (inside real container)
-        if st.button("bot_save", key="ci_save"):
-            if tweet_text.strip():
-                ideas = load_json("saved_ideas.json", [])
-                ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
-                              "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
-                save_json("saved_ideas.json", ideas)
-                st.success("Saved.")
-        if st.button("bot_bank", key="ci_bank_btn"):
-            st.session_state["_ci_show_bank"] = True
-        if st.button("bot_hot", key="ci_inspiration"):
-            st.session_state["_ci_show_inspiration"] = True
-        if st.button("bot_post", key="ci_post_direct"):
-            if is_guest():
-                # Guests: open intent link in browser instead of direct post
-                import urllib.parse as _up_post
-                _enc_post = _up_post.quote(tweet_text.strip()[:280])
-                st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc_post}" target="_blank" style="display:inline-block;padding:8px 16px;background:#2DD4BF;border-radius:8px;color:#000;font-weight:600;text-decoration:none;">Open in X to Post</a>', unsafe_allow_html=True)
-            elif tweet_text.strip():
-                with st.spinner("Posting..."):
-                    _ok, _detail = _post_tweet(tweet_text.strip())
-                if _ok:
-                    if _detail.startswith("https://"):
-                        st.success("Posted to X.")
-                        st.markdown(f"[Open posted tweet]({_detail})")
-                    elif _detail:
-                        st.success(f"Posted to X as @{_detail}.")
-                    else:
-                        st.success("Posted to X.")
-                else:
-                    st.error(f"Post failed — {_detail}")
+    _render_creator_studio_editor()
 
     # ── Modal triggers ──
     def _clear_banger():
