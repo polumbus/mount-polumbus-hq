@@ -4335,7 +4335,7 @@ def _get_format_patterns_with_fallback(fmt: str) -> str:
     return ""
 
 
-def _build_grades_system(fmt: str, pp: dict) -> tuple:
+def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_block: str = "") -> tuple:
     """
     Return (prompt_a, prompt_b) for parallel grade calls.
     Incorporates personal benchmarks from pp and format-specific criteria.
@@ -4384,15 +4384,31 @@ def _build_grades_system(fmt: str, pp: dict) -> tuple:
 - {_fp_ell}% of {_bm_poss} top tweets use ellipsis — benchmark for Voice Match
 - Optimal char range: {_fp_lo}-{_fp_hi} — benchmark for Format Fit
 - {_fmt_note}"""
+    _verification_block = live_stats_block.strip() if (live_stats_block or "").strip() else (
+        "VERIFICATION CONTEXT:\n"
+        "- No verified live stats were fetched for this topic.\n"
+        "- Do NOT invent stats, rankings, injuries, records, player names, or roster details.\n"
+        "- If you cannot verify a factual suggestion from the tweet itself, give a structural or wording fix instead, or say No changes needed."
+    )
+    _voice_guard = (
+        "DISCUSSION INVITE RULE:\n"
+        "- Do NOT force a literal question just because question rate is high.\n"
+        "- Tyler usually invites replies with a declarative trailing thought, often ending in ellipsis, instead of a direct question.\n"
+        "- Only suggest a literal question if the tweet already clearly wants one and it fits the format/voice rules.\n"
+        f"- Respect the active voice mode: {voice}.\n"
+        "- Every fix must obey the current format rules and voice rules.\n"
+        "- Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions.\n"
+        "- Never mention a player, coach, or team not already present in the tweet or the verification context."
+    )
 
-    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate","fix":"exact edit to drive replies"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}}]}}"""
+    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate, {_fp_ell}% ellipsis rate","fix":"exact ending edit that invites replies without forcing a literal question"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact structural or insight-based edit using ONLY verified details already present"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take without inventing facts"}}]}}"""
 
-    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"format: {_char_guide}","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"benchmark: {_fp_ell}% ellipsis rate","fix":"exact word or phrase to change"}}]}}"""
+    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit that fits the voice rules"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"format: {_char_guide}","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"benchmark: {_fp_ell}% ellipsis rate","fix":"exact word, phrase, or ending change to sound more like the writer"}}]}}"""
 
     return _prompt_a, _prompt_b
 
 
-def _build_grades_fallback_prompt(fmt: str, pp: dict, tweet_text: str, char_count: int, has_q: str, has_ell: str) -> str:
+def _build_grades_fallback_prompt(fmt: str, pp: dict, voice: str, tweet_text: str, char_count: int, has_q: str, has_ell: str, live_stats_block: str = "") -> str:
     """Single-call fallback prompt when the parallel grades split fails to parse."""
     _pp = pp or {}
     _fp_q = _pp.get("top_question_pct", 28)
@@ -4413,6 +4429,12 @@ def _build_grades_fallback_prompt(fmt: str, pp: dict, tweet_text: str, char_coun
         _fmt_note = "Article format. Headline and intro are the hook."
     else:
         _fmt_note = f"{fmt} format."
+    _verification_block = live_stats_block.strip() if (live_stats_block or "").strip() else (
+        "VERIFICATION CONTEXT:\n"
+        "- No verified live stats were fetched for this topic.\n"
+        "- Do NOT invent stats, rankings, injuries, records, player names, or roster details.\n"
+        "- If you cannot verify a factual suggestion from the tweet itself, give a structural or wording fix instead, or say No changes needed."
+    )
 
     return f"""Grade this tweet for X algorithm performance.
 
@@ -4424,19 +4446,29 @@ BENCHMARKS:
 - optimal char range: {_fp_lo}-{_fp_hi}
 - format note: {_fmt_note}
 
+{_verification_block}
+
+DISCUSSION INVITE RULE:
+- Do NOT force a literal question just because question rate is high.
+- Tyler usually invites replies with a declarative trailing thought, often ending in ellipsis, instead of a direct question.
+- Only suggest a literal question if the tweet already clearly wants one and it fits the format/voice rules.
+- Respect the active voice mode: {voice}.
+- Every fix must obey the current format rules and voice rules.
+- Never mention a player, coach, or team not already present in the tweet or the verification context.
+
 [TWEET]: "{tweet_text}" ({char_count} chars)
 Has question mark: {has_q} | Has ellipsis: {has_ell}
 
 Return ONLY valid JSON:
 {{"algorithm_score":0,"voice_score":0,"grades":[
 {{"name":"Hook Strength","score":0,"detail":"...","fix":"exact first-line fix"}},
-{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact edit to drive replies"}},
-{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact stat or insight to add"}},
+{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact ending edit that invites replies without forcing a literal question"}},
+{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact structural or insight-based edit using ONLY verified details already present"}},
 {{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}},
-{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit"}},
+{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit that fits the voice rules"}},
 {{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},
 {{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},
-{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word or phrase to change"}}
+{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word, phrase, or ending change to sound more like the writer"}}
 ]}}"""
 
 
@@ -4465,7 +4497,7 @@ def _normalize_grade_items(grades: list) -> list:
     return normalized
 
 
-def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
+def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
     """Deterministic Grades fallback when AI grading returns unusable output."""
     text = (tweet_text or "").strip()
     char_count = len(text)
@@ -4516,10 +4548,10 @@ def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
         dwell_fix = "Adjust the structure so the post sits closer to the proven character range." if not dwell_target_ok else "No changes needed"
 
     hook_score = _clip(4 + (3 if strong_open else 0) + (1 if len(first_line) <= 90 else 0) + (1 if stat_hits > 0 else 0) - (1 if hedges else 0))
-    convo_score = _clip(3 + (3 if question_count > 0 else 0) + (1 if has_colon or has_dash else 0) - (1 if hedges else 0))
+    convo_score = _clip(3 + (3 if ellipsis_count > 0 else 0) + (1 if question_count > 0 else 0) + (1 if has_colon or has_dash else 0) - (1 if hedges else 0))
     bookmark_score = _clip(2 + (3 if stat_hits > 0 else 0) + (2 if len(lines) >= 2 else 0) + (1 if "because" in text.lower() or "why" in text.lower() else 0))
     share_score = _clip(3 + (2 if strong_open else 0) + (1 if stat_hits > 0 else 0) + (1 if question_count > 0 else 0) - (1 if hedges else 0))
-    engage_score = _clip(3 + (2 if question_count > 0 else 0) + (1 if exclaim_count > 0 else 0) + (1 if line_breaks > 0 else 0) + (1 if has_colon or has_dash else 0))
+    engage_score = _clip(3 + (2 if ellipsis_count > 0 else 0) + (1 if question_count > 0 else 0) + (1 if exclaim_count > 0 else 0) + (1 if line_breaks > 0 else 0) + (1 if has_colon or has_dash else 0))
     compliance_penalty = (3 if link_count else 0) + (2 if hashtag_count >= 3 else hashtag_count) + (2 if exclaim_count >= 3 else 0)
     compliance_score = _clip(10 - compliance_penalty)
     dwell_score = _clip(5 + (2 if dwell_target_ok else 0) + (2 if line_breaks > 0 else 0) + (1 if stat_hits > 0 else 0) - (1 if char_count < 50 else 0))
@@ -4578,15 +4610,17 @@ def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
             return f'Rewrite opening line as a shorter, punchier version of: "{first_line}"'
         return "Add a short opening line that starts with a hard fact or named player."
 
-    def _replace_final_line_with_question() -> str:
-        _topic = _find_topic(text)
-        _base_q = "Can they stay healthy long enough to win it all?"
-        if _topic:
-            if "championship" in text.lower():
-                _base_q = f"Can the {_topic} stay healthy long enough to win a championship?"
-            else:
-                _base_q = f"Do the {_topic} actually have enough to make a real run?"
-        return f'Replace final line with: "{_base_q}"'
+    def _replace_final_line_with_open_loop() -> str:
+        _last = lines[-1].strip() if lines else ""
+        if _last:
+            _base = re.sub(r"[.!?…]+$", "", _last).strip()
+            if _base:
+                if voice in ("Critical", "Hype"):
+                    return f'Rewrite final line as a stronger declarative closer based on: "{_base}"'
+                return f'Replace final line with: "{_base}..."'
+        if voice in ("Critical", "Hype"):
+            return "Rewrite the final line as a stronger declarative closer that invites replies without asking a literal question."
+        return "Replace the final line with a stronger declarative trailing thought ending in ellipsis instead of a direct question."
 
     def _move_stat_line_up() -> str:
         _num_line = _line_with_number()
@@ -4595,7 +4629,7 @@ def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
         _line2 = lines[1] if len(lines) > 1 else ""
         if _line2:
             return f'Move this line directly under the opener: "{_line2}"'
-        return "Add one concrete stat line directly after the opener."
+        return "Move the strongest concrete detail closer to the opener instead of adding a new stat."
 
     def _remove_links_hashtags_fix() -> str:
         _links = re.findall(r"(https?://\S+|www\.\S+)", text)
@@ -4619,10 +4653,10 @@ def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict) -> dict:
 
     grades = [
         {"name": "Hook Strength", "score": hook_score, "detail": _detail(f"Opening line is {'specific' if strong_open else 'generic'} and first beat is {len(first_line)} chars."), "fix": _fix_if(hook_score, _replace_opening_line_suggestion())},
-        {"name": "Conversation Catalyst", "score": convo_score, "detail": _detail(f"Question rate benchmark is {_fp_q}%. This tweet uses {question_count} question mark(s)."), "fix": _fix_if(convo_score, _replace_final_line_with_question())},
-        {"name": "Bookmark Worthiness", "score": bookmark_score, "detail": _detail(f"Found {stat_hits} numeric/stat signal(s) and {line_breaks} extra structural beat(s)."), "fix": _fix_if(bookmark_score, _move_stat_line_up())},
+        {"name": "Conversation Catalyst", "score": convo_score, "detail": _detail(f"Question benchmark is {_fp_q}%. Ellipsis benchmark is {_fp_ell}%. This tweet uses {question_count} question mark(s) and {ellipsis_count} ellipsis hit(s)."), "fix": _fix_if(convo_score, _replace_final_line_with_open_loop())},
+        {"name": "Bookmark Worthiness", "score": bookmark_score, "detail": _detail(f"Found {stat_hits} numeric/detail signal(s) and {line_breaks} extra structural beat(s)."), "fix": _fix_if(bookmark_score, _move_stat_line_up())},
         {"name": "Share/Quote Potential", "score": share_score, "detail": _detail("Shareability rises when the take is specific, confident, and easy to quote."), "fix": _fix_if(share_score, _replace_opening_line_suggestion())},
-        {"name": "Engagement Triggers", "score": engage_score, "detail": _detail(f"Questions: {question_count}. Exclamation points: {exclaim_count}. Extra beats: {line_breaks}."), "fix": _fix_if(engage_score, _replace_final_line_with_question())},
+        {"name": "Engagement Triggers", "score": engage_score, "detail": _detail(f"Ellipses: {ellipsis_count}. Questions: {question_count}. Exclamation points: {exclaim_count}. Extra beats: {line_breaks}."), "fix": _fix_if(engage_score, _replace_final_line_with_open_loop())},
         {"name": "Algorithm Compliance", "score": compliance_score, "detail": _detail(f"Links: {link_count}. Hashtags: {hashtag_count}. Excess punctuation penalty: {compliance_penalty}."), "fix": _fix_if(compliance_score, _remove_links_hashtags_fix())},
         {"name": "Dwell Time Potential", "score": dwell_score, "detail": _detail(dwell_detail), "fix": _fix_if(dwell_score, dwell_fix)},
         {"name": "Voice Match", "score": voice_score, "detail": _detail(f"Hedges found: {hedges}. Ellipsis benchmark: {_fp_ell}%. Ellipses used: {ellipsis_count}."), "fix": _fix_if(voice_score, _voice_line_fix())},
@@ -4663,9 +4697,12 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     _live_stats_block = ""
     _sports_ctx = ""
     _skip_sports = is_guest() and "sport" not in load_json("topics.json", {}).get("niche", "").lower()
-    if action in ("banger", "build", "rewrite") and tweet_text.strip() and not _skip_sports:
+    if action in ("banger", "build", "rewrite", "grades") and tweet_text.strip() and not _skip_sports:
         _entities = _detect_sports_entities(tweet_text)
-        _needs_stats = not _input_has_stats(tweet_text) and (_entities["players"] or _entities["teams"])
+        if action == "grades":
+            _needs_stats = bool(_entities["players"] or _entities["teams"])
+        else:
+            _needs_stats = not _input_has_stats(tweet_text) and (_entities["players"] or _entities["teams"])
         _needs_sports = _sports_context_relevant(tweet_text)
         if _needs_stats or _needs_sports:
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _ex:
@@ -4825,7 +4862,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         # ── Cache check ──
-        _grade_hash = hashlib.md5(tweet_text.strip().encode()).hexdigest()
+        _grade_hash = hashlib.md5(f"{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
         _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
         if _cached:
             st.session_state["ci_grades"] = _cached
@@ -4836,21 +4873,23 @@ Return ONLY this JSON, no other text:
             if is_guest():
                 _grades_system = (
                     f"You are grading tweets for @{get_current_handle()}. Match their voice: direct, no fluff, "
-                    "punchy sentences, never hedges. Never use hyphen, en dash, or em dash separators in "
-                    "tweet copy or fix suggestions."
+                    "punchy sentences, never hedges. Prefer declarative discussion invites and trailing ellipsis "
+                    "over literal question closers unless the tweet clearly calls for a direct question. Never use "
+                    "hyphen, en dash, or em dash separators in tweet copy or fix suggestions."
                 )
             else:
                 _grades_system = (
                     "You are grading tweets for Tyler Polumbus — former NFL lineman (8 seasons, Super Bowl 50 champion), "
                     "Denver sports media host. Tyler's voice: direct, no fluff, punchy sentences, former-player authority, "
-                    "never hedges. Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions."
+                    "never hedges. Tyler usually invites discussion with declarative trailing thoughts and ellipsis, not "
+                    "literal question closers. Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions."
                 )
             _has_q = "yes" if "?" in tweet_text else "no"
             _has_ell = "yes" if "..." in tweet_text else "no"
             _char_count = len(tweet_text)
 
             # ── Two parallel calls of 4 grades each, with personal benchmarks ──
-            _raw_a, _raw_b = _build_grades_system(fmt, pp)
+            _raw_a, _raw_b = _build_grades_system(fmt, pp, voice, _live_stats_block)
             _prompt_a = _raw_a.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
             _prompt_b = _raw_b.replace("{tweet_text}", tweet_text).replace("{char_count}", str(_char_count)).replace("{has_q}", _has_q).replace("{has_ell}", _has_ell)
 
@@ -4892,7 +4931,7 @@ Return ONLY this JSON, no other text:
                 for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview"]:
                     st.session_state.pop(_k, None)
             else:
-                _fallback_prompt = _build_grades_fallback_prompt(fmt, pp, tweet_text, _char_count, _has_q, _has_ell)
+                _fallback_prompt = _build_grades_fallback_prompt(fmt, pp, voice, tweet_text, _char_count, _has_q, _has_ell, _live_stats_block)
                 _fallback_raw = _call_claude_grades(_fallback_prompt, _grades_system, 1100)
                 _fallback_data = _parse(_fallback_raw)
                 if _fallback_data and "grades" in _fallback_data:
@@ -4945,7 +4984,7 @@ Return ONLY this JSON, no other text:
                             "fmt": fmt,
                             "len_main": len(_fallback_raw_main or ""),
                         })
-                        gdata = _build_local_grades_fallback(tweet_text, fmt, pp)
+                        gdata = _build_local_grades_fallback(tweet_text, fmt, pp, voice)
                         _cache = st.session_state.get("ci_grades_cache", {})
                         _cache[_grade_hash] = gdata
                         st.session_state["ci_grades_cache"] = _cache
