@@ -7,7 +7,7 @@ Streamlit Cloud sends prompts here; this calls the local Claude CLI (sonnet).
 Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
-import json, os, subprocess, time, urllib.request, urllib.error, re, hashlib, threading
+import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from chatgpt_oauth import call_chatgpt_oauth
@@ -281,6 +281,172 @@ def _twitter_graphql(operation, variables, features=None):
         return False, str(ex)
 
 
+def _get_nested(node, *path):
+    cur = node
+    for key in path:
+        if isinstance(cur, dict) and key in cur:
+            cur = cur[key]
+        else:
+            return None
+    return cur
+
+
+def _looks_like_tweet_node(node):
+    if not isinstance(node, dict):
+        return False
+    rest_id = node.get("rest_id")
+    if not isinstance(rest_id, str) or not rest_id.isdigit():
+        return False
+    typename = node.get("__typename", "")
+    if isinstance(typename, str) and "Tweet" in typename:
+        return True
+    legacy = node.get("legacy")
+    if isinstance(legacy, dict) and ("full_text" in legacy or "conversation_id_str" in legacy):
+        return True
+    return False
+
+
+def _find_first_tweet_node(node):
+    """Walk a GraphQL payload and return the first plausible tweet result dict."""
+    if isinstance(node, dict):
+        if _looks_like_tweet_node(node):
+            return node
+        for value in node.values():
+            found = _find_first_tweet_node(value)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for item in node:
+            found = _find_first_tweet_node(item)
+            if found:
+                return found
+    return None
+
+
+def _extract_screen_name(node):
+    if not isinstance(node, dict):
+        return ""
+    for path in (
+        ("core", "user_results", "result", "legacy", "screen_name"),
+        ("core", "user_results", "result", "core", "screen_name"),
+        ("legacy", "screen_name"),
+        ("core", "screen_name"),
+    ):
+        cur = node
+        ok = True
+        for key in path:
+            if isinstance(cur, dict) and key in cur:
+                cur = cur[key]
+            else:
+                ok = False
+                break
+        if ok and isinstance(cur, str) and cur:
+            return cur
+    return ""
+
+
+def _extract_graphql_error(payload):
+    if not isinstance(payload, dict):
+        return ""
+    errors = payload.get("errors")
+    if isinstance(errors, list):
+        messages = []
+        for item in errors:
+            if isinstance(item, dict):
+                msg = item.get("message") or item.get("detail")
+                if msg:
+                    messages.append(str(msg))
+            elif item:
+                messages.append(str(item))
+        if messages:
+            return "; ".join(messages[:3])
+    return ""
+
+
+def _extract_created_tweet(payload):
+    """Parse CreateTweet/Reply payload into a concrete published tweet result."""
+    if not isinstance(payload, dict):
+        return {}
+    create = payload.get("data", {}).get("create_tweet")
+    if not isinstance(create, dict):
+        return {}
+    tweet_node = None
+    for path in (
+        ("tweet_results", "result"),
+        ("tweet_result", "result"),
+        ("tweet_results",),
+        ("tweet_result",),
+        ("tweet",),
+    ):
+        candidate = _get_nested(create, *path)
+        if _looks_like_tweet_node(candidate):
+            tweet_node = candidate
+            break
+    if not tweet_node:
+        tweet_node = _find_first_tweet_node(create)
+    if not isinstance(tweet_node, dict):
+        return {}
+
+    tweet_id = tweet_node.get("rest_id", "")
+    screen_name = _extract_screen_name(tweet_node)
+    if not screen_name:
+        viewer = payload.get("data", {}).get("viewer")
+        screen_name = _extract_screen_name(viewer)
+
+    tweet_url = ""
+    if tweet_id:
+        if screen_name:
+            tweet_url = f"https://x.com/{screen_name}/status/{tweet_id}"
+        else:
+            tweet_url = f"https://x.com/i/web/status/{tweet_id}"
+
+    return {
+        "tweet_id": tweet_id,
+        "screen_name": screen_name,
+        "tweet_url": tweet_url,
+    }
+
+
+def _get_twitter_viewer_identity():
+    ok, resp = _twitter_graphql("Viewer", {})
+    if not ok:
+        return {}
+    try:
+        payload = json.loads(resp)
+    except Exception:
+        return {}
+    viewer = payload.get("data", {}).get("viewer", {})
+    user = viewer.get("user_results", {}).get("result", {})
+    screen_name = _extract_screen_name(user) or _extract_screen_name(viewer)
+    user_id = ""
+    if isinstance(user, dict):
+        user_id = user.get("rest_id") or user.get("id") or ""
+    return {"screen_name": screen_name, "user_id": user_id}
+
+
+def _twitterapi_get(path, params):
+    """Relay a read request to twitterapi.io from the trusted proxy host."""
+    if not TWITTER_API_IO_KEY:
+        return False, "HQ_TWITTER_API_IO_KEY is not configured on the proxy host."
+
+    url = f"https://api.twitterapi.io{path}"
+    if params:
+        url = f"{url}?{urllib.parse.urlencode(params)}"
+
+    req = urllib.request.Request(
+        url,
+        headers={"X-API-Key": TWITTER_API_IO_KEY, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return True, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}: {e.read().decode()[:300]}"
+    except Exception as ex:
+        return False, str(ex)
+
+
 class ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -402,10 +568,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "semantic_annotation_ids": [],
             }
             ok, resp = _twitter_graphql("CreateTweet", variables, features)
-            if ok and '"create_tweet"' in resp:
-                self.send_json(200, {"ok": True})
-            else:
+            if not ok:
+                print(f"[tweet/post] transport_error={resp[:200]}")
                 self.send_json(500, {"error": resp[:200]})
+                return
+            try:
+                payload = json.loads(resp)
+            except Exception:
+                print(f"[tweet/post] invalid_json={resp[:200]}")
+                self.send_json(500, {"error": "X returned invalid JSON while posting."})
+                return
+
+            created = _extract_created_tweet(payload)
+            if created.get("tweet_id"):
+                if not created.get("screen_name"):
+                    created.update(_get_twitter_viewer_identity())
+                    tweet_id = created.get("tweet_id", "")
+                    screen_name = created.get("screen_name", "")
+                    if tweet_id and screen_name:
+                        created["tweet_url"] = f"https://x.com/{screen_name}/status/{tweet_id}"
+                print(f"[tweet/post] success tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
+                self.send_json(200, {"ok": True, **created})
+            else:
+                error = _extract_graphql_error(payload) or "X did not return a published tweet."
+                print(f"[tweet/post] publish_missing error={error}")
+                self.send_json(500, {"error": error})
 
         elif self.path == "/tweet/reply":
             tweet_id = body.get("tweet_id", "")
@@ -437,10 +624,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "semantic_annotation_ids": [],
             }
             ok, resp = _twitter_graphql("CreateTweet", variables, features)
-            if ok and '"create_tweet"' in resp:
-                self.send_json(200, {"ok": True})
-            else:
+            if not ok:
+                print(f"[tweet/reply] transport_error={resp[:200]}")
                 self.send_json(500, {"error": resp[:200]})
+                return
+            try:
+                payload = json.loads(resp)
+            except Exception:
+                print(f"[tweet/reply] invalid_json={resp[:200]}")
+                self.send_json(500, {"error": "X returned invalid JSON while replying."})
+                return
+
+            created = _extract_created_tweet(payload)
+            if created.get("tweet_id"):
+                if not created.get("screen_name"):
+                    created.update(_get_twitter_viewer_identity())
+                    tweet_id = created.get("tweet_id", "")
+                    screen_name = created.get("screen_name", "")
+                    if tweet_id and screen_name:
+                        created["tweet_url"] = f"https://x.com/{screen_name}/status/{tweet_id}"
+                print(f"[tweet/reply] success tweet_id={created.get('tweet_id')} screen_name={created.get('screen_name')}")
+                self.send_json(200, {"ok": True, **created})
+            else:
+                error = _extract_graphql_error(payload) or "X did not return a published reply."
+                print(f"[tweet/reply] publish_missing error={error}")
+                self.send_json(500, {"error": error})
 
         elif self.path == "/tweet/like":
             # FavoriteTweet GraphQL requires x-client-transaction-id we can't generate
@@ -572,9 +780,37 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "not found"})
 
     def do_GET(self):
-        if self.path == "/health":
+        parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/health":
             _maybe_restore_anthropic()
             self.send_json(200, {"status": "ok", "anthropic_state": get_anthropic_state()})
+        elif parsed.path in {
+            "/twitter/user/info",
+            "/twitter/tweet/advanced_search",
+            "/twitter/list/tweets_timeline",
+            "/twitter/tweets",
+        }:
+            if not self._check_auth():
+                return
+
+            query = {
+                key: values[-1]
+                for key, values in urllib.parse.parse_qs(parsed.query, keep_blank_values=False).items()
+                if values
+            }
+            ok, resp = _twitterapi_get(parsed.path, query)
+            if not ok:
+                self.send_json(503, {"error": resp})
+                return
+
+            try:
+                payload = json.loads(resp)
+            except Exception:
+                self.send_json(500, {"error": "Proxy upstream returned invalid JSON."})
+                return
+
+            self.send_json(200, payload)
         else:
             self.send_json(404, {"error": "not found"})
 

@@ -933,7 +933,7 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet via proxy or shared local helper. Returns (success, error_msg)."""
+    """Post a new tweet via proxy or shared local helper. Returns (success, detail_or_error)."""
     import urllib.request
     proxy_url = _get_proxy_url()
     if proxy_url:
@@ -950,7 +950,8 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read())
             if data.get("ok", False):
-                return True, ""
+                detail = data.get("tweet_url") or data.get("screen_name") or ""
+                return True, detail
             return False, data.get("error", "Proxy returned not ok")
         except urllib.request.HTTPError as e:
             _err = e.read().decode("utf-8", errors="replace")[:200]
@@ -2479,7 +2480,9 @@ _stc.html("""<script>
     if(authPayload && authPayload.token && authPayload.role){
       var authValue=JSON.stringify(authPayload);
       win.localStorage.setItem("mp_auth", authValue);
-      doc.cookie="mp_auth="+encodeURIComponent(authValue)+"; path=/; max-age=31536000; SameSite=Lax";
+      var cookie="mp_auth="+encodeURIComponent(authValue)+"; path=/; max-age=31536000; SameSite=Lax";
+      if(win.location && win.location.protocol === "https:") cookie += "; Secure";
+      doc.cookie=cookie;
     }
   }catch(e){}
 
@@ -5590,7 +5593,18 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                         if st.button("Skip", key=f"ci_gskip_{sel_idx}", use_container_width=True):
                             skipped.add(sel_idx)
                             st.session_state["ci_grade_skipped"] = skipped
-                            st.rerun()
+                            st.session_state["ci_grade_selected"] = _first_actionable_grade_index()
+                            st.session_state["_ci_reopen_dialog"] = {
+                                "action": "grades",
+                                "tweet_text": (
+                                    st.session_state.get("ci_text")
+                                    or st.session_state.get("_ci_text_stage")
+                                    or ""
+                                ),
+                                "fmt": fmt,
+                                "voice": voice,
+                            }
+                            st.rerun(scope="app")
                     elif _is_accepted:
                         st.markdown('<div style="font-size:10px;color:rgba(45,212,191,0.6);font-weight:600;margin-top:6px;">Applied</div>', unsafe_allow_html=True)
 
@@ -6759,11 +6773,17 @@ def page_compose_ideas():
                 st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc_post}" target="_blank" style="display:inline-block;padding:8px 16px;background:#2DD4BF;border-radius:8px;color:#000;font-weight:600;text-decoration:none;">Open in X to Post</a>', unsafe_allow_html=True)
             elif tweet_text.strip():
                 with st.spinner("Posting..."):
-                    _ok, _err = _post_tweet(tweet_text.strip())
+                    _ok, _detail = _post_tweet(tweet_text.strip())
                 if _ok:
-                    st.success("Posted to X!")
+                    if _detail.startswith("https://"):
+                        st.success("Posted to X.")
+                        st.markdown(f"[Open posted tweet]({_detail})")
+                    elif _detail:
+                        st.success(f"Posted to X as @{_detail}.")
+                    else:
+                        st.success("Posted to X.")
                 else:
-                    st.error(f"Post failed — {_err}")
+                    st.error(f"Post failed — {_detail}")
 
     # ── Modal triggers ──
     def _clear_banger():
