@@ -10950,13 +10950,13 @@ def page_podcast():
     stat_cards = []
     for card in dashboard["status_cards"]:
         stat_cards.append(
-            f"""
-            <div class="podcast-status-card">
-              <div class="podcast-status-kicker">{html.escape(card['label'])}</div>
-              <div class="podcast-status-value">{html.escape(card['value'])}</div>
-              <div class="podcast-status-meta">{html.escape(card['meta'])}</div>
-            </div>
-            """
+            (
+                '<div class="podcast-status-card">'
+                f'<div class="podcast-status-kicker">{html.escape(card["label"])}</div>'
+                f'<div class="podcast-status-value">{html.escape(card["value"])}</div>'
+                f'<div class="podcast-status-meta">{html.escape(card["meta"])}</div>'
+                '</div>'
+            )
         )
     st.markdown(f'<div class="podcast-status-grid">{"".join(stat_cards)}</div>', unsafe_allow_html=True)
 
@@ -10964,14 +10964,14 @@ def page_podcast():
     for block in dashboard["compare"]:
         bullets = "".join(f"<li>{html.escape(item)}</li>" for item in block["bullets"])
         compare_blocks.append(
-            f"""
-            <div class="podcast-compare-side">
-              <div class="podcast-compare-label">{html.escape(block['label'])}</div>
-              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">{html.escape(block['title'])}</div>
-              <div class="podcast-compare-copy">{html.escape(block['body'])}</div>
-              <ul style="margin:12px 0 0 18px;color:#C9D1D9;line-height:1.7;font-size:13px;padding:0;">{bullets}</ul>
-            </div>
-            """
+            (
+                '<div class="podcast-compare-side">'
+                f'<div class="podcast-compare-label">{html.escape(block["label"])}</div>'
+                f'<div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">{html.escape(block["title"])}</div>'
+                f'<div class="podcast-compare-copy">{html.escape(block["body"])}</div>'
+                f'<ul style="margin:12px 0 0 18px;color:#C9D1D9;line-height:1.7;font-size:13px;padding:0;">{bullets}</ul>'
+                '</div>'
+            )
         )
     st.markdown(f'<div class="podcast-compare">{"".join(compare_blocks)}</div>', unsafe_allow_html=True)
 
@@ -10987,15 +10987,15 @@ def page_podcast():
     timeline_items = []
     for item in dashboard["timeline"]:
         timeline_items.append(
-            f"""
-            <div class="podcast-timeline-item">
-              <div class="podcast-timeline-time">{html.escape(item['time'])}</div>
-              <div class="podcast-timeline-copy">
-                <strong>{html.escape(item['title'])}</strong>
-                {html.escape(item['body'])}
-              </div>
-            </div>
-            """
+            (
+                '<div class="podcast-timeline-item">'
+                f'<div class="podcast-timeline-time">{html.escape(item["time"])}</div>'
+                '<div class="podcast-timeline-copy">'
+                f'<strong>{html.escape(item["title"])}</strong>'
+                f'{html.escape(item["body"])}'
+                '</div>'
+                '</div>'
+            )
         )
 
     next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
