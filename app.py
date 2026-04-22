@@ -32,6 +32,7 @@ from anthropic_circuit import (
     mark_rate_limited as anthropic_mark_rate_limited,
     parse_retry_after as anthropic_parse_retry_after,
 )
+from podcast_blueprint import get_podcast_dashboard_content
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -2082,15 +2083,16 @@ if st.query_params.get("user"):
     st.session_state["auth_username"] = st.query_params["user"]
 
 _qp_page = st.query_params.get("page", "")
-if st.session_state.pop("_nav_override", False):
+_nav_override = st.session_state.pop("_nav_override", False)
+if _nav_override:
     pass  # current_page already set by nav button callback
 elif _qp_page:
     st.session_state.current_page = _qp_page
 else:
     st.session_state.current_page = "Creator Studio"
 # Sync URL bar with current page so refresh preserves it
-# Only sync if a page param already exists (avoid triggering rerun on fresh load)
-if _qp_page and _qp_page != st.session_state.current_page:
+# Only sync when the user already has a page param or when button-driven nav changed the page.
+if (_qp_page or _nav_override) and _qp_page != st.session_state.current_page:
     st.query_params["page"] = st.session_state.current_page
 # Re-inject auth token + username into URL so refresh preserves login
 if st.session_state.get("_auth_token") and not st.query_params.get("token"):
@@ -2124,9 +2126,13 @@ def _build_gameday_url() -> str:
 # Token prefix for sidebar links — ensures auth survives page navigation
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
+_podcast_state = str(st.query_params.get("podcast_state", "")).strip()
+_podcast_state_qp = f"podcast_state={urllib.parse.quote(_podcast_state)}&" if _podcast_state else ""
 _gameday_url = _build_gameday_url()
 _gameday_url_html = html.escape(_gameday_url, quote=True)
 _owner_debug_zone = ""
+_owner_podcast_icon = ""
+_owner_podcast_panel = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
 _owner_gameday_icon = ""
@@ -2134,6 +2140,20 @@ _owner_gameday_panel = ""
 _nav_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer", "Reply Mode", "Idea Bank",
               "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
 if is_owner():
+    _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
+      <div class="mp-active-pip"></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="9" y="3" width="6" height="12" rx="3" stroke="#00E5CC" stroke-width="1.5" opacity="0.55"/>
+        <path d="M6 10v1a6 6 0 0012 0v-1" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+        <path d="M12 17v4" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+        <path d="M8.5 21h7" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+    </a>"""
+    _owner_podcast_panel = f"""<a href="/?{_tok_qp}{_podcast_state_qp}page=Podcast" class="mp-panel-item {_act('Podcast')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" stroke="#6B8AAA" stroke-width="1.5"/><path d="M6 10v1a6 6 0 0012 0v-1" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M12 17v4" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M8.5 21h7" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Podcast
+      </a>"""
+    _nav_pages.insert(4, "Podcast")
     _owner_signals_icon = f"""<a href="/?{_tok_qp}page=Signals+%26+Prompts" class="mp-ico {_act('Signals & Prompts')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -2144,8 +2164,8 @@ if is_owner():
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Signals & Prompts
       </a>"""
-    _nav_pages.insert(4, "Signals & Prompts")
-    _nav_pages.insert(5, "Gameday Mode")
+    _nav_pages.insert(5, "Signals & Prompts")
+    _nav_pages.insert(6, "Gameday Mode")
     _owner_gameday_icon = f"""<a href="{_gameday_url_html}" class="mp-ico mp-external-top {_act('Gameday Mode')}" data-external-top="1" target="_blank" rel="noopener noreferrer">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -2294,6 +2314,7 @@ _sidebar_html = f"""
         <line x1="16" y1="13" x2="8" y2="13" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
       </svg>
     </a>
+    {_owner_podcast_icon}
     {_owner_signals_icon}
     {_owner_gameday_icon}
     <div class="mp-panel">
@@ -2314,6 +2335,7 @@ _sidebar_html = f"""
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#6B8AAA" stroke-width="1.5"/><line x1="16" y1="13" x2="8" y2="13" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Article Writer
       </a>
+      {_owner_podcast_panel}
       {_owner_signals_panel}
       {_owner_gameday_panel}
     </div>
@@ -2530,15 +2552,22 @@ _stc.html("""<script>
         if(el) el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
       }
     });
-    /* Intercept sidebar <a> links — click matching hidden button, or fall back to URL nav */
-    doc.querySelectorAll('a[href*="?page="]').forEach(function(a){
+    /* Intercept sidebar-only page links when they are plain page switches. */
+    sidebar.querySelectorAll('a[href*="?page="], a[href*="&page="]').forEach(function(a){
       if(a._wired) return;
       a._wired=true;
       a.addEventListener('click',function(e){
-        e.preventDefault();
         var url=new URL(a.href,win.location.origin);
         var page=url.searchParams.get('page');
         if(!page){ win.location.href=a.href; return; }
+        var extraParams=[];
+        url.searchParams.forEach(function(_value,key){
+          if(['page','token','user'].indexOf(key)===-1) extraParams.push(key);
+        });
+        if(extraParams.length){
+          return; /* Let regular navigation preserve full query params. */
+        }
+        e.preventDefault();
         /* Try clicking the hidden nav button */
         var clicked=false;
         var btns=sidebar.querySelectorAll('button');
@@ -2676,6 +2705,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
+  {'<a href="/?'+_tok_qp+_podcast_state_qp+'page=Podcast" target="_self" style="'+_lnk+'">Podcast</a>' if is_owner() else ''}
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
   {'<a href="'+_gameday_url_html+'" data-external-top="1" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
@@ -2700,13 +2730,16 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts", "Gameday Mode"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Podcast"} and not is_owner():
     _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
     })
     page = "Creator Studio"
     st.session_state.current_page = page
+    st.query_params["page"] = page
+    if "podcast_state" in st.query_params:
+        del st.query_params["podcast_state"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -10846,6 +10879,157 @@ def page_gameday():
         st.markdown("<div style='font-size:10px;color:#2a3a50;text-align:center;margin-top:16px;'>Scores refresh every 60s. Tweets refresh manually.</div>", unsafe_allow_html=True)
     st.markdown('<style>@keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}</style>', unsafe_allow_html=True)
 
+
+def page_podcast():
+    if not is_owner():
+        st.session_state.current_page = "Creator Studio"
+        st.query_params["page"] = "Creator Studio"
+        if "podcast_state" in st.query_params:
+            del st.query_params["podcast_state"]
+        st.rerun()
+
+    requested_state = str(st.query_params.get("podcast_state", "")).strip()
+    requested_dashboard = get_podcast_dashboard_content(requested_state)
+    requested_resolved_state = requested_dashboard["current_state"]
+    if (
+        "podcast_state_select" not in st.session_state
+        or st.session_state.get("_podcast_state_last_query") != requested_state
+    ):
+        st.session_state["podcast_state_select"] = requested_resolved_state
+    st.session_state["_podcast_state_last_query"] = requested_state
+
+    state_options = requested_dashboard["state_options"]
+    state_labels = {option["id"]: option["label"] for option in state_options}
+    state_ids = [option["id"] for option in state_options]
+    if st.session_state["podcast_state_select"] not in state_ids:
+        st.session_state["podcast_state_select"] = requested_resolved_state
+    selected_state = st.selectbox(
+        "Mirror State",
+        state_ids,
+        index=state_ids.index(st.session_state["podcast_state_select"]),
+        format_func=lambda state_id: state_labels[state_id],
+        key="podcast_state_select",
+        help="This control updates the HQ mirror view only and does not change the live Discord workflow.",
+    )
+    if st.query_params.get("podcast_state") != selected_state:
+        st.query_params["podcast_state"] = selected_state
+        st.session_state["_podcast_state_last_query"] = selected_state
+    dashboard = get_podcast_dashboard_content(selected_state)
+
+    st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tool-desc">Owner-only workflow dashboard for mapping the HQ Podcast surface against your live unpublished Discord workflow while you test both side by side.</div>',
+        unsafe_allow_html=True,
+    )
+    if requested_dashboard["unknown_state_input"]:
+        st.warning(
+            f"Podcast state '{requested_dashboard['unknown_state_input']}' was not recognized. HQ kept the warning visible and moved the mirror selector to a safe fallback state."
+        )
+    elif requested_dashboard["used_default_state"]:
+        st.caption("No live workflow source is wired yet. Pick a mirror state here to compare the HQ shell against the current Discord run.")
+    st.markdown(
+        f"""
+        <div class="podcast-panel">
+          <div class="podcast-status-kicker">SIDE-BY-SIDE ROLLOUT</div>
+          <div style="font-size:22px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">
+            Discord stays live. HQ is the manual comparison board.
+          </div>
+          <div style="font-size:13px;line-height:1.75;color:#C9D1D9;">
+            Use this page to pressure-test how a future HQ workflow surface should read against the real Discord process:
+            what stage you are in, what is blocked, and what still needs verification before anyone calls the run done.
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:#8B949E;">
+            Current mirror state:
+            <span style="color:#2DD4BF;font-family:'Inter',sans-serif;font-weight:700;">{html.escape(dashboard['current_state_label'])}</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    stat_cards = []
+    for card in dashboard["status_cards"]:
+        stat_cards.append(
+            f"""
+            <div class="podcast-status-card">
+              <div class="podcast-status-kicker">{html.escape(card['label'])}</div>
+              <div class="podcast-status-value">{html.escape(card['value'])}</div>
+              <div class="podcast-status-meta">{html.escape(card['meta'])}</div>
+            </div>
+            """
+        )
+    st.markdown(f'<div class="podcast-status-grid">{"".join(stat_cards)}</div>', unsafe_allow_html=True)
+
+    compare_blocks = []
+    for block in dashboard["compare"]:
+        bullets = "".join(f"<li>{html.escape(item)}</li>" for item in block["bullets"])
+        compare_blocks.append(
+            f"""
+            <div class="podcast-compare-side">
+              <div class="podcast-compare-label">{html.escape(block['label'])}</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">{html.escape(block['title'])}</div>
+              <div class="podcast-compare-copy">{html.escape(block['body'])}</div>
+              <ul style="margin:12px 0 0 18px;color:#C9D1D9;line-height:1.7;font-size:13px;padding:0;">{bullets}</ul>
+            </div>
+            """
+        )
+    st.markdown(f'<div class="podcast-compare">{"".join(compare_blocks)}</div>', unsafe_allow_html=True)
+
+    phase_chips = []
+    for phase in dashboard["phases"]:
+        chip_class = "podcast-phase-chip"
+        if phase["status"] == "active":
+            chip_class += " is-active"
+        elif phase["status"] == "complete":
+            chip_class += " is-complete"
+        phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
+
+    timeline_items = []
+    for item in dashboard["timeline"]:
+        timeline_items.append(
+            f"""
+            <div class="podcast-timeline-item">
+              <div class="podcast-timeline-time">{html.escape(item['time'])}</div>
+              <div class="podcast-timeline-copy">
+                <strong>{html.escape(item['title'])}</strong>
+                {html.escape(item['body'])}
+              </div>
+            </div>
+            """
+        )
+
+    next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
+
+    workflow_col, guidance_col = st.columns([1.5, 1], gap="large")
+    with workflow_col:
+        st.markdown(
+            f"""
+            <div class="podcast-panel">
+              <div class="podcast-status-kicker">Workflow Phases</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Track the full run, not just the creative output.</div>
+              <div class="podcast-phase-row">{"".join(phase_chips)}</div>
+              <div class="podcast-timeline">{"".join(timeline_items)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with guidance_col:
+        st.markdown(
+            f"""
+            <div class="podcast-panel">
+              <div class="podcast-status-kicker">Next Actions</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:10px;">What HQ should make explicit right now.</div>
+              <ul style="margin:0 0 14px 18px;color:#C9D1D9;line-height:1.75;font-size:13px;padding:0;">{next_action_items}</ul>
+              <div class="podcast-status-kicker" style="margin-top:18px;">Selected Stage Summary</div>
+              <div style="font-size:16px;color:#E6EDF3;font-weight:700;line-height:1.4;">{html.escape(dashboard['current_state_label'])}</div>
+              <div style="font-size:12px;color:#8B949E;line-height:1.7;margin-top:6px;">
+                Phase bucket: {html.escape(dashboard['current_phase_label'])}. Use the mirror-state control above to compare another point in the workflow.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
@@ -10863,10 +11047,23 @@ page_map = {
     "Idea Bank": page_inspiration,
 }
 if is_owner():
+    page_map["Podcast"] = page_podcast
+if is_owner():
     page_map["Signals & Prompts"] = page_signals_prompts
     page_map["Gameday Mode"] = page_gameday
 if is_owner():
     page_map["Debug Console"] = page_debug_console
+
+if page not in page_map:
+    _append_debug_event("nav", "redirect", f"{page} is not a valid page", {
+        "auth_role": st.session_state.get("auth_role", ""),
+        "query_page": st.query_params.get("page", ""),
+    })
+    page = "Creator Studio"
+    st.session_state.current_page = page
+    st.query_params["page"] = page
+    if "podcast_state" in st.query_params:
+        del st.query_params["podcast_state"]
 
 st.markdown("""<div class="main-watermark">
   <svg width="80" height="70" viewBox="0 0 100 88" fill="none">
