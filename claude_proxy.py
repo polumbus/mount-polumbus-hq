@@ -13,6 +13,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from chatgpt_oauth import call_chatgpt_oauth
+import podcast_sync
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
     block_for as anthropic_block_for,
@@ -29,6 +30,39 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+
+def _load_env_file(path: str) -> None:
+    try:
+        file_path = Path(path).expanduser()
+        if not file_path.exists():
+            return
+        for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\"'")
+            if key and value and not os.environ.get(key):
+                os.environ[key] = value
+    except Exception:
+        pass
+
+
+def _bootstrap_proxy_env() -> None:
+    for candidate in (
+        "/home/polfam/mount_polumbus_hq/.env.local",
+        "~/.config/openclaw/secrets.env",
+    ):
+        _load_env_file(candidate)
+
+
+_bootstrap_proxy_env()
+
 CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 PROXY_API_KEY = os.environ.get("HQ_PROXY_KEY", "")
@@ -36,11 +70,13 @@ PORT = 7821
 CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
 TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
-GIST_ID = "15fb167bbbfdaa79d5ce11c266c3f652"
+GIST_ID = os.environ.get("HQ_GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
 GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
 TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
 PODCAST_JOB_ROOT = Path(os.environ.get("HQ_PODCAST_JOB_ROOT", os.path.expanduser("~/.openclaw/workspace-omaha/data/podcast_jobs")))
 PODCAST_JOB_ROOT.mkdir(parents=True, exist_ok=True)
+PODCAST_DATA_DIR = Path(os.environ.get("HQ_DATA_DIR", os.path.expanduser("~/.openclaw/workspace-omaha/data")))
+PODCAST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 PODCAST_WHISPER_MODEL = os.environ.get("HQ_PODCAST_WHISPER_MODEL", "base")
 PODCAST_CLIPSAI_PYTHON = os.environ.get("HQ_PODCAST_CLIPSAI_PYTHON", "/home/polfam/.openclaw/clipsai-env/bin/python3")
 PODCAST_CLIPSAI_SCRIPT = os.environ.get("HQ_PODCAST_CLIPSAI_SCRIPT", "/home/polfam/.openclaw/scripts/clipsai-pipeline.py")
@@ -54,10 +90,23 @@ except Exception:
 
 _cookie_cache = {"auth_token": "", "ct0": "", "fetched_at": 0}
 _recovery_thread = None
+_podcast_sync_thread = None
 _podcast_job_lock = threading.Lock()
+_podcast_sync_status_lock = threading.Lock()
 _clip_probe_cache = {}
 PODCAST_TRANSCRIPTION_STALE_SECONDS = int(os.environ.get("HQ_PODCAST_TRANSCRIPTION_STALE_SECONDS", "7200"))
 PODCAST_CLIPS_STALE_SECONDS = int(os.environ.get("HQ_PODCAST_CLIPS_STALE_SECONDS", "5400"))
+PODCAST_SYNC_INTERVAL_SECONDS = int(os.environ.get("HQ_PODCAST_SYNC_INTERVAL_SECONDS", "10"))
+_podcast_sync_status = {
+    "running": False,
+    "last_checked_at": "",
+    "last_changed_at": "",
+    "last_duration_ms": 0,
+    "last_error": "",
+    "last_notes": [],
+    "last_remote_error": "",
+    "source": "local",
+}
 
 
 def _podcast_job_file(run_id: str) -> Path:
@@ -556,6 +605,78 @@ def _ensure_recovery_thread():
         daemon=True,
     )
     _recovery_thread.start()
+
+
+def _podcast_sync_status_snapshot() -> dict:
+    with _podcast_sync_status_lock:
+        return dict(_podcast_sync_status)
+
+
+def _update_podcast_sync_status(**updates) -> None:
+    with _podcast_sync_status_lock:
+        _podcast_sync_status.update(updates)
+
+
+def _podcast_background_sync_once() -> None:
+    _update_podcast_sync_status(running=True)
+    result = podcast_sync.run_background_reconcile_pass(
+        actor="hq_background_sync",
+        load_proxy_job=_load_podcast_job,
+        clip_filter=podcast_sync.filtered_clip_files,
+        data_dir=PODCAST_DATA_DIR,
+        gist_id=GIST_ID,
+        github_pat=GITHUB_PAT,
+    )
+    status_updates = {
+        "running": False,
+        "last_checked_at": result.get("checked_at", ""),
+        "last_duration_ms": int(result.get("duration_ms", 0) or 0),
+        "last_error": "",
+        "last_notes": list(result.get("notes", []))[-8:],
+        "last_remote_error": result.get("remote_error", ""),
+        "source": result.get("source", "local"),
+    }
+    if result.get("changed"):
+        status_updates["last_changed_at"] = result.get("checked_at", "")
+    _update_podcast_sync_status(**status_updates)
+    if result.get("notes") or result.get("remote_error"):
+        print(
+            "[podcast-sync]",
+            json.dumps(
+                {
+                    "changed": bool(result.get("changed")),
+                    "notes": result.get("notes", []),
+                    "remote_error": result.get("remote_error", ""),
+                    "duration_ms": result.get("duration_ms", 0),
+                }
+            ),
+        )
+
+
+def _podcast_reconciliation_loop():
+    while True:
+        try:
+            _podcast_background_sync_once()
+        except Exception as exc:
+            _update_podcast_sync_status(
+                running=False,
+                last_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                last_error=str(exc),
+            )
+            print(f"[podcast-sync] background reconciliation failed: {exc}")
+        time.sleep(max(2, PODCAST_SYNC_INTERVAL_SECONDS))
+
+
+def _ensure_podcast_sync_thread():
+    global _podcast_sync_thread
+    if _podcast_sync_thread and _podcast_sync_thread.is_alive():
+        return
+    _podcast_sync_thread = threading.Thread(
+        target=_podcast_reconciliation_loop,
+        name="podcast-background-sync",
+        daemon=True,
+    )
+    _podcast_sync_thread.start()
 
 def _get_twitter_cookies():
     """Fetch latest Twitter cookies from Gist (synced by Chrome extension)."""
@@ -1289,7 +1410,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if not self._check_auth():
                 return
             _maybe_restore_anthropic()
-            self.send_json(200, {"status": "ok", "anthropic_state": get_anthropic_state()})
+            self.send_json(
+                200,
+                {
+                    "status": "ok",
+                    "anthropic_state": get_anthropic_state(),
+                    "podcast_sync": _podcast_sync_status_snapshot(),
+                },
+            )
         elif parsed.path in {
             "/twitter/user/info",
             "/twitter/tweet/advanced_search",
@@ -1329,6 +1457,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Podcast job not found"})
                 return
             self.send_json(200, {"ok": True, "job": job})
+        elif parsed.path == "/podcast/reconcile-status":
+            if not self._check_auth():
+                return
+            self.send_json(200, {"ok": True, "sync": _podcast_sync_status_snapshot()})
         elif parsed.path == "/podcast/clips":
             if not self._check_auth():
                 return
@@ -1388,6 +1520,7 @@ if __name__ == "__main__":
     if not PROXY_API_KEY:
         print("WARNING: HQ_PROXY_KEY not set — proxy is unprotected!")
     _ensure_recovery_thread()
+    _ensure_podcast_sync_thread()
     server = ThreadedHTTPServer(("0.0.0.0", PORT), ProxyHandler)
     print(f"Claude proxy listening on port {PORT}")
     print("To expose publicly: ssh -R 80:localhost:7821 nokey@localhost.run")

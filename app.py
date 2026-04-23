@@ -11912,98 +11912,6 @@ Return strict JSON with exactly these keys:
             complete_count = len(progress_steps)
         return progress_steps, complete_count
 
-    def _reconcile_podcast_proxy_runs(store_data: dict) -> tuple[dict, bool]:
-        updated_store = podcast_tracker.deepcopy_store(store_data)
-        changed = False
-        for run_data in list(updated_store.get("runs", [])):
-            if _podcast_run_mode(run_data) != "local" or not _podcast_is_local_source_path(run_data.get("source_path", "")):
-                continue
-            try:
-                proxy_job = (_podcast_proxy_status(run_data["id"]) or {}).get("job", {})
-            except Exception:
-                continue
-            if not proxy_job:
-                continue
-            clip_inventory = _podcast_filtered_clip_files(proxy_job.get("clips_files", []), run_data.get("cached_clip_files", []))
-            if clip_inventory != run_data.get("cached_clip_files", []):
-                podcast_tracker.cache_clip_inventory(updated_store, run_id=run_data["id"], clip_files=clip_inventory)
-                run_data = next(item for item in updated_store["runs"] if item["id"] == run_data["id"])
-                changed = True
-            transcript_text = str(proxy_job.get("transcript_text", "")).strip()
-            transcript_path = str(proxy_job.get("transcript_path", "")).strip()
-            chapters_text = str(proxy_job.get("chapters_text", "")).strip()
-            chapters_path = str(proxy_job.get("chapters_path", "")).strip()
-            clips_dir = str(proxy_job.get("clips_dir", "")).strip()
-            if str(proxy_job.get("status", "")).strip() == "completed":
-                transcript_missing = not _podcast_artifact_has_content(run_data, "transcript")
-                if transcript_text and transcript_missing:
-                    podcast_tracker.update_artifact(
-                        updated_store,
-                        run_id=run_data["id"],
-                        artifact_id="transcript",
-                        actor=actor,
-                        text=transcript_text,
-                        path=transcript_path,
-                        status="draft",
-                        notes="Imported automatically from the local HQ podcast runner.",
-                    )
-                    if chapters_text or chapters_path:
-                        podcast_tracker.update_artifact(
-                            updated_store,
-                            run_id=run_data["id"],
-                            artifact_id="chapters",
-                            actor=actor,
-                            text=chapters_text,
-                            path=chapters_path,
-                            status="draft" if chapters_text else "missing",
-                            notes="Imported automatically from the local HQ podcast runner.",
-                        )
-                    if clips_dir and run_data["artifacts"]["clips"].get("path", "").strip() != clips_dir:
-                        podcast_tracker.update_artifact(
-                            updated_store,
-                            run_id=run_data["id"],
-                            artifact_id="clips",
-                            actor=actor,
-                            text=run_data["artifacts"]["clips"].get("text", ""),
-                            path=clips_dir,
-                            status=run_data["artifacts"]["clips"].get("status", "missing"),
-                            notes=run_data["artifacts"]["clips"].get("notes", "") or "Reserved output directory from the local HQ podcast runner.",
-                        )
-                    if run_data["current_state"] in {"initialized", "transcribing", "blocked_manual_fix"}:
-                        podcast_tracker.transition_run(
-                            updated_store,
-                            run_id=run_data["id"],
-                            actor=actor,
-                            state="gate1_waiting",
-                            blocker="",
-                            note="Local HQ podcast runner completed transcript generation.",
-                        )
-                    changed = True
-                elif not transcript_text and run_data["current_state"] in {"initialized", "transcribing"} and transcript_missing:
-                    podcast_tracker.transition_run(
-                        updated_store,
-                        run_id=run_data["id"],
-                        actor=actor,
-                        state="blocked_manual_fix",
-                        blocker="Local HQ podcast runner completed without a transcript.",
-                        note="Runner completed but no transcript text was returned.",
-                    )
-                    changed = True
-            elif (
-                str(proxy_job.get("status", "")).strip() == "failed"
-                and run_data["current_state"] not in {"gate1_waiting", "gate1_approved", "metadata_ready", "gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}
-            ):
-                podcast_tracker.transition_run(
-                    updated_store,
-                    run_id=run_data["id"],
-                    actor=actor,
-                    state="blocked_manual_fix",
-                    blocker=f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}",
-                    note="Local HQ podcast runner failed during transcription.",
-                )
-                changed = True
-        return updated_store, changed
-
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="tool-desc">The Podcast wizard now drives the run one step at a time. The manual workspace is still here, but it stays hidden until you explicitly open it.</div>',
@@ -12042,10 +11950,6 @@ Return strict JSON with exactly these keys:
                 st.session_state.pop(key, None)
             st.rerun()
 
-    reconciled_store, reconciled_changed = _reconcile_podcast_proxy_runs(store)
-    if reconciled_changed:
-        _save_podcast_and_rerun(reconciled_store, reconciled_store.get("active_run_id", ""))
-    store = reconciled_store
     runs = store["runs"]
     run_lookup = {run["id"]: run for run in runs}
 
@@ -12839,87 +12743,6 @@ Return strict JSON with exactly these keys:
             proxy_job = (_podcast_proxy_status(run["id"]) or {}).get("job", {})
         except Exception as exc:
             proxy_job_error = str(exc)
-    if proxy_job.get("status") == "completed":
-        transcript_text = str(proxy_job.get("transcript_text", "")).strip()
-        transcript_path = str(proxy_job.get("transcript_path", "")).strip()
-        chapters_text = str(proxy_job.get("chapters_text", "")).strip()
-        chapters_path = str(proxy_job.get("chapters_path", "")).strip()
-        clips_dir = str(proxy_job.get("clips_dir", "")).strip()
-        clips_inventory = _podcast_filtered_clip_files(proxy_job.get("clips_files", []), run.get("cached_clip_files", []))
-        transcript_artifact = run["artifacts"]["transcript"]
-        chapters_artifact = run["artifacts"]["chapters"]
-        clips_artifact = run["artifacts"]["clips"]
-        needs_import = (
-            transcript_text
-            and run["current_state"] == "transcribing"
-            and not transcript_artifact.get("text", "").strip()
-        )
-        if needs_import:
-            updated_store = podcast_tracker.deepcopy_store(store)
-            if clips_inventory:
-                podcast_tracker.cache_clip_inventory(updated_store, run_id=run["id"], clip_files=clips_inventory)
-            podcast_tracker.update_artifact(
-                updated_store,
-                run_id=run["id"],
-                artifact_id="transcript",
-                actor=actor,
-                text=transcript_text,
-                path=transcript_path,
-                status="draft",
-                notes="Imported automatically from the local HQ podcast runner.",
-            )
-            if chapters_text or chapters_path:
-                podcast_tracker.update_artifact(
-                    updated_store,
-                    run_id=run["id"],
-                    artifact_id="chapters",
-                    actor=actor,
-                    text=chapters_artifact.get("text", "") or chapters_text,
-                    path=chapters_artifact.get("path", "") or chapters_path,
-                    status=chapters_artifact.get("status", "draft") if chapters_artifact.get("text", "").strip() else ("draft" if chapters_text else chapters_artifact.get("status", "missing")),
-                    notes="Imported automatically from the local HQ podcast runner.",
-                )
-            if clips_dir and (clips_artifact.get("path", "").strip() != clips_dir):
-                podcast_tracker.update_artifact(
-                    updated_store,
-                    run_id=run["id"],
-                    artifact_id="clips",
-                    actor=actor,
-                    text=clips_artifact.get("text", ""),
-                    path=clips_dir,
-                    status=clips_artifact.get("status", "missing"),
-                    notes=clips_artifact.get("notes", "") or "Reserved output directory from the local HQ podcast runner.",
-                )
-            if run["current_state"] == "transcribing":
-                podcast_tracker.transition_run(
-                    updated_store,
-                    run_id=run["id"],
-                    actor=actor,
-                    state="gate1_waiting",
-                    blocker="",
-                    note="Local HQ podcast runner completed transcript generation.",
-                )
-            st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Transcript imported automatically from the local HQ podcast runner."}
-            _save_podcast_and_rerun(updated_store, run["id"])
-        elif clips_inventory and run.get("cached_clip_files", []) != clips_inventory:
-            updated_store = podcast_tracker.deepcopy_store(store)
-            podcast_tracker.cache_clip_inventory(updated_store, run_id=run["id"], clip_files=clips_inventory)
-            _save_podcast_and_rerun(updated_store, run["id"])
-    elif (
-        proxy_job.get("status") == "failed"
-        and run["current_state"] not in {"blocked_manual_fix", "gate1_waiting", "gate1_approved", "metadata_ready", "gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}
-    ):
-        updated_store = podcast_tracker.deepcopy_store(store)
-        podcast_tracker.transition_run(
-            updated_store,
-            run_id=run["id"],
-            actor=actor,
-            state="blocked_manual_fix",
-            blocker=f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}",
-            note="Local HQ podcast runner failed during transcription.",
-        )
-        st.session_state["_podcast_flash_message"] = {"level": "error", "text": f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}"}
-        _save_podcast_and_rerun(updated_store, run["id"])
     dashboard = get_podcast_dashboard_content(run["current_state"])
     metrics = podcast_tracker.build_run_metrics(run)
     latest_gate_decisions = metrics["latest_gate_decisions"]
