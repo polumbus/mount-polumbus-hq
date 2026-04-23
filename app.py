@@ -11628,6 +11628,7 @@ def page_podcast():
 
     hero_col, detail_col = st.columns([1.6, 1], gap="large")
     with hero_col:
+        source_truth_label = "Discord" if metrics["requires_sync"] else "HQ"
         st.markdown(
             f"""
             <div class="podcast-panel">
@@ -11637,7 +11638,7 @@ def page_podcast():
               <div class="podcast-inline-kv"><span>Source</span><strong>{_podcast_value_html(run['source_path'], link_label='Open Source Link')}</strong></div>
               <div class="podcast-inline-kv"><span>Discord Ref</span><strong>{_podcast_value_html(run['discord_reference'], link_label='Open Discord Thread')}</strong></div>
               <div class="podcast-inline-kv"><span>Shorts Output</span><strong>{_podcast_value_html(run['artifacts']['clips']['path'], empty_label='Set this in Artifacts > Shorts Clips', link_label='Open Clips Output')}</strong></div>
-              <div class="podcast-inline-kv"><span>Source of Truth</span><strong>{html.escape((run.get('source_of_truth') or 'discord').title())}</strong></div>
+              <div class="podcast-inline-kv"><span>Source of Truth</span><strong>{html.escape(source_truth_label)}</strong></div>
               <div class="podcast-inline-kv"><span>Last Synced</span><strong>{html.escape(run.get('last_synced_at') or 'Never')}</strong></div>
               <div class="podcast-inline-kv"><span>Publish Window</span><strong>{html.escape(run['publish_window'] or 'Not Set')}</strong></div>
               <div class="podcast-inline-kv"><span>Current Blocker</span><strong>{html.escape(run['blocker'] or 'None')}</strong></div>
