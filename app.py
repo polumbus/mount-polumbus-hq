@@ -11254,103 +11254,246 @@ def page_podcast():
             clean = clean[start:end + 1]
         return json.loads(clean)
 
+    def _podcast_trim_prompt_text(text: str, max_chars: int = 28000) -> str:
+        clean = str(text or "").strip()
+        if len(clean) <= max_chars:
+            return clean
+        head_len = max_chars // 2
+        tail_len = max_chars // 3
+        head = clean[:head_len].rsplit(" ", 1)[0].strip()
+        tail = clean[-tail_len:].split(" ", 1)[-1].strip()
+        return f"{head}\n\n[... transcript trimmed for prompt length ...]\n\n{tail}"
+
     def _podcast_generate_packaging_artifacts(updated_store: dict, run_data: dict) -> None:
         transcript_text = str(run_data["artifacts"]["transcript"].get("text", "")).strip()
         if not transcript_text:
             raise ValueError("Transcript content is missing, so packaging suggestions cannot be generated yet.")
         chapters_text = str(run_data["artifacts"]["chapters"].get("text", "")).strip()
+        transcript_for_prompt = _podcast_trim_prompt_text(transcript_text)
+        chapters_for_prompt = chapters_text or "No chapter text supplied yet."
         system = (
-            "You are helping build a podcast/content packaging workflow. "
-            "Return strict JSON only. No markdown. No explanation. "
-            "Focus on concise, strong, social-ready suggestions."
+            get_system_for_voice("Default", "")
+            + "\n\n"
+            + "You are Booth, Tyler's podcast and YouTube packaging agent. "
+            + "Match the unpublished workflow rules exactly. "
+            + "Return strict JSON only. No markdown. No explanation. "
+            + "Never use emojis. Never use third-person attribution like 'Tyler says'. "
+            + "Never use 'we' for team framing; say 'the Broncos'. "
+            + "Always spell George Paton exactly as George Paton. Never write George Peyton. "
+            + "Prefer plain punctuation over em dash or en dash separators. "
+            + "Never return notes about what the copy should be. Return the actual copy."
         )
-        prompt = f"""
-Generate packaging suggestions for this podcast/video run.
+        gate_prompt = f"""
+Generate the Gate 1 packaging options and cleaned chapters for this unpublished podcast run.
 
 Run title:
 {run_data['title']}
 
 Transcript:
-{transcript_text}
+{transcript_for_prompt}
 
-Chapters:
-{chapters_text or 'No chapter text supplied.'}
+Rough chapter/timestamp anchors:
+{chapters_for_prompt}
+
+Rules:
+- Return exactly 3 video title options.
+- 8 words max per title. Count the words.
+- Preserve a curiosity gap.
+- If the viewer can explain the exact event without watching, rewrite it.
+- One capitalized emotional anchor is okay.
+- Return exactly 3 thumbnail text options.
+- Thumbnail text must be 2-3 words max, no team names, and not a question.
+- Return 5-8 cleaned chapter lines.
+- Format each chapter line exactly like `0:00 Intro`.
+- Use the supplied timestamps as anchors when possible.
+- No emojis anywhere.
 
 Return strict JSON with exactly these keys:
 {{
-  "title_candidates": ["5 short compelling title options"],
-  "description": "one polished YouTube description",
-  "tags": ["10 to 15 relevant tags"],
-  "promo_tweets": ["3 promo tweet options"],
-  "thumbnail_text_options": ["4 short thumbnail text options"],
-  "clip_suggestions": [
+  "title_options": ["3 video title options"],
+  "thumbnail_text_options": ["3 thumbnail text options"],
+  "chapters": ["0:00 Intro", "2:01 Another chapter"]
+}}
+""".strip()
+
+        with st.spinner("Generating podcast packaging suggestions..."):
+            gate_payload = _podcast_parse_json_response(
+                _call_claude_proxy(gate_prompt, system, max_tokens=1400, model="claude-sonnet-4-6", timeout=120)
+            )
+
+        title_candidates = [str(item).strip() for item in gate_payload.get("title_options", []) if str(item).strip()]
+        thumbnail_options = [str(item).strip() for item in gate_payload.get("thumbnail_text_options", []) if str(item).strip()]
+        cleaned_chapters = [str(item).strip() for item in gate_payload.get("chapters", []) if str(item).strip()]
+        if not title_candidates or not thumbnail_options or not cleaned_chapters:
+            raise ValueError("The AI response was missing required Gate 1 packaging suggestions.")
+
+        formatted_titles = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(title_candidates[:3]))
+        formatted_thumbnails = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(thumbnail_options[:3]))
+        formatted_chapters = "\n".join(cleaned_chapters[:8])
+
+        metadata_prompt = f"""
+Generate the longform metadata for this unpublished podcast run.
+
+Run title:
+{run_data['title']}
+
+Transcript:
+{transcript_for_prompt}
+
+Approved chapter list:
+{formatted_chapters}
+
+Rules:
+- Write one real YouTube description, not options.
+- First line is a strong hook and must not repeat the title.
+- Insert the exact chapter list after the hook.
+- Then write 3-4 short conversational paragraphs in Tyler's voice.
+- Include exactly this line near the end: `Follow Tyler: https://x.com/Tyler_Polumbus`
+- End with one engagement question.
+- Generate 15-20 tags with no `#`.
+- Remove generic filler like `football` and `nfl`.
+- Generate one actual episode tweet draft, not multiple options.
+- No hashtags.
+- No URL.
+- No unverified claims.
+- Never say `Tyler says`.
+- Never say `we` for team framing.
+- No emojis anywhere.
+
+Reference format:
+The Jalen Waddell move already happened. Now the Broncos have to prove they know exactly what comes next with No. 62.
+
+0:00 Why No. 62 changes everything
+2:01 George Paton's track record in this range
+
+[short conversational paragraphs]
+
+Follow Tyler: https://x.com/Tyler_Polumbus
+
+Who would you target at No. 62, and is there anybody you would actually move up for?
+
+Return strict JSON with exactly these keys:
+{{
+  "description": "full YouTube description with chapter lines inserted",
+  "tags": ["15 to 20 relevant tags"],
+  "episode_tweet": "one actual episode tweet draft"
+}}
+""".strip()
+
+        with st.spinner("Generating metadata and episode tweet..."):
+            metadata_payload = _podcast_parse_json_response(
+                _call_claude_proxy(metadata_prompt, system, max_tokens=1800, model="claude-sonnet-4-6", timeout=120)
+            )
+
+        tags = [str(item).strip() for item in metadata_payload.get("tags", []) if str(item).strip()]
+        formatted_tags = ", ".join(tags[:20])
+        description_text = str(metadata_payload.get("description", "")).strip()
+        episode_tweet = str(metadata_payload.get("episode_tweet", "")).strip()
+        if not description_text or not episode_tweet or not tags:
+            raise ValueError("The AI response was missing required metadata or tweet fields.")
+
+        clip_prompt = f"""
+Generate the per-clip copy bundles for this unpublished podcast run.
+
+Run title:
+{run_data['title']}
+
+Transcript:
+{transcript_for_prompt}
+
+Approved chapter list:
+{formatted_chapters}
+
+Rules:
+- Return exactly 3 clip packages if the transcript supports them. Otherwise return the strongest 2.
+- Each clip must have a plausible time range.
+- Each clip package must include the actual copy bundle, not notes.
+- Shorts title should feel like a real YouTube Shorts title.
+- Shorts description should point back to the full episode.
+- Instagram caption must end exactly with `Watch full video - link in bio`.
+- Clip tweet must have no hashtags and no invented facts.
+- Never say `Tyler says`.
+- Never say `we` for team framing.
+- No emojis anywhere.
+
+Reference clip copy shape:
+Shorts title: The Broncos Still Need This Weapon
+Shorts description: Evan Engram can help, but Denver still needs a real difference-maker at tight end.
+Instagram caption ending: Watch full video - link in bio
+
+Return strict JSON with exactly these keys:
+{{
+  "clip_packages": [
     {{
-      "title": "clip title",
+      "title": "HQ clip label",
       "time_range": "MM:SS-MM:SS",
-      "hook": "why this clip works",
-      "platforms": ["YouTube Shorts", "Instagram Reels"]
+      "reason": "why this clip works",
+      "tweet": "actual tweet text",
+      "shorts_title": "actual YouTube Shorts title",
+      "shorts_description": "actual Shorts description",
+      "shorts_tags": ["8 to 12 tags"],
+      "instagram_caption": "actual IG caption ending with Watch full video - link in bio"
     }}
   ]
 }}
-
-Rules:
-- Make titles and thumbnail text punchy, not generic.
-- Make tweet options post-ready and under 280 characters.
-- Clip suggestions must be specific and use timestamps that could plausibly exist in the transcript.
-- Prefer 5 clip suggestions.
-- Tags should be plain strings with no # symbol.
 """.strip()
-        with st.spinner("Generating podcast packaging suggestions..."):
-            response_text = _call_claude_proxy(prompt, system, max_tokens=2200, model="claude-sonnet-4-6", timeout=120)
-        payload = _podcast_parse_json_response(response_text)
 
-        title_candidates = [str(item).strip() for item in payload.get("title_candidates", []) if str(item).strip()]
-        promo_tweets = [str(item).strip() for item in payload.get("promo_tweets", []) if str(item).strip()]
-        thumbnail_options = [str(item).strip() for item in payload.get("thumbnail_text_options", []) if str(item).strip()]
-        tags = [str(item).strip() for item in payload.get("tags", []) if str(item).strip()]
-        clip_suggestions = payload.get("clip_suggestions", [])
-        if not title_candidates or not promo_tweets or not thumbnail_options or not tags:
-            raise ValueError("The AI response was missing required packaging suggestions.")
+        with st.spinner("Generating per-clip social packages..."):
+            clip_payload = _podcast_parse_json_response(
+                _call_claude_proxy(clip_prompt, system, max_tokens=1800, model="claude-sonnet-4-6", timeout=120)
+            )
 
-        formatted_titles = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(title_candidates[:5]))
-        formatted_tweets = "\n\n".join(f"Option {idx + 1}\n{item}" for idx, item in enumerate(promo_tweets[:3]))
-        formatted_thumbnails = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(thumbnail_options[:4]))
-        formatted_tags = ", ".join(tags[:15])
+        clip_suggestions = clip_payload.get("clip_packages", [])
 
         clip_lines = []
-        for idx, clip in enumerate(clip_suggestions[:5]):
+        for idx, clip in enumerate(clip_suggestions[:3]):
             if not isinstance(clip, dict):
                 continue
             clip_title = str(clip.get("title", "")).strip()
             clip_range = str(clip.get("time_range", "")).strip()
-            clip_hook = str(clip.get("hook", "")).strip()
-            platforms = clip.get("platforms", [])
-            platforms_text = ", ".join(str(item).strip() for item in platforms if str(item).strip())
-            if clip_title or clip_range or clip_hook:
+            clip_reason = str(clip.get("reason", "")).strip()
+            clip_tweet = str(clip.get("tweet", "")).strip()
+            shorts_title = str(clip.get("shorts_title", "")).strip()
+            shorts_description = str(clip.get("shorts_description", "")).strip()
+            shorts_tags = [str(item).strip() for item in clip.get("shorts_tags", []) if str(item).strip()]
+            instagram_caption = str(clip.get("instagram_caption", "")).strip()
+            if instagram_caption and not instagram_caption.endswith("Watch full video - link in bio"):
+                instagram_caption = instagram_caption.rstrip() + "\n\nWatch full video - link in bio"
+            if clip_title or clip_range or clip_reason or clip_tweet or shorts_title or shorts_description or instagram_caption:
                 clip_lines.append(
                     "\n".join(
                         line
                         for line in [
                             f"Clip {idx + 1}: {clip_title}" if clip_title else f"Clip {idx + 1}",
                             f"Time Range: {clip_range}" if clip_range else "",
-                            f"Hook: {clip_hook}" if clip_hook else "",
-                            f"Platforms: {platforms_text}" if platforms_text else "",
+                            f"Why This Clip: {clip_reason}" if clip_reason else "",
+                            "",
+                            "TWEET:" if clip_tweet else "",
+                            clip_tweet if clip_tweet else "",
+                            "",
+                            "YOUTUBE SHORTS:" if (shorts_title or shorts_description or shorts_tags) else "",
+                            f"Title: {shorts_title}" if shorts_title else "",
+                            f"Description: {shorts_description}" if shorts_description else "",
+                            f"Tags: {', '.join(shorts_tags[:12])}" if shorts_tags else "",
+                            "",
+                            "INSTAGRAM REEL:" if instagram_caption else "",
+                            instagram_caption if instagram_caption else "",
                         ]
                         if line
                     )
                 )
         formatted_clips = "\n\n".join(clip_lines)
-        description_text = str(payload.get("description", "")).strip()
-        if not description_text or not formatted_clips:
+        if not formatted_clips:
             raise ValueError("The AI response did not include enough packaging detail to save.")
 
         artifact_updates = {
-            "title": (formatted_titles, run_data["artifacts"]["title"].get("path", ""), "Generated title candidates from transcript."),
-            "description": (description_text, run_data["artifacts"]["description"].get("path", ""), "Generated YouTube description from transcript."),
-            "tags": (formatted_tags, run_data["artifacts"]["tags"].get("path", ""), "Generated tags from transcript."),
-            "tweet": (formatted_tweets, run_data["artifacts"]["tweet"].get("path", ""), "Generated promo tweet options from transcript."),
-            "thumbnail_text": (formatted_thumbnails, run_data["artifacts"]["thumbnail_text"].get("path", ""), "Generated thumbnail text options from transcript."),
-            "clips": (formatted_clips, run_data["artifacts"]["clips"].get("path", ""), "Generated clip title and platform suggestions from transcript."),
+            "title": (formatted_titles, run_data["artifacts"]["title"].get("path", ""), "Generated Gate 1 video title options using the unpublished workflow rules."),
+            "thumbnail_text": (formatted_thumbnails, run_data["artifacts"]["thumbnail_text"].get("path", ""), "Generated Gate 1 thumbnail text options using the unpublished workflow rules."),
+            "chapters": (formatted_chapters, run_data["artifacts"]["chapters"].get("path", ""), "Generated cleaned chapters using the unpublished workflow format."),
+            "description": (description_text, run_data["artifacts"]["description"].get("path", ""), "Generated full YouTube description using the unpublished workflow format."),
+            "tags": (formatted_tags, run_data["artifacts"]["tags"].get("path", ""), "Generated episode tags using the unpublished workflow rules."),
+            "tweet": (episode_tweet, run_data["artifacts"]["tweet"].get("path", ""), "Generated the episode tweet draft using the unpublished workflow rules."),
+            "clips": (formatted_clips, run_data["artifacts"]["clips"].get("path", ""), "Generated per-clip Shorts, X, and Instagram copy bundles using the unpublished workflow rules."),
         }
         for artifact_id, (text_value, path_value, notes_value) in artifact_updates.items():
             podcast_tracker.update_artifact(
