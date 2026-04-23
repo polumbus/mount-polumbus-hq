@@ -55,12 +55,12 @@ DELIVERY_STATUSES = tuple(sorted(_DELIVERY_STATUSES))
 APPROVAL_DECISIONS = tuple(sorted(_APPROVAL_DECISIONS))
 ALLOWED_APPROVAL_STATE_AFTER = {
     "gate1": {
-        "approved": ("gate1_approved",),
+        "approved": ("gate1_approved", "metadata_ready"),
         "changes_requested": ("initialized", "transcribing", "gate1_waiting"),
         "blocked": ("blocked_manual_fix",),
     },
     "gate2": {
-        "approved": ("gate2_approved", "ready_to_publish"),
+        "approved": ("gate2_approved", "ready_to_publish", "publish_pending"),
         "changes_requested": ("metadata_ready", "tweet_waiting", "thumbnail_waiting", "gate2_waiting"),
         "blocked": ("blocked_manual_fix",),
     },
@@ -74,6 +74,13 @@ def _now() -> str:
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
+    except Exception:
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
     except Exception:
         return default
 
@@ -312,6 +319,8 @@ def _default_run() -> dict[str, Any]:
         "selected_clip_name": "",
         "selected_clip_path": "",
         "clip_selection_updated_at": "",
+        "cached_clip_files": [],
+        "clip_cache_updated_at": "",
         "artifacts": {spec["id"]: _artifact_template(spec) for spec in ARTIFACT_SPECS},
         "approvals": [],
         "deliveries": {spec["id"]: _delivery_template(spec) for spec in DELIVERY_SPECS},
@@ -384,6 +393,14 @@ def _merge_run_records(primary: dict[str, Any], secondary: dict[str, Any]) -> di
         fields=("selected_clip_name", "selected_clip_path"),
         timestamp_field="clip_selection_updated_at",
     )
+    primary_clip_cache_ts = _sanitize_text(primary.get("clip_cache_updated_at", ""))
+    secondary_clip_cache_ts = _sanitize_text(secondary.get("clip_cache_updated_at", ""))
+    if _timestamp_value(secondary_clip_cache_ts) > _timestamp_value(primary_clip_cache_ts):
+        merged["cached_clip_files"] = deepcopy(secondary.get("cached_clip_files", []))
+        merged["clip_cache_updated_at"] = secondary_clip_cache_ts
+    else:
+        merged["cached_clip_files"] = deepcopy(primary.get("cached_clip_files", []))
+        merged["clip_cache_updated_at"] = primary_clip_cache_ts
 
     primary_state_ts = _sanitize_text(primary.get("state_updated_at", ""))
     secondary_state_ts = _sanitize_text(secondary.get("state_updated_at", ""))
@@ -490,8 +507,32 @@ def normalize_podcast_store(raw: Any) -> dict[str, Any]:
             "selected_clip_name",
             "selected_clip_path",
             "clip_selection_updated_at",
+            "clip_cache_updated_at",
         ):
             run[field] = _sanitize_text(raw_run.get(field, run[field]))
+        raw_cached_clip_files = raw_run.get("cached_clip_files", [])
+        if isinstance(raw_cached_clip_files, list):
+            normalized_clip_files = []
+            for item in raw_cached_clip_files:
+                if not isinstance(item, dict):
+                    continue
+                clip_name = _sanitize_text(item.get("name", ""))
+                clip_path = _sanitize_text(item.get("path", ""))
+                if not (clip_name and clip_path):
+                    continue
+                normalized_clip_files.append(
+                    {
+                        "name": clip_name,
+                        "path": clip_path,
+                        "size_bytes": _safe_int(item.get("size_bytes", 0) or 0, 0),
+                        "modified_at": _sanitize_text(item.get("modified_at", "")),
+                        "duration_seconds": _safe_float(item.get("duration_seconds", 0.0) or 0.0, 0.0),
+                        "is_final": bool(item.get("is_final", False)),
+                        "is_vertical": bool(item.get("is_vertical", False)),
+                        "group_key": _sanitize_text(item.get("group_key", "")),
+                    }
+                )
+            run["cached_clip_files"] = normalized_clip_files
         if run["current_state"] not in _VALID_STATES:
             run["current_state"] = "initialized"
         raw_artifacts = raw_run.get("artifacts", {})
@@ -802,6 +843,44 @@ def select_clip(
         f"Selected shorts clip: {next_name or 'None'}",
         next_path,
     )
+    _touch_store(store, ts)
+    _sort_runs(store)
+    return run
+
+
+def cache_clip_inventory(
+    store: dict[str, Any],
+    *,
+    run_id: str,
+    clip_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    run = _get_run(store, run_id)
+    normalized = []
+    for item in clip_files:
+        if not isinstance(item, dict):
+            continue
+        clip_name = _sanitize_text(item.get("name", ""))
+        clip_path = _sanitize_text(item.get("path", ""))
+        if not (clip_name and clip_path):
+            continue
+        normalized.append(
+            {
+                "name": clip_name,
+                "path": clip_path,
+                "size_bytes": _safe_int(item.get("size_bytes", 0) or 0, 0),
+                "modified_at": _sanitize_text(item.get("modified_at", "")),
+                "duration_seconds": _safe_float(item.get("duration_seconds", 0.0) or 0.0, 0.0),
+                "is_final": bool(item.get("is_final", False)),
+                "is_vertical": bool(item.get("is_vertical", False)),
+                "group_key": _sanitize_text(item.get("group_key", "")),
+            }
+        )
+    if run.get("cached_clip_files", []) == normalized:
+        return run
+    ts = _now()
+    run["cached_clip_files"] = normalized
+    run["clip_cache_updated_at"] = ts
+    _touch_run(run, ts)
     _touch_store(store, ts)
     _sort_runs(store)
     return run

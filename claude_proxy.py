@@ -113,6 +113,30 @@ def _set_podcast_job_state(run_id: str, **updates) -> dict:
         return job
 
 
+def _probe_media_duration(media_path: Path) -> float:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(media_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if result.returncode != 0:
+            return 0.0
+        return round(float((result.stdout or "").strip() or 0.0), 3)
+    except Exception:
+        return 0.0
+
+
 def _podcast_list_clip_files(clips_dir: str) -> list[dict]:
     clips_root = Path(str(clips_dir or "").strip())
     if not clips_root.is_dir():
@@ -128,12 +152,18 @@ def _podcast_list_clip_files(clips_dir: str) -> list[dict]:
             stat = candidate.stat()
         except Exception:
             continue
+        clip_stem = candidate.stem.lower()
+        group_key = re.sub(r"(_final|_9x16|_vertical)$", "", clip_stem)
         items.append(
             {
                 "name": candidate.name,
                 "path": str(candidate),
                 "size_bytes": int(stat.st_size),
                 "modified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
+                "duration_seconds": _probe_media_duration(candidate),
+                "is_final": "_final" in clip_stem,
+                "is_vertical": "9x16" in clip_stem or "_vertical" in clip_stem,
+                "group_key": group_key,
             }
         )
     return items
