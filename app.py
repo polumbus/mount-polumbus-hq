@@ -901,6 +901,43 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     return data["text"]
 
 
+def _proxy_json_request(path: str, payload: dict | None = None, *, method: str = "POST", timeout: int = 90) -> dict:
+    import urllib.request
+    proxy_url = _get_proxy_url()
+    if not proxy_url:
+        raise Exception("No proxy configured")
+    try:
+        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+    except Exception:
+        proxy_key = ""
+    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+    if proxy_key:
+        headers["X-Proxy-Key"] = proxy_key
+    body = None
+    if method.upper() != "GET":
+        body = json.dumps(payload or {}).encode()
+    req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", data=body, headers=headers, method=method.upper())
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    if data.get("error"):
+        raise Exception(data["error"])
+    return data
+
+
+def _podcast_proxy_start(run_id: str, source_path: str, title: str = "", force: bool = False) -> dict:
+    return _proxy_json_request(
+        "/podcast/start",
+        {"run_id": run_id, "source_path": source_path, "title": title, "force": force},
+        method="POST",
+        timeout=30,
+    )
+
+
+def _podcast_proxy_status(run_id: str) -> dict:
+    query = urllib.parse.urlencode({"run_id": run_id})
+    return _proxy_json_request(f"/podcast/status?{query}", method="GET", timeout=30)
+
+
 def _call_claude_inspiration(prompt: str, system: str, max_tokens: int = 1000, model: str = "claude-sonnet-4-6") -> str:
     """
     What's Hot should stay Anthropic-first but fail fast.
@@ -11124,7 +11161,7 @@ def page_podcast():
         if existing_run:
             updated_store = podcast_tracker.deepcopy_store(store)
             podcast_tracker.set_active_run(updated_store, existing_run["id"])
-            st.session_state["_podcast_flash_message"] = f"Opened the existing run for this link instead of creating a duplicate: {existing_run['title']}"
+            st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Opened the existing run for this link instead of creating a duplicate: {existing_run['title']}"}
             _save_podcast_and_rerun(updated_store, existing_run["id"])
             return
         updated_store = podcast_tracker.deepcopy_store(store)
@@ -11138,6 +11175,32 @@ def page_podcast():
             publish_window=publish_window,
             notes=notes,
         )
+        if clean_source and "://" not in clean_source:
+            try:
+                start_result = _podcast_proxy_start(new_run["id"], clean_source, new_run["title"])
+                job = start_result.get("job", {})
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=new_run["id"],
+                    actor=actor,
+                    state="transcribing",
+                    note=f"Independent HQ runner started local transcription job ({job.get('status', 'queued')}).",
+                )
+                st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Local podcast run started on your proxy host. Transcript generation is now running independently of Discord."}
+            except Exception as exc:
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=new_run["id"],
+                    actor=actor,
+                    state="blocked_manual_fix",
+                    blocker=f"Local podcast start failed: {exc}",
+                    note="Independent HQ runner failed to start on the proxy host.",
+                )
+                st.session_state["_podcast_flash_message"] = {"level": "error", "text": f"Podcast run was created, but local start failed: {exc}"}
+        elif clean_source:
+            st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. Automatic local start currently supports local file paths on your proxy host."}
+        else:
+            st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. Add a local source path when you are ready to launch the independent runner."}
         _save_podcast_and_rerun(updated_store, new_run["id"])
 
     def _podcast_card_html(label: str, value: str, meta: str) -> str:
@@ -11361,8 +11424,19 @@ def page_podcast():
     else:
         st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Live source of truth depends on the run you have open.")
     flash_message = st.session_state.pop("_podcast_flash_message", "")
-    if flash_message:
-        st.success(flash_message)
+    if isinstance(flash_message, dict):
+        flash_level = flash_message.get("level", "success")
+        flash_text = flash_message.get("text", "")
+    else:
+        flash_level = "success"
+        flash_text = flash_message
+    if flash_text:
+        if flash_level == "error":
+            st.error(flash_text)
+        elif flash_level == "warning":
+            st.warning(flash_text)
+        else:
+            st.success(flash_text)
     with st.expander("Troubleshooting", expanded=False):
         st.caption("Only use these if the cloud copy looks stale or persistence fell back to local backup.")
         if st.button("Refresh Cloud", key="podcast_refresh_cloud", type="secondary", use_container_width=True):
@@ -11533,6 +11607,87 @@ def page_podcast():
         st.rerun()
 
     run = run_lookup[selected_run_id]
+    proxy_job = {}
+    proxy_job_error = ""
+    if run.get("source_path") and "://" not in str(run.get("source_path", "")):
+        try:
+            proxy_job = (_podcast_proxy_status(run["id"]) or {}).get("job", {})
+        except Exception as exc:
+            proxy_job_error = str(exc)
+    if proxy_job.get("status") == "completed":
+        transcript_text = str(proxy_job.get("transcript_text", "")).strip()
+        transcript_path = str(proxy_job.get("transcript_path", "")).strip()
+        chapters_text = str(proxy_job.get("chapters_text", "")).strip()
+        chapters_path = str(proxy_job.get("chapters_path", "")).strip()
+        clips_dir = str(proxy_job.get("clips_dir", "")).strip()
+        transcript_artifact = run["artifacts"]["transcript"]
+        chapters_artifact = run["artifacts"]["chapters"]
+        clips_artifact = run["artifacts"]["clips"]
+        needs_import = (
+            transcript_text
+            and (
+                transcript_artifact.get("text", "").strip() != transcript_text
+                or transcript_artifact.get("path", "").strip() != transcript_path
+                or (run["current_state"] == "transcribing")
+            )
+        )
+        if needs_import:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            podcast_tracker.update_artifact(
+                updated_store,
+                run_id=run["id"],
+                artifact_id="transcript",
+                actor=actor,
+                text=transcript_text,
+                path=transcript_path,
+                status="draft",
+                notes="Imported automatically from the local HQ podcast runner.",
+            )
+            if chapters_text or chapters_path:
+                podcast_tracker.update_artifact(
+                    updated_store,
+                    run_id=run["id"],
+                    artifact_id="chapters",
+                    actor=actor,
+                    text=chapters_text,
+                    path=chapters_path,
+                    status="draft" if chapters_text else chapters_artifact.get("status", "missing"),
+                    notes="Imported automatically from the local HQ podcast runner.",
+                )
+            if clips_dir and (clips_artifact.get("path", "").strip() != clips_dir):
+                podcast_tracker.update_artifact(
+                    updated_store,
+                    run_id=run["id"],
+                    artifact_id="clips",
+                    actor=actor,
+                    text=clips_artifact.get("text", ""),
+                    path=clips_dir,
+                    status=clips_artifact.get("status", "missing"),
+                    notes=clips_artifact.get("notes", "") or "Reserved output directory from the local HQ podcast runner.",
+                )
+            if run["current_state"] == "transcribing":
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=run["id"],
+                    actor=actor,
+                    state="gate1_waiting",
+                    blocker="",
+                    note="Local HQ podcast runner completed transcript generation.",
+                )
+            st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Transcript imported automatically from the local HQ podcast runner."}
+            _save_podcast_and_rerun(updated_store, run["id"])
+    elif proxy_job.get("status") == "failed" and run["current_state"] != "blocked_manual_fix":
+        updated_store = podcast_tracker.deepcopy_store(store)
+        podcast_tracker.transition_run(
+            updated_store,
+            run_id=run["id"],
+            actor=actor,
+            state="blocked_manual_fix",
+            blocker=f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}",
+            note="Local HQ podcast runner failed during transcription.",
+        )
+        st.session_state["_podcast_flash_message"] = {"level": "error", "text": f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}"}
+        _save_podcast_and_rerun(updated_store, run["id"])
     dashboard = get_podcast_dashboard_content(run["current_state"])
     metrics = podcast_tracker.build_run_metrics(run)
     latest_gate_decisions = metrics["latest_gate_decisions"]
@@ -11572,6 +11727,50 @@ def page_podcast():
         ),
     ]
     st.markdown(f'<div class="podcast-status-grid">{"".join(summary_cards)}</div>', unsafe_allow_html=True)
+    if proxy_job:
+        proxy_status = str(proxy_job.get("status", "")).strip().title() or "Unknown"
+        proxy_meta = str(proxy_job.get("error", "")).strip() or f"Updated at {proxy_job.get('updated_at') or 'Unknown'}."
+        st.markdown(
+            f'<div class="podcast-panel"><div class="podcast-status-kicker">Local Runner</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.35;">{html.escape(proxy_status)}</div><div class="podcast-status-meta">{html.escape(proxy_meta)}</div></div>',
+            unsafe_allow_html=True,
+        )
+        runner_cols = st.columns([1, 1.4], gap="small")
+        with runner_cols[0]:
+            if st.button("Refresh Local Runner", key=f"podcast_refresh_runner_{run['id']}", type="secondary", use_container_width=True):
+                st.rerun()
+        with runner_cols[1]:
+            if proxy_job.get("output_dir"):
+                st.caption(f"Local output directory: {proxy_job.get('output_dir')}")
+    elif not metrics["requires_sync"] and run.get("source_path") and "://" not in str(run.get("source_path", "")):
+        st.info("This HQ run has a local source path but no local runner job yet.")
+        if st.button("Start Local Runner", key=f"podcast_start_runner_{run['id']}", type="primary", use_container_width=True):
+            updated_store = podcast_tracker.deepcopy_store(store)
+            try:
+                start_result = _podcast_proxy_start(run["id"], run["source_path"], run["title"], force=True)
+                if run["current_state"] in {"initialized", "blocked_manual_fix"}:
+                    podcast_tracker.transition_run(
+                        updated_store,
+                        run_id=run["id"],
+                        actor=actor,
+                        state="transcribing",
+                        blocker="",
+                        note=f"Independent HQ runner started local transcription job ({start_result.get('job', {}).get('status', 'queued')}).",
+                    )
+                st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Local podcast runner started on your proxy host."}
+                _save_podcast_and_rerun(updated_store, run["id"])
+            except Exception as exc:
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=run["id"],
+                    actor=actor,
+                    state="blocked_manual_fix",
+                    blocker=f"Local podcast start failed: {exc}",
+                    note="Independent HQ runner failed to start on the proxy host.",
+                )
+                st.session_state["_podcast_flash_message"] = {"level": "error", "text": f"Local podcast start failed: {exc}"}
+                _save_podcast_and_rerun(updated_store, run["id"])
+    elif proxy_job_error and not metrics["requires_sync"]:
+        st.warning(f"Local runner status is unavailable right now: {proxy_job_error}")
     if run["current_state"] == "blocked_manual_fix" or run.get("blocker"):
         st.error(f"Current blocker: {run.get('blocker') or 'Manual fix is required before HQ should move forward.'}")
     if not run["artifacts"]["clips"]["path"]:

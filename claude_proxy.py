@@ -8,6 +8,7 @@ Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
 import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from chatgpt_oauth import call_chatgpt_oauth
@@ -36,9 +37,171 @@ TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D
 GIST_ID = "15fb167bbbfdaa79d5ce11c266c3f652"
 GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
 TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
+PODCAST_JOB_ROOT = Path(os.environ.get("HQ_PODCAST_JOB_ROOT", os.path.expanduser("~/.openclaw/workspace-omaha/data/podcast_jobs")))
+PODCAST_JOB_ROOT.mkdir(parents=True, exist_ok=True)
+PODCAST_WHISPER_MODEL = os.environ.get("HQ_PODCAST_WHISPER_MODEL", "base")
 
 _cookie_cache = {"auth_token": "", "ct0": "", "fetched_at": 0}
 _recovery_thread = None
+_podcast_job_lock = threading.Lock()
+
+
+def _podcast_job_file(run_id: str) -> Path:
+    safe_run_id = re.sub(r"[^a-zA-Z0-9_-]", "_", run_id or "")
+    return PODCAST_JOB_ROOT / f"{safe_run_id or 'unknown'}.json"
+
+
+def _load_podcast_job(run_id: str) -> dict:
+    job_file = _podcast_job_file(run_id)
+    if not job_file.exists():
+        return {}
+    try:
+        return json.loads(job_file.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_podcast_job(job: dict) -> None:
+    run_id = str(job.get("run_id", "")).strip()
+    if not run_id:
+        return
+    job_file = _podcast_job_file(run_id)
+    job_file.write_text(json.dumps(job, indent=2), encoding="utf-8")
+
+
+def _podcast_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _resolve_podcast_source_path(source_path: str) -> str:
+    raw = (source_path or "").strip().strip("\"'")
+    if not raw:
+        return ""
+    windows_drive = re.match(r"^([A-Za-z]):[\\/](.*)$", raw)
+    if windows_drive:
+        drive = windows_drive.group(1).lower()
+        rest = windows_drive.group(2).replace("\\", "/")
+        return f"/mnt/{drive}/{rest}"
+    if raw.startswith("\\\\"):
+        return raw
+    if raw.startswith("~"):
+        return os.path.expanduser(raw)
+    if raw.startswith("/"):
+        return raw
+    return os.path.abspath(raw)
+
+
+def _set_podcast_job_state(run_id: str, **updates) -> dict:
+    with _podcast_job_lock:
+        job = _load_podcast_job(run_id)
+        job.update(updates)
+        job["run_id"] = run_id
+        job["updated_at"] = _podcast_now()
+        _save_podcast_job(job)
+        return job
+
+
+def _build_chapters_from_segments(segments: list[dict]) -> str:
+    if not segments:
+        return ""
+    chapters = []
+    bucket_start = None
+    bucket_text = []
+    for segment in segments:
+        start = float(segment.get("start", 0.0) or 0.0)
+        text = str(segment.get("text", "")).strip()
+        if bucket_start is None:
+            bucket_start = start
+        if start - bucket_start >= 300 and bucket_text:
+            label = " ".join(bucket_text)[:80].strip() or "Chapter"
+            minutes = int(bucket_start // 60)
+            seconds = int(bucket_start % 60)
+            chapters.append(f"{minutes:02d}:{seconds:02d} {label}")
+            bucket_start = start
+            bucket_text = []
+        if text:
+            bucket_text.append(text)
+    if bucket_text:
+        label = " ".join(bucket_text)[:80].strip() or "Chapter"
+        minutes = int((bucket_start or 0) // 60)
+        seconds = int((bucket_start or 0) % 60)
+        chapters.append(f"{minutes:02d}:{seconds:02d} {label}")
+    return "\n".join(chapters[:12])
+
+
+def _run_podcast_transcription(job_seed: dict) -> None:
+    run_id = str(job_seed.get("run_id", "")).strip()
+    source_path = str(job_seed.get("source_path", "")).strip()
+    resolved_source_path = str(job_seed.get("resolved_source_path", "")).strip()
+    if not run_id or not resolved_source_path:
+        return
+    try:
+        from faster_whisper import WhisperModel
+
+        output_dir = PODCAST_JOB_ROOT / run_id
+        clips_dir = output_dir / "clips"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        _set_podcast_job_state(
+            run_id,
+            status="running",
+            started_at=job_seed.get("started_at") or _podcast_now(),
+            source_path=source_path,
+            resolved_source_path=resolved_source_path,
+            output_dir=str(output_dir),
+            clips_dir=str(clips_dir),
+            model=PODCAST_WHISPER_MODEL,
+            error="",
+        )
+
+        model = WhisperModel(PODCAST_WHISPER_MODEL, device="auto", compute_type="auto")
+        segments, info = model.transcribe(
+            resolved_source_path,
+            vad_filter=True,
+            beam_size=5,
+        )
+        collected_segments = []
+        transcript_lines = []
+        for seg in segments:
+            text = (seg.text or "").strip()
+            if not text:
+                continue
+            item = {
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": text,
+            }
+            collected_segments.append(item)
+            transcript_lines.append(text)
+        transcript_text = "\n\n".join(transcript_lines).strip()
+        chapters_text = _build_chapters_from_segments(collected_segments)
+
+        transcript_path = output_dir / "transcript.txt"
+        transcript_path.write_text(transcript_text, encoding="utf-8")
+        segments_path = output_dir / "segments.json"
+        segments_path.write_text(json.dumps(collected_segments, indent=2), encoding="utf-8")
+        chapters_path = output_dir / "chapters.txt"
+        chapters_path.write_text(chapters_text, encoding="utf-8")
+
+        _set_podcast_job_state(
+            run_id,
+            status="completed",
+            completed_at=_podcast_now(),
+            transcript_text=transcript_text,
+            transcript_path=str(transcript_path),
+            chapters_text=chapters_text,
+            chapters_path=str(chapters_path),
+            segments_path=str(segments_path),
+            language=getattr(info, "language", "") or "",
+            duration=getattr(info, "duration", 0.0) or 0.0,
+            segments_count=len(collected_segments),
+        )
+    except Exception as exc:
+        _set_podcast_job_state(
+            run_id,
+            status="failed",
+            error=str(exc),
+        )
 
 
 def _load_oauth_access_token():
@@ -809,6 +972,43 @@ class ProxyHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
 
+        elif self.path == "/podcast/start":
+            run_id = str(body.get("run_id", "")).strip()
+            source_path = str(body.get("source_path", "")).strip()
+            title = str(body.get("title", "")).strip()
+            force = bool(body.get("force", False))
+            if not run_id or not source_path:
+                self.send_json(400, {"error": "run_id and source_path are required"})
+                return
+            existing = _load_podcast_job(run_id)
+            if existing and existing.get("status") in {"queued", "running"} and not force:
+                self.send_json(200, {"ok": True, "job": existing, "accepted": False, "message": "Job already running"})
+                return
+            resolved_source_path = _resolve_podcast_source_path(source_path)
+            if not resolved_source_path or not os.path.exists(resolved_source_path):
+                self.send_json(404, {"error": f"Source file not found on proxy host: {resolved_source_path or source_path}"})
+                return
+            job = {
+                "run_id": run_id,
+                "title": title,
+                "source_path": source_path,
+                "resolved_source_path": resolved_source_path,
+                "status": "queued",
+                "created_at": _podcast_now(),
+                "started_at": "",
+                "updated_at": _podcast_now(),
+                "error": "",
+            }
+            _save_podcast_job(job)
+            worker = threading.Thread(
+                target=_run_podcast_transcription,
+                args=(job,),
+                name=f"podcast-{run_id}",
+                daemon=True,
+            )
+            worker.start()
+            self.send_json(200, {"ok": True, "accepted": True, "job": _load_podcast_job(run_id)})
+
         else:
             self.send_json(404, {"error": "not found"})
 
@@ -844,6 +1044,19 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 return
 
             self.send_json(200, payload)
+        elif parsed.path == "/podcast/status":
+            if not self._check_auth():
+                return
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
+            run_id = (query.get("run_id") or [""])[-1].strip()
+            if not run_id:
+                self.send_json(400, {"error": "run_id is required"})
+                return
+            job = _load_podcast_job(run_id)
+            if not job:
+                self.send_json(404, {"error": "Podcast job not found"})
+                return
+            self.send_json(200, {"ok": True, "job": job})
         else:
             self.send_json(404, {"error": "not found"})
 
