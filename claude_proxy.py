@@ -161,7 +161,7 @@ def _run_podcast_transcription(job_seed: dict) -> None:
             error="",
         )
 
-        model = WhisperModel(PODCAST_WHISPER_MODEL, device="auto", compute_type="auto")
+        model = WhisperModel(PODCAST_WHISPER_MODEL, device="cpu", compute_type="int8")
         segments, info = model.transcribe(
             resolved_source_path,
             vad_filter=True,
