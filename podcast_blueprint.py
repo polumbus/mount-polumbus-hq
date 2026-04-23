@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-DEFAULT_STATE = "gate1_waiting"
+DEFAULT_STATE = "initialized"
 
 _PHASES = [
     {"id": "intake", "label": "Intake", "states": ["initialized", "transcribing"]},
@@ -120,73 +120,15 @@ _NEXT_ACTIONS = {
     ],
 }
 
-_TIMELINE = [
-    {
-        "time": "01",
-        "title": "Intake & Transcript",
-        "body": "Create the run, attach the source episode, and land transcript/chapter artifacts before any approval gate.",
-    },
-    {
-        "time": "02",
-        "title": "Gate 1 Review",
-        "body": "Approve the transcript quality, title angle, and clip-worthiness before metadata generation moves forward.",
-    },
-    {
-        "time": "03",
-        "title": "Packaging",
-        "body": "Generate title, description, tags, tweet copy, thumbnail direction, and track each artifact version explicitly.",
-    },
-    {
-        "time": "04",
-        "title": "Gate 2 Review",
-        "body": "Review the full package together so the publish step cannot outrun final approval.",
-    },
-    {
-        "time": "05",
-        "title": "Publish & Verify",
-        "body": "Write external delivery IDs, handle retries safely, and confirm the public asset before calling the run done.",
-    },
-]
-
-_COMPARE_BLOCKS = [
-    {
-        "label": "Current Workflow",
-        "title": "Discord remains the source of truth for live tests.",
-        "body": (
-            "Keep Booth and the current unpublished workflow running exactly as-is while you test "
-            "whether HQ captures every gate, blocker, artifact, and verification step."
-        ),
-        "bullets": [
-            "Live execution stays in Discord.",
-            "Manual approvals and fallbacks still happen there first.",
-            "Use HQ to expose skipped steps, brittle transitions, and missing receipts.",
-        ],
-        "phase_ids": [phase["id"] for phase in _PHASES],
-    },
-    {
-        "label": "New HQ Layer",
-        "title": "Post Ascend becomes the durable workflow dashboard.",
-        "body": (
-            "HQ should become the operator surface that knows what exists, what is approved, what is "
-            "blocked, and what still needs public verification before the run is truly done."
-        ),
-        "bullets": [
-            "Track state explicitly instead of inferring from chat or files.",
-            "Make transcript, clips, metadata, and publish artifacts visible in one place.",
-            "Build toward resumable runs and safer retries without disrupting Discord today.",
-        ],
-        "phase_ids": ["gate1", "packaging", "gate2", "publish", "verify"],
-    },
-]
-
-
 def _ordered_states() -> list[str]:
     return [state for phase in _PHASES for state in phase["states"]]
 
 
+PODCAST_STATES = tuple(_ordered_states())
+
+
 def _validate_blueprint() -> None:
-    ordered_states = _ordered_states()
-    duplicate_states = sorted({state for state in ordered_states if ordered_states.count(state) > 1})
+    duplicate_states = sorted({state for state in PODCAST_STATES if PODCAST_STATES.count(state) > 1})
     if duplicate_states:
         raise ValueError(f"Podcast state order contains duplicates: {duplicate_states}")
     label_states = set(_STATE_LABELS)
@@ -199,20 +141,6 @@ def _validate_blueprint() -> None:
         missing = sorted(_VALID_STATES - action_states)
         extra = sorted(action_states - _VALID_STATES)
         raise ValueError(f"Podcast next actions are out of sync. Missing={missing}, Extra={extra}")
-    valid_phase_ids = {phase["id"] for phase in _PHASES}
-    for block in _COMPARE_BLOCKS:
-        unknown = sorted(set(block.get("phase_ids", [])) - valid_phase_ids)
-        if unknown:
-            raise ValueError(
-                f"Podcast comparison block '{block['label']}' references unknown phases: {unknown}"
-            )
-        for key in ("label", "title", "body", "bullets"):
-            if key not in block:
-                raise ValueError(f"Podcast comparison block is missing required key '{key}'")
-    for item in _TIMELINE:
-        for key in ("time", "title", "body"):
-            if key not in item:
-                raise ValueError(f"Podcast timeline item is missing required key '{key}'")
 
 
 def resolve_podcast_state(current_state: str | None) -> dict[str, str | bool | None]:
@@ -258,7 +186,6 @@ def get_suggested_next_actions(current_state: str | None = None) -> list[str]:
 def get_podcast_dashboard_content(current_state: str | None = None) -> dict:
     resolution = resolve_podcast_state(current_state)
     state = resolution["state"]
-    ordered_states = _ordered_states()
     return {
         "current_state": state,
         "current_state_label": _STATE_LABELS[state],
@@ -266,39 +193,11 @@ def get_podcast_dashboard_content(current_state: str | None = None) -> dict:
         "used_default_state": resolution["used_default"],
         "state_options": [
             {"id": state_id, "label": _STATE_LABELS[state_id]}
-            for state_id in ordered_states
+            for state_id in PODCAST_STATES
         ],
-        "status_cards": [
-            {
-                "label": "Primary Live Path",
-                "value": "Discord",
-                "meta": "Discord remains the live source while HQ is used as a manual mirror board for side-by-side testing.",
-            },
-            {
-                "label": "HQ Role",
-                "value": "Manual Mirror",
-                "meta": "Use HQ to map phases, blockers, assets, and next actions without changing the live Discord workflow yet.",
-            },
-            {
-                "label": "Selected Mirror Stage",
-                "value": _STATE_LABELS[state],
-                "meta": "This is the stage you are manually comparing against the current Discord run.",
-            },
-            {
-                "label": "End Condition",
-                "value": "Done",
-                "meta": "A run only reaches Done after the public asset, social IDs, and processing checks are confirmed.",
-            },
-        ],
-        "compare": list(_COMPARE_BLOCKS),
         "phases": _phase_statuses(state),
-        "current_phase_label": next(
-            (phase["label"] for phase in _PHASES if state in phase["states"]),
-            "Unknown Stage",
-        ),
-        "timeline": list(_TIMELINE),
         "next_actions": get_suggested_next_actions(state),
-        "states": ordered_states,
+        "states": list(PODCAST_STATES),
     }
 
 

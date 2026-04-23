@@ -15,6 +15,7 @@ import urllib.error
 import urllib.parse
 from datetime import datetime, timedelta, date
 from pathlib import Path
+import podcast_tracker
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
                   odds_available, odds_format_block,
@@ -33,6 +34,11 @@ from anthropic_circuit import (
     parse_retry_after as anthropic_parse_retry_after,
 )
 from podcast_blueprint import get_podcast_dashboard_content
+
+_PODCAST_STATE_LABELS = {
+    option["id"]: option["label"]
+    for option in get_podcast_dashboard_content(None)["state_options"]
+}
 
 # ─── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1182,6 +1188,180 @@ def _save_actions_gist(actions: dict):
         pass
 
 
+def _podcast_store_filename() -> str:
+    return "podcast_runs.json"
+
+
+def _podcast_store_cache_handle() -> str:
+    role = "guest" if is_guest() else "owner"
+    return f"{role}:{get_current_handle()}"
+
+
+_PODCAST_OWNER_CACHE_TTL_SECONDS = 5.0
+
+
+def _podcast_remote_cache_is_fresh(cache_handle: str) -> bool:
+    if st.session_state.get("_podcast_runs_remote_cache_handle") != cache_handle:
+        return False
+    cached_at = float(st.session_state.get("_podcast_runs_remote_cache_loaded_at", 0) or 0)
+    return (time.time() - cached_at) <= _PODCAST_OWNER_CACHE_TTL_SECONDS
+
+
+def _load_podcast_local_store_raw() -> tuple[dict, str]:
+    path = get_data_dir() / _podcast_store_filename()
+    if not path.exists():
+        return podcast_tracker.empty_podcast_store(), ""
+    try:
+        return json.loads(path.read_text()), ""
+    except Exception as exc:
+        return podcast_tracker.empty_podcast_store(), f"Local podcast backup could not be parsed: {exc}"
+
+
+def _write_podcast_local_store(store: dict) -> None:
+    path = get_data_dir() / _podcast_store_filename()
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(store, indent=2, default=str))
+    temp_path.replace(path)
+
+
+def _load_podcast_remote_store_raw() -> tuple[dict, str]:
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        file_meta = data.get("files", {}).get("hq_podcast_runs.json", {})
+        if file_meta.get("content"):
+            content = file_meta.get("content", "")
+            if not file_meta.get("truncated"):
+                return json.loads(content), ""
+        if file_meta.get("raw_url"):
+            raw_resp = requests.get(file_meta["raw_url"], timeout=8)
+            raw_resp.raise_for_status()
+            return json.loads(raw_resp.text), ""
+        return podcast_tracker.empty_podcast_store(), ""
+    except Exception as exc:
+        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}"
+
+
+def _load_podcast_runs_store() -> dict:
+    cache_handle = _podcast_store_cache_handle()
+    cached_store = st.session_state.get("_podcast_runs_cache")
+    cached_at = float(st.session_state.get("_podcast_runs_cache_loaded_at", 0) or 0)
+    cache_is_fresh = (time.time() - cached_at) <= _PODCAST_OWNER_CACHE_TTL_SECONDS
+    if st.session_state.get("_podcast_runs_cache_handle") == cache_handle and cached_store is not None:
+        if is_guest() or cache_is_fresh:
+            return podcast_tracker.deepcopy_store(cached_store)
+
+    local_store, local_error = _load_podcast_local_store_raw()
+    load_source = "local"
+    load_error = local_error
+    if is_guest():
+        store = local_store
+    else:
+        if _podcast_remote_cache_is_fresh(cache_handle):
+            remote_store = podcast_tracker.deepcopy_store(st.session_state.get("_podcast_runs_remote_cache", podcast_tracker.empty_podcast_store()))
+            remote_error = ""
+        else:
+            remote_store, remote_error = _load_podcast_remote_store_raw()
+            if not remote_error:
+                st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
+                st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+                st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
+        store = podcast_tracker.merge_podcast_stores(local_store, remote_store)
+        if remote_error:
+            load_source = "local_backup"
+            load_error = remote_error if not local_error else f"{remote_error} | {local_error}"
+        else:
+            load_source = "gist"
+            load_error = local_error
+    normalized = podcast_tracker.normalize_podcast_store(store)
+    st.session_state["_podcast_runs_cache"] = normalized
+    st.session_state["_podcast_runs_cache_handle"] = cache_handle
+    st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+    st.session_state["_podcast_runs_persist_status"] = {"source": load_source, "error": load_error}
+    return podcast_tracker.deepcopy_store(normalized)
+
+
+def _save_podcast_runs_store(store: dict) -> dict:
+    normalized = podcast_tracker.normalize_podcast_store(store)
+    _write_podcast_local_store(normalized)
+    if is_guest():
+        st.session_state["_podcast_runs_cache"] = normalized
+        st.session_state["_podcast_runs_cache_handle"] = _podcast_store_cache_handle()
+        st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+        st.session_state["_podcast_runs_persist_status"] = {"source": "local", "error": ""}
+        return normalized
+
+    cache_handle = _podcast_store_cache_handle()
+    remote_store, remote_error = _load_podcast_remote_store_raw()
+    if not remote_error:
+        st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
+        st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+        st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
+    merged = podcast_tracker.merge_podcast_stores(normalized, remote_store)
+    if remote_error:
+        _write_podcast_local_store(merged)
+        st.session_state["_podcast_runs_cache"] = merged
+        st.session_state["_podcast_runs_cache_handle"] = cache_handle
+        st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+        st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.empty_podcast_store()
+        st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+        st.session_state["_podcast_runs_remote_cache_loaded_at"] = 0.0
+        st.session_state["_podcast_runs_persist_status"] = {
+            "source": "local_backup",
+            "error": f"{remote_error}. Shared gist was not updated; local backup still saved.",
+        }
+        return merged
+    try:
+        gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        payload = json.dumps({
+            "files": {
+                "hq_podcast_runs.json": {
+                    "content": json.dumps(merged, indent=2, default=str),
+                }
+            }
+        })
+        resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
+        if 200 <= resp.status_code < 300:
+            _write_podcast_local_store(merged)
+            st.session_state["_podcast_runs_cache"] = merged
+            st.session_state["_podcast_runs_cache_handle"] = cache_handle
+            st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+            st.session_state["_podcast_runs_remote_cache"] = merged
+            st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+            st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
+            st.session_state["_podcast_runs_persist_status"] = {
+                "source": "gist",
+                "error": remote_error,
+            }
+        else:
+            _write_podcast_local_store(merged)
+            st.session_state["_podcast_runs_cache"] = merged
+            st.session_state["_podcast_runs_cache_handle"] = cache_handle
+            st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+            st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.empty_podcast_store()
+            st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+            st.session_state["_podcast_runs_remote_cache_loaded_at"] = 0.0
+            st.session_state["_podcast_runs_persist_status"] = {
+                "source": "local_backup",
+                "error": f"Gist write failed with HTTP {resp.status_code}. Local backup still saved.",
+            }
+    except Exception as exc:
+        _write_podcast_local_store(merged)
+        st.session_state["_podcast_runs_cache"] = merged
+        st.session_state["_podcast_runs_cache_handle"] = cache_handle
+        st.session_state["_podcast_runs_cache_loaded_at"] = time.time()
+        st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.empty_podcast_store()
+        st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
+        st.session_state["_podcast_runs_remote_cache_loaded_at"] = 0.0
+        st.session_state["_podcast_runs_persist_status"] = {
+            "source": "local_backup",
+            "error": f"Gist write failed: {exc}. Local backup still saved.",
+        }
+    return merged
+
+
 def load_json(filename: str, default=None):
     path = get_data_dir() / filename
     if path.exists():
@@ -2127,7 +2307,9 @@ def _build_gameday_url() -> str:
 _tok_user_part = f"user={st.session_state.get('auth_username', '')}&" if st.session_state.get("auth_username") else ""
 _tok_qp = f"token={st.session_state.get('_auth_token', '')}&{_tok_user_part}" if st.session_state.get("_auth_token") else ""
 _podcast_state = str(st.query_params.get("podcast_state", "")).strip()
+_podcast_run = str(st.query_params.get("podcast_run", "") or st.session_state.get("_podcast_last_run_id", "")).strip()
 _podcast_state_qp = f"podcast_state={urllib.parse.quote(_podcast_state)}&" if _podcast_state else ""
+_podcast_run_qp = f"podcast_run={urllib.parse.quote(_podcast_run)}&" if _podcast_run else ""
 _gameday_url = _build_gameday_url()
 _gameday_url_html = html.escape(_gameday_url, quote=True)
 _owner_debug_zone = ""
@@ -2140,7 +2322,7 @@ _owner_gameday_panel = ""
 _nav_pages = ["Creator Studio", "Raw Thoughts", "Content Coach", "Article Writer", "Reply Mode", "Idea Bank",
               "Post History", "Algorithm Score", "Account Audit", "My Stats", "Profile Analyzer"]
 if is_owner():
-    _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
+    _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}{_podcast_run_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="9" y="3" width="6" height="12" rx="3" stroke="#00E5CC" stroke-width="1.5" opacity="0.55"/>
@@ -2149,7 +2331,7 @@ if is_owner():
         <path d="M8.5 21h7" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
       </svg>
     </a>"""
-    _owner_podcast_panel = f"""<a href="/?{_tok_qp}{_podcast_state_qp}page=Podcast" class="mp-panel-item {_act('Podcast')}" target="_self">
+    _owner_podcast_panel = f"""<a href="/?{_tok_qp}{_podcast_state_qp}{_podcast_run_qp}page=Podcast" class="mp-panel-item {_act('Podcast')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" stroke="#6B8AAA" stroke-width="1.5"/><path d="M6 10v1a6 6 0 0012 0v-1" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M12 17v4" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M8.5 21h7" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Podcast
       </a>"""
@@ -2705,7 +2887,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
-  {'<a href="/?'+_tok_qp+_podcast_state_qp+'page=Podcast" target="_self" style="'+_lnk+'">Podcast</a>' if is_owner() else ''}
+  {'<a href="/?'+_tok_qp+_podcast_state_qp+_podcast_run_qp+'page=Podcast" target="_self" style="'+_lnk+'">Podcast</a>' if is_owner() else ''}
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
   {'<a href="'+_gameday_url_html+'" data-external-top="1" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
@@ -2740,6 +2922,8 @@ if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Podcast"} and
     st.query_params["page"] = page
     if "podcast_state" in st.query_params:
         del st.query_params["podcast_state"]
+    if "podcast_run" in st.query_params:
+        del st.query_params["podcast_run"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -10886,151 +11070,558 @@ def page_podcast():
         st.query_params["page"] = "Creator Studio"
         if "podcast_state" in st.query_params:
             del st.query_params["podcast_state"]
+        if "podcast_run" in st.query_params:
+            del st.query_params["podcast_run"]
         st.rerun()
 
+    actor = st.session_state.get("auth_username", "") or get_current_handle() or "owner"
+    store = _load_podcast_runs_store()
+    runs = store["runs"]
+    run_lookup = {run["id"]: run for run in runs}
+    requested_run_id = str(st.query_params.get("podcast_run", "")).strip()
     requested_state = str(st.query_params.get("podcast_state", "")).strip()
-    requested_dashboard = get_podcast_dashboard_content(requested_state)
-    requested_resolved_state = requested_dashboard["current_state"]
-    if (
-        "podcast_state_select" not in st.session_state
-        or st.session_state.get("_podcast_state_last_query") != requested_state
-    ):
-        st.session_state["podcast_state_select"] = requested_resolved_state
-    st.session_state["_podcast_state_last_query"] = requested_state
 
-    state_options = requested_dashboard["state_options"]
-    state_labels = {option["id"]: option["label"] for option in state_options}
-    state_ids = [option["id"] for option in state_options]
-    if st.session_state["podcast_state_select"] not in state_ids:
-        st.session_state["podcast_state_select"] = requested_resolved_state
-    selected_state = st.selectbox(
-        "Mirror State",
-        state_ids,
-        index=state_ids.index(st.session_state["podcast_state_select"]),
-        format_func=lambda state_id: state_labels[state_id],
-        key="podcast_state_select",
-        help="This control updates the HQ mirror view only and does not change the live Discord workflow.",
-    )
-    if st.query_params.get("podcast_state") != selected_state:
-        st.query_params["podcast_state"] = selected_state
-        st.session_state["_podcast_state_last_query"] = selected_state
-    dashboard = get_podcast_dashboard_content(selected_state)
+    def _save_podcast_and_rerun(updated_store: dict, run_id: str = "") -> None:
+        saved = _save_podcast_runs_store(updated_store)
+        active_run_id = run_id or saved.get("active_run_id", "")
+        if active_run_id:
+            st.session_state["_podcast_last_run_id"] = active_run_id
+            active_run = next((item for item in saved["runs"] if item["id"] == active_run_id), None)
+            st.query_params["podcast_run"] = active_run_id
+            if active_run:
+                st.query_params["podcast_state"] = active_run["current_state"]
+        else:
+            if "podcast_run" in st.query_params:
+                del st.query_params["podcast_run"]
+            st.query_params["podcast_state"] = requested_state or get_podcast_dashboard_content(None)["current_state"]
+        st.rerun()
+
+    def _podcast_card_html(label: str, value: str, meta: str) -> str:
+        return (
+            '<div class="podcast-status-card">'
+            f'<div class="podcast-status-kicker">{html.escape(label)}</div>'
+            f'<div class="podcast-status-value">{html.escape(value)}</div>'
+            f'<div class="podcast-status-meta">{html.escape(meta)}</div>'
+            '</div>'
+        )
+
+    def _podcast_run_label(run: dict) -> str:
+        state_label = _PODCAST_STATE_LABELS.get(run["current_state"], run["current_state"])
+        code = f" · {run['episode_code']}" if run.get("episode_code") else ""
+        return f"{run['title']}{code} · {state_label}"
 
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="tool-desc">Owner-only workflow dashboard for mapping the HQ Podcast surface against your live unpublished Discord workflow while you test both side by side.</div>',
+        '<div class="tool-desc">HQ now mirrors the live unpublished Discord workflow with durable run tracking, approvals, artifacts, receipts, and verification. Discord stays live while you pressure-test both side by side.</div>',
         unsafe_allow_html=True,
     )
-    if requested_dashboard["unknown_state_input"]:
-        st.warning(
-            f"Podcast state '{requested_dashboard['unknown_state_input']}' was not recognized. HQ kept the warning visible and moved the mirror selector to a safe fallback state."
-        )
-    elif requested_dashboard["used_default_state"]:
-        st.caption("No live workflow source is wired yet. Pick a mirror state here to compare the HQ shell against the current Discord run.")
-    st.markdown(
-        f"""
-        <div class="podcast-panel">
-          <div class="podcast-status-kicker">SIDE-BY-SIDE ROLLOUT</div>
-          <div style="font-size:22px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">
-            Discord stays live. HQ is the manual comparison board.
-          </div>
-          <div style="font-size:13px;line-height:1.75;color:#C9D1D9;">
-            Use this page to pressure-test how a future HQ workflow surface should read against the real Discord process:
-            what stage you are in, what is blocked, and what still needs verification before anyone calls the run done.
-          </div>
-          <div style="margin-top:10px;font-size:12px;color:#8B949E;">
-            Current mirror state:
-            <span style="color:#2DD4BF;font-family:'Inter',sans-serif;font-weight:700;">{html.escape(dashboard['current_state_label'])}</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    persist_status = st.session_state.get("_podcast_runs_persist_status", {"source": "local", "error": ""})
+    persist_col, refresh_col = st.columns([5, 1], gap="small")
+    with persist_col:
+        if persist_status.get("error"):
+            st.warning(persist_status["error"])
+        else:
+            st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Discord remains the live source of truth.")
+    with refresh_col:
+        if st.button("Refresh Cloud", key="podcast_refresh_cloud", type="secondary", use_container_width=True):
+            for key in (
+                "_podcast_runs_cache",
+                "_podcast_runs_cache_handle",
+                "_podcast_runs_cache_loaded_at",
+                "_podcast_runs_remote_cache",
+                "_podcast_runs_remote_cache_handle",
+                "_podcast_runs_remote_cache_loaded_at",
+            ):
+                st.session_state.pop(key, None)
+            st.rerun()
 
-    stat_cards = []
-    for card in dashboard["status_cards"]:
-        stat_cards.append(
-            (
-                '<div class="podcast-status-card">'
-                f'<div class="podcast-status-kicker">{html.escape(card["label"])}</div>'
-                f'<div class="podcast-status-value">{html.escape(card["value"])}</div>'
-                f'<div class="podcast-status-meta">{html.escape(card["meta"])}</div>'
-                '</div>'
+    with st.expander("Create HQ Mirror Run", expanded=not runs):
+        with st.form("podcast_create_run_form", clear_on_submit=True):
+            create_col1, create_col2 = st.columns(2, gap="large")
+            with create_col1:
+                new_title = st.text_input("Run Title", placeholder="Episode 42 - Draft Release")
+                new_episode_code = st.text_input("Episode Code", placeholder="EP-042")
+                new_source_path = st.text_input("Source File / Link", placeholder="Dropbox path, drive link, or local note")
+            with create_col2:
+                new_discord_reference = st.text_input("Discord Reference", placeholder="Thread URL or channel note")
+                new_publish_window = st.text_input("Publish Window", placeholder="Tomorrow 9 AM MT")
+                new_notes = st.text_area("Kickoff Notes", height=100, placeholder="Anything Booth or HQ needs to remember for this run.")
+            create_run_submitted = st.form_submit_button("Create HQ Run", type="primary", use_container_width=True)
+        if create_run_submitted:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            new_run = podcast_tracker.create_run(
+                updated_store,
+                actor=actor,
+                title=new_title,
+                episode_code=new_episode_code,
+                source_path=new_source_path,
+                discord_reference=new_discord_reference,
+                publish_window=new_publish_window,
+                notes=new_notes,
             )
-        )
-    st.markdown(f'<div class="podcast-status-grid">{"".join(stat_cards)}</div>', unsafe_allow_html=True)
+            _save_podcast_and_rerun(updated_store, new_run["id"])
 
-    compare_blocks = []
-    for block in dashboard["compare"]:
-        bullets = "".join(f"<li>{html.escape(item)}</li>" for item in block["bullets"])
-        compare_blocks.append(
-            (
-                '<div class="podcast-compare-side">'
-                f'<div class="podcast-compare-label">{html.escape(block["label"])}</div>'
-                f'<div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:8px;">{html.escape(block["title"])}</div>'
-                f'<div class="podcast-compare-copy">{html.escape(block["body"])}</div>'
-                f'<ul style="margin:12px 0 0 18px;color:#C9D1D9;line-height:1.7;font-size:13px;padding:0;">{bullets}</ul>'
-                '</div>'
-            )
-        )
-    st.markdown(f'<div class="podcast-compare">{"".join(compare_blocks)}</div>', unsafe_allow_html=True)
+    selected_run_id = ""
+    if requested_run_id in run_lookup:
+        selected_run_id = requested_run_id
+    elif st.session_state.get("_podcast_last_run_id") in run_lookup:
+        selected_run_id = st.session_state["_podcast_last_run_id"]
+    elif store.get("active_run_id") in run_lookup:
+        selected_run_id = store["active_run_id"]
+    elif runs:
+        selected_run_id = runs[0]["id"]
+    if selected_run_id:
+        st.session_state["_podcast_last_run_id"] = selected_run_id
 
-    phase_chips = []
-    for phase in dashboard["phases"]:
-        chip_class = "podcast-phase-chip"
-        if phase["status"] == "active":
-            chip_class += " is-active"
-        elif phase["status"] == "complete":
-            chip_class += " is-complete"
-        phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
+    if not runs:
+        dashboard = get_podcast_dashboard_content(requested_state or None)
+        empty_cards = [
+            _podcast_card_html("Live Path", "Discord", "Discord remains the live workflow while HQ is being instrumented."),
+            _podcast_card_html("HQ Mode", "Ready", "Create a run to start tracking artifacts, approvals, deliveries, and verification."),
+            _podcast_card_html("Mirror State", dashboard["current_state_label"], "This preview only shows the modeled workflow until a real HQ run exists."),
+        ]
+        st.caption("No HQ podcast runs yet. Create one above, then keep your Discord workflow running exactly as-is and mirror the run here.")
+        st.markdown(f'<div class="podcast-status-grid">{"".join(empty_cards)}</div>', unsafe_allow_html=True)
 
-    timeline_items = []
-    for item in dashboard["timeline"]:
-        timeline_items.append(
-            (
-                '<div class="podcast-timeline-item">'
-                f'<div class="podcast-timeline-time">{html.escape(item["time"])}</div>'
-                '<div class="podcast-timeline-copy">'
-                f'<strong>{html.escape(item["title"])}</strong>'
-                f'{html.escape(item["body"])}'
-                '</div>'
-                '</div>'
-            )
-        )
+        phase_chips = []
+        for phase in dashboard["phases"]:
+            chip_class = "podcast-phase-chip"
+            if phase["status"] == "active":
+                chip_class += " is-active"
+            elif phase["status"] == "complete":
+                chip_class += " is-complete"
+            phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
 
-    next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
-
-    workflow_col, guidance_col = st.columns([1.5, 1], gap="large")
-    with workflow_col:
+        next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
         st.markdown(
             f"""
             <div class="podcast-panel">
-              <div class="podcast-status-kicker">Workflow Phases</div>
-              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Track the full run, not just the creative output.</div>
+              <div class="podcast-status-kicker">Workflow Preview</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Discord stays live. HQ becomes the durable mirror.</div>
               <div class="podcast-phase-row">{"".join(phase_chips)}</div>
-              <div class="podcast-timeline">{"".join(timeline_items)}</div>
+              <ul style="margin:0 0 0 18px;color:#C9D1D9;line-height:1.8;font-size:13px;padding:0;">{next_action_items}</ul>
             </div>
             """,
             unsafe_allow_html=True,
         )
-    with guidance_col:
+        return
+
+    if selected_run_id and st.query_params.get("podcast_run") != selected_run_id:
+        st.query_params["podcast_run"] = selected_run_id
+
+    selector_col, mirror_col = st.columns([1.6, 1], gap="large")
+    with selector_col:
+        run_ids = [run["id"] for run in runs]
+        selected_from_ui = st.selectbox(
+            "Active HQ Run",
+            run_ids,
+            index=run_ids.index(selected_run_id),
+            format_func=lambda run_id: _podcast_run_label(run_lookup[run_id]),
+            help="Choose which HQ mirror run you want to operate on. Discord stays live either way.",
+        )
+    with mirror_col:
+        st.markdown(
+            '<div class="podcast-panel"><div class="podcast-status-kicker">Mirror Mode</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Discord is still the live path.</div><div class="podcast-status-meta">Every button here updates HQ tracking only so you can pressure-test the new workflow without disrupting Booth.</div></div>',
+            unsafe_allow_html=True,
+        )
+    if selected_from_ui != selected_run_id:
+        st.query_params["podcast_run"] = selected_from_ui
+        st.query_params["podcast_state"] = run_lookup[selected_from_ui]["current_state"]
+        st.rerun()
+
+    run = run_lookup[selected_run_id]
+    dashboard = get_podcast_dashboard_content(run["current_state"])
+    metrics = podcast_tracker.build_run_metrics(run)
+    latest_gate_decisions = metrics["latest_gate_decisions"]
+    if st.query_params.get("podcast_state") != run["current_state"]:
+        st.query_params["podcast_state"] = run["current_state"]
+
+    summary_cards = [
+        _podcast_card_html("Primary Live Path", "Discord", "Booth and the current unpublished workflow remain untouched while HQ mirrors the run."),
+        _podcast_card_html("Current State", dashboard["current_state_label"], f"Last changed at {run['state_updated_at'] or run['updated_at'] or run['created_at']}."),
+        _podcast_card_html(
+            "Mirror Sync",
+            metrics["sync_status"].replace("_", " ").title(),
+            f"Last synced at {run.get('last_synced_at') or 'Never'} from the Discord workflow.",
+        ),
+        _podcast_card_html("Artifacts", f"{metrics['artifact_approved']}/{metrics['artifact_total']}", f"{metrics['artifact_populated']} populated, {metrics['artifact_blocked']} blocked."),
+        _podcast_card_html(
+            "Approvals",
+            f"{sum(1 for decision in latest_gate_decisions.values() if decision and decision['decision'] == 'approved')}/{len(podcast_tracker.APPROVAL_GATES)}",
+            "Gate approvals are now explicit HQ records instead of scattered chat context.",
+        ),
+        _podcast_card_html(
+            "Verification",
+            f"{metrics['verified_checks']}/{metrics['verification_total']}",
+            "Done only means done after public checks and social receipts are recorded.",
+        ),
+    ]
+    st.markdown(f'<div class="podcast-status-grid">{"".join(summary_cards)}</div>', unsafe_allow_html=True)
+
+    hero_col, detail_col = st.columns([1.6, 1], gap="large")
+    with hero_col:
         st.markdown(
             f"""
             <div class="podcast-panel">
-              <div class="podcast-status-kicker">Next Actions</div>
-              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;margin-bottom:10px;">What HQ should make explicit right now.</div>
-              <ul style="margin:0 0 14px 18px;color:#C9D1D9;line-height:1.75;font-size:13px;padding:0;">{next_action_items}</ul>
-              <div class="podcast-status-kicker" style="margin-top:18px;">Selected Stage Summary</div>
-              <div style="font-size:16px;color:#E6EDF3;font-weight:700;line-height:1.4;">{html.escape(dashboard['current_state_label'])}</div>
-              <div style="font-size:12px;color:#8B949E;line-height:1.7;margin-top:6px;">
-                Phase bucket: {html.escape(dashboard['current_phase_label'])}. Use the mirror-state control above to compare another point in the workflow.
-              </div>
+              <div class="podcast-status-kicker">Active HQ Mirror Run</div>
+              <div style="font-size:24px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:10px;">{html.escape(run['title'])}</div>
+              <div class="podcast-inline-kv"><span>Episode Code</span><strong>{html.escape(run['episode_code'] or 'Not Set')}</strong></div>
+              <div class="podcast-inline-kv"><span>Source</span><strong>{html.escape(run['source_path'] or 'Not Set')}</strong></div>
+              <div class="podcast-inline-kv"><span>Discord Ref</span><strong>{html.escape(run['discord_reference'] or 'Not Set')}</strong></div>
+              <div class="podcast-inline-kv"><span>Source of Truth</span><strong>{html.escape((run.get('source_of_truth') or 'discord').title())}</strong></div>
+              <div class="podcast-inline-kv"><span>Last Synced</span><strong>{html.escape(run.get('last_synced_at') or 'Never')}</strong></div>
+              <div class="podcast-inline-kv"><span>Publish Window</span><strong>{html.escape(run['publish_window'] or 'Not Set')}</strong></div>
+              <div class="podcast-inline-kv"><span>Current Blocker</span><strong>{html.escape(run['blocker'] or 'None')}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with detail_col:
+        last_event = metrics["last_event"]
+        st.markdown(
+            f"""
+            <div class="podcast-panel">
+              <div class="podcast-status-kicker">Run Snapshot</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">HQ now has durable memory for this run.</div>
+              <div class="podcast-status-meta" style="margin-top:10px;">Created: {html.escape(run['created_at'] or 'Unknown')}</div>
+              <div class="podcast-status-meta">Updated: {html.escape(run['updated_at'] or 'Unknown')}</div>
+              <div class="podcast-status-meta">Notes: {html.escape(run['notes'] or 'None yet')}</div>
+              <div class="podcast-status-meta" style="margin-top:10px;">Latest event: {html.escape((last_event or {}).get('summary', 'No events yet'))}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-# ═══════════════════════════════════════════════════════════════════════════
+    active_section = st.radio(
+        "Podcast Section",
+        ["Overview", "Artifacts", "Approvals", "Delivery & Verify", "Activity"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key=f"podcast_section_{run['id']}",
+    )
+
+    if active_section == "Overview":
+        details_col, transition_col = st.columns(2, gap="large")
+        with details_col:
+            st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
+            st.markdown('<div class="podcast-status-kicker">Run Details</div>', unsafe_allow_html=True)
+            with st.form(f"podcast_details_form_{run['id']}"):
+                details_title = st.text_input("Run Title", value=run["title"])
+                details_episode_code = st.text_input("Episode Code", value=run["episode_code"])
+                details_source = st.text_input("Source File / Link", value=run["source_path"])
+                details_discord = st.text_input("Discord Reference", value=run["discord_reference"])
+                details_window = st.text_input("Publish Window", value=run["publish_window"])
+                details_blocker = st.text_input("Current Blocker", value=run["blocker"])
+                details_notes = st.text_area("Run Notes", value=run["notes"], height=140)
+                details_submitted = st.form_submit_button("Save Run Details", type="primary", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            if details_submitted:
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.update_run_details(
+                    updated_store,
+                    run_id=run["id"],
+                    actor=actor,
+                    title=details_title,
+                    episode_code=details_episode_code,
+                    source_path=details_source,
+                    discord_reference=details_discord,
+                    publish_window=details_window,
+                    blocker=details_blocker,
+                    notes=details_notes,
+                )
+                _save_podcast_and_rerun(updated_store, run["id"])
+        with transition_col:
+            st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
+            st.markdown('<div class="podcast-status-kicker">State Transition</div>', unsafe_allow_html=True)
+            state_options = dashboard["state_options"]
+            state_ids = [option["id"] for option in state_options]
+            state_labels = {option["id"]: option["label"] for option in state_options}
+            with st.form(f"podcast_state_form_{run['id']}"):
+                next_state = st.selectbox(
+                    "HQ Mirror State",
+                    state_ids,
+                    index=state_ids.index(run["current_state"]) if run["current_state"] in state_ids else 0,
+                    format_func=lambda state_id: state_labels[state_id],
+                )
+                next_blocker = st.text_input("Blocker After Transition", value=run["blocker"])
+                transition_note = st.text_area("Transition Note", height=120, placeholder="Why are you moving the HQ mirror to this state?")
+                transition_submitted = st.form_submit_button("Record State Change", type="primary", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            if transition_submitted:
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=run["id"],
+                    actor=actor,
+                    state=next_state,
+                    blocker=next_blocker,
+                    note=transition_note,
+                )
+                _save_podcast_and_rerun(updated_store, run["id"])
+
+        phase_chips = []
+        for phase in dashboard["phases"]:
+            chip_class = "podcast-phase-chip"
+            if phase["status"] == "active":
+                chip_class += " is-active"
+            elif phase["status"] == "complete":
+                chip_class += " is-complete"
+            phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
+        next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
+        workflow_col, action_col = st.columns([1.5, 1], gap="large")
+        with workflow_col:
+            st.markdown(
+                f"""
+                <div class="podcast-panel">
+                  <div class="podcast-status-kicker">Workflow Phases</div>
+                  <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Track the real run with durable HQ state, not memory.</div>
+                  <div class="podcast-phase-row">{"".join(phase_chips)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with action_col:
+            st.markdown(
+                f"""
+                <div class="podcast-panel">
+                  <div class="podcast-status-kicker">Next Actions</div>
+                  <ul style="margin:0 0 0 18px;color:#C9D1D9;line-height:1.75;font-size:13px;padding:0;">{next_action_items}</ul>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    if active_section == "Artifacts":
+        artifact_cards = []
+        for spec in podcast_tracker.ARTIFACT_SPECS:
+            artifact = run["artifacts"][spec["id"]]
+            artifact_cards.append(
+                (
+                    '<div class="podcast-artifact-card">'
+                    f'<div class="podcast-status-kicker">{html.escape(spec["label"])}</div>'
+                    f'<div class="podcast-artifact-status is-{html.escape(artifact["status"])}">{html.escape(artifact["status"].replace("_", " ").title())}</div>'
+                    f'<div class="podcast-status-meta">Version {artifact["version"]} · Updated {html.escape(artifact["updated_at"] or "Not yet")}</div>'
+                    '</div>'
+                )
+            )
+        st.markdown(f'<div class="podcast-artifact-grid">{"".join(artifact_cards)}</div>', unsafe_allow_html=True)
+
+        artifact_lookup = {spec["id"]: spec for spec in podcast_tracker.ARTIFACT_SPECS}
+        artifact_ids = [spec["id"] for spec in podcast_tracker.ARTIFACT_SPECS]
+        selected_artifact_id = st.selectbox(
+            "Artifact To Edit",
+            artifact_ids,
+            format_func=lambda artifact_id: artifact_lookup[artifact_id]["label"],
+        )
+        selected_artifact = run["artifacts"][selected_artifact_id]
+        with st.form(f"podcast_artifact_form_{run['id']}_{selected_artifact_id}"):
+            artifact_text = st.text_area(
+                f"{artifact_lookup[selected_artifact_id]['label']} Content",
+                value=selected_artifact["text"],
+                height=180,
+                placeholder="Paste the approved or draft content here.",
+            )
+            artifact_path = st.text_input(
+                "Asset Path / URL",
+                value=selected_artifact["path"],
+                placeholder="File path, Drive link, or external URL",
+            )
+            artifact_status = st.selectbox(
+                "Artifact Status",
+                list(podcast_tracker.ARTIFACT_STATUSES),
+                index=list(podcast_tracker.ARTIFACT_STATUSES).index(selected_artifact["status"]),
+            )
+            artifact_notes = st.text_area("Artifact Notes", value=selected_artifact["notes"], height=100)
+            artifact_submitted = st.form_submit_button("Save Artifact", type="primary", use_container_width=True)
+        if artifact_submitted:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            podcast_tracker.update_artifact(
+                updated_store,
+                run_id=run["id"],
+                artifact_id=selected_artifact_id,
+                actor=actor,
+                text=artifact_text,
+                path=artifact_path,
+                status=artifact_status,
+                notes=artifact_notes,
+            )
+            _save_podcast_and_rerun(updated_store, run["id"])
+
+    if active_section == "Approvals":
+        gate_cards = []
+        gate_lookup = {gate["id"]: gate["label"] for gate in podcast_tracker.APPROVAL_GATES}
+        for gate in podcast_tracker.APPROVAL_GATES:
+            latest = latest_gate_decisions.get(gate["id"])
+            if latest:
+                value = latest["decision"].replace("_", " ").title()
+                meta = f"{latest['actor'] or 'Unknown'} · {latest['created_at']}"
+            else:
+                value = "Pending"
+                meta = "No HQ approval recorded yet."
+            gate_cards.append(_podcast_card_html(gate["label"], value, meta))
+        st.markdown(f'<div class="podcast-status-grid">{"".join(gate_cards)}</div>', unsafe_allow_html=True)
+
+        with st.form(f"podcast_approval_form_{run['id']}"):
+            approval_gate = st.selectbox(
+                "Approval Gate",
+                [gate["id"] for gate in podcast_tracker.APPROVAL_GATES],
+                format_func=lambda gate_id: gate_lookup[gate_id],
+            )
+            approval_decision = st.selectbox(
+                "Decision",
+                list(podcast_tracker.APPROVAL_DECISIONS),
+                format_func=lambda decision: decision.replace("_", " ").title(),
+            )
+            allowed_state_after = list(podcast_tracker.ALLOWED_APPROVAL_STATE_AFTER.get(approval_gate, {}).get(approval_decision, ()))
+            approval_state_options = [("", "Keep Current State")] + [
+                (state_id, _PODCAST_STATE_LABELS.get(state_id, state_id))
+                for state_id in allowed_state_after
+            ]
+            approval_state_after = st.selectbox(
+                "Optional State After Recording",
+                [item[0] for item in approval_state_options],
+                format_func=lambda value: dict(approval_state_options)[value],
+                help="Only valid follow-up states for the selected gate and decision are shown here.",
+            )
+            approval_notes = st.text_area("Approval Notes", height=120, placeholder="What was approved, blocked, or kicked back?")
+            approval_submitted = st.form_submit_button("Record Approval", type="primary", use_container_width=True)
+        if approval_submitted:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            try:
+                podcast_tracker.record_approval(
+                    updated_store,
+                    run_id=run["id"],
+                    gate=approval_gate,
+                    decision=approval_decision,
+                    actor=actor,
+                    notes=approval_notes,
+                    state_after=approval_state_after,
+                )
+            except ValueError as exc:
+                st.warning(str(exc))
+            else:
+                _save_podcast_and_rerun(updated_store, run["id"])
+
+        if run["approvals"]:
+            approval_rows = []
+            for approval in reversed(run["approvals"]):
+                approval_rows.append(
+                    (
+                        '<div class="podcast-event-item">'
+                        f'<div class="podcast-event-meta">{html.escape(approval["created_at"])} · {html.escape(approval["actor"] or "Unknown")} · {html.escape(gate_lookup[approval["gate"]])}</div>'
+                        f'<div class="podcast-event-title">{html.escape(approval["decision"].replace("_", " ").title())}</div>'
+                        f'<div class="podcast-event-copy">{html.escape(approval["notes"] or "No notes recorded.")}</div>'
+                        '</div>'
+                    )
+                )
+            st.markdown(f'<div class="podcast-event-log">{"".join(approval_rows)}</div>', unsafe_allow_html=True)
+
+    if active_section == "Delivery & Verify":
+        delivery_cols = st.columns(2, gap="large")
+        for idx, spec in enumerate(podcast_tracker.DELIVERY_SPECS):
+            delivery = run["deliveries"][spec["id"]]
+            with delivery_cols[idx]:
+                st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
+                st.markdown(f'<div class="podcast-status-kicker">{html.escape(spec["label"])} Delivery</div>', unsafe_allow_html=True)
+                with st.form(f"podcast_delivery_form_{run['id']}_{spec['id']}"):
+                    delivery_status = st.selectbox(
+                        "Delivery Status",
+                        list(podcast_tracker.DELIVERY_STATUSES),
+                        index=list(podcast_tracker.DELIVERY_STATUSES).index(delivery["status"]),
+                        format_func=lambda value: value.replace("_", " ").title(),
+                    )
+                    delivery_id = st.text_input("External ID", value=delivery["external_id"])
+                    delivery_url = st.text_input("Public URL", value=delivery["url"])
+                    delivery_notes = st.text_area("Delivery Notes", value=delivery["notes"], height=100)
+                    delivery_submitted = st.form_submit_button("Save Delivery", type="primary", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                if delivery_submitted:
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    podcast_tracker.update_delivery(
+                        updated_store,
+                        run_id=run["id"],
+                        channel=spec["id"],
+                        actor=actor,
+                        status=delivery_status,
+                        external_id=delivery_id,
+                        url=delivery_url,
+                        notes=delivery_notes,
+                    )
+                    _save_podcast_and_rerun(updated_store, run["id"])
+
+        verification = run["verification"]
+        st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="podcast-status-kicker">Verification Checklist</div>', unsafe_allow_html=True)
+        with st.form(f"podcast_verification_form_{run['id']}"):
+            verification_checks = {}
+            verify_col1, verify_col2 = st.columns(2, gap="large")
+            for idx, spec in enumerate(podcast_tracker.VERIFICATION_CHECKS):
+                target_col = verify_col1 if idx % 2 == 0 else verify_col2
+                with target_col:
+                    verification_checks[spec["id"]] = st.checkbox(spec["label"], value=verification[spec["id"]])
+            verification_notes = st.text_area("Verification Notes", value=verification["notes"], height=100)
+            verification_submitted = st.form_submit_button("Save Verification", type="primary", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        if verification_submitted:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            podcast_tracker.update_verification(
+                updated_store,
+                run_id=run["id"],
+                actor=actor,
+                checks=verification_checks,
+                notes=verification_notes,
+            )
+            _save_podcast_and_rerun(updated_store, run["id"])
+
+    if active_section == "Activity":
+        sync_col, note_col = st.columns(2, gap="large")
+        with sync_col:
+            with st.form(f"podcast_sync_form_{run['id']}"):
+                sync_note = st.text_area(
+                    "Discord Sync Note",
+                    height=120,
+                    value=run.get("sync_note", ""),
+                    placeholder="What did you verify in Discord when syncing HQ just now?",
+                )
+                sync_submitted = st.form_submit_button("Mark Sync Checkpoint", type="primary", use_container_width=True)
+            if sync_submitted:
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.record_sync_checkpoint(updated_store, run_id=run["id"], actor=actor, note=sync_note)
+                _save_podcast_and_rerun(updated_store, run["id"])
+        with note_col:
+            with st.form(f"podcast_manual_note_form_{run['id']}"):
+                manual_note = st.text_area("Manual HQ Note", height=120, placeholder="Anything worth recording from the live Discord run.")
+                note_submitted = st.form_submit_button("Add Note", type="primary", use_container_width=True)
+            if note_submitted:
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.add_manual_note(updated_store, run_id=run["id"], actor=actor, note=manual_note)
+                _save_podcast_and_rerun(updated_store, run["id"])
+
+        event_rows = []
+        for event in reversed(run["events"]):
+            event_rows.append(
+                (
+                    '<div class="podcast-event-item">'
+                    f'<div class="podcast-event-meta">{html.escape(event["created_at"])} · {html.escape(event["actor"] or "Unknown")} · {html.escape(event["type"].replace("_", " "))}</div>'
+                    f'<div class="podcast-event-title">{html.escape(event["summary"])}</div>'
+                    f'<div class="podcast-event-copy">{html.escape(event["details"] or "No extra details.")}</div>'
+                    '</div>'
+                )
+            )
+        empty_event_html = (
+            '<div class="podcast-event-item">'
+            '<div class="podcast-event-title">No HQ events yet.</div>'
+            '<div class="podcast-event-copy">Use the forms above to start capturing the live workflow in HQ.</div>'
+            '</div>'
+        )
+        st.markdown(
+            f'<div class="podcast-event-log">{"".join(event_rows) if event_rows else empty_event_html}</div>',
+            unsafe_allow_html=True,
+        )
+        with st.expander("Raw HQ Run JSON", expanded=False):
+            st.code(json.dumps(run, indent=2), language="json")
+        return
+
 # ROUTE TO PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 page_map = {
