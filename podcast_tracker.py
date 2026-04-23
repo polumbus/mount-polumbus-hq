@@ -224,6 +224,7 @@ def _default_run() -> dict[str, Any]:
         "source_of_truth": "discord",
         "last_synced_at": "",
         "sync_note": "",
+        "blocked_from_state": "",
         "current_state": "initialized",
         "blocker": "",
         "notes": "",
@@ -294,7 +295,7 @@ def _merge_run_records(primary: dict[str, Any], secondary: dict[str, Any]) -> di
         merged,
         primary,
         secondary,
-        fields=("blocker",),
+        fields=("blocker", "blocked_from_state"),
         timestamp_field="blocker_updated_at",
     )
 
@@ -391,6 +392,7 @@ def normalize_podcast_store(raw: Any) -> dict[str, Any]:
             "source_of_truth",
             "last_synced_at",
             "sync_note",
+            "blocked_from_state",
             "current_state",
             "blocker",
             "notes",
@@ -613,6 +615,8 @@ def transition_run(
     if previous_state == state and run["blocker"] == blocker.strip() and not note.strip():
         return run
     blocker_changed = run["blocker"] != blocker.strip()
+    if state == "blocked_manual_fix" and previous_state != "blocked_manual_fix":
+        run["blocked_from_state"] = previous_state
     run["current_state"] = state
     run["blocker"] = blocker.strip()
     ts = _touch_run(run)
@@ -721,6 +725,8 @@ def record_approval(
         notes.strip(),
     )
     if state_after.strip():
+        if state_after.strip() == "blocked_manual_fix" and run["current_state"] != "blocked_manual_fix":
+            run["blocked_from_state"] = run["current_state"]
         run["current_state"] = state_after.strip()
         run["state_updated_at"] = approval["created_at"]
         if decision == "approved" and state_after.strip() != "blocked_manual_fix":

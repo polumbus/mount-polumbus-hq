@@ -11096,6 +11096,31 @@ def page_podcast():
             st.query_params["podcast_state"] = requested_state or get_podcast_dashboard_content(None)["current_state"]
         st.rerun()
 
+    def _create_hq_run(
+        *,
+        title: str,
+        discord_reference: str,
+        episode_code: str = "",
+        source_path: str = "",
+        publish_window: str = "",
+        notes: str = "",
+    ) -> None:
+        if not title.strip() or not discord_reference.strip():
+            st.warning("Fill in both Run Title and Discord Reference before creating an HQ mirror run.")
+            return
+        updated_store = podcast_tracker.deepcopy_store(store)
+        new_run = podcast_tracker.create_run(
+            updated_store,
+            actor=actor,
+            title=title,
+            episode_code=episode_code,
+            source_path=source_path,
+            discord_reference=discord_reference,
+            publish_window=publish_window,
+            notes=notes,
+        )
+        _save_podcast_and_rerun(updated_store, new_run["id"])
+
     def _podcast_card_html(label: str, value: str, meta: str) -> str:
         return (
             '<div class="podcast-status-card">'
@@ -11110,19 +11135,210 @@ def page_podcast():
         code = f" · {run['episode_code']}" if run.get("episode_code") else ""
         return f"{run['title']}{code} · {state_label}"
 
+    def _podcast_value_html(value: str, empty_label: str = "Not Set", link_label: str = "Open Link") -> str:
+        clean = (value or "").strip()
+        if not clean:
+            return html.escape(empty_label)
+        if clean.startswith(("http://", "https://")):
+            safe_href = html.escape(clean, quote=True)
+            safe_text = html.escape(link_label)
+            safe_title = html.escape(clean, quote=True)
+            return f'<a href="{safe_href}" target="_blank" title="{safe_title}" style="color:#2DD4BF;text-decoration:none;">{safe_text}</a>'
+        return html.escape(clean)
+
+    def _set_podcast_section(run_id: str, section_name: str) -> None:
+        st.session_state[f"podcast_section_{run_id}"] = section_name
+
+    def _guided_actions_for_run(run: dict) -> list[dict]:
+        latest = podcast_tracker.latest_gate_decisions(run)
+        state = run["current_state"]
+        run_metrics = podcast_tracker.build_run_metrics(run)
+        transcript_ready = bool(run["artifacts"]["transcript"]["text"] or run["artifacts"]["transcript"]["path"])
+        has_delivery_receipt = any(
+            delivery.get("external_id") or delivery.get("url") or delivery.get("status") in {"posted", "verified"}
+            for delivery in run.get("deliveries", {}).values()
+        )
+        verification_complete = run_metrics["verified_checks"] == run_metrics["verification_total"]
+        actions: list[dict] = []
+
+        def add(
+            action_id: str,
+            label: str,
+            help_text: str,
+            section: str,
+            button_type: str = "secondary",
+            disabled: bool = False,
+        ) -> None:
+            actions.append(
+                {
+                    "id": action_id,
+                    "label": label,
+                    "help": help_text,
+                    "section": section,
+                    "type": button_type,
+                    "disabled": disabled,
+                }
+            )
+
+        if state == "initialized":
+            add("mark_transcribing", "1. Start Transcript", "Use when Discord begins transcript work.", "Overview", "primary")
+            add("transcript_ready", "2. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", disabled=not transcript_ready)
+        elif state == "transcribing":
+            add("transcript_ready", "1. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", "primary", disabled=not transcript_ready)
+            add("block_run", "Block Run", "Use only if Discord hits a real manual blocker.", "Activity")
+        elif state == "gate1_waiting":
+            add("approve_gate1", "1. Approve Gate 1", "Record Gate 1 approval and move forward.", "Approvals", "primary")
+            add("gate1_changes", "Need Changes", "Keep the run in Gate 1 while fixes happen.", "Approvals")
+            add("block_run", "Block Run", "Use if Discord cannot continue without manual help.", "Activity")
+        elif state == "gate1_approved":
+            add("metadata_ready", "1. Metadata Ready", "All packaging inputs are ready for the next phase.", "Artifacts", "primary")
+            add("tweet_waiting", "Waiting On Tweet", "Use if the tweet is the only missing packaging piece.", "Artifacts")
+            add("thumbnail_waiting", "Waiting On Thumbnail", "Use if the thumbnail is the current blocker.", "Artifacts")
+        elif state == "metadata_ready":
+            add("start_gate2", "1. Start Gate 2 Review", "Move into the final package review.", "Approvals", "primary")
+            add("block_run", "Block Run", "Use if packaging found a manual blocker.", "Activity")
+        elif state == "tweet_waiting":
+            add("tweet_ready", "1. Tweet Ready", "Clear the tweet blocker and return to packaging ready.", "Artifacts", "primary")
+            add("block_run", "Block Run", "Use if tweet work is manually blocked.", "Activity")
+        elif state == "thumbnail_waiting":
+            add("thumbnail_ready", "1. Thumbnail Ready", "Clear the thumbnail blocker and return to packaging ready.", "Artifacts", "primary")
+            add("block_run", "Block Run", "Use if thumbnail work is manually blocked.", "Activity")
+        elif state == "gate2_waiting":
+            add("approve_gate2", "1. Approve Gate 2", "Record final approval before publish prep.", "Approvals", "primary")
+            add("gate2_changes", "Kick Back To Packaging", "Send the run back for packaging fixes.", "Approvals")
+            add("block_run", "Block Run", "Use if Gate 2 found a hard blocker.", "Activity")
+        elif state == "gate2_approved":
+            add("mark_ready_to_publish", "1. Ready To Publish", "The package is approved and can move to publish prep.", "Delivery & Verify", "primary")
+        elif state == "ready_to_publish":
+            add("start_publish", "1. Start Publish", "Use when Discord begins the publish step.", "Delivery & Verify", "primary")
+        elif state == "publish_pending":
+            add("mark_public_verified", "1. Public Checks Passed", "Complete the verification checklist and record at least one delivery receipt before using this.", "Delivery & Verify", "primary", disabled=not (verification_complete and has_delivery_receipt))
+            add("mark_retry", "Needs Retry", "Use if the release hit a publish problem.", "Delivery & Verify")
+            add("block_run", "Block Run", "Use if the publish issue needs manual intervention.", "Activity")
+        elif state == "release_retry":
+            add("retry_running", "1. Retry Running", "Move back into publish pending when the retry starts.", "Delivery & Verify", "primary")
+            add("block_run", "Block Run", "Use if the retry is blocked manually.", "Activity")
+        elif state == "public_verified":
+            add("mark_done", "1. Mark Done", "This only unlocks after verification is complete and the Discord mirror is freshly synced.", "Delivery & Verify", "primary", disabled=not (verification_complete and run_metrics["sync_status"] == "fresh"))
+        elif state == "blocked_manual_fix":
+            blocked_from_state = run.get("blocked_from_state", "").strip()
+            if blocked_from_state and blocked_from_state != "blocked_manual_fix":
+                resume_section = {
+                    "gate1_waiting": "Approvals",
+                    "metadata_ready": "Artifacts",
+                    "tweet_waiting": "Artifacts",
+                    "thumbnail_waiting": "Artifacts",
+                    "gate2_waiting": "Approvals",
+                    "publish_pending": "Delivery & Verify",
+                    "release_retry": "Delivery & Verify",
+                }.get(blocked_from_state, "Overview")
+                resume_label = _PODCAST_STATE_LABELS.get(blocked_from_state, blocked_from_state).replace("Waiting", "Review")
+                add("resume_previous_state", f"1. Resume {resume_label}", "Return HQ to the exact state that was blocked.", resume_section, "primary")
+            elif latest.get("gate2") and latest["gate2"]["decision"] == "approved":
+                add("resume_publish_retry", "1. Resume Publish Retry", "Use after the blocker is fixed and publish work can continue.", "Delivery & Verify", "primary")
+            elif latest.get("gate1") and latest["gate1"]["decision"] == "approved":
+                add("resume_packaging", "1. Resume Packaging", "Go back to packaging after the blocker is fixed.", "Artifacts", "primary")
+                add("resume_gate2", "Resume Gate 2 Review", "Use if you are ready to re-open Gate 2.", "Approvals")
+            else:
+                add("resume_gate1", "1. Resume Gate 1 Review", "Go back to Gate 1 after the blocker is fixed.", "Approvals", "primary")
+        elif state == "done":
+            add("sync_now", "Sync Checkpoint", "Record one last HQ sync note if you need it.", "Activity", "primary")
+
+        return actions
+
+    def _run_guided_action(updated_store: dict, run_id: str, action_id: str) -> None:
+        if action_id == "mark_transcribing":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="transcribing", note="Guided action: transcription started.")
+        elif action_id == "transcript_ready":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="gate1_waiting", blocker="", note="Guided action: transcript ready for Gate 1.")
+        elif action_id == "approve_gate1":
+            podcast_tracker.record_approval(updated_store, run_id=run_id, gate="gate1", decision="approved", actor=actor, notes="Guided action: Gate 1 approved.", state_after="gate1_approved")
+        elif action_id == "gate1_changes":
+            podcast_tracker.record_approval(updated_store, run_id=run_id, gate="gate1", decision="changes_requested", actor=actor, notes="Guided action: Gate 1 needs changes.", state_after="gate1_waiting")
+        elif action_id == "metadata_ready":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="metadata_ready", blocker="", note="Guided action: packaging is ready.")
+        elif action_id == "tweet_waiting":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="tweet_waiting", blocker="Waiting on approved tweet.", note="Guided action: waiting on tweet.")
+        elif action_id == "thumbnail_waiting":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="thumbnail_waiting", blocker="Waiting on approved thumbnail.", note="Guided action: waiting on thumbnail.")
+        elif action_id == "tweet_ready":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="metadata_ready", blocker="", note="Guided action: tweet blocker cleared.")
+        elif action_id == "thumbnail_ready":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="metadata_ready", blocker="", note="Guided action: thumbnail blocker cleared.")
+        elif action_id == "start_gate2":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="gate2_waiting", blocker="", note="Guided action: Gate 2 review started.")
+        elif action_id == "approve_gate2":
+            podcast_tracker.record_approval(updated_store, run_id=run_id, gate="gate2", decision="approved", actor=actor, notes="Guided action: Gate 2 approved.", state_after="gate2_approved")
+        elif action_id == "gate2_changes":
+            podcast_tracker.record_approval(updated_store, run_id=run_id, gate="gate2", decision="changes_requested", actor=actor, notes="Guided action: Gate 2 sent back to packaging.", state_after="metadata_ready")
+        elif action_id == "mark_ready_to_publish":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="ready_to_publish", blocker="", note="Guided action: ready to publish.")
+        elif action_id == "start_publish":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="publish_pending", blocker="", note="Guided action: publish started.")
+        elif action_id == "mark_retry":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="release_retry", blocker="Publish issue needs retry.", note="Guided action: release retry needed.")
+        elif action_id == "retry_running":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="publish_pending", blocker="", note="Guided action: publish retry running.")
+        elif action_id == "mark_public_verified":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="public_verified", blocker="", note="Guided action: public checks passed.")
+        elif action_id == "mark_done":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="done", blocker="", note="Guided action: run marked done.")
+        elif action_id == "resume_previous_state":
+            resume_run = next((item for item in updated_store["runs"] if item["id"] == run_id), None)
+            resume_state = (resume_run or {}).get("blocked_from_state", "") or "gate1_waiting"
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state=resume_state, blocker="", note="Guided action: returning to the exact pre-block state.")
+        elif action_id == "resume_publish_retry":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="release_retry", blocker="", note="Guided action: manual fix cleared, returning to publish retry.")
+        elif action_id == "resume_packaging":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="metadata_ready", blocker="", note="Guided action: manual fix cleared, returning to packaging.")
+        elif action_id == "resume_gate2":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="gate2_waiting", blocker="", note="Guided action: manual fix cleared, returning to Gate 2.")
+        elif action_id == "resume_gate1":
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="gate1_waiting", blocker="", note="Guided action: manual fix cleared, returning to Gate 1.")
+        elif action_id == "block_run":
+            current_run = next((item for item in updated_store["runs"] if item["id"] == run_id), None)
+            blocker_text = (current_run or {}).get("blocker", "").strip() or "Manual fix needed from the live Discord run."
+            podcast_tracker.transition_run(updated_store, run_id=run_id, actor=actor, state="blocked_manual_fix", blocker=blocker_text, note="Guided action: manual blocker recorded.")
+        elif action_id == "sync_now":
+            podcast_tracker.record_sync_checkpoint(updated_store, run_id=run_id, actor=actor, note="Guided action: HQ mirror synced to Discord.")
+
+    def _safe_manual_state_options(current_state: str) -> list[str]:
+        options_map = {
+            "initialized": ["initialized", "transcribing", "gate1_waiting", "blocked_manual_fix"],
+            "transcribing": ["transcribing", "gate1_waiting", "blocked_manual_fix"],
+            "gate1_waiting": ["gate1_waiting", "gate1_approved", "blocked_manual_fix"],
+            "gate1_approved": ["gate1_approved", "metadata_ready", "tweet_waiting", "thumbnail_waiting", "blocked_manual_fix"],
+            "metadata_ready": ["metadata_ready", "gate2_waiting", "blocked_manual_fix"],
+            "tweet_waiting": ["tweet_waiting", "metadata_ready", "blocked_manual_fix"],
+            "thumbnail_waiting": ["thumbnail_waiting", "metadata_ready", "blocked_manual_fix"],
+            "gate2_waiting": ["gate2_waiting", "metadata_ready", "gate2_approved", "blocked_manual_fix"],
+            "gate2_approved": ["gate2_approved", "ready_to_publish", "blocked_manual_fix"],
+            "ready_to_publish": ["ready_to_publish", "publish_pending", "blocked_manual_fix"],
+            "publish_pending": ["publish_pending", "release_retry", "public_verified", "blocked_manual_fix"],
+            "release_retry": ["release_retry", "publish_pending", "blocked_manual_fix"],
+            "public_verified": ["public_verified", "done", "blocked_manual_fix"],
+            "done": ["done", "public_verified"],
+            "blocked_manual_fix": ["blocked_manual_fix", "gate1_waiting", "metadata_ready", "gate2_waiting", "release_retry"],
+        }
+        options = options_map.get(current_state, [current_state, "blocked_manual_fix"])
+        seen = []
+        for state_id in options:
+            if state_id not in seen:
+                seen.append(state_id)
+        return seen
+
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="tool-desc">HQ now mirrors the live unpublished Discord workflow with durable run tracking, approvals, artifacts, receipts, and verification. Discord stays live while you pressure-test both side by side.</div>',
         unsafe_allow_html=True,
     )
     persist_status = st.session_state.get("_podcast_runs_persist_status", {"source": "local", "error": ""})
-    persist_col, refresh_col = st.columns([5, 1], gap="small")
-    with persist_col:
-        if persist_status.get("error"):
-            st.warning(persist_status["error"])
-        else:
-            st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Discord remains the live source of truth.")
-    with refresh_col:
+    if persist_status.get("error"):
+        st.warning(persist_status["error"])
+    else:
+        st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Discord remains the live source of truth.")
+    with st.expander("Troubleshooting", expanded=False):
+        st.caption("Only use these if the cloud mirror looks stale or persistence fell back to local backup.")
         if st.button("Refresh Cloud", key="podcast_refresh_cloud", type="secondary", use_container_width=True):
             for key in (
                 "_podcast_runs_cache",
@@ -11135,7 +11351,23 @@ def page_podcast():
                 st.session_state.pop(key, None)
             st.rerun()
 
-    with st.expander("Create HQ Mirror Run", expanded=not runs):
+    with st.form("podcast_quick_create_form", clear_on_submit=True):
+        quick_create_cols = st.columns([2.2, 2.2, 1], gap="small")
+        with quick_create_cols[0]:
+            quick_title = st.text_input("Quick Run Title", placeholder="Episode 42 - Draft Release", label_visibility="collapsed")
+        with quick_create_cols[1]:
+            quick_discord_reference = st.text_input("Quick Discord Reference", placeholder="Discord thread URL", label_visibility="collapsed")
+        with quick_create_cols[2]:
+            quick_create_submitted = st.form_submit_button(
+                "Create",
+                type="primary",
+                use_container_width=True,
+                disabled=not (quick_title.strip() and quick_discord_reference.strip()),
+            )
+    if quick_create_submitted:
+        _create_hq_run(title=quick_title, discord_reference=quick_discord_reference)
+
+    with st.expander("Create HQ Mirror Run With More Fields", expanded=not runs):
         with st.form("podcast_create_run_form", clear_on_submit=True):
             create_col1, create_col2 = st.columns(2, gap="large")
             with create_col1:
@@ -11146,20 +11378,21 @@ def page_podcast():
                 new_discord_reference = st.text_input("Discord Reference", placeholder="Thread URL or channel note")
                 new_publish_window = st.text_input("Publish Window", placeholder="Tomorrow 9 AM MT")
                 new_notes = st.text_area("Kickoff Notes", height=100, placeholder="Anything Booth or HQ needs to remember for this run.")
-            create_run_submitted = st.form_submit_button("Create HQ Run", type="primary", use_container_width=True)
+            create_run_submitted = st.form_submit_button(
+                "Create HQ Run",
+                type="primary",
+                use_container_width=True,
+                disabled=not (new_title.strip() and new_discord_reference.strip()),
+            )
         if create_run_submitted:
-            updated_store = podcast_tracker.deepcopy_store(store)
-            new_run = podcast_tracker.create_run(
-                updated_store,
-                actor=actor,
+            _create_hq_run(
                 title=new_title,
+                discord_reference=new_discord_reference,
                 episode_code=new_episode_code,
                 source_path=new_source_path,
-                discord_reference=new_discord_reference,
                 publish_window=new_publish_window,
                 notes=new_notes,
             )
-            _save_podcast_and_rerun(updated_store, new_run["id"])
 
     selected_run_id = ""
     if requested_run_id in run_lookup:
@@ -11209,6 +11442,30 @@ def page_podcast():
     if selected_run_id and st.query_params.get("podcast_run") != selected_run_id:
         st.query_params["podcast_run"] = selected_run_id
 
+    run_chip_ids = []
+    for candidate in runs:
+        candidate_metrics = podcast_tracker.build_run_metrics(candidate)
+        if candidate["id"] == selected_run_id or candidate["current_state"] == "blocked_manual_fix" or candidate_metrics["sync_status"] in {"unsynced", "aging", "stale"}:
+            run_chip_ids.append(candidate["id"])
+    for candidate in runs[:4]:
+        if candidate["id"] not in run_chip_ids:
+            run_chip_ids.append(candidate["id"])
+    if run_chip_ids:
+        st.caption("Fast run switch")
+        chip_cols = st.columns(min(4, len(run_chip_ids)), gap="small")
+        for idx, run_id in enumerate(run_chip_ids[:4]):
+            candidate = run_lookup[run_id]
+            with chip_cols[idx % len(chip_cols)]:
+                if st.button(
+                    _podcast_run_label(candidate),
+                    key=f"podcast_run_chip_{run_id}",
+                    type="primary" if run_id == selected_run_id else "secondary",
+                    use_container_width=True,
+                ):
+                    st.query_params["podcast_run"] = run_id
+                    st.query_params["podcast_state"] = candidate["current_state"]
+                    st.rerun()
+
     selector_col, mirror_col = st.columns([1.6, 1], gap="large")
     with selector_col:
         run_ids = [run["id"] for run in runs]
@@ -11257,6 +11514,57 @@ def page_podcast():
         ),
     ]
     st.markdown(f'<div class="podcast-status-grid">{"".join(summary_cards)}</div>', unsafe_allow_html=True)
+    if run["current_state"] == "blocked_manual_fix" or run.get("blocker"):
+        st.error(f"Current blocker: {run.get('blocker') or 'Manual fix is required before HQ should move forward.'}")
+
+    guided_actions = _guided_actions_for_run(run)
+    st.markdown(
+        f"""
+        <div class="podcast-panel">
+          <div class="podcast-status-kicker">Simple Operator Flow</div>
+          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Follow Discord, then press the next obvious button here.</div>
+          <div class="podcast-status-meta">1. Keep Booth running in Discord. 2. When something finishes there, click the matching button below in HQ. 3. Only use the detailed editors further down if something unusual happens.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if metrics["sync_status"] in {"unsynced", "aging", "stale"}:
+        if st.button("Sync From Discord Now", key=f"podcast_sync_prompt_{run['id']}", type="primary", use_container_width=True):
+            _set_podcast_section(run["id"], "Activity")
+            st.rerun()
+    if guided_actions:
+        disabled_actions = [action["help"] for action in guided_actions if action.get("disabled")]
+        if disabled_actions:
+            st.info(f"Unlock the next step: {disabled_actions[0]}")
+        guided_cols = st.columns(min(3, len(guided_actions)), gap="small")
+        for idx, action in enumerate(guided_actions):
+            with guided_cols[idx % len(guided_cols)]:
+                if st.button(
+                    action["label"],
+                    key=f"podcast_guided_{run['id']}_{action['id']}",
+                    type=action["type"],
+                    use_container_width=True,
+                    disabled=action.get("disabled", False),
+                ):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    _set_podcast_section(run["id"], action["section"])
+                    _run_guided_action(updated_store, run["id"], action["id"])
+                    _save_podcast_and_rerun(updated_store, run["id"])
+                st.caption(action["help"])
+
+    st.caption("Need something specific? Jump straight to the right editor below.")
+    section_labels = ["Overview", "Artifacts", "Approvals", "Delivery & Verify", "Activity"]
+    section_cols = st.columns(len(section_labels), gap="small")
+    for idx, section_name in enumerate(section_labels):
+        with section_cols[idx]:
+            if st.button(
+                section_name,
+                key=f"podcast_jump_{run['id']}_{section_name}",
+                use_container_width=True,
+                type="primary" if st.session_state.get(f"podcast_section_{run['id']}", "Overview") == section_name else "secondary",
+            ):
+                _set_podcast_section(run["id"], section_name)
+                st.rerun()
 
     hero_col, detail_col = st.columns([1.6, 1], gap="large")
     with hero_col:
@@ -11266,8 +11574,8 @@ def page_podcast():
               <div class="podcast-status-kicker">Active HQ Mirror Run</div>
               <div style="font-size:24px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:10px;">{html.escape(run['title'])}</div>
               <div class="podcast-inline-kv"><span>Episode Code</span><strong>{html.escape(run['episode_code'] or 'Not Set')}</strong></div>
-              <div class="podcast-inline-kv"><span>Source</span><strong>{html.escape(run['source_path'] or 'Not Set')}</strong></div>
-              <div class="podcast-inline-kv"><span>Discord Ref</span><strong>{html.escape(run['discord_reference'] or 'Not Set')}</strong></div>
+              <div class="podcast-inline-kv"><span>Source</span><strong>{_podcast_value_html(run['source_path'], link_label='Open Source Link')}</strong></div>
+              <div class="podcast-inline-kv"><span>Discord Ref</span><strong>{_podcast_value_html(run['discord_reference'], link_label='Open Discord Thread')}</strong></div>
               <div class="podcast-inline-kv"><span>Source of Truth</span><strong>{html.escape((run.get('source_of_truth') or 'discord').title())}</strong></div>
               <div class="podcast-inline-kv"><span>Last Synced</span><strong>{html.escape(run.get('last_synced_at') or 'Never')}</strong></div>
               <div class="podcast-inline-kv"><span>Publish Window</span><strong>{html.escape(run['publish_window'] or 'Not Set')}</strong></div>
@@ -11292,18 +11600,15 @@ def page_podcast():
             unsafe_allow_html=True,
         )
 
-    active_section = st.radio(
-        "Podcast Section",
-        ["Overview", "Artifacts", "Approvals", "Delivery & Verify", "Activity"],
-        horizontal=True,
-        label_visibility="collapsed",
-        key=f"podcast_section_{run['id']}",
-    )
+    section_key = f"podcast_section_{run['id']}"
+    if section_key not in st.session_state:
+        st.session_state[section_key] = "Overview"
+    active_section = st.session_state[section_key]
+    st.caption(f"Detailed editor: {active_section}. Use the jump buttons above when you need a different section.")
 
     if active_section == "Overview":
         details_col, transition_col = st.columns(2, gap="large")
         with details_col:
-            st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
             st.markdown('<div class="podcast-status-kicker">Run Details</div>', unsafe_allow_html=True)
             with st.form(f"podcast_details_form_{run['id']}"):
                 details_title = st.text_input("Run Title", value=run["title"])
@@ -11311,10 +11616,8 @@ def page_podcast():
                 details_source = st.text_input("Source File / Link", value=run["source_path"])
                 details_discord = st.text_input("Discord Reference", value=run["discord_reference"])
                 details_window = st.text_input("Publish Window", value=run["publish_window"])
-                details_blocker = st.text_input("Current Blocker", value=run["blocker"])
                 details_notes = st.text_area("Run Notes", value=run["notes"], height=140)
                 details_submitted = st.form_submit_button("Save Run Details", type="primary", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
             if details_submitted:
                 updated_store = podcast_tracker.deepcopy_store(store)
                 podcast_tracker.update_run_details(
@@ -11326,38 +11629,47 @@ def page_podcast():
                     source_path=details_source,
                     discord_reference=details_discord,
                     publish_window=details_window,
-                    blocker=details_blocker,
+                    blocker=run["blocker"],
                     notes=details_notes,
                 )
                 _save_podcast_and_rerun(updated_store, run["id"])
         with transition_col:
-            st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
-            st.markdown('<div class="podcast-status-kicker">State Transition</div>', unsafe_allow_html=True)
-            state_options = dashboard["state_options"]
-            state_ids = [option["id"] for option in state_options]
-            state_labels = {option["id"]: option["label"] for option in state_options}
-            with st.form(f"podcast_state_form_{run['id']}"):
-                next_state = st.selectbox(
-                    "HQ Mirror State",
-                    state_ids,
-                    index=state_ids.index(run["current_state"]) if run["current_state"] in state_ids else 0,
-                    format_func=lambda state_id: state_labels[state_id],
-                )
-                next_blocker = st.text_input("Blocker After Transition", value=run["blocker"])
-                transition_note = st.text_area("Transition Note", height=120, placeholder="Why are you moving the HQ mirror to this state?")
-                transition_submitted = st.form_submit_button("Record State Change", type="primary", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            if transition_submitted:
-                updated_store = podcast_tracker.deepcopy_store(store)
-                podcast_tracker.transition_run(
-                    updated_store,
-                    run_id=run["id"],
-                    actor=actor,
-                    state=next_state,
-                    blocker=next_blocker,
-                    note=transition_note,
-                )
-                _save_podcast_and_rerun(updated_store, run["id"])
+            with st.expander("Advanced correction only", expanded=False):
+                st.caption("Use this only for unusual rewinds, corrections, or manual-fix handling. The guided buttons above are safer for normal mirroring.")
+                safe_state_ids = _safe_manual_state_options(run["current_state"])
+                state_labels = {option["id"]: option["label"] for option in dashboard["state_options"]}
+                with st.form(f"podcast_state_form_{run['id']}"):
+                    next_state = st.selectbox(
+                        "Safe Manual State",
+                        safe_state_ids,
+                        index=safe_state_ids.index(run["current_state"]) if run["current_state"] in safe_state_ids else 0,
+                        format_func=lambda state_id: state_labels.get(state_id, state_id),
+                        help="This is a safety-limited manual state editor. Use the guided buttons above for normal workflow updates.",
+                    )
+                    blocker_value = st.text_input(
+                        "Set New Blocker (Optional)",
+                        value=run["blocker"] if run["current_state"] == "blocked_manual_fix" else "",
+                        placeholder="Leave blank to keep the current blocker.",
+                        help="Blockers only change if you type a new value or explicitly clear them below.",
+                    )
+                    clear_blocker = st.checkbox("Clear blocker on save")
+                    transition_note = st.text_area("Why are you changing the state?", height=120, placeholder="Use this only for unusual corrections or rewinds.")
+                    transition_submitted = st.form_submit_button("Save Manual State Change", type="primary", use_container_width=True)
+                if transition_submitted:
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    next_blocker = "" if clear_blocker else (blocker_value.strip() or run["blocker"])
+                    if next_state == "blocked_manual_fix" and not next_blocker.strip():
+                        st.warning("Add a blocker before sending the run to Manual Fix.")
+                    else:
+                        podcast_tracker.transition_run(
+                            updated_store,
+                            run_id=run["id"],
+                            actor=actor,
+                            state=next_state,
+                            blocker=next_blocker,
+                            note=transition_note,
+                        )
+                        _save_podcast_and_rerun(updated_store, run["id"])
 
         phase_chips = []
         for phase in dashboard["phases"]:
@@ -11392,27 +11704,42 @@ def page_podcast():
             )
 
     if active_section == "Artifacts":
-        artifact_cards = []
-        for spec in podcast_tracker.ARTIFACT_SPECS:
-            artifact = run["artifacts"][spec["id"]]
-            artifact_cards.append(
-                (
-                    '<div class="podcast-artifact-card">'
-                    f'<div class="podcast-status-kicker">{html.escape(spec["label"])}</div>'
-                    f'<div class="podcast-artifact-status is-{html.escape(artifact["status"])}">{html.escape(artifact["status"].replace("_", " ").title())}</div>'
-                    f'<div class="podcast-status-meta">Version {artifact["version"]} · Updated {html.escape(artifact["updated_at"] or "Not yet")}</div>'
-                    '</div>'
-                )
-            )
-        st.markdown(f'<div class="podcast-artifact-grid">{"".join(artifact_cards)}</div>', unsafe_allow_html=True)
-
         artifact_lookup = {spec["id"]: spec for spec in podcast_tracker.ARTIFACT_SPECS}
         artifact_ids = [spec["id"] for spec in podcast_tracker.ARTIFACT_SPECS]
-        selected_artifact_id = st.selectbox(
-            "Artifact To Edit",
-            artifact_ids,
-            format_func=lambda artifact_id: artifact_lookup[artifact_id]["label"],
-        )
+        artifact_key = f"podcast_artifact_{run['id']}"
+        if artifact_key not in st.session_state:
+            st.session_state[artifact_key] = next(
+                (
+                    artifact_id
+                    for artifact_id in artifact_ids
+                    if run["artifacts"][artifact_id]["status"] in {"blocked", "missing"}
+                ),
+                artifact_ids[0],
+            )
+        selected_artifact_id = st.session_state[artifact_key]
+        artifact_card_cols = st.columns(min(3, len(artifact_ids)), gap="small")
+        for idx, artifact_id in enumerate(artifact_ids):
+            artifact = run["artifacts"][artifact_id]
+            with artifact_card_cols[idx % len(artifact_card_cols)]:
+                st.markdown(
+                    (
+                        '<div class="podcast-artifact-card">'
+                        f'<div class="podcast-status-kicker">{html.escape(artifact_lookup[artifact_id]["label"])}</div>'
+                        f'<div class="podcast-artifact-status is-{html.escape(artifact["status"])}">{html.escape(artifact["status"].replace("_", " ").title())}</div>'
+                        f'<div class="podcast-status-meta">Version {artifact["version"]} · Updated {html.escape(artifact["updated_at"] or "Not yet")}</div>'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    f"Edit {artifact_lookup[artifact_id]['label']}",
+                    key=f"podcast_artifact_pick_{run['id']}_{artifact_id}",
+                    type="primary" if selected_artifact_id == artifact_id else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state[artifact_key] = artifact_id
+                    st.rerun()
+
         selected_artifact = run["artifacts"][selected_artifact_id]
         with st.form(f"podcast_artifact_form_{run['id']}_{selected_artifact_id}"):
             artifact_text = st.text_area(
@@ -11472,17 +11799,24 @@ def page_podcast():
                 list(podcast_tracker.APPROVAL_DECISIONS),
                 format_func=lambda decision: decision.replace("_", " ").title(),
             )
+            approval_advance = st.checkbox("Also advance the HQ workflow state now")
             allowed_state_after = list(podcast_tracker.ALLOWED_APPROVAL_STATE_AFTER.get(approval_gate, {}).get(approval_decision, ()))
-            approval_state_options = [("", "Keep Current State")] + [
-                (state_id, _PODCAST_STATE_LABELS.get(state_id, state_id))
-                for state_id in allowed_state_after
-            ]
-            approval_state_after = st.selectbox(
-                "Optional State After Recording",
-                [item[0] for item in approval_state_options],
-                format_func=lambda value: dict(approval_state_options)[value],
-                help="Only valid follow-up states for the selected gate and decision are shown here.",
-            )
+            suggested_state_after = allowed_state_after[0] if allowed_state_after else ""
+            approval_override_state = st.checkbox("Choose a different follow-up state", disabled=not (approval_advance and len(allowed_state_after) > 1))
+            if approval_advance and suggested_state_after:
+                st.caption(f"Suggested next state: {_PODCAST_STATE_LABELS.get(suggested_state_after, suggested_state_after)}")
+            approval_state_after = suggested_state_after if approval_advance else ""
+            if approval_advance and approval_override_state and allowed_state_after:
+                approval_state_options = [
+                    (state_id, _PODCAST_STATE_LABELS.get(state_id, state_id))
+                    for state_id in allowed_state_after
+                ]
+                approval_state_after = st.selectbox(
+                    "Advance To",
+                    [item[0] for item in approval_state_options],
+                    format_func=lambda value: dict(approval_state_options)[value],
+                    help="Only valid follow-up states for the selected gate and decision are shown here.",
+                )
             approval_notes = st.text_area("Approval Notes", height=120, placeholder="What was approved, blocked, or kicked back?")
             approval_submitted = st.form_submit_button("Record Approval", type="primary", use_container_width=True)
         if approval_submitted:
@@ -11495,7 +11829,7 @@ def page_podcast():
                     decision=approval_decision,
                     actor=actor,
                     notes=approval_notes,
-                    state_after=approval_state_after,
+                    state_after=approval_state_after if approval_advance else "",
                 )
             except ValueError as exc:
                 st.warning(str(exc))
@@ -11537,17 +11871,20 @@ def page_podcast():
                 st.markdown('</div>', unsafe_allow_html=True)
                 if delivery_submitted:
                     updated_store = podcast_tracker.deepcopy_store(store)
-                    podcast_tracker.update_delivery(
-                        updated_store,
-                        run_id=run["id"],
-                        channel=spec["id"],
-                        actor=actor,
-                        status=delivery_status,
-                        external_id=delivery_id,
-                        url=delivery_url,
-                        notes=delivery_notes,
-                    )
-                    _save_podcast_and_rerun(updated_store, run["id"])
+                    if delivery_status in {"posted", "verified"} and not (delivery_id.strip() or delivery_url.strip()):
+                        st.warning(f"Add an External ID or Public URL before marking {spec['label']} as {delivery_status.replace('_', ' ')}.")
+                    else:
+                        podcast_tracker.update_delivery(
+                            updated_store,
+                            run_id=run["id"],
+                            channel=spec["id"],
+                            actor=actor,
+                            status=delivery_status,
+                            external_id=delivery_id,
+                            url=delivery_url,
+                            notes=delivery_notes,
+                        )
+                        _save_podcast_and_rerun(updated_store, run["id"])
 
         verification = run["verification"]
         st.markdown('<div class="podcast-panel">', unsafe_allow_html=True)
@@ -11564,14 +11901,25 @@ def page_podcast():
         st.markdown('</div>', unsafe_allow_html=True)
         if verification_submitted:
             updated_store = podcast_tracker.deepcopy_store(store)
-            podcast_tracker.update_verification(
-                updated_store,
-                run_id=run["id"],
-                actor=actor,
-                checks=verification_checks,
-                notes=verification_notes,
+            candidate_run = next((item for item in updated_store["runs"] if item["id"] == run["id"]), None)
+            delivery_records = (candidate_run or run).get("deliveries", {})
+            has_receipt = any(
+                delivery.get("external_id") or delivery.get("url") or delivery.get("status") in {"posted", "verified"}
+                for delivery in delivery_records.values()
             )
-            _save_podcast_and_rerun(updated_store, run["id"])
+            if any(verification_checks.values()) and not has_receipt:
+                st.warning("Record at least one posted delivery ID or public URL before checking verification boxes.")
+            elif verification_checks.get("public_url_checked") and not any(delivery.get("url") for delivery in delivery_records.values()):
+                st.warning("Add a public URL before marking Public URL Checked.")
+            else:
+                podcast_tracker.update_verification(
+                    updated_store,
+                    run_id=run["id"],
+                    actor=actor,
+                    checks=verification_checks,
+                    notes=verification_notes,
+                )
+                _save_podcast_and_rerun(updated_store, run["id"])
 
     if active_section == "Activity":
         sync_col, note_col = st.columns(2, gap="large")
@@ -11583,11 +11931,15 @@ def page_podcast():
                     value=run.get("sync_note", ""),
                     placeholder="What did you verify in Discord when syncing HQ just now?",
                 )
+                sync_confirmed = st.checkbox("I just checked the live Discord workflow before pressing this")
                 sync_submitted = st.form_submit_button("Mark Sync Checkpoint", type="primary", use_container_width=True)
             if sync_submitted:
-                updated_store = podcast_tracker.deepcopy_store(store)
-                podcast_tracker.record_sync_checkpoint(updated_store, run_id=run["id"], actor=actor, note=sync_note)
-                _save_podcast_and_rerun(updated_store, run["id"])
+                if not sync_confirmed:
+                    st.warning("Confirm that you just checked Discord before refreshing HQ sync time.")
+                else:
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    podcast_tracker.record_sync_checkpoint(updated_store, run_id=run["id"], actor=actor, note=sync_note)
+                    _save_podcast_and_rerun(updated_store, run["id"])
         with note_col:
             with st.form(f"podcast_manual_note_form_{run['id']}"):
                 manual_note = st.text_area("Manual HQ Note", height=120, placeholder="Anything worth recording from the live Discord run.")
