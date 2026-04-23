@@ -7,7 +7,7 @@ Streamlit Cloud sends prompts here; this calls the local Claude CLI (sonnet).
 Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
-import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading, sys, site
+import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading, sys, site, mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
@@ -40,6 +40,8 @@ TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
 PODCAST_JOB_ROOT = Path(os.environ.get("HQ_PODCAST_JOB_ROOT", os.path.expanduser("~/.openclaw/workspace-omaha/data/podcast_jobs")))
 PODCAST_JOB_ROOT.mkdir(parents=True, exist_ok=True)
 PODCAST_WHISPER_MODEL = os.environ.get("HQ_PODCAST_WHISPER_MODEL", "base")
+PODCAST_CLIPSAI_PYTHON = os.environ.get("HQ_PODCAST_CLIPSAI_PYTHON", "/home/polfam/.openclaw/clipsai-env/bin/python3")
+PODCAST_CLIPSAI_SCRIPT = os.environ.get("HQ_PODCAST_CLIPSAI_SCRIPT", "/home/polfam/.openclaw/scripts/clipsai-pipeline.py")
 
 try:
     _USER_SITE = site.getusersitepackages()
@@ -108,6 +110,45 @@ def _set_podcast_job_state(run_id: str, **updates) -> dict:
         return job
 
 
+def _podcast_list_clip_files(clips_dir: str) -> list[dict]:
+    clips_root = Path(str(clips_dir or "").strip())
+    if not clips_root.is_dir():
+        return []
+    items = []
+    for candidate in sorted(
+        clips_root.iterdir(),
+        key=lambda path: (path.suffix.lower() not in {".mp4", ".mov", ".m4v", ".webm"}, path.name.lower()),
+    ):
+        if not candidate.is_file() or candidate.suffix.lower() not in {".mp4", ".mov", ".m4v", ".webm"}:
+            continue
+        try:
+            stat = candidate.stat()
+        except Exception:
+            continue
+        items.append(
+            {
+                "name": candidate.name,
+                "path": str(candidate),
+                "size_bytes": int(stat.st_size),
+                "modified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
+            }
+        )
+    return items
+
+
+def _podcast_refresh_clip_index(run_id: str) -> dict:
+    with _podcast_job_lock:
+        job = _load_podcast_job(run_id)
+        if not job:
+            return {}
+        clip_files = _podcast_list_clip_files(str(job.get("clips_dir", "")).strip())
+        if job.get("clips_files") != clip_files:
+            job["clips_files"] = clip_files
+            job["clips_updated_at"] = _podcast_now()
+            _save_podcast_job(job)
+        return job
+
+
 def _build_chapters_from_segments(segments: list[dict]) -> str:
     if not segments:
         return ""
@@ -157,6 +198,12 @@ def _run_podcast_transcription(job_seed: dict) -> None:
             resolved_source_path=resolved_source_path,
             output_dir=str(output_dir),
             clips_dir=str(clips_dir),
+            clips_status=job_seed.get("clips_status", "not_started") or "not_started",
+            clips_error=job_seed.get("clips_error", "") or "",
+            clips_files=job_seed.get("clips_files", []) or [],
+            clips_started_at=job_seed.get("clips_started_at", "") or "",
+            clips_updated_at=job_seed.get("clips_updated_at", "") or "",
+            clips_log_path=str(output_dir / "clips_pipeline.log"),
             model=PODCAST_WHISPER_MODEL,
             error="",
         )
@@ -202,12 +249,77 @@ def _run_podcast_transcription(job_seed: dict) -> None:
             language=getattr(info, "language", "") or "",
             duration=getattr(info, "duration", 0.0) or 0.0,
             segments_count=len(collected_segments),
+            clips_status=job_seed.get("clips_status", "not_started") or "not_started",
+            clips_error=job_seed.get("clips_error", "") or "",
+            clips_files=_podcast_list_clip_files(str(clips_dir)),
+            clips_updated_at=_podcast_now(),
         )
     except Exception as exc:
         _set_podcast_job_state(
             run_id,
             status="failed",
             error=str(exc),
+        )
+
+
+def _run_podcast_clip_generation(job_seed: dict) -> None:
+    run_id = str(job_seed.get("run_id", "")).strip()
+    resolved_source_path = str(job_seed.get("resolved_source_path", "")).strip()
+    output_dir = Path(str(job_seed.get("output_dir", "")).strip() or (PODCAST_JOB_ROOT / run_id))
+    clips_dir = Path(str(job_seed.get("clips_dir", "")).strip() or (output_dir / "clips"))
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    log_path = Path(str(job_seed.get("clips_log_path", "")).strip() or (output_dir / "clips_pipeline.log"))
+    if not run_id or not resolved_source_path:
+        return
+    try:
+        if not os.path.exists(PODCAST_CLIPSAI_PYTHON):
+            raise FileNotFoundError(f"ClipsAI Python not found: {PODCAST_CLIPSAI_PYTHON}")
+        if not os.path.exists(PODCAST_CLIPSAI_SCRIPT):
+            raise FileNotFoundError(f"ClipsAI script not found: {PODCAST_CLIPSAI_SCRIPT}")
+        _set_podcast_job_state(
+            run_id,
+            clips_status="running",
+            clips_error="",
+            clips_started_at=_podcast_now(),
+            clips_updated_at=_podcast_now(),
+            clips_log_path=str(log_path),
+        )
+        cmd = [
+            PODCAST_CLIPSAI_PYTHON,
+            PODCAST_CLIPSAI_SCRIPT,
+            resolved_source_path,
+            "--output-dir",
+            str(clips_dir),
+            "--max-clips",
+            "5",
+            "--min-duration",
+            "30",
+            "--max-duration",
+            "80",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        log_path.write_text(
+            (result.stdout or "") + ("\n\n--- STDERR ---\n\n" + result.stderr if result.stderr else ""),
+            encoding="utf-8",
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "Clip generation failed").strip())
+        clip_files = _podcast_list_clip_files(str(clips_dir))
+        if not clip_files:
+            raise RuntimeError("Clip generation completed but no video clips were created.")
+        _set_podcast_job_state(
+            run_id,
+            clips_status="completed",
+            clips_error="",
+            clips_files=clip_files,
+            clips_updated_at=_podcast_now(),
+        )
+    except Exception as exc:
+        _set_podcast_job_state(
+            run_id,
+            clips_status="failed",
+            clips_error=str(exc),
+            clips_updated_at=_podcast_now(),
         )
 
 
@@ -679,6 +791,16 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_bytes(self, code, body: bytes, content_type: str):
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", len(body))
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Proxy-Key, ngrok-skip-browser-warning")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -1005,6 +1127,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "started_at": "",
                 "updated_at": _podcast_now(),
                 "error": "",
+                "clips_status": "not_started",
+                "clips_error": "",
+                "clips_files": [],
+                "clips_started_at": "",
+                "clips_updated_at": "",
+                "clips_log_path": str((PODCAST_JOB_ROOT / run_id / "clips_pipeline.log")),
             }
             _save_podcast_job(job)
             worker = threading.Thread(
@@ -1014,7 +1142,49 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 daemon=True,
             )
             worker.start()
-            self.send_json(200, {"ok": True, "accepted": True, "job": _load_podcast_job(run_id)})
+            self.send_json(200, {"ok": True, "accepted": True, "job": _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)})
+
+        elif self.path == "/podcast/generate-clips":
+            run_id = str(body.get("run_id", "")).strip()
+            force = bool(body.get("force", False))
+            if not run_id:
+                self.send_json(400, {"error": "run_id is required"})
+                return
+            job = _load_podcast_job(run_id)
+            if not job:
+                self.send_json(404, {"error": "Podcast job not found"})
+                return
+            if str(job.get("status", "")).strip() != "completed":
+                self.send_json(409, {"error": "Transcription must complete before clips can be generated"})
+                return
+            existing_status = str(job.get("clips_status", "")).strip()
+            if existing_status in {"queued", "running"} and not force:
+                self.send_json(200, {"ok": True, "accepted": False, "job": _podcast_refresh_clip_index(run_id) or job, "message": "Clip generation already running"})
+                return
+            clips_dir = Path(str(job.get("clips_dir", "")).strip() or (PODCAST_JOB_ROOT / run_id / "clips"))
+            clips_dir.mkdir(parents=True, exist_ok=True)
+            if force:
+                for existing_file in _podcast_list_clip_files(str(clips_dir)):
+                    try:
+                        Path(existing_file["path"]).unlink()
+                    except Exception:
+                        pass
+            _set_podcast_job_state(
+                run_id,
+                clips_status="queued",
+                clips_error="",
+                clips_files=[] if force else job.get("clips_files", []),
+                clips_started_at="",
+                clips_updated_at=_podcast_now(),
+            )
+            worker = threading.Thread(
+                target=_run_podcast_clip_generation,
+                args=(_load_podcast_job(run_id),),
+                name=f"podcast-clips-{run_id}",
+                daemon=True,
+            )
+            worker.start()
+            self.send_json(200, {"ok": True, "accepted": True, "job": _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)})
 
         else:
             self.send_json(404, {"error": "not found"})
@@ -1023,6 +1193,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path == "/health":
+            if not self._check_auth():
+                return
             _maybe_restore_anthropic()
             self.send_json(200, {"status": "ok", "anthropic_state": get_anthropic_state()})
         elif parsed.path in {
@@ -1059,11 +1231,62 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if not run_id:
                 self.send_json(400, {"error": "run_id is required"})
                 return
-            job = _load_podcast_job(run_id)
+            job = _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)
             if not job:
                 self.send_json(404, {"error": "Podcast job not found"})
                 return
             self.send_json(200, {"ok": True, "job": job})
+        elif parsed.path == "/podcast/clips":
+            if not self._check_auth():
+                return
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
+            run_id = (query.get("run_id") or [""])[-1].strip()
+            if not run_id:
+                self.send_json(400, {"error": "run_id is required"})
+                return
+            job = _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)
+            if not job:
+                self.send_json(404, {"error": "Podcast job not found"})
+                return
+            self.send_json(
+                200,
+                {
+                    "ok": True,
+                    "run_id": run_id,
+                    "clips_status": job.get("clips_status", "not_started"),
+                    "clips_error": job.get("clips_error", ""),
+                    "clips_dir": job.get("clips_dir", ""),
+                    "clips": job.get("clips_files", []),
+                },
+            )
+        elif parsed.path == "/podcast/clip":
+            if not self._check_auth():
+                return
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
+            run_id = (query.get("run_id") or [""])[-1].strip()
+            clip_name = (query.get("clip_name") or [""])[-1].strip()
+            if not run_id or not clip_name:
+                self.send_json(400, {"error": "run_id and clip_name are required"})
+                return
+            job = _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)
+            if not job:
+                self.send_json(404, {"error": "Podcast job not found"})
+                return
+            target = next((item for item in job.get("clips_files", []) if item.get("name") == clip_name), None)
+            if not target:
+                self.send_json(404, {"error": "Clip not found"})
+                return
+            clip_path = Path(str(target.get("path", "")).strip())
+            if not clip_path.is_file():
+                self.send_json(404, {"error": "Clip file is missing on the proxy host"})
+                return
+            try:
+                body = clip_path.read_bytes()
+            except Exception as exc:
+                self.send_json(500, {"error": str(exc)})
+                return
+            content_type = mimetypes.guess_type(str(clip_path))[0] or "video/mp4"
+            self.send_bytes(200, body, content_type)
         else:
             self.send_json(404, {"error": "not found"})
 

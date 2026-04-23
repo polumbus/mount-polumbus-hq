@@ -924,6 +924,23 @@ def _proxy_json_request(path: str, payload: dict | None = None, *, method: str =
     return data
 
 
+def _proxy_binary_request(path: str, *, timeout: int = 90) -> tuple[bytes, str]:
+    import urllib.request
+    proxy_url = _get_proxy_url()
+    if not proxy_url:
+        raise Exception("No proxy configured")
+    try:
+        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
+    except Exception:
+        proxy_key = ""
+    headers = {"ngrok-skip-browser-warning": "1"}
+    if proxy_key:
+        headers["X-Proxy-Key"] = proxy_key
+    req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(), resp.headers.get_content_type() or "application/octet-stream"
+
+
 def _podcast_proxy_start(run_id: str, source_path: str, title: str = "", force: bool = False) -> dict:
     return _proxy_json_request(
         "/podcast/start",
@@ -936,6 +953,20 @@ def _podcast_proxy_start(run_id: str, source_path: str, title: str = "", force: 
 def _podcast_proxy_status(run_id: str) -> dict:
     query = urllib.parse.urlencode({"run_id": run_id})
     return _proxy_json_request(f"/podcast/status?{query}", method="GET", timeout=30)
+
+
+def _podcast_proxy_generate_clips(run_id: str, force: bool = False) -> dict:
+    return _proxy_json_request(
+        "/podcast/generate-clips",
+        {"run_id": run_id, "force": force},
+        method="POST",
+        timeout=30,
+    )
+
+
+def _podcast_proxy_fetch_clip_bytes(run_id: str, clip_name: str) -> tuple[bytes, str]:
+    query = urllib.parse.urlencode({"run_id": run_id, "clip_name": clip_name})
+    return _proxy_binary_request(f"/podcast/clip?{query}", timeout=120)
 
 
 def _call_claude_inspiration(prompt: str, system: str, max_tokens: int = 1000, model: str = "claude-sonnet-4-6") -> str:
@@ -11218,7 +11249,7 @@ def page_podcast():
         return f"{run['title']}{code} · {state_label}"
 
     def _podcast_value_html(value: str, empty_label: str = "Not Set", link_label: str = "Open Link") -> str:
-        clean = (value or "").strip()
+        clean = _podcast_clean_display_value(value)
         if not clean:
             return html.escape(empty_label)
         if clean.startswith(("http://", "https://")):
@@ -11690,9 +11721,23 @@ Return strict JSON with exactly these keys:
                 seen.append(state_id)
         return seen
 
+    def _podcast_clean_display_value(value: str) -> str:
+        return str(value or "").strip().strip("\"'")
+
+    def _podcast_parse_numbered_options(text: str) -> list[str]:
+        options = []
+        for raw_line in str(text or "").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            line = re.sub(r"^\d+\.\s*", "", line)
+            if line:
+                options.append(line)
+        return options
+
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="tool-desc">HQ now gives the podcast workflow a durable home for run tracking, approvals, artifacts, receipts, and verification. Discord can stay live while you pressure-test both side by side.</div>',
+        '<div class="tool-desc">The Podcast wizard now drives the run one step at a time. The manual workspace is still here, but it stays hidden until you explicitly open it.</div>',
         unsafe_allow_html=True,
     )
     persist_status = st.session_state.get("_podcast_runs_persist_status", {"source": "local", "error": ""})
@@ -11728,64 +11773,6 @@ Return strict JSON with exactly these keys:
                 st.session_state.pop(key, None)
             st.rerun()
 
-    st.markdown(
-        """
-        <div class="podcast-panel">
-          <div class="podcast-status-kicker">Fastest Start</div>
-          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Paste the video link or local file path and open the run here fast.</div>
-          <div class="podcast-status-meta">This starts the HQ run record with the fewest clicks. It now supports the same local video file path style you use in Discord. If Booth is also running in Discord, add that thread so HQ can compare against it cleanly.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.form("podcast_quick_create_form", clear_on_submit=True):
-        quick_create_cols = st.columns([2.2, 1.4, 1.4], gap="small")
-        with quick_create_cols[0]:
-            quick_source_path = st.text_input("Video Link Or Local File Path", placeholder=r"C:\Videos\episode_042.mp4 or https://...")
-        with quick_create_cols[1]:
-            quick_title = st.text_input("Episode Title (Recommended)", placeholder="Strongly recommended for cleaner run labels")
-        with quick_create_cols[2]:
-            quick_discord_reference = st.text_input("Discord Thread (Optional)", placeholder="Recommended if Booth is already running there")
-        quick_create_submitted = st.form_submit_button(
-            "Start HQ Run",
-            type="primary",
-            use_container_width=True,
-        )
-    if quick_create_submitted:
-        _create_hq_run(
-            title=quick_title,
-            discord_reference=quick_discord_reference,
-            source_path=quick_source_path,
-            notes="Started from the Post Ascend video-link launcher.",
-        )
-    st.caption("Shorts clips do not export from HQ yet. For now, save the real clip folder or URL in the Shorts Output field under Artifacts > Shorts Clips.")
-
-    with st.expander("Advanced Start Options", expanded=not runs):
-        with st.form("podcast_create_run_form", clear_on_submit=True):
-            create_col1, create_col2 = st.columns(2, gap="large")
-            with create_col1:
-                new_title = st.text_input("Run Title", placeholder="Episode 42 - Draft Release")
-                new_episode_code = st.text_input("Episode Code", placeholder="EP-042")
-                new_source_path = st.text_input("Video Link / Local File Path", placeholder=r"C:\Videos\episode_042.mp4, /Users/me/video.mp4, or https://...")
-            with create_col2:
-                new_discord_reference = st.text_input("Discord Reference (Optional)", placeholder="Thread URL or channel note")
-                new_publish_window = st.text_input("Publish Window", placeholder="Tomorrow 9 AM MT")
-                new_notes = st.text_area("Kickoff Notes", height=100, placeholder="Anything Booth or HQ needs to remember for this run.")
-            create_run_submitted = st.form_submit_button(
-                "Start Advanced Run",
-                type="primary",
-                use_container_width=True,
-            )
-        if create_run_submitted:
-            _create_hq_run(
-                title=new_title,
-                discord_reference=new_discord_reference,
-                episode_code=new_episode_code,
-                source_path=new_source_path,
-                publish_window=new_publish_window,
-                notes=new_notes,
-            )
-
     selected_run_id = ""
     if requested_run_id in run_lookup:
         selected_run_id = requested_run_id
@@ -11797,6 +11784,372 @@ Return strict JSON with exactly these keys:
         selected_run_id = runs[0]["id"]
     if selected_run_id:
         st.session_state["_podcast_last_run_id"] = selected_run_id
+
+    wizard_open_key = "_podcast_wizard_open"
+    advanced_open_key = "_podcast_show_advanced"
+    if wizard_open_key not in st.session_state:
+        st.session_state[wizard_open_key] = True
+    if advanced_open_key not in st.session_state:
+        st.session_state[advanced_open_key] = False
+
+    @st.dialog("Podcast Workflow", width="large")
+    def _podcast_workflow_wizard_dialog(dialog_nonce: str):
+        st.markdown(
+            '<div class="podcast-status-kicker">One Step At A Time</div><div style="font-size:22px;color:#E6EDF3;font-weight:700;line-height:1.35;margin:6px 0 10px 0;">This wizard only shows the next thing you need to do.</div>',
+            unsafe_allow_html=True,
+        )
+        if not runs:
+            with st.form("podcast_wizard_start_form", clear_on_submit=True):
+                wizard_source = st.text_input("Video Link Or Local File Path", placeholder=r"C:\Videos\episode_042.mp4")
+                wizard_title = st.text_input("Episode Title (Optional)", placeholder="Leave blank if you do not know it yet")
+                wizard_discord = st.text_input("Discord Thread (Optional)", placeholder="Only add this if you also want side-by-side tracking")
+                wizard_start = st.form_submit_button("Start Podcast Workflow", type="primary", use_container_width=True)
+            if wizard_start:
+                _create_hq_run(
+                    title=wizard_title,
+                    discord_reference=wizard_discord,
+                    source_path=wizard_source,
+                    notes="Started from the Podcast wizard.",
+                )
+            if st.button("Hide Wizard", key="podcast_hide_wizard_empty", use_container_width=True):
+                st.session_state[wizard_open_key] = False
+                st.rerun()
+            return
+
+        current_run = run_lookup.get(selected_run_id or store.get("active_run_id", "")) or runs[0]
+        current_metrics = podcast_tracker.build_run_metrics(current_run)
+        current_proxy_job = {}
+        current_proxy_error = ""
+        local_source = bool(current_run.get("source_path")) and "://" not in str(current_run.get("source_path", ""))
+        if local_source:
+            try:
+                current_proxy_job = (_podcast_proxy_status(current_run["id"]) or {}).get("job", {})
+            except Exception as exc:
+                current_proxy_error = str(exc)
+
+        st.markdown(
+            f'<div class="podcast-panel"><div class="podcast-status-kicker">Active Run</div><div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.3;">{html.escape(current_run["title"])}</div><div class="podcast-status-meta">{html.escape(_PODCAST_STATE_LABELS.get(current_run["current_state"], current_run["current_state"]))}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        if current_run.get("blocker"):
+            st.error(current_run["blocker"])
+
+        state = current_run["current_state"]
+        clip_files = list(current_proxy_job.get("clips_files", []) or [])
+        clip_status = str(current_proxy_job.get("clips_status", "")).strip() or ("completed" if clip_files else "not_started")
+        selected_clip_name = str(current_run.get("selected_clip_name", "")).strip()
+
+        def _save_and_stay(updated_store: dict) -> None:
+            st.session_state[wizard_open_key] = True
+            _save_podcast_and_rerun(updated_store, current_run["id"])
+
+        if state == "initialized" and local_source:
+            st.info("Step 1: start the local runner so HQ can transcribe the video.")
+            if st.button("Start Local Runner", key=f"wizard_start_runner_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                try:
+                    start_result = _podcast_proxy_start(current_run["id"], current_run["source_path"], current_run["title"], force=True)
+                    podcast_tracker.transition_run(
+                        updated_store,
+                        run_id=current_run["id"],
+                        actor=actor,
+                        state="transcribing",
+                        blocker="",
+                        note=f"Wizard started local transcription job ({start_result.get('job', {}).get('status', 'queued')}).",
+                    )
+                    st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Local runner started."}
+                    _save_and_stay(updated_store)
+                except Exception as exc:
+                    st.error(str(exc))
+            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_initialized", use_container_width=True):
+                st.session_state[wizard_open_key] = False
+                st.rerun()
+            return
+
+        if state == "transcribing" or str(current_proxy_job.get("status", "")).strip() in {"queued", "running"}:
+            runner_status = str(current_proxy_job.get("status", "")).strip().title() or "Running"
+            st.info(f"Step 1: wait for transcription to finish. Current runner status: {runner_status}.")
+            if current_proxy_error:
+                st.warning(current_proxy_error)
+            if st.button("Check Progress", key=f"wizard_refresh_runner_{current_run['id']}", type="primary", use_container_width=True):
+                st.rerun()
+            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_transcribing", use_container_width=True):
+                st.session_state[wizard_open_key] = False
+                st.rerun()
+            return
+
+        if state == "gate1_waiting":
+            title_options = _podcast_parse_numbered_options(current_run["artifacts"]["title"].get("text", ""))
+            thumbnail_options = _podcast_parse_numbered_options(current_run["artifacts"]["thumbnail_text"].get("text", ""))
+            if not title_options or not thumbnail_options:
+                st.info("Step 2: generate the Gate 1 title and thumbnail options from the transcript.")
+                if st.button("Generate Gate 1 Options", key=f"wizard_generate_gate1_{current_run['id']}", type="primary", use_container_width=True):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    try:
+                        _podcast_generate_packaging_artifacts(updated_store, current_run)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 suggestions generated."}
+                        _save_and_stay(updated_store)
+                if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_gate1gen", use_container_width=True):
+                    st.session_state[wizard_open_key] = False
+                    st.rerun()
+                return
+            title_pick_key = f"podcast_wizard_title_pick_{current_run['id']}"
+            thumb_pick_key = f"podcast_wizard_thumb_pick_{current_run['id']}"
+            if title_pick_key not in st.session_state or st.session_state[title_pick_key] not in title_options:
+                st.session_state[title_pick_key] = title_options[0]
+            if thumb_pick_key not in st.session_state or st.session_state[thumb_pick_key] not in thumbnail_options:
+                st.session_state[thumb_pick_key] = thumbnail_options[0]
+            st.info("Step 2: pick the title and thumbnail text you want to use, then approve Gate 1.")
+            st.radio("Pick The Title", title_options, key=title_pick_key, label_visibility="collapsed")
+            st.radio("Pick The Thumbnail Text", thumbnail_options, key=thumb_pick_key, label_visibility="collapsed")
+            wizard_gate1_cols = st.columns(2, gap="small")
+            with wizard_gate1_cols[0]:
+                if st.button("Approve Gate 1 Picks", key=f"wizard_gate1_approve_{current_run['id']}", type="primary", use_container_width=True):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    podcast_tracker.update_artifact(
+                        updated_store,
+                        run_id=current_run["id"],
+                        artifact_id="title",
+                        actor=actor,
+                        text=st.session_state[title_pick_key],
+                        path=current_run["artifacts"]["title"].get("path", ""),
+                        status="approved",
+                        notes="Approved in the Podcast wizard.",
+                    )
+                    podcast_tracker.update_artifact(
+                        updated_store,
+                        run_id=current_run["id"],
+                        artifact_id="thumbnail_text",
+                        actor=actor,
+                        text=st.session_state[thumb_pick_key],
+                        path=current_run["artifacts"]["thumbnail_text"].get("path", ""),
+                        status="approved",
+                        notes="Approved in the Podcast wizard.",
+                    )
+                    podcast_tracker.record_approval(
+                        updated_store,
+                        run_id=current_run["id"],
+                        gate="gate1",
+                        decision="approved",
+                        actor=actor,
+                        notes="Approved Gate 1 picks in the Podcast wizard.",
+                        state_after="gate1_approved",
+                    )
+                    st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 approved."}
+                    _save_and_stay(updated_store)
+            with wizard_gate1_cols[1]:
+                if st.button("Regenerate Options", key=f"wizard_gate1_regen_{current_run['id']}", use_container_width=True):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    try:
+                        _podcast_generate_packaging_artifacts(updated_store, current_run)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 suggestions regenerated."}
+                        _save_and_stay(updated_store)
+            return
+
+        if state == "gate1_approved":
+            st.info("Step 3: move the run into Gate 2 review.")
+            if st.button("Start Gate 2 Review", key=f"wizard_to_metadata_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="metadata_ready", blocker="", note="Wizard advanced into Gate 2 prep.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "metadata_ready":
+            st.info("Step 4: open the final package review.")
+            if st.button("Start Gate 2 Review", key=f"wizard_start_gate2_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="gate2_waiting", blocker="", note="Wizard opened Gate 2 review.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "gate2_waiting":
+            if local_source and clip_status in {"not_started", ""}:
+                st.info("Step 5: generate the actual shorts clips so you can review them here.")
+                if st.button("Generate Shorts Clips", key=f"wizard_generate_clips_{current_run['id']}", type="primary", use_container_width=True):
+                    try:
+                        _podcast_proxy_generate_clips(current_run["id"], force=False)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation started."}
+                        st.rerun()
+                return
+            if clip_status in {"queued", "running"}:
+                st.info("Step 5: wait for the shorts clips to finish generating.")
+                if st.button("Check Clip Progress", key=f"wizard_refresh_clips_{current_run['id']}", type="primary", use_container_width=True):
+                    st.rerun()
+                return
+            if clip_status == "failed":
+                st.error(current_proxy_job.get("clips_error", "Clip generation failed."))
+                if st.button("Retry Clip Generation", key=f"wizard_retry_clips_{current_run['id']}", type="primary", use_container_width=True):
+                    try:
+                        _podcast_proxy_generate_clips(current_run["id"], force=True)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
+                        st.rerun()
+                return
+            if clip_files:
+                preview_key = f"podcast_clip_preview_{current_run['id']}"
+                selected_index = next((idx for idx, item in enumerate(clip_files) if item.get("name") == selected_clip_name), 0)
+                if preview_key not in st.session_state or not isinstance(st.session_state[preview_key], int) or st.session_state[preview_key] >= len(clip_files):
+                    st.session_state[preview_key] = selected_index
+                preview_idx = max(0, min(int(st.session_state[preview_key]), len(clip_files) - 1))
+                preview_clip = clip_files[preview_idx]
+                st.info("Step 5: review the real shorts clips and pick the one you want to use.")
+                st.caption(f"Clip {preview_idx + 1} of {len(clip_files)} · {preview_clip['name']}")
+                try:
+                    preview_bytes, preview_type = _podcast_proxy_fetch_clip_bytes(current_run["id"], preview_clip["name"])
+                    st.video(preview_bytes, format=preview_type)
+                except Exception as exc:
+                    st.warning(f"Could not load clip preview: {exc}")
+                preview_nav_cols = st.columns(3, gap="small")
+                with preview_nav_cols[0]:
+                    if st.button("Previous Clip", key=f"wizard_prev_clip_{current_run['id']}", use_container_width=True, disabled=preview_idx == 0):
+                        st.session_state[preview_key] = max(0, preview_idx - 1)
+                        st.rerun()
+                with preview_nav_cols[1]:
+                    if st.button("Next Clip", key=f"wizard_next_clip_{current_run['id']}", use_container_width=True, disabled=preview_idx >= len(clip_files) - 1):
+                        st.session_state[preview_key] = min(len(clip_files) - 1, preview_idx + 1)
+                        st.rerun()
+                with preview_nav_cols[2]:
+                    with st.form(f"wizard_gate2_form_{current_run['id']}_{preview_idx}"):
+                        gate2_submit = st.form_submit_button("Approve Gate 2 With This Clip", type="primary", use_container_width=True)
+                    if gate2_submit:
+                        updated_store = podcast_tracker.deepcopy_store(store)
+                        podcast_tracker.select_clip(
+                            updated_store,
+                            run_id=current_run["id"],
+                            actor=actor,
+                            clip_name=preview_clip["name"],
+                            clip_path=preview_clip["path"],
+                        )
+                        podcast_tracker.record_approval(
+                            updated_store,
+                            run_id=current_run["id"],
+                            gate="gate2",
+                            decision="approved",
+                            actor=actor,
+                            notes=f"Approved Gate 2 with selected clip {preview_clip['name']}.",
+                            state_after="gate2_approved",
+                        )
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Gate 2 approved with clip {preview_clip['name']}."}
+                        _save_and_stay(updated_store)
+                return
+            st.warning("No clips are available yet.")
+            return
+
+        if state == "gate2_approved":
+            st.info("Step 6: mark this package ready to publish.")
+            if st.button("Ready To Publish", key=f"wizard_ready_publish_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="ready_to_publish", blocker="", note="Wizard marked the run ready to publish.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "ready_to_publish":
+            st.info("Step 7: start the publish step.")
+            if st.button("Start Publish", key=f"wizard_start_publish_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="publish_pending", blocker="", note="Wizard started publish.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "publish_pending":
+            st.info("Step 8: paste your public links, finish the checks, and mark this verified.")
+            with st.form(f"podcast_wizard_publish_verify_{current_run['id']}"):
+                wizard_youtube = st.text_input("YouTube URL", value=current_run["deliveries"]["youtube"]["url"])
+                wizard_x = st.text_input("X URL", value=current_run["deliveries"]["x"]["url"])
+                verify_public = st.checkbox("Public URL works", value=bool(current_run["verification"]["public_url_checked"]))
+                verify_processing = st.checkbox("Processing finished", value=bool(current_run["verification"]["processing_checked"]))
+                verify_transcript = st.checkbox("Transcript is available", value=bool(current_run["verification"]["transcript_checked"]))
+                verify_social = st.checkbox("Social receipt is confirmed", value=bool(current_run["verification"]["social_ids_checked"]))
+                wizard_publish_submit = st.form_submit_button("Mark Public Verified", type="primary", use_container_width=True)
+            if wizard_publish_submit:
+                if not (wizard_youtube.strip() or wizard_x.strip()):
+                    st.error("Add at least one public link before marking the run verified.")
+                elif not all([verify_public, verify_processing, verify_transcript, verify_social]):
+                    st.error("Check every verification box before marking the run verified.")
+                else:
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    if wizard_youtube.strip():
+                        podcast_tracker.update_delivery(updated_store, run_id=current_run["id"], channel="youtube", actor=actor, status="verified", external_id="", url=wizard_youtube, notes="Saved from the Podcast wizard.")
+                    if wizard_x.strip():
+                        podcast_tracker.update_delivery(updated_store, run_id=current_run["id"], channel="x", actor=actor, status="verified", external_id="", url=wizard_x, notes="Saved from the Podcast wizard.")
+                    podcast_tracker.update_verification(
+                        updated_store,
+                        run_id=current_run["id"],
+                        actor=actor,
+                        checks={
+                            "public_url_checked": verify_public,
+                            "processing_checked": verify_processing,
+                            "transcript_checked": verify_transcript,
+                            "social_ids_checked": verify_social,
+                        },
+                        notes="Verified from the Podcast wizard.",
+                    )
+                    podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="public_verified", blocker="", note="Wizard completed publish verification.")
+                    _save_and_stay(updated_store)
+            return
+
+        if state == "public_verified":
+            st.success("Step 9: everything is verified. Mark the run done.")
+            if st.button("Mark Done", key=f"wizard_done_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="done", blocker="", note="Wizard marked the run done.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "done":
+            st.success("This run is done.")
+            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_done", type="primary", use_container_width=True):
+                st.session_state[wizard_open_key] = False
+                st.rerun()
+            return
+
+        fallback_actions = _guided_actions_for_run(current_run)
+        if fallback_actions:
+            next_action = fallback_actions[0]
+            st.info(next_action["help"])
+            if st.button(next_action["label"], key=f"wizard_fallback_{current_run['id']}_{next_action['id']}", type="primary", use_container_width=True, disabled=next_action.get("disabled", False)):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                _run_guided_action(updated_store, current_run["id"], next_action["id"])
+                _save_and_stay(updated_store)
+        if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_fallback", use_container_width=True):
+            st.session_state[wizard_open_key] = False
+            st.rerun()
+
+    if st.session_state.get(wizard_open_key):
+        _podcast_workflow_wizard_dialog(f"{selected_run_id}:{store.get('updated_at', '')}:{len(runs)}")
+
+    toolbar_cols = st.columns([1.1, 1.1, 1.4], gap="small")
+    with toolbar_cols[0]:
+        if st.button("Reopen Wizard" if not st.session_state.get(wizard_open_key) else "Wizard Open", key="podcast_open_wizard_toolbar", type="primary", use_container_width=True, disabled=st.session_state.get(wizard_open_key)):
+            st.session_state[wizard_open_key] = True
+            st.rerun()
+    with toolbar_cols[1]:
+        if st.button("Open Advanced Workspace" if not st.session_state.get(advanced_open_key) else "Hide Advanced Workspace", key="podcast_toggle_advanced_toolbar", type="secondary", use_container_width=True):
+            st.session_state[advanced_open_key] = not st.session_state.get(advanced_open_key)
+            st.rerun()
+    with toolbar_cols[2]:
+        if runs:
+            current_label = _podcast_run_label(run_lookup[selected_run_id])
+            st.caption(f"Current run: {current_label}")
+        else:
+            st.caption("No run yet. Use the wizard to start one.")
+
+    if not runs:
+        st.info("The wizard is the only thing you need here. It will walk you through the run one step at a time.")
+        if not st.session_state.get(advanced_open_key):
+            return
 
     if not runs:
         dashboard = get_podcast_dashboard_content(requested_state or None)
@@ -11970,6 +12323,34 @@ Return strict JSON with exactly these keys:
     latest_gate_decisions = metrics["latest_gate_decisions"]
     if st.query_params.get("podcast_state") != run["current_state"]:
         st.query_params["podcast_state"] = run["current_state"]
+
+    if len(runs) > 1:
+        minimal_run_ids = [item["id"] for item in runs]
+        chosen_run_id = st.selectbox(
+            "Switch Run",
+            minimal_run_ids,
+            index=minimal_run_ids.index(run["id"]),
+            format_func=lambda run_id: _podcast_run_label(run_lookup[run_id]),
+            key="podcast_minimal_run_switch",
+        )
+        if chosen_run_id != run["id"]:
+            st.query_params["podcast_run"] = chosen_run_id
+            st.query_params["podcast_state"] = run_lookup[chosen_run_id]["current_state"]
+            st.rerun()
+
+    selected_clip_label = metrics.get("selected_clip_name") or "Not selected yet"
+    runner_status = str(proxy_job.get("status", "")).strip().title() if proxy_job else "Not started"
+    clips_status = str(proxy_job.get("clips_status", "")).strip().replace("_", " ").title() if proxy_job else "Not started"
+    minimal_cards = [
+        _podcast_card_html("Current Step", dashboard["current_state_label"], "The wizard will keep showing only the next thing to do."),
+        _podcast_card_html("Runner", runner_status or "Unknown", "This is the independent local HQ runner."),
+        _podcast_card_html("Shorts Clips", clips_status or "Not started", f"Selected clip: {selected_clip_label}"),
+    ]
+    st.markdown(f'<div class="podcast-status-grid">{"".join(minimal_cards)}</div>', unsafe_allow_html=True)
+    if run.get("blocker"):
+        st.error(f"Current blocker: {run.get('blocker')}")
+    if not st.session_state.get(advanced_open_key):
+        return
 
     primary_path_value = "Discord" if metrics["requires_sync"] else "HQ Start"
     primary_path_meta = (
@@ -12312,11 +12693,52 @@ Return strict JSON with exactly these keys:
         artifact_path_label = "Asset Path / URL"
         artifact_path_placeholder = "File path, Drive link, or external URL"
         if selected_artifact_id == "clips":
-            st.info("Shorts clips are not rendered by HQ yet. Save the real folder or destination URL in the field below. Use the notes box for timecodes, clip names, or extra context.")
+            st.info("Review the actual shorts clips here, then select the one you want to use. The notes box below is still useful for clip copy or extra context.")
             artifact_text_label = "Shorts Clip Notes"
             artifact_text_placeholder = "Paste clip notes, timecodes, or clip names here."
             artifact_path_label = "Shorts Output Folder / URL"
             artifact_path_placeholder = "Folder path, shared Drive link, ZIP URL, or clip destination"
+            clip_files = list(proxy_job.get("clips_files", []) or [])
+            if clip_files:
+                preview_key = f"podcast_artifact_clip_preview_{run['id']}"
+                selected_name = str(run.get("selected_clip_name", "")).strip()
+                selected_index = next((idx for idx, item in enumerate(clip_files) if item.get("name") == selected_name), 0)
+                if preview_key not in st.session_state or not isinstance(st.session_state[preview_key], int) or st.session_state[preview_key] >= len(clip_files):
+                    st.session_state[preview_key] = selected_index
+                preview_idx = max(0, min(int(st.session_state[preview_key]), len(clip_files) - 1))
+                preview_clip = clip_files[preview_idx]
+                st.caption(f"Clip {preview_idx + 1} of {len(clip_files)} · {preview_clip['name']}")
+                try:
+                    preview_bytes, preview_type = _podcast_proxy_fetch_clip_bytes(run["id"], preview_clip["name"])
+                    st.video(preview_bytes, format=preview_type)
+                except Exception as exc:
+                    st.warning(f"Could not load clip preview: {exc}")
+                artifact_clip_cols = st.columns(3, gap="small")
+                with artifact_clip_cols[0]:
+                    if st.button("Previous Clip", key=f"podcast_artifact_prev_clip_{run['id']}", use_container_width=True, disabled=preview_idx == 0):
+                        st.session_state[preview_key] = max(0, preview_idx - 1)
+                        st.rerun()
+                with artifact_clip_cols[1]:
+                    if st.button("Next Clip", key=f"podcast_artifact_next_clip_{run['id']}", use_container_width=True, disabled=preview_idx >= len(clip_files) - 1):
+                        st.session_state[preview_key] = min(len(clip_files) - 1, preview_idx + 1)
+                        st.rerun()
+                with artifact_clip_cols[2]:
+                    select_label = "Selected" if selected_name == preview_clip["name"] else "Use This Clip"
+                    if st.button(select_label, key=f"podcast_artifact_use_clip_{run['id']}", type="primary", use_container_width=True, disabled=selected_name == preview_clip["name"]):
+                        updated_store = podcast_tracker.deepcopy_store(store)
+                        podcast_tracker.select_clip(
+                            updated_store,
+                            run_id=run["id"],
+                            actor=actor,
+                            clip_name=preview_clip["name"],
+                            clip_path=preview_clip["path"],
+                        )
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Selected clip: {preview_clip['name']}"}
+                        _save_podcast_and_rerun(updated_store, run["id"])
+            elif proxy_job.get("clips_status") in {"queued", "running"}:
+                st.caption("Clips are still generating. Refresh the local runner status in Overview if you need to check again.")
+            elif proxy_job.get("clips_status") == "failed":
+                st.warning(proxy_job.get("clips_error", "Clip generation failed."))
         with st.form(f"podcast_artifact_form_{run['id']}_{selected_artifact_id}"):
             artifact_text = st.text_area(
                 artifact_text_label,

@@ -309,6 +309,9 @@ def _default_run() -> dict[str, Any]:
         "details_updated_at": "",
         "state_updated_at": "",
         "blocker_updated_at": "",
+        "selected_clip_name": "",
+        "selected_clip_path": "",
+        "clip_selection_updated_at": "",
         "artifacts": {spec["id"]: _artifact_template(spec) for spec in ARTIFACT_SPECS},
         "approvals": [],
         "deliveries": {spec["id"]: _delivery_template(spec) for spec in DELIVERY_SPECS},
@@ -373,6 +376,13 @@ def _merge_run_records(primary: dict[str, Any], secondary: dict[str, Any]) -> di
         secondary,
         fields=("blocker", "blocked_from_state"),
         timestamp_field="blocker_updated_at",
+    )
+    _merge_run_fields_by_timestamp(
+        merged,
+        primary,
+        secondary,
+        fields=("selected_clip_name", "selected_clip_path"),
+        timestamp_field="clip_selection_updated_at",
     )
 
     primary_state_ts = _sanitize_text(primary.get("state_updated_at", ""))
@@ -477,6 +487,9 @@ def normalize_podcast_store(raw: Any) -> dict[str, Any]:
             "details_updated_at",
             "state_updated_at",
             "blocker_updated_at",
+            "selected_clip_name",
+            "selected_clip_path",
+            "clip_selection_updated_at",
         ):
             run[field] = _sanitize_text(raw_run.get(field, run[field]))
         if run["current_state"] not in _VALID_STATES:
@@ -764,6 +777,36 @@ def update_artifact(
     return artifact
 
 
+def select_clip(
+    store: dict[str, Any],
+    *,
+    run_id: str,
+    actor: str,
+    clip_name: str,
+    clip_path: str,
+) -> dict[str, Any]:
+    run = _get_run(store, run_id)
+    next_name = clip_name.strip()
+    next_path = clip_path.strip()
+    if run.get("selected_clip_name", "") == next_name and run.get("selected_clip_path", "") == next_path:
+        return run
+    ts = _now()
+    run["selected_clip_name"] = next_name
+    run["selected_clip_path"] = next_path
+    run["clip_selection_updated_at"] = ts
+    _touch_run(run, ts)
+    add_event(
+        run,
+        actor,
+        "clip_selected",
+        f"Selected shorts clip: {next_name or 'None'}",
+        next_path,
+    )
+    _touch_store(store, ts)
+    _sort_runs(store)
+    return run
+
+
 def record_approval(
     store: dict[str, Any],
     *,
@@ -967,6 +1010,8 @@ def build_run_metrics(run: dict[str, Any]) -> dict[str, Any]:
         "sync_age_hours": sync_age_hours,
         "requires_sync": requires_sync,
         "last_event": run.get("events", [])[-1] if run.get("events") else None,
+        "selected_clip_name": _sanitize_text(run.get("selected_clip_name", "")),
+        "selected_clip_path": _sanitize_text(run.get("selected_clip_path", "")),
     }
 
 
