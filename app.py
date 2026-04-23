@@ -11108,7 +11108,7 @@ def page_podcast():
         clean_title = title.strip()
         clean_source = source_path.strip()
         if not clean_title and not clean_source:
-            st.warning("Add a Video Link or a Run Title before starting the podcast workflow.")
+            st.warning("Add a video link, local file path, or run title before starting the podcast workflow.")
             return
         normalized_source = podcast_tracker.canonical_source_key(clean_source)
         normalized_discord = discord_reference.strip().lower()
@@ -11381,8 +11381,8 @@ def page_podcast():
         """
         <div class="podcast-panel">
           <div class="podcast-status-kicker">Fastest Start</div>
-          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Paste the video link and open the run here fast.</div>
-          <div class="podcast-status-meta">This starts the HQ run record with the fewest clicks. If Booth is also running in Discord, add that thread so HQ can compare against it cleanly.</div>
+          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Paste the video link or local file path and open the run here fast.</div>
+          <div class="podcast-status-meta">This starts the HQ run record with the fewest clicks. It now supports the same local video file path style you use in Discord. If Booth is also running in Discord, add that thread so HQ can compare against it cleanly.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -11390,7 +11390,7 @@ def page_podcast():
     with st.form("podcast_quick_create_form", clear_on_submit=True):
         quick_create_cols = st.columns([2.2, 1.4, 1.4], gap="small")
         with quick_create_cols[0]:
-            quick_source_path = st.text_input("Video Link", placeholder="Paste the video link that starts the workflow")
+            quick_source_path = st.text_input("Video Link Or Local File Path", placeholder=r"C:\Videos\episode_042.mp4 or https://...")
         with quick_create_cols[1]:
             quick_title = st.text_input("Episode Title (Recommended)", placeholder="Strongly recommended for cleaner run labels")
         with quick_create_cols[2]:
@@ -11416,7 +11416,7 @@ def page_podcast():
             with create_col1:
                 new_title = st.text_input("Run Title", placeholder="Episode 42 - Draft Release")
                 new_episode_code = st.text_input("Episode Code", placeholder="EP-042")
-                new_source_path = st.text_input("Video Link / Source", placeholder="YouTube, Dropbox, Drive, Riverside, or local note")
+                new_source_path = st.text_input("Video Link / Local File Path", placeholder=r"C:\Videos\episode_042.mp4, /Users/me/video.mp4, or https://...")
             with create_col2:
                 new_discord_reference = st.text_input("Discord Reference (Optional)", placeholder="Thread URL or channel note")
                 new_publish_window = st.text_input("Publish Window", placeholder="Tomorrow 9 AM MT")

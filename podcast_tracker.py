@@ -131,10 +131,23 @@ def _sanitize_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _normalize_local_source(source_path: str) -> str:
+    clean = _sanitize_text(source_path).strip("\"'")
+    return clean.replace("\\", "/").rstrip("/")
+
+
 def _suggest_title_from_source(source_path: str) -> str:
     clean = _sanitize_text(source_path)
     if not clean:
         return f"Podcast Intake {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    if "://" not in clean:
+        local_source = _normalize_local_source(clean)
+        local_name = local_source.rsplit("/", 1)[-1]
+        if "." in local_name:
+            local_name = local_name.rsplit(".", 1)[0]
+        local_name = local_name.replace("-", " ").replace("_", " ").strip()
+        local_name = " ".join(piece for piece in local_name.split() if piece)
+        return local_name[:80] if local_name else f"Podcast Intake {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
     try:
         from urllib.parse import parse_qs, urlparse
 
@@ -164,6 +177,8 @@ def canonical_source_key(source_path: str) -> str:
     clean = _sanitize_text(source_path)
     if not clean:
         return ""
+    if "://" not in clean:
+        return _normalize_local_source(clean).lower()
     try:
         from urllib.parse import parse_qs, urlencode, urlparse
 
