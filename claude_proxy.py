@@ -7,7 +7,7 @@ Streamlit Cloud sends prompts here; this calls the local Claude CLI (sonnet).
 Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
-import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading
+import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading, sys, site
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
@@ -40,6 +40,13 @@ TWITTER_API_IO_KEY = os.environ.get("HQ_TWITTER_API_IO_KEY", "")
 PODCAST_JOB_ROOT = Path(os.environ.get("HQ_PODCAST_JOB_ROOT", os.path.expanduser("~/.openclaw/workspace-omaha/data/podcast_jobs")))
 PODCAST_JOB_ROOT.mkdir(parents=True, exist_ok=True)
 PODCAST_WHISPER_MODEL = os.environ.get("HQ_PODCAST_WHISPER_MODEL", "base")
+
+try:
+    _USER_SITE = site.getusersitepackages()
+    if _USER_SITE and _USER_SITE not in sys.path:
+        sys.path.append(_USER_SITE)
+except Exception:
+    pass
 
 _cookie_cache = {"auth_token": "", "ct0": "", "fetched_at": 0}
 _recovery_thread = None
