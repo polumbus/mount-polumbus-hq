@@ -12029,6 +12029,37 @@ Return strict JSON with exactly these keys:
                     st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 2 approved."}
                     _save_and_stay(updated_store)
                 return
+            if selected_clip_name and not clip_files:
+                st.info("Step 5: HQ already has a selected clip saved for this run. Approve Gate 2 now, or regenerate clips if you want to review them again.")
+                st.caption(f"Saved selected clip: {selected_clip_name}")
+                fallback_cols = st.columns(2, gap="small")
+                with fallback_cols[0]:
+                    if st.button("Approve Gate 2 With Saved Clip", key=f"wizard_gate2_saved_clip_{current_run['id']}", type="primary", use_container_width=True):
+                        updated_store = podcast_tracker.deepcopy_store(store)
+                        podcast_tracker.record_approval(
+                            updated_store,
+                            run_id=current_run["id"],
+                            gate="gate2",
+                            decision="approved",
+                            actor=actor,
+                            notes=f"Approved Gate 2 with saved clip {selected_clip_name}.",
+                            state_after="gate2_approved",
+                        )
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Gate 2 approved with saved clip {selected_clip_name}."}
+                        _save_and_stay(updated_store)
+                with fallback_cols[1]:
+                    if st.button("Regenerate Shorts Clips", key=f"wizard_gate2_saved_clip_regen_{current_run['id']}", use_container_width=True):
+                        try:
+                            clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
+                            if not clip_result.get("accepted", True):
+                                st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
+                                return
+                        except Exception as exc:
+                            st.error(_podcast_user_error_text(str(exc)))
+                        else:
+                            st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
+                            st.rerun()
+                return
             if local_source and clip_status in {"not_started", ""}:
                 st.info("Step 5: generate the actual shorts clips so you can review them here.")
                 if st.button("Generate Shorts Clips", key=f"wizard_generate_clips_{current_run['id']}", type="primary", use_container_width=True):
