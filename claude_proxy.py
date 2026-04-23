@@ -96,7 +96,8 @@ _podcast_sync_status_lock = threading.Lock()
 _clip_probe_cache = {}
 PODCAST_TRANSCRIPTION_STALE_SECONDS = int(os.environ.get("HQ_PODCAST_TRANSCRIPTION_STALE_SECONDS", "7200"))
 PODCAST_CLIPS_STALE_SECONDS = int(os.environ.get("HQ_PODCAST_CLIPS_STALE_SECONDS", "5400"))
-PODCAST_SYNC_INTERVAL_SECONDS = int(os.environ.get("HQ_PODCAST_SYNC_INTERVAL_SECONDS", "10"))
+PODCAST_SYNC_ACTIVE_INTERVAL_SECONDS = int(os.environ.get("HQ_PODCAST_SYNC_ACTIVE_INTERVAL_SECONDS", "3"))
+PODCAST_SYNC_IDLE_INTERVAL_SECONDS = int(os.environ.get("HQ_PODCAST_SYNC_IDLE_INTERVAL_SECONDS", "15"))
 _podcast_sync_status = {
     "running": False,
     "last_checked_at": "",
@@ -106,6 +107,7 @@ _podcast_sync_status = {
     "last_notes": [],
     "last_remote_error": "",
     "source": "local",
+    "sleep_interval_seconds": PODCAST_SYNC_IDLE_INTERVAL_SECONDS,
 }
 
 
@@ -653,6 +655,22 @@ def _podcast_background_sync_once() -> None:
         )
 
 
+def _podcast_has_active_work() -> bool:
+    try:
+        for job_file in PODCAST_JOB_ROOT.glob("*.json"):
+            try:
+                job = _load_podcast_job(job_file.stem)
+            except Exception:
+                continue
+            if str(job.get("status", "")).strip() in {"queued", "running"}:
+                return True
+            if str(job.get("clips_status", "")).strip() in {"queued", "running"}:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def _podcast_reconciliation_loop():
     while True:
         try:
@@ -664,7 +682,12 @@ def _podcast_reconciliation_loop():
                 last_error=str(exc),
             )
             print(f"[podcast-sync] background reconciliation failed: {exc}")
-        time.sleep(max(2, PODCAST_SYNC_INTERVAL_SECONDS))
+        sleep_interval = max(
+            2,
+            PODCAST_SYNC_ACTIVE_INTERVAL_SECONDS if _podcast_has_active_work() else PODCAST_SYNC_IDLE_INTERVAL_SECONDS,
+        )
+        _update_podcast_sync_status(sleep_interval_seconds=sleep_interval)
+        time.sleep(sleep_interval)
 
 
 def _ensure_podcast_sync_thread():

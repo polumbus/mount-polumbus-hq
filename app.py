@@ -16,6 +16,7 @@ import urllib.parse
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import podcast_tracker
+import podcast_sync
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
                   odds_available, odds_format_block,
@@ -11804,53 +11805,7 @@ Return strict JSON with exactly these keys:
         return f"{minutes}:{seconds:02d}" if total else "Unknown length"
 
     def _podcast_filtered_clip_files(raw_clip_files: list[dict] | None, cached_clip_files: list[dict] | None = None) -> list[dict]:
-        clip_candidates = list(raw_clip_files or [])
-        if not clip_candidates and cached_clip_files:
-            clip_candidates = list(cached_clip_files or [])
-        normalized: list[dict] = []
-        for item in clip_candidates:
-            if not isinstance(item, dict):
-                continue
-            clip_name = str(item.get("name", "")).strip()
-            clip_path = str(item.get("path", "")).strip()
-            if not (clip_name and clip_path):
-                continue
-            normalized.append(
-                {
-                    "name": clip_name,
-                    "path": clip_path,
-                    "size_bytes": int(item.get("size_bytes", 0) or 0),
-                    "modified_at": str(item.get("modified_at", "")).strip(),
-                    "duration_seconds": float(item.get("duration_seconds", 0.0) or 0.0),
-                    "is_final": bool(item.get("is_final", False)),
-                    "is_vertical": bool(item.get("is_vertical", False)),
-                    "group_key": str(item.get("group_key", "")).strip() or clip_name.lower(),
-                }
-            )
-        if not normalized:
-            return []
-        preferred = [item for item in normalized if item.get("is_final")]
-        source_items = preferred or normalized
-        grouped: dict[str, dict] = {}
-        for item in source_items:
-            group_key = item.get("group_key") or item["name"].lower()
-            existing = grouped.get(group_key)
-            if not existing:
-                grouped[group_key] = item
-                continue
-            existing_score = (1 if existing.get("is_final") else 0, existing.get("duration_seconds", 0.0), existing.get("size_bytes", 0))
-            candidate_score = (1 if item.get("is_final") else 0, item.get("duration_seconds", 0.0), item.get("size_bytes", 0))
-            if candidate_score > existing_score:
-                grouped[group_key] = item
-        return sorted(
-            grouped.values(),
-            key=lambda item: (
-                0 if item.get("is_final") else 1,
-                abs(float(item.get("duration_seconds", 0.0) or 0.0) - 45.0),
-                -int(item.get("size_bytes", 0) or 0),
-                item["name"].lower(),
-            ),
-        )
+        return podcast_sync.filtered_clip_files(raw_clip_files, cached_clip_files)
 
     def _podcast_recommended_clip_name(clip_files: list[dict]) -> str:
         if not clip_files:
@@ -11952,6 +11907,23 @@ Return strict JSON with exactly these keys:
 
     runs = store["runs"]
     run_lookup = {run["id"]: run for run in runs}
+    proxy_job_cache: dict[str, tuple[dict, str]] = {}
+
+    def _podcast_proxy_job_cached(run_data: dict) -> tuple[dict, str]:
+        run_id = str(run_data.get("id", "")).strip()
+        if not run_id:
+            return {}, ""
+        if run_id in proxy_job_cache:
+            return proxy_job_cache[run_id]
+        if _podcast_run_mode(run_data) != "local" or not _podcast_is_local_source_path(run_data.get("source_path", "")):
+            proxy_job_cache[run_id] = ({}, "")
+            return proxy_job_cache[run_id]
+        try:
+            proxy_job = (_podcast_proxy_status(run_id) or {}).get("job", {})
+            proxy_job_cache[run_id] = (proxy_job, "")
+        except Exception as exc:
+            proxy_job_cache[run_id] = ({}, str(exc))
+        return proxy_job_cache[run_id]
 
     selected_run_id = ""
     if requested_run_id in run_lookup:
@@ -12038,10 +12010,7 @@ Return strict JSON with exactly these keys:
         current_run_mode = _podcast_run_mode(current_run)
         local_source = current_run_mode == "local" and _podcast_is_local_source_path(current_run.get("source_path", ""))
         if local_source:
-            try:
-                current_proxy_job = (_podcast_proxy_status(current_run["id"]) or {}).get("job", {})
-            except Exception as exc:
-                current_proxy_error = str(exc)
+            current_proxy_job, current_proxy_error = _podcast_proxy_job_cached(current_run)
         clip_files = _podcast_filtered_clip_files(current_proxy_job.get("clips_files", []), current_run.get("cached_clip_files", []))
         clip_status = str(current_proxy_job.get("clips_status", "")).strip() or ("completed" if clip_files else "not_started")
         selected_clip_name = str(current_run.get("selected_clip_name", "")).strip()
@@ -12614,12 +12583,7 @@ Return strict JSON with exactly these keys:
             st.info("The wizard is the only thing you need here. It will walk you through the run one step at a time.")
             return
         compact_run = run_lookup[selected_run_id]
-        compact_proxy_job = {}
-        if _podcast_run_mode(compact_run) == "local" and _podcast_is_local_source_path(compact_run.get("source_path", "")):
-            try:
-                compact_proxy_job = (_podcast_proxy_status(compact_run["id"]) or {}).get("job", {})
-            except Exception:
-                compact_proxy_job = {}
+        compact_proxy_job, _ = _podcast_proxy_job_cached(compact_run)
         compact_steps, compact_completed = _podcast_progress_steps(compact_run, compact_proxy_job)
         compact_step_markup = []
         for step in compact_steps:
@@ -12736,32 +12700,12 @@ Return strict JSON with exactly these keys:
         st.rerun()
 
     run = run_lookup[selected_run_id]
-    proxy_job = {}
-    proxy_job_error = ""
-    if _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", "")):
-        try:
-            proxy_job = (_podcast_proxy_status(run["id"]) or {}).get("job", {})
-        except Exception as exc:
-            proxy_job_error = str(exc)
+    proxy_job, proxy_job_error = _podcast_proxy_job_cached(run)
     dashboard = get_podcast_dashboard_content(run["current_state"])
     metrics = podcast_tracker.build_run_metrics(run)
     latest_gate_decisions = metrics["latest_gate_decisions"]
     if st.query_params.get("podcast_state") != run["current_state"]:
         st.query_params["podcast_state"] = run["current_state"]
-
-    if len(runs) > 1:
-        minimal_run_ids = [item["id"] for item in runs]
-        chosen_run_id = st.selectbox(
-            "Switch Run",
-            minimal_run_ids,
-            index=minimal_run_ids.index(run["id"]),
-            format_func=lambda run_id: _podcast_run_label(run_lookup[run_id]),
-            key="podcast_minimal_run_switch",
-        )
-        if chosen_run_id != run["id"]:
-            st.query_params["podcast_run"] = chosen_run_id
-            st.query_params["podcast_state"] = run_lookup[chosen_run_id]["current_state"]
-            st.rerun()
 
     selected_clip_label = metrics.get("selected_clip_name") or "Not selected yet"
     runner_status = str(proxy_job.get("status", "")).strip().title() if proxy_job else "Not started"
