@@ -1480,6 +1480,20 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Podcast job not found"})
                 return
             self.send_json(200, {"ok": True, "job": job})
+        elif parsed.path == "/podcast/status-batch":
+            if not self._check_auth():
+                return
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
+            run_ids = [str(item).strip() for item in (query.get("run_id") or []) if str(item).strip()]
+            if not run_ids:
+                self.send_json(400, {"error": "run_id is required"})
+                return
+            jobs = {}
+            for run_id in run_ids[:25]:
+                job = _podcast_refresh_clip_index(run_id) or _load_podcast_job(run_id)
+                if job:
+                    jobs[run_id] = job
+            self.send_json(200, {"ok": True, "jobs": jobs})
         elif parsed.path == "/podcast/reconcile-status":
             if not self._check_auth():
                 return

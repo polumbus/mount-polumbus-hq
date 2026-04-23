@@ -972,6 +972,14 @@ def _podcast_proxy_status(run_id: str) -> dict:
     return _proxy_json_request(f"/podcast/status?{query}", method="GET", timeout=30)
 
 
+def _podcast_proxy_status_batch(run_ids: list[str]) -> dict:
+    pairs = [("run_id", str(run_id).strip()) for run_id in run_ids if str(run_id).strip()]
+    if not pairs:
+        return {"ok": True, "jobs": {}}
+    query = urllib.parse.urlencode(pairs)
+    return _proxy_json_request(f"/podcast/status-batch?{query}", method="GET", timeout=30)
+
+
 def _podcast_proxy_generate_clips(run_id: str, force: bool = False) -> dict:
     return _proxy_json_request(
         "/podcast/generate-clips",
@@ -979,6 +987,10 @@ def _podcast_proxy_generate_clips(run_id: str, force: bool = False) -> dict:
         method="POST",
         timeout=30,
     )
+
+
+def _podcast_proxy_reconcile_status() -> dict:
+    return _proxy_json_request("/podcast/reconcile-status", method="GET", timeout=15)
 
 
 def _podcast_proxy_fetch_clip_bytes(run_id: str, clip_name: str) -> tuple[bytes, str]:
@@ -11830,6 +11842,31 @@ Return strict JSON with exactly these keys:
         state = run["current_state"]
         runner_status = str(proxy_job.get("status", "")).strip().lower()
         is_local = _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", ""))
+        if not is_local:
+            progress_steps = [
+                {"id": "prep", "label": "Prep", "status": "pending"},
+                {"id": "review", "label": "Review", "status": "pending"},
+                {"id": "publish", "label": "Publish", "status": "pending"},
+                {"id": "done", "label": "Done", "status": "pending"},
+            ]
+            if state in {"initialized", "gate1_waiting", "gate1_approved", "metadata_ready"}:
+                progress_steps[0]["status"] = "active"
+            elif state in {"gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
+                progress_steps[0]["status"] = "complete"
+            if state == "gate2_waiting":
+                progress_steps[1]["status"] = "active"
+            elif state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
+                progress_steps[1]["status"] = "complete"
+            if state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified"}:
+                progress_steps[2]["status"] = "active"
+            elif state == "done":
+                progress_steps[2]["status"] = "complete"
+            if state == "done":
+                progress_steps[3]["status"] = "complete"
+            complete_count = sum(1 for step in progress_steps if step["status"] == "complete")
+            if state == "done":
+                complete_count = len(progress_steps)
+            return progress_steps, complete_count
         progress_steps = [
             {"id": "start", "label": "Start", "status": "pending"},
             {"id": "gate1", "label": "Gate 1", "status": "pending"},
@@ -11908,6 +11945,25 @@ Return strict JSON with exactly these keys:
     runs = store["runs"]
     run_lookup = {run["id"]: run for run in runs}
     proxy_job_cache: dict[str, tuple[dict, str]] = {}
+    local_run_ids = [
+        str(run["id"]).strip()
+        for run in runs
+        if _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", ""))
+    ]
+    proxy_sync_status: dict = {}
+    proxy_sync_error = ""
+
+    if local_run_ids:
+        try:
+            batch_jobs = (_podcast_proxy_status_batch(local_run_ids) or {}).get("jobs", {})
+            for run_id, job in batch_jobs.items():
+                proxy_job_cache[str(run_id).strip()] = (job or {}, "")
+        except Exception:
+            pass
+        try:
+            proxy_sync_status = (_podcast_proxy_reconcile_status() or {}).get("sync", {})
+        except Exception as exc:
+            proxy_sync_error = str(exc)
 
     def _podcast_proxy_job_cached(run_data: dict) -> tuple[dict, str]:
         run_id = str(run_data.get("id", "")).strip()
@@ -11924,6 +11980,23 @@ Return strict JSON with exactly these keys:
         except Exception as exc:
             proxy_job_cache[run_id] = ({}, str(exc))
         return proxy_job_cache[run_id]
+
+    def _podcast_background_sync_caption() -> str:
+        if proxy_sync_error:
+            return f"Background sync status is unavailable right now: {proxy_sync_error}"
+        if not proxy_sync_status:
+            return "Background sync is available for local runs when the proxy is online."
+        last_checked = str(proxy_sync_status.get("last_checked_at", "")).strip() or "unknown"
+        interval = int(proxy_sync_status.get("sleep_interval_seconds", 0) or 0)
+        cadence = f"every {interval}s" if interval else "on its current cadence"
+        if str(proxy_sync_status.get("last_error", "")).strip():
+            return f"Background sync hit an issue after {last_checked}: {proxy_sync_status.get('last_error')}"
+        if proxy_sync_status.get("running"):
+            return f"Background sync is running now and checks local jobs about {cadence}."
+        return f"Background sync last checked local jobs at {last_checked} and is polling about {cadence}."
+
+    if local_run_ids:
+        st.caption(_podcast_background_sync_caption())
 
     selected_run_id = ""
     if requested_run_id in run_lookup:
@@ -12052,8 +12125,8 @@ Return strict JSON with exactly these keys:
             blocked_from_state = str(current_run.get("blocked_from_state", "")).strip()
             blocker_copy = current_run.get("blocker") or "HQ hit a blocker and needs one clean recovery action."
             if local_source and blocked_from_state in {"initialized", "transcribing"}:
-                st.info("HQ can restart the transcript step from here.")
-                if st.button("Start This Step Over", key=f"wizard_retry_transcript_{current_run['id']}", type="primary", use_container_width=True):
+                st.info("Step 1: rerun the transcript step after the blocker is cleared.")
+                if st.button("Run Transcript Step", key=f"wizard_retry_transcript_{current_run['id']}", type="primary", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     try:
                         start_result = _podcast_proxy_start(current_run["id"], current_run["source_path"], current_run["title"], force=True)
@@ -12074,8 +12147,8 @@ Return strict JSON with exactly these keys:
                         st.error(_podcast_user_error_text(str(exc)))
                 return
             if local_source and blocked_from_state in {"metadata_ready", "gate2_waiting"}:
-                st.info("HQ can restart the clip step from here.")
-                if st.button("Start This Step Over", key=f"wizard_retry_clip_blocked_{current_run['id']}", type="primary", use_container_width=True):
+                st.info("Step 4: rerun the clip step after the blocker is cleared.")
+                if st.button("Run Clip Step", key=f"wizard_retry_clip_blocked_{current_run['id']}", type="primary", use_container_width=True):
                     try:
                         clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
                         if not clip_result.get("accepted", True):
@@ -12114,7 +12187,7 @@ Return strict JSON with exactly these keys:
 
         if state == "initialized" and local_source:
             st.info("Step 1: start the local runner so HQ can transcribe the video.")
-            if st.button("Start Local Runner", key=f"wizard_start_runner_{current_run['id']}", type="primary", use_container_width=True):
+            if st.button("Run Transcript Step", key=f"wizard_start_runner_{current_run['id']}", type="primary", use_container_width=True):
                 updated_store = podcast_tracker.deepcopy_store(store)
                 try:
                     start_result = _podcast_proxy_start(current_run["id"], current_run["source_path"], current_run["title"], force=True)
@@ -12133,9 +12206,6 @@ Return strict JSON with exactly these keys:
                     _save_and_stay(updated_store)
                 except Exception as exc:
                     st.error(_podcast_user_error_text(str(exc)))
-            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_initialized", use_container_width=True):
-                st.session_state[wizard_open_key] = False
-                st.rerun()
             return
 
         if state == "initialized" and not local_source:
@@ -12163,13 +12233,11 @@ Return strict JSON with exactly these keys:
 
         if state == "transcribing" or str(current_proxy_job.get("status", "")).strip() in {"queued", "running"}:
             runner_status = str(current_proxy_job.get("status", "")).strip().title() or "Running"
-            st.info(f"Step 1: wait for transcription to finish. Current runner status: {runner_status}.")
+            st.info(f"Step 1: the transcript step is running. Current runner status: {runner_status}.")
+            st.caption("Background sync will import finished output automatically. Use Refresh View only if you want a newer snapshot right now.")
             if current_proxy_error:
                 st.warning(current_proxy_error)
-            if st.button("Check Progress", key=f"wizard_refresh_runner_{current_run['id']}", type="primary", use_container_width=True):
-                st.rerun()
-            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_transcribing", use_container_width=True):
-                st.session_state[wizard_open_key] = False
+            if st.button("Refresh View", key=f"wizard_refresh_runner_{current_run['id']}", type="secondary", use_container_width=True):
                 st.rerun()
             return
 
@@ -12187,9 +12255,6 @@ Return strict JSON with exactly these keys:
                     else:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 suggestions generated."}
                         _save_and_stay(updated_store)
-                if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_gate1gen", use_container_width=True):
-                    st.session_state[wizard_open_key] = False
-                    st.rerun()
                 return
             title_pick_key = f"podcast_wizard_title_pick_{current_run['id']}"
             thumb_pick_key = f"podcast_wizard_thumb_pick_{current_run['id']}"
@@ -12236,7 +12301,7 @@ Return strict JSON with exactly these keys:
                     st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 approved. HQ moved straight into package review."}
                     _save_and_stay(updated_store)
             with wizard_gate1_cols[1]:
-                if st.button("Start This Step Over", key=f"wizard_gate1_regen_{current_run['id']}", use_container_width=True):
+                if st.button("Regenerate Suggestions", key=f"wizard_gate1_regen_{current_run['id']}", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     try:
                         _podcast_generate_packaging_artifacts(updated_store, current_run)
@@ -12280,7 +12345,7 @@ Return strict JSON with exactly these keys:
                     podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="gate2_waiting", blocker="", note="Wizard completed package review and opened clip review.")
                     _save_and_stay(updated_store)
             with review_cols[1]:
-                if st.button("Start This Step Over", key=f"wizard_regen_packaging_{current_run['id']}", use_container_width=True):
+                if st.button("Regenerate Packaging", key=f"wizard_regen_packaging_{current_run['id']}", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     try:
                         _podcast_generate_packaging_artifacts(updated_store, current_run)
@@ -12319,7 +12384,7 @@ Return strict JSON with exactly these keys:
                 st.caption(f"Saved selected clip: {selected_clip_name}")
                 fallback_cols = st.columns(2, gap="small")
                 with fallback_cols[0]:
-                    if st.button("Approve Gate 2", key=f"wizard_gate2_saved_clip_{current_run['id']}", type="primary", use_container_width=True):
+                    if st.button("Approve Saved Clip", key=f"wizard_gate2_saved_clip_{current_run['id']}", type="primary", use_container_width=True):
                         updated_store = podcast_tracker.deepcopy_store(store)
                         podcast_tracker.record_approval(
                             updated_store,
@@ -12333,7 +12398,7 @@ Return strict JSON with exactly these keys:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Gate 2 approved with saved clip {selected_clip_name}."}
                         _save_and_stay(updated_store)
                 with fallback_cols[1]:
-                    if st.button("Start This Step Over", key=f"wizard_gate2_saved_clip_regen_{current_run['id']}", use_container_width=True):
+                    if st.button("Run Clip Step", key=f"wizard_gate2_saved_clip_regen_{current_run['id']}", use_container_width=True):
                         try:
                             clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
                             if not clip_result.get("accepted", True):
@@ -12346,8 +12411,8 @@ Return strict JSON with exactly these keys:
                             st.rerun()
                 return
             if local_source and clip_status in {"not_started", ""}:
-                st.info("Step 4: generate the real shorts clips so you can review them here.")
-                if st.button("Generate Shorts Clips", key=f"wizard_generate_clips_{current_run['id']}", type="primary", use_container_width=True):
+                st.info("Step 4: run the clip step so you can review the real shorts options here.")
+                if st.button("Run Clip Step", key=f"wizard_generate_clips_{current_run['id']}", type="primary", use_container_width=True):
                     try:
                         clip_result = _podcast_proxy_generate_clips(current_run["id"], force=False)
                         if not clip_result.get("accepted", True):
@@ -12360,13 +12425,14 @@ Return strict JSON with exactly these keys:
                         st.rerun()
                 return
             if clip_status in {"queued", "running"}:
-                st.info("Step 4: wait for the shorts clips to finish generating.")
-                if st.button("Check Clip Progress", key=f"wizard_refresh_clips_{current_run['id']}", type="primary", use_container_width=True):
+                st.info("Step 4: the clip step is running.")
+                st.caption("Background sync will keep reconciling local output. Use Refresh View only if you want a newer snapshot right now.")
+                if st.button("Refresh View", key=f"wizard_refresh_clips_{current_run['id']}", type="secondary", use_container_width=True):
                     st.rerun()
                 return
             if clip_status == "failed":
                 st.error(_podcast_user_error_text(current_proxy_job.get("clips_error", "Clip generation failed.")))
-                if st.button("Start This Step Over", key=f"wizard_retry_clips_{current_run['id']}", type="primary", use_container_width=True):
+                if st.button("Run Clip Step", key=f"wizard_retry_clips_{current_run['id']}", type="primary", use_container_width=True):
                     try:
                         clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
                         if not clip_result.get("accepted", True):
@@ -12424,7 +12490,7 @@ Return strict JSON with exactly these keys:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Gate 2 approved with clip {preview_clip['name']}."}
                         _save_and_stay(updated_store)
                 with clip_review_cols[1]:
-                    if st.button("Start This Step Over", key=f"wizard_regen_clips_{current_run['id']}", use_container_width=True):
+                    if st.button("Run Clip Step Again", key=f"wizard_regen_clips_{current_run['id']}", use_container_width=True):
                         try:
                             clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
                             if not clip_result.get("accepted", True):
@@ -12439,7 +12505,7 @@ Return strict JSON with exactly these keys:
             st.warning("No usable clips are available yet.")
             empty_clip_cols = st.columns(2, gap="small")
             with empty_clip_cols[0]:
-                if st.button("Start This Step Over", key=f"wizard_empty_clip_retry_{current_run['id']}", type="primary", use_container_width=True):
+                if st.button("Run Clip Step", key=f"wizard_empty_clip_retry_{current_run['id']}", type="primary", use_container_width=True):
                     try:
                         clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
                         if not clip_result.get("accepted", True):
@@ -12650,30 +12716,6 @@ Return strict JSON with exactly these keys:
     if selected_run_id and st.query_params.get("podcast_run") != selected_run_id:
         st.query_params["podcast_run"] = selected_run_id
 
-    run_chip_ids = []
-    for candidate in runs:
-        candidate_metrics = podcast_tracker.build_run_metrics(candidate)
-        if candidate["id"] == selected_run_id or candidate["current_state"] == "blocked_manual_fix" or candidate_metrics["sync_status"] in {"unsynced", "aging", "stale"}:
-            run_chip_ids.append(candidate["id"])
-    for candidate in runs[:4]:
-        if candidate["id"] not in run_chip_ids:
-            run_chip_ids.append(candidate["id"])
-    if run_chip_ids:
-        st.caption("Fast run switch")
-        chip_cols = st.columns(min(4, len(run_chip_ids)), gap="small")
-        for idx, run_id in enumerate(run_chip_ids[:4]):
-            candidate = run_lookup[run_id]
-            with chip_cols[idx % len(chip_cols)]:
-                if st.button(
-                    _podcast_run_label(candidate),
-                    key=f"podcast_run_chip_{run_id}",
-                    type="primary" if run_id == selected_run_id else "secondary",
-                    use_container_width=True,
-                ):
-                    st.query_params["podcast_run"] = run_id
-                    st.query_params["podcast_state"] = candidate["current_state"]
-                    st.rerun()
-
     selector_col, mirror_col = st.columns([1.6, 1], gap="large")
     with selector_col:
         run_ids = [run["id"] for run in runs]
@@ -12753,6 +12795,10 @@ Return strict JSON with exactly these keys:
             "Done only means done after public checks and social receipts are recorded.",
         ),
     ]
+    if local_run_ids:
+        sync_summary = "Healthy" if not proxy_sync_error and not str(proxy_sync_status.get("last_error", "")).strip() else "Needs attention"
+        sync_meta = _podcast_background_sync_caption()
+        summary_cards.append(_podcast_card_html("Background Sync", sync_summary, sync_meta))
     st.markdown(f'<div class="podcast-status-grid">{"".join(summary_cards)}</div>', unsafe_allow_html=True)
     if proxy_job:
         proxy_status = str(proxy_job.get("status", "")).strip().title() or "Unknown"
@@ -12763,7 +12809,7 @@ Return strict JSON with exactly these keys:
         )
         runner_cols = st.columns([1, 1.4], gap="small")
         with runner_cols[0]:
-            if st.button("Refresh Local Runner", key=f"podcast_refresh_runner_{run['id']}", type="secondary", use_container_width=True):
+            if st.button("Refresh View", key=f"podcast_refresh_runner_{run['id']}", type="secondary", use_container_width=True):
                 st.rerun()
         with runner_cols[1]:
             if proxy_job.get("output_dir"):
