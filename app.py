@@ -11399,7 +11399,6 @@ def page_podcast():
             "Start HQ Run",
             type="primary",
             use_container_width=True,
-            disabled=not quick_source_path.strip(),
         )
     if quick_create_submitted:
         _create_hq_run(
@@ -11425,7 +11424,6 @@ def page_podcast():
                 "Start Advanced Run",
                 type="primary",
                 use_container_width=True,
-                disabled=not (new_title.strip() or new_source_path.strip()),
             )
         if create_run_submitted:
             _create_hq_run(
