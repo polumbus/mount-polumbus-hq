@@ -11105,14 +11105,33 @@ def page_podcast():
         publish_window: str = "",
         notes: str = "",
     ) -> None:
-        if not title.strip() or not discord_reference.strip():
-            st.warning("Fill in both Run Title and Discord Reference before creating an HQ mirror run.")
+        clean_title = title.strip()
+        clean_source = source_path.strip()
+        if not clean_title and not clean_source:
+            st.warning("Add a Video Link or a Run Title before starting the podcast workflow.")
+            return
+        normalized_source = podcast_tracker.canonical_source_key(clean_source)
+        normalized_discord = discord_reference.strip().lower()
+        existing_run = next(
+            (
+                candidate
+                for candidate in runs
+                if (normalized_source and podcast_tracker.canonical_source_key(candidate.get("source_path", "")) == normalized_source)
+                or (normalized_discord and candidate.get("discord_reference", "").strip().lower() == normalized_discord)
+            ),
+            None,
+        )
+        if existing_run:
+            updated_store = podcast_tracker.deepcopy_store(store)
+            podcast_tracker.set_active_run(updated_store, existing_run["id"])
+            st.session_state["_podcast_flash_message"] = f"Opened the existing run for this link instead of creating a duplicate: {existing_run['title']}"
+            _save_podcast_and_rerun(updated_store, existing_run["id"])
             return
         updated_store = podcast_tracker.deepcopy_store(store)
         new_run = podcast_tracker.create_run(
             updated_store,
             actor=actor,
-            title=title,
+            title=clean_title or podcast_tracker._suggest_title_from_source(clean_source),
             episode_code=episode_code,
             source_path=source_path,
             discord_reference=discord_reference,
@@ -11181,15 +11200,15 @@ def page_podcast():
             )
 
         if state == "initialized":
-            add("mark_transcribing", "1. Start Transcript", "Use when Discord begins transcript work.", "Overview", "primary")
+            add("mark_transcribing", "1. Start Transcript", "Use when transcript work begins.", "Overview", "primary")
             add("transcript_ready", "2. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", disabled=not transcript_ready)
         elif state == "transcribing":
             add("transcript_ready", "1. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", "primary", disabled=not transcript_ready)
-            add("block_run", "Block Run", "Use only if Discord hits a real manual blocker.", "Activity")
+            add("block_run", "Block Run", "Use only if the run hits a real manual blocker.", "Activity")
         elif state == "gate1_waiting":
             add("approve_gate1", "1. Approve Gate 1", "Record Gate 1 approval and move forward.", "Approvals", "primary")
             add("gate1_changes", "Need Changes", "Keep the run in Gate 1 while fixes happen.", "Approvals")
-            add("block_run", "Block Run", "Use if Discord cannot continue without manual help.", "Activity")
+            add("block_run", "Block Run", "Use if the run cannot continue without manual help.", "Activity")
         elif state == "gate1_approved":
             add("metadata_ready", "1. Metadata Ready", "All packaging inputs are ready for the next phase.", "Artifacts", "primary")
             add("tweet_waiting", "Waiting On Tweet", "Use if the tweet is the only missing packaging piece.", "Artifacts")
@@ -11210,7 +11229,7 @@ def page_podcast():
         elif state == "gate2_approved":
             add("mark_ready_to_publish", "1. Ready To Publish", "The package is approved and can move to publish prep.", "Delivery & Verify", "primary")
         elif state == "ready_to_publish":
-            add("start_publish", "1. Start Publish", "Use when Discord begins the publish step.", "Delivery & Verify", "primary")
+            add("start_publish", "1. Start Publish", "Use when the publish step begins.", "Delivery & Verify", "primary")
         elif state == "publish_pending":
             add("mark_public_verified", "1. Public Checks Passed", "Complete the verification checklist and record at least one delivery receipt before using this.", "Delivery & Verify", "primary", disabled=not (verification_complete and has_delivery_receipt))
             add("mark_retry", "Needs Retry", "Use if the release hit a publish problem.", "Delivery & Verify")
@@ -11219,7 +11238,11 @@ def page_podcast():
             add("retry_running", "1. Retry Running", "Move back into publish pending when the retry starts.", "Delivery & Verify", "primary")
             add("block_run", "Block Run", "Use if the retry is blocked manually.", "Activity")
         elif state == "public_verified":
-            add("mark_done", "1. Mark Done", "This only unlocks after verification is complete and the Discord mirror is freshly synced.", "Delivery & Verify", "primary", disabled=not (verification_complete and run_metrics["sync_status"] == "fresh"))
+            done_ready = verification_complete and (not run_metrics["requires_sync"] or run_metrics["sync_status"] == "fresh")
+            done_help = "This only unlocks after verification is complete."
+            if run_metrics["requires_sync"]:
+                done_help = "This only unlocks after verification is complete and Discord sync is fresh."
+            add("mark_done", "1. Mark Done", done_help, "Delivery & Verify", "primary", disabled=not done_ready)
         elif state == "blocked_manual_fix":
             blocked_from_state = run.get("blocked_from_state", "").strip()
             if blocked_from_state and blocked_from_state != "blocked_manual_fix":
@@ -11329,16 +11352,19 @@ def page_podcast():
 
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="tool-desc">HQ now mirrors the live unpublished Discord workflow with durable run tracking, approvals, artifacts, receipts, and verification. Discord stays live while you pressure-test both side by side.</div>',
+        '<div class="tool-desc">HQ now gives the podcast workflow a durable home for run tracking, approvals, artifacts, receipts, and verification. Discord can stay live while you pressure-test both side by side.</div>',
         unsafe_allow_html=True,
     )
     persist_status = st.session_state.get("_podcast_runs_persist_status", {"source": "local", "error": ""})
     if persist_status.get("error"):
         st.warning(persist_status["error"])
     else:
-        st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Discord remains the live source of truth.")
+        st.caption(f"Podcast HQ persistence: {persist_status.get('source', 'local')}. Live source of truth depends on the run you have open.")
+    flash_message = st.session_state.pop("_podcast_flash_message", "")
+    if flash_message:
+        st.success(flash_message)
     with st.expander("Troubleshooting", expanded=False):
-        st.caption("Only use these if the cloud mirror looks stale or persistence fell back to local backup.")
+        st.caption("Only use these if the cloud copy looks stale or persistence fell back to local backup.")
         if st.button("Refresh Cloud", key="podcast_refresh_cloud", type="secondary", use_container_width=True):
             for key in (
                 "_podcast_runs_cache",
@@ -11351,38 +11377,55 @@ def page_podcast():
                 st.session_state.pop(key, None)
             st.rerun()
 
+    st.markdown(
+        """
+        <div class="podcast-panel">
+          <div class="podcast-status-kicker">Fastest Start</div>
+          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Paste the video link and open the run here fast.</div>
+          <div class="podcast-status-meta">This starts the HQ run record with the fewest clicks. If Booth is also running in Discord, add that thread so HQ can compare against it cleanly.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     with st.form("podcast_quick_create_form", clear_on_submit=True):
-        quick_create_cols = st.columns([2.2, 2.2, 1], gap="small")
+        quick_create_cols = st.columns([2.2, 1.4, 1.4], gap="small")
         with quick_create_cols[0]:
-            quick_title = st.text_input("Quick Run Title", placeholder="Episode 42 - Draft Release", label_visibility="collapsed")
+            quick_source_path = st.text_input("Video Link", placeholder="Paste the video link that starts the workflow")
         with quick_create_cols[1]:
-            quick_discord_reference = st.text_input("Quick Discord Reference", placeholder="Discord thread URL", label_visibility="collapsed")
+            quick_title = st.text_input("Episode Title (Recommended)", placeholder="Strongly recommended for cleaner run labels")
         with quick_create_cols[2]:
-            quick_create_submitted = st.form_submit_button(
-                "Create",
-                type="primary",
-                use_container_width=True,
-                disabled=not (quick_title.strip() and quick_discord_reference.strip()),
-            )
+            quick_discord_reference = st.text_input("Discord Thread (Optional)", placeholder="Recommended if Booth is already running there")
+        quick_create_submitted = st.form_submit_button(
+            "Start HQ Run",
+            type="primary",
+            use_container_width=True,
+            disabled=not quick_source_path.strip(),
+        )
     if quick_create_submitted:
-        _create_hq_run(title=quick_title, discord_reference=quick_discord_reference)
+        _create_hq_run(
+            title=quick_title,
+            discord_reference=quick_discord_reference,
+            source_path=quick_source_path,
+            notes="Started from the Post Ascend video-link launcher.",
+        )
+    st.caption("Shorts clips do not export from HQ yet. For now, save the real clip folder or URL in the Shorts Output field under Artifacts > Shorts Clips.")
 
-    with st.expander("Create HQ Mirror Run With More Fields", expanded=not runs):
+    with st.expander("Advanced Start Options", expanded=not runs):
         with st.form("podcast_create_run_form", clear_on_submit=True):
             create_col1, create_col2 = st.columns(2, gap="large")
             with create_col1:
                 new_title = st.text_input("Run Title", placeholder="Episode 42 - Draft Release")
                 new_episode_code = st.text_input("Episode Code", placeholder="EP-042")
-                new_source_path = st.text_input("Source File / Link", placeholder="Dropbox path, drive link, or local note")
+                new_source_path = st.text_input("Video Link / Source", placeholder="YouTube, Dropbox, Drive, Riverside, or local note")
             with create_col2:
-                new_discord_reference = st.text_input("Discord Reference", placeholder="Thread URL or channel note")
+                new_discord_reference = st.text_input("Discord Reference (Optional)", placeholder="Thread URL or channel note")
                 new_publish_window = st.text_input("Publish Window", placeholder="Tomorrow 9 AM MT")
                 new_notes = st.text_area("Kickoff Notes", height=100, placeholder="Anything Booth or HQ needs to remember for this run.")
             create_run_submitted = st.form_submit_button(
-                "Create HQ Run",
+                "Start Advanced Run",
                 type="primary",
                 use_container_width=True,
-                disabled=not (new_title.strip() and new_discord_reference.strip()),
+                disabled=not (new_title.strip() or new_source_path.strip()),
             )
         if create_run_submitted:
             _create_hq_run(
@@ -11409,11 +11452,11 @@ def page_podcast():
     if not runs:
         dashboard = get_podcast_dashboard_content(requested_state or None)
         empty_cards = [
-            _podcast_card_html("Live Path", "Discord", "Discord remains the live workflow while HQ is being instrumented."),
-            _podcast_card_html("HQ Mode", "Ready", "Create a run to start tracking artifacts, approvals, deliveries, and verification."),
+            _podcast_card_html("Start Path", "HQ Or Discord", "Paste a video link above for the fastest HQ-first start, or attach a Discord thread for side-by-side tracking."),
+            _podcast_card_html("HQ Mode", "Ready", "Paste a video link above to start tracking artifacts, approvals, deliveries, and verification."),
             _podcast_card_html("Mirror State", dashboard["current_state_label"], "This preview only shows the modeled workflow until a real HQ run exists."),
         ]
-        st.caption("No HQ podcast runs yet. Create one above, then keep your Discord workflow running exactly as-is and mirror the run here.")
+        st.caption("No podcast runs yet. Paste a video link above to start in HQ with the fewest clicks, then add a Discord thread if you want side-by-side tracking.")
         st.markdown(f'<div class="podcast-status-grid">{"".join(empty_cards)}</div>', unsafe_allow_html=True)
 
         phase_chips = []
@@ -11430,7 +11473,7 @@ def page_podcast():
             f"""
             <div class="podcast-panel">
               <div class="podcast-status-kicker">Workflow Preview</div>
-              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Discord stays live. HQ becomes the durable mirror.</div>
+              <div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">HQ becomes the durable control board. Discord can stay live beside it when needed.</div>
               <div class="podcast-phase-row">{"".join(phase_chips)}</div>
               <ul style="margin:0 0 0 18px;color:#C9D1D9;line-height:1.8;font-size:13px;padding:0;">{next_action_items}</ul>
             </div>
@@ -11474,11 +11517,16 @@ def page_podcast():
             run_ids,
             index=run_ids.index(selected_run_id),
             format_func=lambda run_id: _podcast_run_label(run_lookup[run_id]),
-            help="Choose which HQ mirror run you want to operate on. Discord stays live either way.",
+            help="Choose which podcast run you want to operate on.",
         )
+        preview_metrics = podcast_tracker.build_run_metrics(run_lookup[selected_from_ui])
     with mirror_col:
         st.markdown(
-            '<div class="podcast-panel"><div class="podcast-status-kicker">Mirror Mode</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Discord is still the live path.</div><div class="podcast-status-meta">Every button here updates HQ tracking only so you can pressure-test the new workflow without disrupting Booth.</div></div>',
+            (
+                '<div class="podcast-panel"><div class="podcast-status-kicker">Current Mode</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">Discord is still the live path.</div><div class="podcast-status-meta">Every button here updates HQ tracking only so you can pressure-test the new workflow without disrupting Booth.</div></div>'
+                if preview_metrics["requires_sync"]
+                else '<div class="podcast-panel"><div class="podcast-status-kicker">Current Mode</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.4;">HQ started this run first.</div><div class="podcast-status-meta">Use the guided buttons here as your working record. Add a Discord thread later if you want side-by-side validation.</div></div>'
+            ),
             unsafe_allow_html=True,
         )
     if selected_from_ui != selected_run_id:
@@ -11493,13 +11541,25 @@ def page_podcast():
     if st.query_params.get("podcast_state") != run["current_state"]:
         st.query_params["podcast_state"] = run["current_state"]
 
+    primary_path_value = "Discord" if metrics["requires_sync"] else "HQ Start"
+    primary_path_meta = (
+        "Booth and the current unpublished workflow remain untouched while HQ tracks the run."
+        if metrics["requires_sync"]
+        else "This run started in HQ first. Add a Discord thread later if you want side-by-side sync checks."
+    )
+    sync_label = "Discord Sync" if metrics["requires_sync"] else "Sync Mode"
+    sync_meta = (
+        f"Last synced at {run.get('last_synced_at') or 'Never'} from the Discord workflow."
+        if metrics["requires_sync"]
+        else "Discord sync is optional until you attach a Discord thread to this run."
+    )
     summary_cards = [
-        _podcast_card_html("Primary Live Path", "Discord", "Booth and the current unpublished workflow remain untouched while HQ mirrors the run."),
+        _podcast_card_html("Primary Live Path", primary_path_value, primary_path_meta),
         _podcast_card_html("Current State", dashboard["current_state_label"], f"Last changed at {run['state_updated_at'] or run['updated_at'] or run['created_at']}."),
         _podcast_card_html(
-            "Mirror Sync",
+            sync_label,
             metrics["sync_status"].replace("_", " ").title(),
-            f"Last synced at {run.get('last_synced_at') or 'Never'} from the Discord workflow.",
+            sync_meta,
         ),
         _podcast_card_html("Artifacts", f"{metrics['artifact_approved']}/{metrics['artifact_total']}", f"{metrics['artifact_populated']} populated, {metrics['artifact_blocked']} blocked."),
         _podcast_card_html(
@@ -11516,20 +11576,22 @@ def page_podcast():
     st.markdown(f'<div class="podcast-status-grid">{"".join(summary_cards)}</div>', unsafe_allow_html=True)
     if run["current_state"] == "blocked_manual_fix" or run.get("blocker"):
         st.error(f"Current blocker: {run.get('blocker') or 'Manual fix is required before HQ should move forward.'}")
+    if not run["artifacts"]["clips"]["path"]:
+        st.info("Shorts output is not set yet. Open Artifacts > Shorts Clips and save the real folder or URL where the live workflow wrote the clips.")
 
     guided_actions = _guided_actions_for_run(run)
     st.markdown(
         f"""
         <div class="podcast-panel">
           <div class="podcast-status-kicker">Simple Operator Flow</div>
-          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Follow Discord, then press the next obvious button here.</div>
-          <div class="podcast-status-meta">1. Keep Booth running in Discord. 2. When something finishes there, click the matching button below in HQ. 3. Only use the detailed editors further down if something unusual happens.</div>
+          <div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:8px;">Press the next obvious button here.</div>
+          <div class="podcast-status-meta">{'1. Keep Booth running in Discord. 2. When something finishes there, click the matching button below in HQ. 3. Only use the detailed editors further down if something unusual happens.' if metrics['requires_sync'] else '1. This run started in HQ. 2. Use the guided buttons below as each step finishes. 3. Add a Discord thread later only if you want side-by-side validation.'}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    if metrics["sync_status"] in {"unsynced", "aging", "stale"}:
-        if st.button("Sync From Discord Now", key=f"podcast_sync_prompt_{run['id']}", type="primary", use_container_width=True):
+    if metrics["requires_sync"] and metrics["sync_status"] in {"unsynced", "aging", "stale"}:
+        if st.button("Go To Sync Checkpoint", key=f"podcast_sync_prompt_{run['id']}", type="primary", use_container_width=True):
             _set_podcast_section(run["id"], "Activity")
             st.rerun()
     if guided_actions:
@@ -11571,11 +11633,12 @@ def page_podcast():
         st.markdown(
             f"""
             <div class="podcast-panel">
-              <div class="podcast-status-kicker">Active HQ Mirror Run</div>
+              <div class="podcast-status-kicker">Active Podcast Run</div>
               <div style="font-size:24px;color:#E6EDF3;font-weight:700;line-height:1.35;margin-bottom:10px;">{html.escape(run['title'])}</div>
               <div class="podcast-inline-kv"><span>Episode Code</span><strong>{html.escape(run['episode_code'] or 'Not Set')}</strong></div>
               <div class="podcast-inline-kv"><span>Source</span><strong>{_podcast_value_html(run['source_path'], link_label='Open Source Link')}</strong></div>
               <div class="podcast-inline-kv"><span>Discord Ref</span><strong>{_podcast_value_html(run['discord_reference'], link_label='Open Discord Thread')}</strong></div>
+              <div class="podcast-inline-kv"><span>Shorts Output</span><strong>{_podcast_value_html(run['artifacts']['clips']['path'], empty_label='Set this in Artifacts > Shorts Clips', link_label='Open Clips Output')}</strong></div>
               <div class="podcast-inline-kv"><span>Source of Truth</span><strong>{html.escape((run.get('source_of_truth') or 'discord').title())}</strong></div>
               <div class="podcast-inline-kv"><span>Last Synced</span><strong>{html.escape(run.get('last_synced_at') or 'Never')}</strong></div>
               <div class="podcast-inline-kv"><span>Publish Window</span><strong>{html.escape(run['publish_window'] or 'Not Set')}</strong></div>
@@ -11741,17 +11804,27 @@ def page_podcast():
                     st.rerun()
 
         selected_artifact = run["artifacts"][selected_artifact_id]
+        artifact_text_label = f"{artifact_lookup[selected_artifact_id]['label']} Content"
+        artifact_text_placeholder = "Paste the approved or draft content here."
+        artifact_path_label = "Asset Path / URL"
+        artifact_path_placeholder = "File path, Drive link, or external URL"
+        if selected_artifact_id == "clips":
+            st.info("Shorts clips are not rendered by HQ yet. Save the real folder or destination URL in the field below. Use the notes box for timecodes, clip names, or extra context.")
+            artifact_text_label = "Shorts Clip Notes"
+            artifact_text_placeholder = "Paste clip notes, timecodes, or clip names here."
+            artifact_path_label = "Shorts Output Folder / URL"
+            artifact_path_placeholder = "Folder path, shared Drive link, ZIP URL, or clip destination"
         with st.form(f"podcast_artifact_form_{run['id']}_{selected_artifact_id}"):
             artifact_text = st.text_area(
-                f"{artifact_lookup[selected_artifact_id]['label']} Content",
+                artifact_text_label,
                 value=selected_artifact["text"],
                 height=180,
-                placeholder="Paste the approved or draft content here.",
+                placeholder=artifact_text_placeholder,
             )
             artifact_path = st.text_input(
-                "Asset Path / URL",
+                artifact_path_label,
                 value=selected_artifact["path"],
-                placeholder="File path, Drive link, or external URL",
+                placeholder=artifact_path_placeholder,
             )
             artifact_status = st.selectbox(
                 "Artifact Status",

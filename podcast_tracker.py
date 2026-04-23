@@ -1,4 +1,4 @@
-"""Durable Podcast run tracker for the HQ side-by-side workflow mirror."""
+"""Durable Podcast run tracker for the HQ side-by-side workflow."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ ARTIFACT_SPECS = [
     {"id": "tweet", "label": "Approved Tweet", "kind": "text"},
     {"id": "thumbnail_text", "label": "Thumbnail Text", "kind": "text"},
     {"id": "thumbnail_asset", "label": "Thumbnail Asset", "kind": "path"},
-    {"id": "clips", "label": "Clip Notes", "kind": "text"},
+    {"id": "clips", "label": "Shorts Clips", "kind": "text"},
 ]
 
 APPROVAL_GATES = [
@@ -131,6 +131,67 @@ def _sanitize_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _suggest_title_from_source(source_path: str) -> str:
+    clean = _sanitize_text(source_path)
+    if not clean:
+        return f"Podcast Intake {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    try:
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(clean)
+        host = parsed.netloc.lower()
+        query = parse_qs(parsed.query)
+        youtube_id = ""
+        if "youtube.com" in host:
+            youtube_id = _sanitize_text((query.get("v") or [""])[0])
+        elif "youtu.be" in host:
+            youtube_id = parsed.path.strip("/").split("/", 1)[0]
+        if youtube_id:
+            return f"YouTube Intake {youtube_id[:8]} · {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    except Exception:
+        pass
+    source_part = clean.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    stem = source_part.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").strip()
+    stem = " ".join(piece for piece in stem.split() if piece)
+    if stem.lower() in {"watch", "video", "videos", "shorts"}:
+        return f"Podcast Intake {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    if stem and len(stem) >= 6:
+        return stem[:80]
+    return f"Podcast Intake {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+
+def canonical_source_key(source_path: str) -> str:
+    clean = _sanitize_text(source_path)
+    if not clean:
+        return ""
+    try:
+        from urllib.parse import parse_qs, urlencode, urlparse
+
+        parsed = urlparse(clean)
+        host = parsed.netloc.lower().removeprefix("www.")
+        query = parse_qs(parsed.query)
+        if "youtube.com" in host:
+            video_id = _sanitize_text((query.get("v") or [""])[0])
+            if video_id:
+                return f"youtube:{video_id.lower()}"
+        if "youtu.be" in host:
+            video_id = parsed.path.strip("/").split("/", 1)[0]
+            if video_id:
+                return f"youtube:{video_id.lower()}"
+        filtered_pairs = []
+        for key in sorted(query):
+            if key.lower().startswith("utm_") or key.lower() in {"feature", "si"}:
+                continue
+            for value in sorted(query.get(key, [])):
+                filtered_pairs.append((key.lower(), value))
+        normalized_query = urlencode(filtered_pairs, doseq=True)
+        normalized_path = parsed.path.rstrip("/").lower()
+        suffix = f"?{normalized_query}" if normalized_query else ""
+        return f"{host}{normalized_path}{suffix}"
+    except Exception:
+        return clean.lower()
+
+
 def empty_podcast_store() -> dict[str, Any]:
     return {
         "version": STORE_VERSION,
@@ -221,7 +282,7 @@ def _default_run() -> dict[str, Any]:
         "source_path": "",
         "discord_reference": "",
         "publish_window": "",
-        "source_of_truth": "discord",
+        "source_of_truth": "hq",
         "last_synced_at": "",
         "sync_note": "",
         "blocked_from_state": "",
@@ -531,18 +592,19 @@ def create_run(
     ts = _now()
     run = _default_run()
     run["id"] = f"pod_{uuid4().hex[:10]}"
-    run["title"] = title.strip() or "Untitled Podcast Run"
+    run["title"] = title.strip() or _suggest_title_from_source(source_path)
     run["episode_code"] = episode_code.strip()
     run["source_path"] = source_path.strip()
     run["discord_reference"] = discord_reference.strip()
     run["publish_window"] = publish_window.strip()
     run["notes"] = notes.strip()
+    run["source_of_truth"] = "discord" if run["discord_reference"] else "hq"
     run["created_at"] = ts
     run["updated_at"] = ts
     run["details_updated_at"] = ts
     run["state_updated_at"] = ts
     run["blocker_updated_at"] = ts
-    add_event(run, actor, "run_created", "Created HQ podcast mirror run", run["title"])
+    add_event(run, actor, "run_created", "Created podcast workflow run", run["title"])
     store["runs"].append(run)
     store["active_run_id"] = run["id"]
     _sort_runs(store)
@@ -586,7 +648,7 @@ def update_run_details(
     details_changed = any(before[key] != next_values[key] for key in ("title", "episode_code", "source_path", "discord_reference", "publish_window", "notes"))
     blocker_changed = before["blocker"] != next_values["blocker"]
     run.update(next_values)
-    run["source_of_truth"] = "discord"
+    run["source_of_truth"] = "discord" if next_values["discord_reference"] else "hq"
     ts = _touch_run(run)
     if details_changed:
         run["details_updated_at"] = ts
@@ -615,19 +677,21 @@ def transition_run(
     if previous_state == state and run["blocker"] == blocker.strip() and not note.strip():
         return run
     blocker_changed = run["blocker"] != blocker.strip()
+    blocked_from_state_changed = False
     if state == "blocked_manual_fix" and previous_state != "blocked_manual_fix":
         run["blocked_from_state"] = previous_state
+        blocked_from_state_changed = True
     run["current_state"] = state
     run["blocker"] = blocker.strip()
     ts = _touch_run(run)
     run["state_updated_at"] = ts
-    if blocker_changed:
+    if blocker_changed or blocked_from_state_changed:
         run["blocker_updated_at"] = ts
     add_event(
         run,
         actor,
         "state_changed",
-        f"Moved HQ mirror state from {previous_state} to {state}",
+        f"Moved podcast workflow state from {previous_state} to {state}",
         note.strip() or run["blocker"],
     )
     _touch_store(store, ts)
@@ -725,12 +789,16 @@ def record_approval(
         notes.strip(),
     )
     if state_after.strip():
+        blocked_from_state_changed = False
         if state_after.strip() == "blocked_manual_fix" and run["current_state"] != "blocked_manual_fix":
             run["blocked_from_state"] = run["current_state"]
+            blocked_from_state_changed = True
         run["current_state"] = state_after.strip()
         run["state_updated_at"] = approval["created_at"]
         if decision == "approved" and state_after.strip() != "blocked_manual_fix":
             run["blocker"] = ""
+            run["blocker_updated_at"] = approval["created_at"]
+        elif blocked_from_state_changed:
             run["blocker_updated_at"] = approval["created_at"]
     _touch_store(store, ts)
     _sort_runs(store)
@@ -855,9 +923,10 @@ def build_run_metrics(run: dict[str, Any]) -> dict[str, Any]:
     verification = run.get("verification", {})
     latest = latest_gate_decisions(run)
     verified_checks = sum(1 for check_id in _VERIFICATION_IDS if verification.get(check_id))
-    sync_status = "unsynced"
+    requires_sync = bool(_sanitize_text(run.get("discord_reference", ""))) or _sanitize_text(run.get("source_of_truth", "")) == "discord"
+    sync_status = "hq_only" if not requires_sync else "unsynced"
     sync_age_hours = None
-    if run.get("last_synced_at"):
+    if requires_sync and run.get("last_synced_at"):
         try:
             sync_dt = _timestamp_value(run["last_synced_at"])
             sync_age_hours = max(0.0, (datetime.now(timezone.utc) - sync_dt).total_seconds() / 3600)
@@ -881,6 +950,7 @@ def build_run_metrics(run: dict[str, Any]) -> dict[str, Any]:
         "verification_total": len(_VERIFICATION_IDS),
         "sync_status": sync_status,
         "sync_age_hours": sync_age_hours,
+        "requires_sync": requires_sync,
         "last_event": run.get("events", [])[-1] if run.get("events") else None,
     }
 
