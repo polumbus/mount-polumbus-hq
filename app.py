@@ -11231,11 +11231,145 @@ def page_podcast():
     def _set_podcast_section(run_id: str, section_name: str) -> None:
         st.session_state[f"podcast_section_{run_id}"] = section_name
 
+    def _podcast_artifact_has_content(run_data: dict, artifact_id: str) -> bool:
+        artifact = run_data["artifacts"].get(artifact_id, {})
+        return bool(str(artifact.get("text", "")).strip() or str(artifact.get("path", "")).strip())
+
+    def _podcast_packaging_artifact_ids() -> tuple[str, ...]:
+        return ("title", "description", "tags", "tweet", "thumbnail_text", "clips")
+
+    def _podcast_packaging_ready(run_data: dict) -> bool:
+        return all(_podcast_artifact_has_content(run_data, artifact_id) for artifact_id in _podcast_packaging_artifact_ids())
+
+    def _podcast_parse_json_response(raw_text: str) -> dict:
+        clean = (raw_text or "").strip()
+        if not clean:
+            raise ValueError("The AI returned an empty response.")
+        fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", clean, re.DOTALL)
+        if fenced:
+            clean = fenced.group(1).strip()
+        start = clean.find("{")
+        end = clean.rfind("}")
+        if start != -1 and end != -1 and end >= start:
+            clean = clean[start:end + 1]
+        return json.loads(clean)
+
+    def _podcast_generate_packaging_artifacts(updated_store: dict, run_data: dict) -> None:
+        transcript_text = str(run_data["artifacts"]["transcript"].get("text", "")).strip()
+        if not transcript_text:
+            raise ValueError("Transcript content is missing, so packaging suggestions cannot be generated yet.")
+        chapters_text = str(run_data["artifacts"]["chapters"].get("text", "")).strip()
+        system = (
+            "You are helping build a podcast/content packaging workflow. "
+            "Return strict JSON only. No markdown. No explanation. "
+            "Focus on concise, strong, social-ready suggestions."
+        )
+        prompt = f"""
+Generate packaging suggestions for this podcast/video run.
+
+Run title:
+{run_data['title']}
+
+Transcript:
+{transcript_text}
+
+Chapters:
+{chapters_text or 'No chapter text supplied.'}
+
+Return strict JSON with exactly these keys:
+{{
+  "title_candidates": ["5 short compelling title options"],
+  "description": "one polished YouTube description",
+  "tags": ["10 to 15 relevant tags"],
+  "promo_tweets": ["3 promo tweet options"],
+  "thumbnail_text_options": ["4 short thumbnail text options"],
+  "clip_suggestions": [
+    {{
+      "title": "clip title",
+      "time_range": "MM:SS-MM:SS",
+      "hook": "why this clip works",
+      "platforms": ["YouTube Shorts", "Instagram Reels"]
+    }}
+  ]
+}}
+
+Rules:
+- Make titles and thumbnail text punchy, not generic.
+- Make tweet options post-ready and under 280 characters.
+- Clip suggestions must be specific and use timestamps that could plausibly exist in the transcript.
+- Prefer 5 clip suggestions.
+- Tags should be plain strings with no # symbol.
+""".strip()
+        with st.spinner("Generating podcast packaging suggestions..."):
+            response_text = _call_claude_proxy(prompt, system, max_tokens=2200, model="claude-sonnet-4-6", timeout=120)
+        payload = _podcast_parse_json_response(response_text)
+
+        title_candidates = [str(item).strip() for item in payload.get("title_candidates", []) if str(item).strip()]
+        promo_tweets = [str(item).strip() for item in payload.get("promo_tweets", []) if str(item).strip()]
+        thumbnail_options = [str(item).strip() for item in payload.get("thumbnail_text_options", []) if str(item).strip()]
+        tags = [str(item).strip() for item in payload.get("tags", []) if str(item).strip()]
+        clip_suggestions = payload.get("clip_suggestions", [])
+        if not title_candidates or not promo_tweets or not thumbnail_options or not tags:
+            raise ValueError("The AI response was missing required packaging suggestions.")
+
+        formatted_titles = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(title_candidates[:5]))
+        formatted_tweets = "\n\n".join(f"Option {idx + 1}\n{item}" for idx, item in enumerate(promo_tweets[:3]))
+        formatted_thumbnails = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(thumbnail_options[:4]))
+        formatted_tags = ", ".join(tags[:15])
+
+        clip_lines = []
+        for idx, clip in enumerate(clip_suggestions[:5]):
+            if not isinstance(clip, dict):
+                continue
+            clip_title = str(clip.get("title", "")).strip()
+            clip_range = str(clip.get("time_range", "")).strip()
+            clip_hook = str(clip.get("hook", "")).strip()
+            platforms = clip.get("platforms", [])
+            platforms_text = ", ".join(str(item).strip() for item in platforms if str(item).strip())
+            if clip_title or clip_range or clip_hook:
+                clip_lines.append(
+                    "\n".join(
+                        line
+                        for line in [
+                            f"Clip {idx + 1}: {clip_title}" if clip_title else f"Clip {idx + 1}",
+                            f"Time Range: {clip_range}" if clip_range else "",
+                            f"Hook: {clip_hook}" if clip_hook else "",
+                            f"Platforms: {platforms_text}" if platforms_text else "",
+                        ]
+                        if line
+                    )
+                )
+        formatted_clips = "\n\n".join(clip_lines)
+        description_text = str(payload.get("description", "")).strip()
+        if not description_text or not formatted_clips:
+            raise ValueError("The AI response did not include enough packaging detail to save.")
+
+        artifact_updates = {
+            "title": (formatted_titles, run_data["artifacts"]["title"].get("path", ""), "Generated title candidates from transcript."),
+            "description": (description_text, run_data["artifacts"]["description"].get("path", ""), "Generated YouTube description from transcript."),
+            "tags": (formatted_tags, run_data["artifacts"]["tags"].get("path", ""), "Generated tags from transcript."),
+            "tweet": (formatted_tweets, run_data["artifacts"]["tweet"].get("path", ""), "Generated promo tweet options from transcript."),
+            "thumbnail_text": (formatted_thumbnails, run_data["artifacts"]["thumbnail_text"].get("path", ""), "Generated thumbnail text options from transcript."),
+            "clips": (formatted_clips, run_data["artifacts"]["clips"].get("path", ""), "Generated clip title and platform suggestions from transcript."),
+        }
+        for artifact_id, (text_value, path_value, notes_value) in artifact_updates.items():
+            podcast_tracker.update_artifact(
+                updated_store,
+                run_id=run_data["id"],
+                artifact_id=artifact_id,
+                actor=actor,
+                text=text_value,
+                path=path_value,
+                status="draft",
+                notes=notes_value,
+            )
+
     def _guided_actions_for_run(run: dict) -> list[dict]:
         latest = podcast_tracker.latest_gate_decisions(run)
         state = run["current_state"]
         run_metrics = podcast_tracker.build_run_metrics(run)
         transcript_ready = bool(run["artifacts"]["transcript"]["text"] or run["artifacts"]["transcript"]["path"])
+        packaging_ready = _podcast_packaging_ready(run)
         has_delivery_receipt = any(
             delivery.get("external_id") or delivery.get("url") or delivery.get("status") in {"posted", "verified"}
             for delivery in run.get("deliveries", {}).values()
@@ -11273,11 +11407,11 @@ def page_podcast():
             add("gate1_changes", "Need Changes", "Keep the run in Gate 1 while fixes happen.", "Approvals")
             add("block_run", "Block Run", "Use if the run cannot continue without manual help.", "Activity")
         elif state == "gate1_approved":
-            add("metadata_ready", "1. Metadata Ready", "All packaging inputs are ready for the next phase.", "Artifacts", "primary")
+            add("metadata_ready", "1. Metadata Ready", "All packaging inputs are ready for the next phase.", "Artifacts", "primary", disabled=not packaging_ready)
             add("tweet_waiting", "Waiting On Tweet", "Use if the tweet is the only missing packaging piece.", "Artifacts")
             add("thumbnail_waiting", "Waiting On Thumbnail", "Use if the thumbnail is the current blocker.", "Artifacts")
         elif state == "metadata_ready":
-            add("start_gate2", "1. Start Gate 2 Review", "Move into the final package review.", "Approvals", "primary")
+            add("start_gate2", "1. Start Gate 2 Review", "Move into the final package review.", "Approvals", "primary", disabled=not packaging_ready)
             add("block_run", "Block Run", "Use if packaging found a manual blocker.", "Activity")
         elif state == "tweet_waiting":
             add("tweet_ready", "1. Tweet Ready", "Clear the tweet blocker and return to packaging ready.", "Artifacts", "primary")
@@ -11968,6 +12102,34 @@ def page_podcast():
         artifact_lookup = {spec["id"]: spec for spec in podcast_tracker.ARTIFACT_SPECS}
         artifact_ids = [spec["id"] for spec in podcast_tracker.ARTIFACT_SPECS]
         artifact_key = f"podcast_artifact_{run['id']}"
+        transcript_available = _podcast_artifact_has_content(run, "transcript")
+        packaging_ready = _podcast_packaging_ready(run)
+        if transcript_available:
+            st.markdown(
+                '<div class="podcast-panel"><div class="podcast-status-kicker">Packaging Generator</div><div style="font-size:18px;color:#E6EDF3;font-weight:700;line-height:1.35;">Generate titles, description, tags, tweets, thumbnail text, and clip ideas from the transcript.</div><div class="podcast-status-meta">This fills the packaging artifacts with draft suggestions so you do not have to paste them manually.</div></div>',
+                unsafe_allow_html=True,
+            )
+            generator_cols = st.columns([1.2, 1.2], gap="small")
+            with generator_cols[0]:
+                if st.button(
+                    "Generate Packaging Suggestions",
+                    key=f"podcast_generate_packaging_{run['id']}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    try:
+                        _podcast_generate_packaging_artifacts(updated_store, run)
+                    except Exception as exc:
+                        st.warning(str(exc))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Packaging suggestions generated from the transcript."}
+                        _save_podcast_and_rerun(updated_store, run["id"])
+            with generator_cols[1]:
+                status_copy = "Packaging suggestions are ready." if packaging_ready else "Packaging suggestions still need to be generated or completed."
+                st.caption(status_copy)
+        else:
+            st.info("Transcript is required before packaging suggestions can be generated.")
         if artifact_key not in st.session_state:
             st.session_state[artifact_key] = next(
                 (
