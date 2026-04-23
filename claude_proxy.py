@@ -26,6 +26,7 @@ from anthropic_circuit import (
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
 
 CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
@@ -75,7 +76,9 @@ def _save_podcast_job(job: dict) -> None:
     if not run_id:
         return
     job_file = _podcast_job_file(run_id)
-    job_file.write_text(json.dumps(job, indent=2), encoding="utf-8")
+    temp_file = job_file.with_suffix(job_file.suffix + ".tmp")
+    temp_file.write_text(json.dumps(job, indent=2), encoding="utf-8")
+    temp_file.replace(job_file)
 
 
 def _podcast_now() -> str:
@@ -297,7 +300,7 @@ def _run_podcast_clip_generation(job_seed: dict) -> None:
             "--max-duration",
             "80",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
         log_path.write_text(
             (result.stdout or "") + ("\n\n--- STDERR ---\n\n" + result.stderr if result.stderr else ""),
             encoding="utf-8",
@@ -1110,8 +1113,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "run_id and source_path are required"})
                 return
             existing = _load_podcast_job(run_id)
-            if existing and existing.get("status") in {"queued", "running"} and not force:
-                self.send_json(200, {"ok": True, "job": existing, "accepted": False, "message": "Job already running"})
+            if existing and existing.get("status") in {"queued", "running"}:
+                message = "Job already running"
+                if force:
+                    message = "Job is already running and cannot be restarted until it finishes"
+                self.send_json(200, {"ok": True, "job": existing, "accepted": False, "message": message})
                 return
             resolved_source_path = _resolve_podcast_source_path(source_path)
             if not resolved_source_path or not os.path.exists(resolved_source_path):
@@ -1158,8 +1164,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_json(409, {"error": "Transcription must complete before clips can be generated"})
                 return
             existing_status = str(job.get("clips_status", "")).strip()
-            if existing_status in {"queued", "running"} and not force:
-                self.send_json(200, {"ok": True, "accepted": False, "job": _podcast_refresh_clip_index(run_id) or job, "message": "Clip generation already running"})
+            if existing_status in {"queued", "running"}:
+                message = "Clip generation already running"
+                if force:
+                    message = "Clip generation is already running and cannot be restarted until it finishes"
+                self.send_json(200, {"ok": True, "accepted": False, "job": _podcast_refresh_clip_index(run_id) or job, "message": message})
                 return
             clips_dir = Path(str(job.get("clips_dir", "")).strip() or (PODCAST_JOB_ROOT / run_id / "clips"))
             clips_dir.mkdir(parents=True, exist_ok=True)
