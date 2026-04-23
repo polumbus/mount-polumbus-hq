@@ -938,7 +938,7 @@ def build_run_metrics(run: dict[str, Any]) -> dict[str, Any]:
     verification = run.get("verification", {})
     latest = latest_gate_decisions(run)
     verified_checks = sum(1 for check_id in _VERIFICATION_IDS if verification.get(check_id))
-    requires_sync = bool(_sanitize_text(run.get("discord_reference", ""))) or _sanitize_text(run.get("source_of_truth", "")) == "discord"
+    requires_sync = bool(_sanitize_text(run.get("discord_reference", "")))
     sync_status = "hq_only" if not requires_sync else "unsynced"
     sync_age_hours = None
     if requires_sync and run.get("last_synced_at"):
