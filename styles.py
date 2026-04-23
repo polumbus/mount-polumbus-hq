@@ -600,6 +600,11 @@ hr { border-color: #14203A !important; }
   border-color: rgba(196,158,60,0.3);
   color: #C49E3C;
 }
+.podcast-phase-chip.is-skipped {
+  background: rgba(139,148,158,0.08);
+  border-color: rgba(139,148,158,0.18);
+  color: #8B949E;
+}
 .podcast-inline-kv {
   display: flex;
   justify-content: space-between;

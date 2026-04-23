@@ -11184,6 +11184,7 @@ def page_podcast():
         *,
         title: str,
         discord_reference: str,
+        run_mode: str,
         episode_code: str = "",
         source_path: str = "",
         publish_window: str = "",
@@ -11218,11 +11219,12 @@ def page_podcast():
             title=clean_title or podcast_tracker._suggest_title_from_source(clean_source),
             episode_code=episode_code,
             source_path=source_path,
+            run_mode=run_mode,
             discord_reference=discord_reference,
             publish_window=publish_window,
             notes=notes,
         )
-        if clean_source and "://" not in clean_source:
+        if run_mode == "local" and clean_source and "://" not in clean_source:
             try:
                 start_result = _podcast_proxy_start(new_run["id"], clean_source, new_run["title"])
                 job = start_result.get("job", {})
@@ -11245,7 +11247,7 @@ def page_podcast():
                 )
                 st.session_state["_podcast_flash_message"] = {"level": "error", "text": f"Podcast run was created, but local start failed: {exc}"}
         elif clean_source:
-            st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. Automatic local start currently supports local file paths on your proxy host."}
+            st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. This mode tracks the workflow, but it does not start the local runner automatically."}
         else:
             st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. Add a local source path when you are ready to launch the independent runner."}
         _save_podcast_and_rerun(updated_store, new_run["id"])
@@ -11778,6 +11780,18 @@ Return strict JSON with exactly these keys:
         clean = _podcast_clean_display_value(value)
         return bool(clean) and "://" not in clean
 
+    def _podcast_run_mode(run_data: dict) -> str:
+        clean_mode = str(run_data.get("run_mode", "")).strip().lower()
+        if clean_mode in {"local", "url", "discord"}:
+            return clean_mode
+        if _podcast_is_local_source_path(run_data.get("source_path", "")):
+            return "local"
+        if str(run_data.get("source_path", "")).strip():
+            return "url"
+        if str(run_data.get("discord_reference", "")).strip():
+            return "discord"
+        return "local"
+
     def _podcast_compact_text(value: str, limit: int = 180) -> str:
         clean = " ".join(str(value or "").split())
         if len(clean) <= limit:
@@ -11860,8 +11874,7 @@ Return strict JSON with exactly these keys:
     def _podcast_progress_steps(run: dict, proxy_job: dict) -> tuple[list[dict], int]:
         state = run["current_state"]
         runner_status = str(proxy_job.get("status", "")).strip().lower()
-        is_local = _podcast_is_local_source_path(run.get("source_path", ""))
-        clip_status = str(proxy_job.get("clips_status", "")).strip().lower()
+        is_local = _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", ""))
         progress_steps = [
             {"id": "start", "label": "Start", "status": "pending"},
             {"id": "gate1", "label": "Gate 1", "status": "pending"},
@@ -11893,11 +11906,103 @@ Return strict JSON with exactly these keys:
         elif state == "done":
             progress_steps[4]["status"] = "complete"
         if state == "done":
-            progress_steps[5]["status"] = "active"
+            progress_steps[5]["status"] = "complete"
         complete_count = sum(1 for step in progress_steps if step["status"] == "complete")
         if state == "done":
             complete_count = len(progress_steps)
         return progress_steps, complete_count
+
+    def _reconcile_podcast_proxy_runs(store_data: dict) -> tuple[dict, bool]:
+        updated_store = podcast_tracker.deepcopy_store(store_data)
+        changed = False
+        for run_data in list(updated_store.get("runs", [])):
+            if _podcast_run_mode(run_data) != "local" or not _podcast_is_local_source_path(run_data.get("source_path", "")):
+                continue
+            try:
+                proxy_job = (_podcast_proxy_status(run_data["id"]) or {}).get("job", {})
+            except Exception:
+                continue
+            if not proxy_job:
+                continue
+            clip_inventory = _podcast_filtered_clip_files(proxy_job.get("clips_files", []), run_data.get("cached_clip_files", []))
+            if clip_inventory != run_data.get("cached_clip_files", []):
+                podcast_tracker.cache_clip_inventory(updated_store, run_id=run_data["id"], clip_files=clip_inventory)
+                run_data = next(item for item in updated_store["runs"] if item["id"] == run_data["id"])
+                changed = True
+            transcript_text = str(proxy_job.get("transcript_text", "")).strip()
+            transcript_path = str(proxy_job.get("transcript_path", "")).strip()
+            chapters_text = str(proxy_job.get("chapters_text", "")).strip()
+            chapters_path = str(proxy_job.get("chapters_path", "")).strip()
+            clips_dir = str(proxy_job.get("clips_dir", "")).strip()
+            if str(proxy_job.get("status", "")).strip() == "completed":
+                transcript_missing = not _podcast_artifact_has_content(run_data, "transcript")
+                if transcript_text and transcript_missing:
+                    podcast_tracker.update_artifact(
+                        updated_store,
+                        run_id=run_data["id"],
+                        artifact_id="transcript",
+                        actor=actor,
+                        text=transcript_text,
+                        path=transcript_path,
+                        status="draft",
+                        notes="Imported automatically from the local HQ podcast runner.",
+                    )
+                    if chapters_text or chapters_path:
+                        podcast_tracker.update_artifact(
+                            updated_store,
+                            run_id=run_data["id"],
+                            artifact_id="chapters",
+                            actor=actor,
+                            text=chapters_text,
+                            path=chapters_path,
+                            status="draft" if chapters_text else "missing",
+                            notes="Imported automatically from the local HQ podcast runner.",
+                        )
+                    if clips_dir and run_data["artifacts"]["clips"].get("path", "").strip() != clips_dir:
+                        podcast_tracker.update_artifact(
+                            updated_store,
+                            run_id=run_data["id"],
+                            artifact_id="clips",
+                            actor=actor,
+                            text=run_data["artifacts"]["clips"].get("text", ""),
+                            path=clips_dir,
+                            status=run_data["artifacts"]["clips"].get("status", "missing"),
+                            notes=run_data["artifacts"]["clips"].get("notes", "") or "Reserved output directory from the local HQ podcast runner.",
+                        )
+                    if run_data["current_state"] in {"initialized", "transcribing", "blocked_manual_fix"}:
+                        podcast_tracker.transition_run(
+                            updated_store,
+                            run_id=run_data["id"],
+                            actor=actor,
+                            state="gate1_waiting",
+                            blocker="",
+                            note="Local HQ podcast runner completed transcript generation.",
+                        )
+                    changed = True
+                elif not transcript_text and run_data["current_state"] in {"initialized", "transcribing"} and transcript_missing:
+                    podcast_tracker.transition_run(
+                        updated_store,
+                        run_id=run_data["id"],
+                        actor=actor,
+                        state="blocked_manual_fix",
+                        blocker="Local HQ podcast runner completed without a transcript.",
+                        note="Runner completed but no transcript text was returned.",
+                    )
+                    changed = True
+            elif (
+                str(proxy_job.get("status", "")).strip() == "failed"
+                and run_data["current_state"] not in {"gate1_waiting", "gate1_approved", "metadata_ready", "gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}
+            ):
+                podcast_tracker.transition_run(
+                    updated_store,
+                    run_id=run_data["id"],
+                    actor=actor,
+                    state="blocked_manual_fix",
+                    blocker=f"Local HQ podcast runner failed: {proxy_job.get('error', 'Unknown error')}",
+                    note="Local HQ podcast runner failed during transcription.",
+                )
+                changed = True
+        return updated_store, changed
 
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
@@ -11936,6 +12041,13 @@ Return strict JSON with exactly these keys:
             ):
                 st.session_state.pop(key, None)
             st.rerun()
+
+    reconciled_store, reconciled_changed = _reconcile_podcast_proxy_runs(store)
+    if reconciled_changed:
+        _save_podcast_and_rerun(reconciled_store, reconciled_store.get("active_run_id", ""))
+    store = reconciled_store
+    runs = store["runs"]
+    run_lookup = {run["id"]: run for run in runs}
 
     selected_run_id = ""
     if requested_run_id in run_lookup:
@@ -11997,9 +12109,16 @@ Return strict JSON with exactly these keys:
                 if wizard_mode != "Mirror Discord Run" and not wizard_source.strip():
                     st.error("Add the video path or URL first.")
                     return
+                if wizard_mode == "Start From Local Video" and not _podcast_is_local_source_path(wizard_source):
+                    st.error("Use a real local file path for this mode.")
+                    return
+                if wizard_mode == "Track External Video URL" and _podcast_is_local_source_path(wizard_source):
+                    st.error("Use a real URL for this mode.")
+                    return
                 _create_hq_run(
                     title=wizard_title,
                     discord_reference=wizard_discord,
+                    run_mode="local" if wizard_mode == "Start From Local Video" else ("url" if wizard_mode == "Track External Video URL" else "discord"),
                     source_path=wizard_source,
                     notes=f"Started from the Podcast wizard ({wizard_mode}).",
                 )
@@ -12012,7 +12131,8 @@ Return strict JSON with exactly these keys:
         current_metrics = podcast_tracker.build_run_metrics(current_run)
         current_proxy_job = {}
         current_proxy_error = ""
-        local_source = _podcast_is_local_source_path(current_run.get("source_path", ""))
+        current_run_mode = _podcast_run_mode(current_run)
+        local_source = current_run_mode == "local" and _podcast_is_local_source_path(current_run.get("source_path", ""))
         if local_source:
             try:
                 current_proxy_job = (_podcast_proxy_status(current_run["id"]) or {}).get("job", {})
@@ -12030,6 +12150,8 @@ Return strict JSON with exactly these keys:
                 chip_class += " is-active"
             elif step["status"] == "complete":
                 chip_class += " is-complete"
+            elif step["status"] == "skipped":
+                chip_class += " is-skipped"
             progress_markup.append(f'<span class="{chip_class}">{html.escape(step["label"])}</span>')
 
         st.markdown(
@@ -12045,10 +12167,9 @@ Return strict JSON with exactly these keys:
             unsafe_allow_html=True,
         )
 
-        if current_run.get("blocker"):
-            st.error(current_run["blocker"])
-
         state = current_run["current_state"]
+        if current_run.get("blocker") and state != "blocked_manual_fix":
+            st.error(current_run["blocker"])
 
         def _save_and_stay(updated_store: dict) -> None:
             st.session_state[wizard_open_key] = True
@@ -12057,7 +12178,6 @@ Return strict JSON with exactly these keys:
         if state == "blocked_manual_fix":
             blocked_from_state = str(current_run.get("blocked_from_state", "")).strip()
             blocker_copy = current_run.get("blocker") or "HQ hit a blocker and needs one clean recovery action."
-            st.error(blocker_copy)
             if local_source and blocked_from_state in {"initialized", "transcribing"}:
                 st.info("HQ can restart the transcript step from here.")
                 if st.button("Start This Step Over", key=f"wizard_retry_transcript_{current_run['id']}", type="primary", use_container_width=True):
@@ -12256,6 +12376,12 @@ Return strict JSON with exactly these keys:
 
         if state in {"gate1_approved", "metadata_ready"}:
             st.info("Step 3: review the generated package, then move into clip review.")
+            packaging_ready = _podcast_packaging_ready(current_run)
+            missing_packaging = [
+                spec["label"]
+                for spec in podcast_tracker.ARTIFACT_SPECS
+                if spec["id"] in _podcast_packaging_artifact_ids() and not _podcast_artifact_has_content(current_run, spec["id"])
+            ]
             package_cols = st.columns(2, gap="small")
             with package_cols[0]:
                 st.markdown("**Approved Title**")
@@ -12273,7 +12399,10 @@ Return strict JSON with exactly these keys:
                 st.caption(_podcast_compact_text(current_run["artifacts"]["clips"].get("text", ""), 220) or "No clip packages generated yet.")
             review_cols = st.columns(2, gap="small")
             with review_cols[0]:
-                if st.button("Packaging Looks Good", key=f"wizard_start_gate2_{current_run['id']}", type="primary", use_container_width=True):
+                if st.button("Packaging Looks Good", key=f"wizard_start_gate2_{current_run['id']}", type="primary", use_container_width=True, disabled=not packaging_ready):
+                    if not _podcast_packaging_ready(current_run):
+                        st.warning("Generate or fill every required packaging item before moving on.")
+                        return
                     updated_store = podcast_tracker.deepcopy_store(store)
                     podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="gate2_waiting", blocker="", note="Wizard completed package review and opened clip review.")
                     _save_and_stay(updated_store)
@@ -12287,12 +12416,16 @@ Return strict JSON with exactly these keys:
                     else:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Packaging suggestions regenerated."}
                         _save_and_stay(updated_store)
+            if missing_packaging:
+                st.warning(f"Missing before Gate 2: {', '.join(missing_packaging)}.")
             return
 
         if state == "gate2_waiting":
             if not local_source:
-                st.info("Step 4: this run does not use the local clip runner, so approve Gate 2 after you review the saved clip notes.")
-                if st.button("Approve Gate 2", key=f"wizard_gate2_manual_{current_run['id']}", type="primary", use_container_width=True):
+                clip_notes_ready = _podcast_artifact_has_content(current_run, "clips")
+                st.info("Step 4: this run does not use the local clip runner, so review the saved clip notes before approving Gate 2.")
+                st.caption(_podcast_compact_text(current_run["artifacts"]["clips"].get("text", ""), 320) or "No clip notes are saved yet.")
+                if st.button("Approve Gate 2", key=f"wizard_gate2_manual_{current_run['id']}", type="primary", use_container_width=True, disabled=not clip_notes_ready):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     podcast_tracker.record_approval(
                         updated_store,
@@ -12305,6 +12438,8 @@ Return strict JSON with exactly these keys:
                     )
                     st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 2 approved."}
                     _save_and_stay(updated_store)
+                if not clip_notes_ready:
+                    st.warning("Save the reviewed clip notes first.")
                 return
             if selected_clip_name and not clip_files:
                 st.info("Step 4: HQ already has a saved clip for this run. Approve it now, or regenerate the clip step if you want fresh choices.")
@@ -12428,11 +12563,37 @@ Return strict JSON with exactly these keys:
                             st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
                             st.rerun()
                 return
-            st.warning("No clips are available yet.")
+            st.warning("No usable clips are available yet.")
+            empty_clip_cols = st.columns(2, gap="small")
+            with empty_clip_cols[0]:
+                if st.button("Start This Step Over", key=f"wizard_empty_clip_retry_{current_run['id']}", type="primary", use_container_width=True):
+                    try:
+                        clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
+                        if not clip_result.get("accepted", True):
+                            st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
+                            return
+                    except Exception as exc:
+                        st.error(_podcast_user_error_text(str(exc)))
+                    else:
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
+                        st.rerun()
+            with empty_clip_cols[1]:
+                if st.button("Open Advanced Workspace", key=f"wizard_empty_clip_advanced_{current_run['id']}", use_container_width=True):
+                    st.session_state[advanced_open_key] = True
+                    _set_podcast_section(current_run["id"], "Artifacts")
+                    st.rerun()
             return
 
-        if state in {"gate2_approved", "ready_to_publish"}:
-            st.info("Step 5: once the episode is live, move into the final link-and-verification check.")
+        if state == "gate2_approved":
+            st.info("Step 5: mark this package ready to publish.")
+            if st.button("Ready To Publish", key=f"wizard_mark_ready_publish_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="ready_to_publish", blocker="", note="Wizard marked the run ready to publish.")
+                _save_and_stay(updated_store)
+            return
+
+        if state == "ready_to_publish":
+            st.info("Step 6: once the episode is live, move into the final link-and-verification check.")
             if st.button("It Is Live, Add Public Links", key=f"wizard_publish_ready_{current_run['id']}", type="primary", use_container_width=True):
                 updated_store = podcast_tracker.deepcopy_store(store)
                 podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="publish_pending", blocker="", note="Wizard moved the run into the final publish check.")
@@ -12440,7 +12601,7 @@ Return strict JSON with exactly these keys:
             return
 
         if state == "publish_pending":
-            st.info("Step 5: paste the public links, finish the checks, and close the workflow.")
+            st.info("Step 7: save the public links, then finish verification when every check is true.")
             with st.form(f"podcast_wizard_publish_verify_{current_run['id']}"):
                 wizard_youtube = st.text_input("YouTube Link", value=current_run["deliveries"]["youtube"]["url"])
                 wizard_x = st.text_input("X Link", value=current_run["deliveries"]["x"]["url"])
@@ -12448,8 +12609,17 @@ Return strict JSON with exactly these keys:
                 verify_processing = st.checkbox("Processing finished", value=bool(current_run["verification"]["processing_checked"]))
                 verify_transcript = st.checkbox("Transcript is available", value=bool(current_run["verification"]["transcript_checked"]))
                 verify_social = st.checkbox("Social receipt is confirmed", value=bool(current_run["verification"]["social_ids_checked"]))
+                publish_save_links = st.form_submit_button("Save Public Links", use_container_width=True)
                 wizard_publish_submit = st.form_submit_button("Finish Workflow", type="primary", use_container_width=True)
-            if wizard_publish_submit:
+            if publish_save_links:
+                updated_store = podcast_tracker.deepcopy_store(store)
+                if wizard_youtube.strip():
+                    podcast_tracker.update_delivery(updated_store, run_id=current_run["id"], channel="youtube", actor=actor, status="posted", external_id="", url=wizard_youtube, notes="Saved from the Podcast wizard.")
+                if wizard_x.strip():
+                    podcast_tracker.update_delivery(updated_store, run_id=current_run["id"], channel="x", actor=actor, status="posted", external_id="", url=wizard_x, notes="Saved from the Podcast wizard.")
+                st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Public links saved."}
+                _save_and_stay(updated_store)
+            elif wizard_publish_submit:
                 if not (wizard_youtube.strip() or wizard_x.strip()):
                     st.error("Add at least one public link before marking the run verified.")
                 elif not all([verify_public, verify_processing, verify_transcript, verify_social]):
@@ -12484,13 +12654,13 @@ Return strict JSON with exactly these keys:
 
         if state == "public_verified":
             if current_metrics["requires_sync"] and current_metrics["sync_status"] != "fresh":
-                st.info("Step 6: record a fresh Discord sync checkpoint before HQ marks this run done.")
+                st.info("Step 8: record a fresh Discord sync checkpoint before HQ marks this run done.")
                 if st.button("Mark Discord Sync Checkpoint", key=f"wizard_sync_done_{current_run['id']}", type="primary", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     podcast_tracker.record_sync_checkpoint(updated_store, run_id=current_run["id"], actor=actor, note="Wizard recorded a final Discord sync checkpoint.")
                     _save_and_stay(updated_store)
             else:
-                st.success("Step 6: everything is verified. Mark the run done.")
+                st.success("Step 8: everything is verified. Mark the run done.")
                 if st.button("Mark Done", key=f"wizard_done_{current_run['id']}", type="primary", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="done", blocker="", note="Wizard marked the run done.")
@@ -12541,7 +12711,7 @@ Return strict JSON with exactly these keys:
             return
         compact_run = run_lookup[selected_run_id]
         compact_proxy_job = {}
-        if _podcast_is_local_source_path(compact_run.get("source_path", "")):
+        if _podcast_run_mode(compact_run) == "local" and _podcast_is_local_source_path(compact_run.get("source_path", "")):
             try:
                 compact_proxy_job = (_podcast_proxy_status(compact_run["id"]) or {}).get("job", {})
             except Exception:
@@ -12554,6 +12724,8 @@ Return strict JSON with exactly these keys:
                 chip_class += " is-active"
             elif step["status"] == "complete":
                 chip_class += " is-complete"
+            elif step["status"] == "skipped":
+                chip_class += " is-skipped"
             compact_step_markup.append(f'<span class="{chip_class}">{html.escape(step["label"])}</span>')
         st.markdown(
             f"""
@@ -12589,6 +12761,8 @@ Return strict JSON with exactly these keys:
                 chip_class += " is-active"
             elif phase["status"] == "complete":
                 chip_class += " is-complete"
+            elif phase["status"] == "skipped":
+                chip_class += " is-skipped"
             phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
 
         next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
@@ -12660,7 +12834,7 @@ Return strict JSON with exactly these keys:
     run = run_lookup[selected_run_id]
     proxy_job = {}
     proxy_job_error = ""
-    if run.get("source_path") and "://" not in str(run.get("source_path", "")):
+    if _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", "")):
         try:
             proxy_job = (_podcast_proxy_status(run["id"]) or {}).get("job", {})
         except Exception as exc:
@@ -12827,7 +13001,7 @@ Return strict JSON with exactly these keys:
         with runner_cols[1]:
             if proxy_job.get("output_dir"):
                 st.caption(f"Local output directory: {proxy_job.get('output_dir')}")
-    elif not metrics["requires_sync"] and run.get("source_path") and "://" not in str(run.get("source_path", "")):
+    elif _podcast_run_mode(run) == "local" and not metrics["requires_sync"] and _podcast_is_local_source_path(run.get("source_path", "")):
         st.info("This HQ run has a local source path but no local runner job yet.")
         if st.button("Start Local Runner", key=f"podcast_start_runner_{run['id']}", type="primary", use_container_width=True):
             updated_store = podcast_tracker.deepcopy_store(store)
@@ -13025,6 +13199,8 @@ Return strict JSON with exactly these keys:
                 chip_class += " is-active"
             elif phase["status"] == "complete":
                 chip_class += " is-complete"
+            elif phase["status"] == "skipped":
+                chip_class += " is-skipped"
             phase_chips.append(f'<span class="{chip_class}">{html.escape(phase["label"])}</span>')
         next_action_items = "".join(f"<li>{html.escape(item)}</li>" for item in dashboard["next_actions"])
         workflow_col, action_col = st.columns([1.5, 1], gap="large")
@@ -13165,7 +13341,7 @@ Return strict JSON with exactly these keys:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": f"Selected clip: {preview_clip['name']}"}
                         _save_podcast_and_rerun(updated_store, run["id"])
                 with artifact_clip_cols[1]:
-                    if _podcast_is_local_source_path(run.get("source_path", "")) and st.button("Start This Step Over", key=f"podcast_artifact_retry_clip_step_{run['id']}", use_container_width=True):
+                    if _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", "")) and st.button("Start This Step Over", key=f"podcast_artifact_retry_clip_step_{run['id']}", use_container_width=True):
                         try:
                             clip_result = _podcast_proxy_generate_clips(run["id"], force=True)
                             if not clip_result.get("accepted", True):
@@ -13261,8 +13437,11 @@ Return strict JSON with exactly these keys:
         if approval_submitted:
             updated_store = podcast_tracker.deepcopy_store(store)
             try:
-                if approval_gate == "gate2" and approval_decision == "approved" and run.get("source_path") and "://" not in str(run.get("source_path", "")) and not str(run.get("selected_clip_name", "")).strip():
-                    raise ValueError("Pick a shorts clip before approving Gate 2 for a local HQ run.")
+                if approval_gate == "gate2" and approval_decision == "approved":
+                    if not _podcast_artifact_has_content(run, "clips"):
+                        raise ValueError("Save the reviewed clip notes before approving Gate 2.")
+                    if _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", "")) and not str(run.get("selected_clip_name", "")).strip():
+                        raise ValueError("Pick a shorts clip before approving Gate 2 for a local HQ run.")
                 podcast_tracker.record_approval(
                     updated_store,
                     run_id=run["id"],

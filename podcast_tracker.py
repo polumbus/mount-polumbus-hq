@@ -47,6 +47,7 @@ _GATE_IDS = {spec["id"] for spec in APPROVAL_GATES}
 _DELIVERY_IDS = {spec["id"] for spec in DELIVERY_SPECS}
 _VERIFICATION_IDS = {spec["id"] for spec in VERIFICATION_CHECKS}
 _VALID_STATES = set(PODCAST_STATES)
+_RUN_MODES = {"local", "url", "discord"}
 _ARTIFACT_STATUSES = {"missing", "draft", "approved", "blocked"}
 _DELIVERY_STATUSES = {"not_started", "pending", "posted", "verified", "retry", "failed"}
 _APPROVAL_DECISIONS = {"approved", "changes_requested", "blocked"}
@@ -141,6 +142,30 @@ def _sanitize_text(value: Any) -> str:
 def _normalize_local_source(source_path: str) -> str:
     clean = _sanitize_text(source_path).strip("\"'")
     return clean.replace("\\", "/").rstrip("/")
+
+
+def _derive_run_mode(source_path: str, discord_reference: str) -> str:
+    clean_source = _sanitize_text(source_path)
+    clean_discord = _sanitize_text(discord_reference)
+    if clean_source:
+        return "url" if "://" in clean_source else "local"
+    if clean_discord:
+        return "discord"
+    return "local"
+
+
+def _normalize_run_mode(run_mode: str, source_path: str, discord_reference: str) -> str:
+    clean_mode = _sanitize_text(run_mode).lower()
+    derived = _derive_run_mode(source_path, discord_reference)
+    if clean_mode not in _RUN_MODES:
+        return derived
+    if clean_mode == "local" and (not _sanitize_text(source_path) or "://" in _sanitize_text(source_path)):
+        return derived
+    if clean_mode == "url" and (not _sanitize_text(source_path) or "://" not in _sanitize_text(source_path)):
+        return derived
+    if clean_mode == "discord" and _sanitize_text(source_path):
+        return derived
+    return clean_mode
 
 
 def _suggest_title_from_source(source_path: str) -> str:
@@ -302,6 +327,7 @@ def _default_run() -> dict[str, Any]:
         "title": "",
         "episode_code": "",
         "source_path": "",
+        "run_mode": "local",
         "discord_reference": "",
         "publish_window": "",
         "source_of_truth": "hq",
@@ -379,6 +405,11 @@ def _merge_run_records(primary: dict[str, Any], secondary: dict[str, Any]) -> di
         fields=("title", "episode_code", "source_path", "discord_reference", "publish_window", "notes"),
         timestamp_field="details_updated_at",
     )
+    merged["run_mode"] = _normalize_run_mode(
+        merged.get("run_mode", ""),
+        merged.get("source_path", ""),
+        merged.get("discord_reference", ""),
+    )
     _merge_run_fields_by_timestamp(
         merged,
         primary,
@@ -426,7 +457,7 @@ def _merge_run_records(primary: dict[str, Any], secondary: dict[str, Any]) -> di
         _sanitize_text(primary.get("updated_at", "")),
         _sanitize_text(secondary.get("updated_at", "")),
     )
-    merged["source_of_truth"] = "discord"
+    merged["source_of_truth"] = "discord" if merged.get("discord_reference", "") else "hq"
 
     merged["artifacts"] = {}
     for spec in ARTIFACT_SPECS:
@@ -490,6 +521,7 @@ def normalize_podcast_store(raw: Any) -> dict[str, Any]:
             "title",
             "episode_code",
             "source_path",
+            "run_mode",
             "discord_reference",
             "publish_window",
             "source_of_truth",
@@ -510,6 +542,7 @@ def normalize_podcast_store(raw: Any) -> dict[str, Any]:
             "clip_cache_updated_at",
         ):
             run[field] = _sanitize_text(raw_run.get(field, run[field]))
+        run["run_mode"] = _normalize_run_mode(run.get("run_mode", ""), run.get("source_path", ""), run.get("discord_reference", ""))
         raw_cached_clip_files = raw_run.get("cached_clip_files", [])
         if isinstance(raw_cached_clip_files, list):
             normalized_clip_files = []
@@ -654,6 +687,7 @@ def create_run(
     title: str,
     episode_code: str = "",
     source_path: str = "",
+    run_mode: str = "",
     discord_reference: str = "",
     publish_window: str = "",
     notes: str = "",
@@ -664,6 +698,7 @@ def create_run(
     run["title"] = title.strip() or _suggest_title_from_source(source_path)
     run["episode_code"] = episode_code.strip()
     run["source_path"] = source_path.strip()
+    run["run_mode"] = _normalize_run_mode(run_mode, run["source_path"], discord_reference)
     run["discord_reference"] = discord_reference.strip()
     run["publish_window"] = publish_window.strip()
     run["notes"] = notes.strip()
@@ -717,6 +752,7 @@ def update_run_details(
     details_changed = any(before[key] != next_values[key] for key in ("title", "episode_code", "source_path", "discord_reference", "publish_window", "notes"))
     blocker_changed = before["blocker"] != next_values["blocker"]
     run.update(next_values)
+    run["run_mode"] = _normalize_run_mode(run.get("run_mode", ""), run["source_path"], run["discord_reference"])
     run["source_of_truth"] = "discord" if next_values["discord_reference"] else "hq"
     ts = _touch_run(run)
     if details_changed:
@@ -880,6 +916,11 @@ def cache_clip_inventory(
     ts = _now()
     run["cached_clip_files"] = normalized
     run["clip_cache_updated_at"] = ts
+    selected_name = _sanitize_text(run.get("selected_clip_name", ""))
+    if selected_name and not any(item.get("name", "") == selected_name for item in normalized):
+        run["selected_clip_name"] = ""
+        run["selected_clip_path"] = ""
+        run["clip_selection_updated_at"] = ts
     _touch_run(run, ts)
     _touch_store(store, ts)
     _sort_runs(store)
