@@ -16,6 +16,7 @@ import urllib.parse
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import podcast_tracker
+import podcast_remote_store
 import podcast_store
 import podcast_sync
 import podcast_workflow
@@ -1314,24 +1315,28 @@ def _write_podcast_local_store(store: dict) -> None:
     podcast_store.write_local_store(store, get_data_dir())
 
 
-def _load_podcast_remote_store_raw() -> tuple[dict, str]:
+def _load_podcast_remote_store_bundle_raw() -> tuple[dict, str, bool]:
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
         resp.raise_for_status()
         data = resp.json()
-        file_meta = data.get("files", {}).get("hq_podcast_runs.json", {})
-        if file_meta.get("content"):
-            content = file_meta.get("content", "")
-            if not file_meta.get("truncated"):
-                return json.loads(content), ""
-        if file_meta.get("raw_url"):
-            raw_resp = requests.get(file_meta["raw_url"], timeout=8)
+        files = data.get("files", {})
+
+        def _fetch_text(raw_url: str) -> str:
+            raw_resp = requests.get(raw_url, timeout=8)
             raw_resp.raise_for_status()
-            return json.loads(raw_resp.text), ""
-        return podcast_tracker.empty_podcast_store(), ""
+            return raw_resp.text
+
+        store, error = podcast_remote_store.load_remote_store_from_files(files, fetch_text=_fetch_text)
+        return store, error, podcast_remote_store.has_remote_manifest(files)
     except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}"
+        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", False
+
+
+def _load_podcast_remote_store_raw() -> tuple[dict, str]:
+    store, error, _uses_manifest = _load_podcast_remote_store_bundle_raw()
+    return store, error
 
 
 def _load_podcast_runs_store() -> dict:
@@ -1353,11 +1358,12 @@ def _load_podcast_runs_store() -> dict:
             remote_store = podcast_tracker.deepcopy_store(st.session_state.get("_podcast_runs_remote_cache", podcast_tracker.empty_podcast_store()))
             remote_error = ""
         else:
-            remote_store, remote_error = _load_podcast_remote_store_raw()
+            remote_store, remote_error, remote_has_manifest = _load_podcast_remote_store_bundle_raw()
             if not remote_error:
                 st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
                 st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
                 st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
+                st.session_state["_podcast_runs_remote_has_manifest"] = remote_has_manifest
         store = podcast_tracker.merge_podcast_stores(local_store, remote_store)
         if remote_error:
             load_source = "local_backup"
@@ -1384,11 +1390,12 @@ def _save_podcast_runs_store(store: dict) -> dict:
         return normalized
 
     cache_handle = _podcast_store_cache_handle()
-    remote_store, remote_error = _load_podcast_remote_store_raw()
+    remote_store, remote_error, remote_has_manifest = _load_podcast_remote_store_bundle_raw()
     if not remote_error:
         st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
         st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
         st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
+        st.session_state["_podcast_runs_remote_has_manifest"] = remote_has_manifest
     merged = podcast_tracker.merge_podcast_stores(normalized, remote_store)
     if remote_error:
         _write_podcast_local_store(merged)
@@ -1405,12 +1412,14 @@ def _save_podcast_runs_store(store: dict) -> dict:
         return merged
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
+        remote_previous = remote_store if not remote_error else podcast_tracker.empty_podcast_store()
         payload = json.dumps({
-            "files": {
-                "hq_podcast_runs.json": {
-                    "content": json.dumps(merged, indent=2, default=str),
-                }
-            }
+            "files": podcast_remote_store.build_remote_files_payload(
+                merged,
+                previous_store=remote_previous,
+                include_snapshot=False,
+                force_all_runs=not remote_has_manifest,
+            )
         })
         resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
         if 200 <= resp.status_code < 300:

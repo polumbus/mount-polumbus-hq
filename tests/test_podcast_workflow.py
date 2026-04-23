@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import podcast_remote_store
 import podcast_store
 import podcast_tracker
 import podcast_workflow
@@ -126,6 +127,66 @@ class PodcastStoreTests(unittest.TestCase):
             loaded, error = podcast_store.load_local_store_raw(data_dir)
         self.assertEqual(error, "")
         self.assertEqual(loaded["runs"][0]["id"], run["id"])
+
+
+class PodcastRemoteStoreTests(unittest.TestCase):
+    def test_load_remote_store_from_manifest_files(self):
+        store = podcast_tracker.empty_podcast_store()
+        first = podcast_tracker.create_run(store, actor="tester", title="One", source_path=r"C:\one.mp4", run_mode="local")
+        second = podcast_tracker.create_run(store, actor="tester", title="Two", source_path="https://youtu.be/two", run_mode="url")
+        store["active_run_id"] = second["id"]
+        files = podcast_remote_store.build_remote_files_payload(store, previous_store=None, include_snapshot=False)
+        loaded, error = podcast_remote_store.load_remote_store_from_files(
+            files,
+            fetch_text=lambda _raw_url: "",
+        )
+        self.assertEqual(error, "")
+        self.assertEqual(len(loaded["runs"]), 2)
+        self.assertEqual(loaded["active_run_id"], second["id"])
+        self.assertEqual({run["id"] for run in loaded["runs"]}, {first["id"], second["id"]})
+
+    def test_load_remote_store_falls_back_to_legacy_blob(self):
+        store = podcast_tracker.empty_podcast_store()
+        run = podcast_tracker.create_run(store, actor="tester", title="Legacy Remote", source_path="https://youtu.be/legacy", run_mode="url")
+        loaded, error = podcast_remote_store.load_remote_store_from_files(
+            {
+                podcast_remote_store.LEGACY_REMOTE_FILENAME: {
+                    "content": json.dumps(store, indent=2, default=str),
+                    "truncated": False,
+                }
+            },
+            fetch_text=lambda _raw_url: "",
+        )
+        self.assertEqual(error, "")
+        self.assertEqual(loaded["runs"][0]["id"], run["id"])
+
+    def test_remote_payload_only_updates_changed_runs(self):
+        store = podcast_tracker.empty_podcast_store()
+        first = podcast_tracker.create_run(store, actor="tester", title="One", source_path=r"C:\one.mp4", run_mode="local")
+        second = podcast_tracker.create_run(store, actor="tester", title="Two", source_path="https://youtu.be/two", run_mode="url")
+        previous = podcast_tracker.normalize_podcast_store(store)
+        for run in store["runs"]:
+            if run["id"] == first["id"]:
+                run["title"] = "One Updated"
+                break
+        payload = podcast_remote_store.build_remote_files_payload(store, previous_store=previous, include_snapshot=False)
+        self.assertIn(podcast_remote_store.remote_manifest_filename(), payload)
+        self.assertIn(podcast_remote_store.remote_run_filename(first["id"]), payload)
+        self.assertNotIn(podcast_remote_store.remote_run_filename(second["id"]), payload)
+
+    def test_remote_payload_can_force_full_run_write_for_legacy_migration(self):
+        store = podcast_tracker.empty_podcast_store()
+        first = podcast_tracker.create_run(store, actor="tester", title="One", source_path=r"C:\one.mp4", run_mode="local")
+        second = podcast_tracker.create_run(store, actor="tester", title="Two", source_path="https://youtu.be/two", run_mode="url")
+        previous = podcast_tracker.normalize_podcast_store(store)
+        payload = podcast_remote_store.build_remote_files_payload(
+            store,
+            previous_store=previous,
+            include_snapshot=False,
+            force_all_runs=True,
+        )
+        self.assertIn(podcast_remote_store.remote_run_filename(first["id"]), payload)
+        self.assertIn(podcast_remote_store.remote_run_filename(second["id"]), payload)
 
 
 if __name__ == "__main__":

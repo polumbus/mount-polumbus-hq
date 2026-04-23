@@ -6,6 +6,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+import podcast_remote_store
 import podcast_store
 import podcast_tracker
 
@@ -13,7 +14,6 @@ DEFAULT_GIST_ID = os.environ.get("HQ_GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652
 DEFAULT_GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
 DEFAULT_DATA_DIR = Path(os.environ.get("HQ_DATA_DIR", os.path.expanduser("~/.openclaw/workspace-omaha/data")))
 DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-PODCAST_GIST_FILENAME = "hq_podcast_runs.json"
 _EARLY_LOCAL_STATES = {"initialized", "transcribing", "blocked_manual_fix"}
 _POST_GATE1_STATES = {
     "gate1_waiting",
@@ -140,10 +140,10 @@ def write_local_store(store: dict[str, Any], *, data_dir: Path | None = None) ->
     return podcast_store.write_local_store(store, root)
 
 
-def load_remote_store_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str]:
+def load_remote_store_bundle_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str, bool]:
     token = str(github_pat if github_pat is not None else DEFAULT_GITHUB_PAT).strip()
     if not token:
-        return podcast_tracker.empty_podcast_store(), "HQ_GITHUB_PAT is not configured."
+        return podcast_tracker.empty_podcast_store(), "HQ_GITHUB_PAT is not configured.", False
     try:
         active_gist_id = str(gist_id or DEFAULT_GIST_ID).strip()
         req = urllib.request.Request(
@@ -152,32 +152,50 @@ def load_remote_store_raw(*, gist_id: str | None = None, github_pat: str | None 
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        file_meta = data.get("files", {}).get(PODCAST_GIST_FILENAME, {})
-        if file_meta.get("content") and not file_meta.get("truncated"):
-            return json.loads(file_meta.get("content", "")), ""
-        raw_url = str(file_meta.get("raw_url", "")).strip()
-        if raw_url:
+
+        def _fetch_text(raw_url: str) -> str:
             raw_req = urllib.request.Request(raw_url, headers={"User-Agent": "mount-polumbus-hq-podcast-sync"})
             with urllib.request.urlopen(raw_req, timeout=8) as resp:
-                return json.loads(resp.read().decode("utf-8")), ""
-        return podcast_tracker.empty_podcast_store(), ""
+                return resp.read().decode("utf-8")
+
+        files = data.get("files", {})
+        store, error = podcast_remote_store.load_remote_store_from_files(files, fetch_text=_fetch_text)
+        return store, error, podcast_remote_store.has_remote_manifest(files)
     except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}"
+        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", False
+
+
+def load_remote_store_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str]:
+    store, error, _uses_manifest = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
+    return store, error
 
 
 def save_remote_store(store: dict[str, Any], *, gist_id: str | None = None, github_pat: str | None = None) -> str:
+    return save_remote_store_delta(store, previous_store=None, gist_id=gist_id, github_pat=github_pat)
+
+
+def save_remote_store_delta(
+    store: dict[str, Any],
+    *,
+    previous_store: dict[str, Any] | None = None,
+    remote_has_manifest: bool = True,
+    gist_id: str | None = None,
+    github_pat: str | None = None,
+) -> str:
     token = str(github_pat if github_pat is not None else DEFAULT_GITHUB_PAT).strip()
     if not token:
         return "HQ_GITHUB_PAT is not configured."
     normalized = podcast_tracker.normalize_podcast_store(store)
     active_gist_id = str(gist_id or DEFAULT_GIST_ID).strip()
+    files_payload = podcast_remote_store.build_remote_files_payload(
+        normalized,
+        previous_store=previous_store,
+        include_snapshot=False,
+        force_all_runs=not remote_has_manifest,
+    )
     payload = json.dumps(
         {
-            "files": {
-                PODCAST_GIST_FILENAME: {
-                    "content": json.dumps(normalized, indent=2, default=str),
-                }
-            }
+            "files": files_payload
         }
     ).encode("utf-8")
     try:
@@ -215,10 +233,16 @@ def load_merged_store(*, data_dir: Path | None = None, gist_id: str | None = Non
 
 def save_merged_store(store: dict[str, Any], *, data_dir: Path | None = None, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     normalized = podcast_tracker.normalize_podcast_store(store)
-    remote_store, remote_error = load_remote_store_raw(gist_id=gist_id, github_pat=github_pat)
+    remote_store, remote_error, remote_has_manifest = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
     merged = normalized if remote_error else podcast_tracker.merge_podcast_stores(normalized, remote_store)
     write_local_store(merged, data_dir=data_dir)
-    remote_error = save_remote_store(merged, gist_id=gist_id, github_pat=github_pat)
+    remote_error = save_remote_store_delta(
+        merged,
+        previous_store=None if remote_error else remote_store,
+        remote_has_manifest=remote_has_manifest,
+        gist_id=gist_id,
+        github_pat=github_pat,
+    )
     return merged, {"remote_error": remote_error}
 
 

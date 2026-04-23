@@ -13,7 +13,7 @@ RUNS_SUBDIRNAME = "runs"
 SNAPSHOT_FILENAME = "store_snapshot.json"
 
 
-def _safe_run_id(run_id: str) -> str:
+def safe_run_id(run_id: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", str(run_id or "").strip()) or "unknown"
 
 
@@ -34,7 +34,7 @@ def snapshot_path(data_dir: Path) -> Path:
 
 
 def run_file_path(data_dir: Path, run_id: str) -> Path:
-    return runs_root(data_dir) / RUNS_SUBDIRNAME / f"{_safe_run_id(run_id)}.json"
+    return runs_root(data_dir) / RUNS_SUBDIRNAME / f"{safe_run_id(run_id)}.json"
 
 
 def _write_json(path: Path, payload: Any) -> None:
