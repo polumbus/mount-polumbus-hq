@@ -16,7 +16,9 @@ import urllib.parse
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import podcast_tracker
+import podcast_store
 import podcast_sync
+import podcast_workflow
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
                   odds_available, odds_format_block,
@@ -1286,7 +1288,7 @@ def _save_actions_gist(actions: dict):
 
 
 def _podcast_store_filename() -> str:
-    return "podcast_runs.json"
+    return podcast_store.LEGACY_STORE_FILENAME
 
 
 def _podcast_store_cache_handle() -> str:
@@ -1305,20 +1307,11 @@ def _podcast_remote_cache_is_fresh(cache_handle: str) -> bool:
 
 
 def _load_podcast_local_store_raw() -> tuple[dict, str]:
-    path = get_data_dir() / _podcast_store_filename()
-    if not path.exists():
-        return podcast_tracker.empty_podcast_store(), ""
-    try:
-        return json.loads(path.read_text()), ""
-    except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Local podcast backup could not be parsed: {exc}"
+    return podcast_store.load_local_store_raw(get_data_dir())
 
 
 def _write_podcast_local_store(store: dict) -> None:
-    path = get_data_dir() / _podcast_store_filename()
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    temp_path.write_text(json.dumps(store, indent=2, default=str))
-    temp_path.replace(path)
+    podcast_store.write_local_store(store, get_data_dir())
 
 
 def _load_podcast_remote_store_raw() -> tuple[dict, str]:
@@ -11294,28 +11287,22 @@ def page_podcast():
         st.session_state[f"podcast_section_{run_id}"] = section_name
 
     def _podcast_artifact_has_content(run_data: dict, artifact_id: str) -> bool:
-        artifact = run_data["artifacts"].get(artifact_id, {})
-        return bool(str(artifact.get("text", "")).strip() or str(artifact.get("path", "")).strip())
+        return podcast_workflow.artifact_has_content(run_data, artifact_id)
 
     def _podcast_packaging_artifact_ids() -> tuple[str, ...]:
-        return ("title", "description", "tags", "tweet", "thumbnail_text", "clips")
+        return tuple(podcast_workflow.PACKAGING_ARTIFACT_IDS)
 
     def _podcast_packaging_ready(run_data: dict) -> bool:
-        return all(_podcast_artifact_has_content(run_data, artifact_id) for artifact_id in _podcast_packaging_artifact_ids())
+        return podcast_workflow.packaging_ready(run_data)
 
     def _podcast_gate1_ready(run_data: dict) -> bool:
-        return _podcast_artifact_has_content(run_data, "title") and _podcast_artifact_has_content(run_data, "thumbnail_text")
+        return podcast_workflow.gate1_ready(run_data)
 
     def _podcast_gate2_ready(run_data: dict) -> bool:
-        if _podcast_run_mode(run_data) == "local" and _podcast_is_local_source_path(run_data.get("source_path", "")):
-            return bool(str(run_data.get("selected_clip_name", "")).strip())
-        return _podcast_artifact_has_content(run_data, "clips")
+        return podcast_workflow.gate2_ready(run_data)
 
     def _podcast_has_delivery_receipt(run_data: dict) -> bool:
-        return any(
-            delivery.get("external_id") or delivery.get("url") or delivery.get("status") in {"posted", "verified"}
-            for delivery in run_data.get("deliveries", {}).values()
-        )
+        return podcast_workflow.has_delivery_receipt(run_data)
 
     def _podcast_parse_json_response(raw_text: str) -> dict:
         clean = (raw_text or "").strip()
@@ -11607,113 +11594,7 @@ Return strict JSON with exactly these keys:
             )
 
     def _guided_actions_for_run(run: dict) -> list[dict]:
-        latest = podcast_tracker.latest_gate_decisions(run)
-        state = run["current_state"]
-        run_metrics = podcast_tracker.build_run_metrics(run)
-        local_source = _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", ""))
-        transcript_ready = bool(run["artifacts"]["transcript"]["text"] or run["artifacts"]["transcript"]["path"])
-        gate1_ready = _podcast_gate1_ready(run)
-        packaging_ready = _podcast_packaging_ready(run)
-        gate2_ready = _podcast_gate2_ready(run)
-        has_delivery_receipt = _podcast_has_delivery_receipt(run)
-        verification_complete = run_metrics["verified_checks"] == run_metrics["verification_total"]
-        actions: list[dict] = []
-
-        def add(
-            action_id: str,
-            label: str,
-            help_text: str,
-            section: str,
-            button_type: str = "secondary",
-            disabled: bool = False,
-        ) -> None:
-            actions.append(
-                {
-                    "id": action_id,
-                    "label": label,
-                    "help": help_text,
-                    "section": section,
-                    "type": button_type,
-                    "disabled": disabled,
-                }
-            )
-
-        if state == "initialized":
-            if local_source:
-                add("start_local_transcript", "1. Run Transcript Step", "Start the local runner and let background sync import the result.", "Overview", "primary")
-            else:
-                add("transcript_ready", "1. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", "primary", disabled=not transcript_ready)
-        elif state == "transcribing":
-            add("transcript_ready", "1. Transcript Ready", "Save the transcript artifact first, then use this to move to Gate 1.", "Artifacts", "primary", disabled=not transcript_ready)
-            add("block_run", "Block Run", "Use only if the run hits a real manual blocker.", "Activity")
-        elif state == "gate1_waiting":
-            add("approve_gate1", "1. Approve Gate 1", "Approve Gate 1 after the title and thumbnail picks are saved.", "Approvals", "primary", disabled=not gate1_ready)
-            add("gate1_changes", "Need Changes", "Keep the run in Gate 1 while fixes happen.", "Approvals")
-            add("block_run", "Block Run", "Use if the run cannot continue without manual help.", "Activity")
-        elif state == "gate1_approved":
-            add("metadata_ready", "1. Metadata Ready", "All packaging inputs are ready for the next phase.", "Artifacts", "primary", disabled=not packaging_ready)
-            add("tweet_waiting", "Waiting On Tweet", "Use if the tweet is the only missing packaging piece.", "Artifacts")
-            add("thumbnail_waiting", "Waiting On Thumbnail", "Use if the thumbnail is the current blocker.", "Artifacts")
-        elif state == "metadata_ready":
-            add("start_gate2", "1. Start Gate 2 Review", "Move into the final package review.", "Approvals", "primary", disabled=not packaging_ready)
-            add("block_run", "Block Run", "Use if packaging found a manual blocker.", "Activity")
-        elif state == "tweet_waiting":
-            add("tweet_ready", "1. Tweet Ready", "Clear the tweet blocker and return to packaging ready.", "Artifacts", "primary")
-            add("block_run", "Block Run", "Use if tweet work is manually blocked.", "Activity")
-        elif state == "thumbnail_waiting":
-            add("thumbnail_ready", "1. Thumbnail Ready", "Clear the thumbnail blocker and return to packaging ready.", "Artifacts", "primary")
-            add("block_run", "Block Run", "Use if thumbnail work is manually blocked.", "Activity")
-        elif state == "gate2_waiting":
-            gate2_help = "Pick and save a local clip first before approving Gate 2." if local_source else "Save reviewed clip notes first before approving Gate 2."
-            add("approve_gate2", "1. Approve Gate 2", gate2_help if not gate2_ready else "Record final approval before publish prep.", "Approvals", "primary", disabled=not gate2_ready)
-            add("gate2_changes", "Kick Back To Packaging", "Send the run back for packaging fixes.", "Approvals")
-            add("block_run", "Block Run", "Use if Gate 2 found a hard blocker.", "Activity")
-        elif state == "gate2_approved":
-            add("mark_ready_to_publish", "1. Ready To Publish", "The package is approved and can move to publish prep.", "Delivery & Verify", "primary")
-        elif state == "ready_to_publish":
-            add("start_publish", "1. Start Publish", "Use when the publish step begins.", "Delivery & Verify", "primary")
-        elif state == "publish_pending":
-            add("mark_public_verified", "1. Public Checks Passed", "Complete the verification checklist and record at least one delivery receipt before using this.", "Delivery & Verify", "primary", disabled=not (verification_complete and has_delivery_receipt))
-            add("mark_retry", "Needs Retry", "Use if the release hit a publish problem.", "Delivery & Verify")
-            add("block_run", "Block Run", "Use if the publish issue needs manual intervention.", "Activity")
-        elif state == "release_retry":
-            add("retry_running", "1. Retry Running", "Move back into publish pending when the retry starts.", "Delivery & Verify", "primary")
-            add("block_run", "Block Run", "Use if the retry is blocked manually.", "Activity")
-        elif state == "public_verified":
-            done_ready = verification_complete and (not run_metrics["requires_sync"] or run_metrics["sync_status"] == "fresh")
-            done_help = "This only unlocks after verification is complete."
-            if run_metrics["requires_sync"]:
-                done_help = "This only unlocks after verification is complete and Discord sync is fresh."
-            add("mark_done", "1. Mark Done", done_help, "Delivery & Verify", "primary", disabled=not done_ready)
-        elif state == "blocked_manual_fix":
-            blocked_from_state = run.get("blocked_from_state", "").strip()
-            if local_source and blocked_from_state in {"initialized", "transcribing"}:
-                add("restart_transcript_step", "1. Run Transcript Step", "Rerun the transcript step after the blocker is fixed.", "Overview", "primary")
-            elif local_source and blocked_from_state in {"metadata_ready", "gate2_waiting"}:
-                add("restart_clip_step", "1. Run Clip Step", "Rerun the clip step after the blocker is fixed.", "Overview", "primary")
-            elif blocked_from_state and blocked_from_state != "blocked_manual_fix":
-                resume_section = {
-                    "gate1_waiting": "Approvals",
-                    "metadata_ready": "Artifacts",
-                    "tweet_waiting": "Artifacts",
-                    "thumbnail_waiting": "Artifacts",
-                    "gate2_waiting": "Approvals",
-                    "publish_pending": "Delivery & Verify",
-                    "release_retry": "Delivery & Verify",
-                }.get(blocked_from_state, "Overview")
-                resume_label = _PODCAST_STATE_LABELS.get(blocked_from_state, blocked_from_state).replace("Waiting", "Review")
-                add("resume_previous_state", f"1. Resume {resume_label}", "Return HQ to the exact state that was blocked.", resume_section, "primary")
-            elif latest.get("gate2") and latest["gate2"]["decision"] == "approved":
-                add("resume_publish_retry", "1. Resume Publish Retry", "Use after the blocker is fixed and publish work can continue.", "Delivery & Verify", "primary")
-            elif latest.get("gate1") and latest["gate1"]["decision"] == "approved":
-                add("resume_packaging", "1. Resume Packaging", "Go back to packaging after the blocker is fixed.", "Artifacts", "primary")
-                add("resume_gate2", "Resume Gate 2 Review", "Use if you are ready to re-open Gate 2.", "Approvals")
-            else:
-                add("resume_gate1", "1. Resume Gate 1 Review", "Go back to Gate 1 after the blocker is fixed.", "Approvals", "primary")
-        elif state == "done":
-            add("sync_now", "Sync Checkpoint", "Record one last HQ sync note if you need it.", "Activity", "primary")
-
-        return actions
+        return podcast_workflow.guided_actions_for_run(run, _PODCAST_STATE_LABELS)
 
     def _run_guided_action(updated_store: dict, run_id: str, action_id: str) -> None:
         current_run = next((item for item in updated_store["runs"] if item["id"] == run_id), None)
@@ -11865,20 +11746,10 @@ Return strict JSON with exactly these keys:
         return options
 
     def _podcast_is_local_source_path(value: str) -> bool:
-        clean = _podcast_clean_display_value(value)
-        return bool(clean) and "://" not in clean
+        return podcast_workflow.is_local_source_path(_podcast_clean_display_value(value))
 
     def _podcast_run_mode(run_data: dict) -> str:
-        clean_mode = str(run_data.get("run_mode", "")).strip().lower()
-        if clean_mode in {"local", "url", "discord"}:
-            return clean_mode
-        if _podcast_is_local_source_path(run_data.get("source_path", "")):
-            return "local"
-        if str(run_data.get("source_path", "")).strip():
-            return "url"
-        if str(run_data.get("discord_reference", "")).strip():
-            return "discord"
-        return "local"
+        return podcast_workflow.run_mode(run_data)
 
     def _podcast_compact_text(value: str, limit: int = 180) -> str:
         clean = " ".join(str(value or "").split())
@@ -11914,70 +11785,7 @@ Return strict JSON with exactly these keys:
         return f"Clip {idx + 1} · {duration_label}{suffix}"
 
     def _podcast_progress_steps(run: dict, proxy_job: dict) -> tuple[list[dict], int]:
-        state = run["current_state"]
-        runner_status = str(proxy_job.get("status", "")).strip().lower()
-        is_local = _podcast_run_mode(run) == "local" and _podcast_is_local_source_path(run.get("source_path", ""))
-        if not is_local:
-            progress_steps = [
-                {"id": "prep", "label": "Prep", "status": "pending"},
-                {"id": "review", "label": "Review", "status": "pending"},
-                {"id": "publish", "label": "Publish", "status": "pending"},
-                {"id": "done", "label": "Done", "status": "pending"},
-            ]
-            if state in {"initialized", "gate1_waiting", "gate1_approved", "metadata_ready"}:
-                progress_steps[0]["status"] = "active"
-            elif state in {"gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
-                progress_steps[0]["status"] = "complete"
-            if state == "gate2_waiting":
-                progress_steps[1]["status"] = "active"
-            elif state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
-                progress_steps[1]["status"] = "complete"
-            if state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified"}:
-                progress_steps[2]["status"] = "active"
-            elif state == "done":
-                progress_steps[2]["status"] = "complete"
-            if state == "done":
-                progress_steps[3]["status"] = "complete"
-            complete_count = sum(1 for step in progress_steps if step["status"] == "complete")
-            if state == "done":
-                complete_count = len(progress_steps)
-            return progress_steps, complete_count
-        progress_steps = [
-            {"id": "start", "label": "Start", "status": "pending"},
-            {"id": "gate1", "label": "Gate 1", "status": "pending"},
-            {"id": "package", "label": "Package", "status": "pending"},
-            {"id": "clips", "label": "Clip", "status": "pending"},
-            {"id": "publish", "label": "Publish", "status": "pending"},
-            {"id": "done", "label": "Done", "status": "pending"},
-        ]
-        if state in {"initialized", "transcribing"} or runner_status in {"queued", "running"}:
-            progress_steps[0]["status"] = "active"
-        else:
-            progress_steps[0]["status"] = "complete"
-        if state == "gate1_waiting":
-            progress_steps[1]["status"] = "active"
-        elif state not in {"initialized", "transcribing"}:
-            progress_steps[1]["status"] = "complete"
-        if state in {"gate1_approved", "metadata_ready"}:
-            progress_steps[2]["status"] = "active"
-        elif state in {"gate2_waiting", "gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
-            progress_steps[2]["status"] = "complete"
-        if state == "gate2_waiting":
-            progress_steps[3]["status"] = "active"
-        elif state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified", "done"}:
-            progress_steps[3]["status"] = "complete"
-        elif not is_local and state in {"metadata_ready"}:
-            progress_steps[3]["status"] = "skipped"
-        if state in {"gate2_approved", "ready_to_publish", "publish_pending", "public_verified"}:
-            progress_steps[4]["status"] = "active"
-        elif state == "done":
-            progress_steps[4]["status"] = "complete"
-        if state == "done":
-            progress_steps[5]["status"] = "complete"
-        complete_count = sum(1 for step in progress_steps if step["status"] == "complete")
-        if state == "done":
-            complete_count = len(progress_steps)
-        return progress_steps, complete_count
+        return podcast_workflow.progress_steps(run, proxy_job)
 
     st.markdown('<div class="main-header">PODCAST <span>WORKFLOW</span></div>', unsafe_allow_html=True)
     st.markdown(
@@ -12196,9 +12004,25 @@ Return strict JSON with exactly these keys:
             st.session_state[wizard_open_key] = True
             _save_podcast_and_rerun(updated_store, current_run["id"])
 
-        if state == "blocked_manual_fix":
+        def _open_wizard_advanced_workspace(section_name: str = "Artifacts") -> None:
+            st.session_state[advanced_open_key] = True
+            _set_podcast_section(current_run["id"], section_name)
+            st.rerun()
+
+        def _start_clip_generation(force: bool, success_text: str) -> None:
+            try:
+                clip_result = _podcast_proxy_generate_clips(current_run["id"], force=force)
+                if not clip_result.get("accepted", True):
+                    st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
+                    return
+            except Exception as exc:
+                st.error(_podcast_user_error_text(str(exc)))
+            else:
+                st.session_state["_podcast_flash_message"] = {"level": "success", "text": success_text}
+                st.rerun()
+
+        def _render_blocked_step() -> None:
             blocked_from_state = str(current_run.get("blocked_from_state", "")).strip()
-            blocker_copy = current_run.get("blocker") or "HQ hit a blocker and needs one clean recovery action."
             if local_source and blocked_from_state in {"initialized", "transcribing"}:
                 st.info("Step 1: rerun the transcript step after the blocker is cleared.")
                 if st.button("Run Transcript Step", key=f"wizard_retry_transcript_{current_run['id']}", type="primary", use_container_width=True):
@@ -12221,6 +12045,7 @@ Return strict JSON with exactly these keys:
                     except Exception as exc:
                         st.error(_podcast_user_error_text(str(exc)))
                 return
+
             if local_source and blocked_from_state in {"metadata_ready", "gate2_waiting"}:
                 st.info("Step 4: rerun the clip step after the blocker is cleared.")
                 if st.button("Run Clip Step", key=f"wizard_retry_clip_blocked_{current_run['id']}", type="primary", use_container_width=True):
@@ -12244,6 +12069,7 @@ Return strict JSON with exactly these keys:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip step restarted."}
                         _save_and_stay(updated_store)
                 return
+
             if blocked_from_state:
                 blocked_label = _PODCAST_STATE_LABELS.get(blocked_from_state, blocked_from_state)
                 st.info(f"HQ can move this run back to {blocked_label}.")
@@ -12258,32 +12084,31 @@ Return strict JSON with exactly these keys:
                         note="Wizard resumed the blocked run.",
                     )
                     _save_and_stay(updated_store)
+
+        def _render_initialized_step() -> None:
+            if local_source:
+                st.info("Step 1: start the local runner so HQ can transcribe the video.")
+                if st.button("Run Transcript Step", key=f"wizard_start_runner_{current_run['id']}", type="primary", use_container_width=True):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    try:
+                        start_result = _podcast_proxy_start(current_run["id"], current_run["source_path"], current_run["title"], force=True)
+                        if not start_result.get("accepted", True):
+                            st.warning(_podcast_user_error_text(start_result.get("message", "The local runner is already busy.")))
+                            return
+                        podcast_tracker.transition_run(
+                            updated_store,
+                            run_id=current_run["id"],
+                            actor=actor,
+                            state="transcribing",
+                            blocker="",
+                            note=f"Wizard started local transcription job ({start_result.get('job', {}).get('status', 'queued')}).",
+                        )
+                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Local runner started."}
+                        _save_and_stay(updated_store)
+                    except Exception as exc:
+                        st.error(_podcast_user_error_text(str(exc)))
                 return
 
-        if state == "initialized" and local_source:
-            st.info("Step 1: start the local runner so HQ can transcribe the video.")
-            if st.button("Run Transcript Step", key=f"wizard_start_runner_{current_run['id']}", type="primary", use_container_width=True):
-                updated_store = podcast_tracker.deepcopy_store(store)
-                try:
-                    start_result = _podcast_proxy_start(current_run["id"], current_run["source_path"], current_run["title"], force=True)
-                    if not start_result.get("accepted", True):
-                        st.warning(_podcast_user_error_text(start_result.get("message", "The local runner is already busy.")))
-                        return
-                    podcast_tracker.transition_run(
-                        updated_store,
-                        run_id=current_run["id"],
-                        actor=actor,
-                        state="transcribing",
-                        blocker="",
-                        note=f"Wizard started local transcription job ({start_result.get('job', {}).get('status', 'queued')}).",
-                    )
-                    st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Local runner started."}
-                    _save_and_stay(updated_store)
-                except Exception as exc:
-                    st.error(_podcast_user_error_text(str(exc)))
-            return
-
-        if state == "initialized" and not local_source:
             transcript_ready = _podcast_artifact_has_content(current_run, "transcript")
             if transcript_ready:
                 st.info("Step 1: HQ already has the transcript, so you can move straight into Gate 1.")
@@ -12298,15 +12123,13 @@ Return strict JSON with exactly these keys:
                         note="Wizard opened Gate 1 from an already-saved transcript.",
                     )
                     _save_and_stay(updated_store)
-            else:
-                st.info("Step 1: save the transcript first. Local file paths can run it automatically; URL and Discord mirror runs need the transcript saved manually in Advanced Workspace.")
-                if st.button("Open Advanced Workspace", key=f"wizard_open_advanced_initialized_{current_run['id']}", type="primary", use_container_width=True):
-                    st.session_state[advanced_open_key] = True
-                    _set_podcast_section(current_run["id"], "Artifacts")
-                    st.rerun()
-            return
+                return
 
-        if state == "transcribing" or str(current_proxy_job.get("status", "")).strip() in {"queued", "running"}:
+            st.info("Step 1: save the transcript first. Local file paths can run it automatically; URL and Discord mirror runs need the transcript saved manually in Advanced Workspace.")
+            if st.button("Open Advanced Workspace", key=f"wizard_open_advanced_initialized_{current_run['id']}", type="primary", use_container_width=True):
+                _open_wizard_advanced_workspace()
+
+        def _render_transcribing_step() -> None:
             runner_status = str(current_proxy_job.get("status", "")).strip().title() or "Running"
             st.info(f"Step 1: the transcript step is running. Current runner status: {runner_status}.")
             st.caption("Background sync will import finished output automatically. Use Refresh View only if you want a newer snapshot right now.")
@@ -12314,9 +12137,8 @@ Return strict JSON with exactly these keys:
                 st.warning(current_proxy_error)
             if st.button("Refresh View", key=f"wizard_refresh_runner_{current_run['id']}", type="secondary", use_container_width=True):
                 st.rerun()
-            return
 
-        if state == "gate1_waiting":
+        def _render_gate1_step() -> None:
             title_options = _podcast_parse_numbered_options(current_run["artifacts"]["title"].get("text", ""))
             thumbnail_options = _podcast_parse_numbered_options(current_run["artifacts"]["thumbnail_text"].get("text", ""))
             if not title_options or not thumbnail_options:
@@ -12331,12 +12153,14 @@ Return strict JSON with exactly these keys:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 suggestions generated."}
                         _save_and_stay(updated_store)
                 return
+
             title_pick_key = f"podcast_wizard_title_pick_{current_run['id']}"
             thumb_pick_key = f"podcast_wizard_thumb_pick_{current_run['id']}"
             if title_pick_key not in st.session_state or st.session_state[title_pick_key] not in title_options:
                 st.session_state[title_pick_key] = title_options[0]
             if thumb_pick_key not in st.session_state or st.session_state[thumb_pick_key] not in thumbnail_options:
                 st.session_state[thumb_pick_key] = thumbnail_options[0]
+
             st.info("Step 2: pick the title and thumbnail text you want to use, then approve Gate 1.")
             st.radio("Pick The Title", title_options, key=title_pick_key, label_visibility="collapsed")
             st.radio("Pick The Thumbnail Text", thumbnail_options, key=thumb_pick_key, label_visibility="collapsed")
@@ -12385,9 +12209,8 @@ Return strict JSON with exactly these keys:
                     else:
                         st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Gate 1 suggestions regenerated."}
                         _save_and_stay(updated_store)
-            return
 
-        if state in {"gate1_approved", "metadata_ready"}:
+        def _render_packaging_step() -> None:
             st.info("Step 3: review the generated package, then move into clip review.")
             packaging_ready = _podcast_packaging_ready(current_run)
             missing_packaging = [
@@ -12417,7 +12240,14 @@ Return strict JSON with exactly these keys:
                         st.warning("Generate or fill every required packaging item before moving on.")
                         return
                     updated_store = podcast_tracker.deepcopy_store(store)
-                    podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="gate2_waiting", blocker="", note="Wizard completed package review and opened clip review.")
+                    podcast_tracker.transition_run(
+                        updated_store,
+                        run_id=current_run["id"],
+                        actor=actor,
+                        state="gate2_waiting",
+                        blocker="",
+                        note="Wizard completed package review and opened clip review.",
+                    )
                     _save_and_stay(updated_store)
             with review_cols[1]:
                 if st.button("Regenerate Packaging", key=f"wizard_regen_packaging_{current_run['id']}", use_container_width=True):
@@ -12431,9 +12261,8 @@ Return strict JSON with exactly these keys:
                         _save_and_stay(updated_store)
             if missing_packaging:
                 st.warning(f"Missing before Gate 2: {', '.join(missing_packaging)}.")
-            return
 
-        if state == "gate2_waiting":
+        def _render_gate2_step() -> None:
             if not local_source:
                 clip_notes_ready = _podcast_artifact_has_content(current_run, "clips")
                 st.info("Step 4: this run does not use the local clip runner, so review the saved clip notes before approving Gate 2.")
@@ -12454,6 +12283,7 @@ Return strict JSON with exactly these keys:
                 if not clip_notes_ready:
                     st.warning("Save the reviewed clip notes first.")
                 return
+
             if selected_clip_name and not clip_files:
                 st.info("Step 4: HQ already has a saved clip for this run. Approve it now, or regenerate the clip step if you want fresh choices.")
                 st.caption(f"Saved selected clip: {selected_clip_name}")
@@ -12474,51 +12304,28 @@ Return strict JSON with exactly these keys:
                         _save_and_stay(updated_store)
                 with fallback_cols[1]:
                     if st.button("Run Clip Step", key=f"wizard_gate2_saved_clip_regen_{current_run['id']}", use_container_width=True):
-                        try:
-                            clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
-                            if not clip_result.get("accepted", True):
-                                st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
-                                return
-                        except Exception as exc:
-                            st.error(_podcast_user_error_text(str(exc)))
-                        else:
-                            st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
-                            st.rerun()
+                        _start_clip_generation(True, "Clip generation restarted.")
                 return
-            if local_source and clip_status in {"not_started", ""}:
+
+            if clip_status in {"not_started", ""}:
                 st.info("Step 4: run the clip step so you can review the real shorts options here.")
                 if st.button("Run Clip Step", key=f"wizard_generate_clips_{current_run['id']}", type="primary", use_container_width=True):
-                    try:
-                        clip_result = _podcast_proxy_generate_clips(current_run["id"], force=False)
-                        if not clip_result.get("accepted", True):
-                            st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
-                            return
-                    except Exception as exc:
-                        st.error(_podcast_user_error_text(str(exc)))
-                    else:
-                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation started."}
-                        st.rerun()
+                    _start_clip_generation(False, "Clip generation started.")
                 return
+
             if clip_status in {"queued", "running"}:
                 st.info("Step 4: the clip step is running.")
                 st.caption("Background sync will keep reconciling local output. Use Refresh View only if you want a newer snapshot right now.")
                 if st.button("Refresh View", key=f"wizard_refresh_clips_{current_run['id']}", type="secondary", use_container_width=True):
                     st.rerun()
                 return
+
             if clip_status == "failed":
                 st.error(_podcast_user_error_text(current_proxy_job.get("clips_error", "Clip generation failed.")))
                 if st.button("Run Clip Step", key=f"wizard_retry_clips_{current_run['id']}", type="primary", use_container_width=True):
-                    try:
-                        clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
-                        if not clip_result.get("accepted", True):
-                            st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
-                            return
-                    except Exception as exc:
-                        st.error(_podcast_user_error_text(str(exc)))
-                    else:
-                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
-                        st.rerun()
+                    _start_clip_generation(True, "Clip generation restarted.")
                 return
+
             if clip_files:
                 clip_lookup = {item["name"]: item for item in clip_files}
                 clip_names = [item["name"] for item in clip_files]
@@ -12536,7 +12343,7 @@ Return strict JSON with exactly these keys:
                 preview_clip = clip_lookup[selected_clip_for_review]
                 if recommended_clip_name:
                     st.caption(f"Recommended clip: {recommended_clip_name}")
-                st.caption(f"{preview_clip['name']} · {_podcast_clip_duration_label(preview_clip.get('duration_seconds', 0.0))}")
+                st.caption(f"{preview_clip['name']} - {_podcast_clip_duration_label(preview_clip.get('duration_seconds', 0.0))}")
                 try:
                     preview_bytes, preview_type = _podcast_proxy_fetch_clip_bytes(current_run["id"], preview_clip["name"])
                     st.video(preview_bytes, format=preview_type)
@@ -12566,55 +12373,33 @@ Return strict JSON with exactly these keys:
                         _save_and_stay(updated_store)
                 with clip_review_cols[1]:
                     if st.button("Run Clip Step Again", key=f"wizard_regen_clips_{current_run['id']}", use_container_width=True):
-                        try:
-                            clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
-                            if not clip_result.get("accepted", True):
-                                st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
-                                return
-                        except Exception as exc:
-                            st.error(_podcast_user_error_text(str(exc)))
-                        else:
-                            st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
-                            st.rerun()
+                        _start_clip_generation(True, "Clip generation restarted.")
                 return
+
             st.warning("No usable clips are available yet.")
             empty_clip_cols = st.columns(2, gap="small")
             with empty_clip_cols[0]:
                 if st.button("Run Clip Step", key=f"wizard_empty_clip_retry_{current_run['id']}", type="primary", use_container_width=True):
-                    try:
-                        clip_result = _podcast_proxy_generate_clips(current_run["id"], force=True)
-                        if not clip_result.get("accepted", True):
-                            st.warning(_podcast_user_error_text(clip_result.get("message", "Clip generation is already running.")))
-                            return
-                    except Exception as exc:
-                        st.error(_podcast_user_error_text(str(exc)))
-                    else:
-                        st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Clip generation restarted."}
-                        st.rerun()
+                    _start_clip_generation(True, "Clip generation restarted.")
             with empty_clip_cols[1]:
                 if st.button("Open Advanced Workspace", key=f"wizard_empty_clip_advanced_{current_run['id']}", use_container_width=True):
-                    st.session_state[advanced_open_key] = True
-                    _set_podcast_section(current_run["id"], "Artifacts")
-                    st.rerun()
-            return
+                    _open_wizard_advanced_workspace()
 
-        if state == "gate2_approved":
+        def _render_gate2_approved_step() -> None:
             st.info("Step 5: mark this package ready to publish.")
             if st.button("Ready To Publish", key=f"wizard_mark_ready_publish_{current_run['id']}", type="primary", use_container_width=True):
                 updated_store = podcast_tracker.deepcopy_store(store)
                 podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="ready_to_publish", blocker="", note="Wizard marked the run ready to publish.")
                 _save_and_stay(updated_store)
-            return
 
-        if state == "ready_to_publish":
+        def _render_ready_to_publish_step() -> None:
             st.info("Step 6: once the episode is live, move into the final link-and-verification check.")
             if st.button("It Is Live, Add Public Links", key=f"wizard_publish_ready_{current_run['id']}", type="primary", use_container_width=True):
                 updated_store = podcast_tracker.deepcopy_store(store)
                 podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="publish_pending", blocker="", note="Wizard moved the run into the final publish check.")
                 _save_and_stay(updated_store)
-            return
 
-        if state == "publish_pending":
+        def _render_publish_pending_step() -> None:
             st.info("Step 7: save the public links, then finish verification when every check is true.")
             with st.form(f"podcast_wizard_publish_verify_{current_run['id']}"):
                 wizard_youtube = st.text_input("YouTube Link", value=current_run["deliveries"]["youtube"]["url"])
@@ -12625,6 +12410,7 @@ Return strict JSON with exactly these keys:
                 verify_social = st.checkbox("Social receipt is confirmed", value=bool(current_run["verification"]["social_ids_checked"]))
                 publish_save_links = st.form_submit_button("Save Public Links", use_container_width=True)
                 wizard_publish_submit = st.form_submit_button("Finish Workflow", type="primary", use_container_width=True)
+
             if publish_save_links:
                 updated_store = podcast_tracker.deepcopy_store(store)
                 if wizard_youtube.strip():
@@ -12633,7 +12419,9 @@ Return strict JSON with exactly these keys:
                     podcast_tracker.update_delivery(updated_store, run_id=current_run["id"], channel="x", actor=actor, status="posted", external_id="", url=wizard_x, notes="Saved from the Podcast wizard.")
                 st.session_state["_podcast_flash_message"] = {"level": "success", "text": "Public links saved."}
                 _save_and_stay(updated_store)
-            elif wizard_publish_submit:
+                return
+
+            if wizard_publish_submit:
                 if not (wizard_youtube.strip() or wizard_x.strip()):
                     st.error("Add at least one public link before marking the run verified.")
                 elif not all([verify_public, verify_processing, verify_transcript, verify_social]):
@@ -12664,45 +12452,74 @@ Return strict JSON with exactly these keys:
                         "text": "Publish links saved. HQ is done." if not current_metrics["requires_sync"] else "Publish links saved. Record the final Discord sync checkpoint next.",
                     }
                     _save_and_stay(updated_store)
-            return
 
-        if state == "public_verified":
+        def _render_public_verified_step() -> None:
             if current_metrics["requires_sync"] and current_metrics["sync_status"] != "fresh":
                 st.info("Step 8: record a fresh Discord sync checkpoint before HQ marks this run done.")
                 if st.button("Mark Discord Sync Checkpoint", key=f"wizard_sync_done_{current_run['id']}", type="primary", use_container_width=True):
                     updated_store = podcast_tracker.deepcopy_store(store)
                     podcast_tracker.record_sync_checkpoint(updated_store, run_id=current_run["id"], actor=actor, note="Wizard recorded a final Discord sync checkpoint.")
                     _save_and_stay(updated_store)
-            else:
-                st.success("Step 8: everything is verified. Mark the run done.")
-                if st.button("Mark Done", key=f"wizard_done_{current_run['id']}", type="primary", use_container_width=True):
-                    updated_store = podcast_tracker.deepcopy_store(store)
-                    podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="done", blocker="", note="Wizard marked the run done.")
-                    _save_and_stay(updated_store)
-            return
+                return
 
-        if state == "done":
+            st.success("Step 8: everything is verified. Mark the run done.")
+            if st.button("Mark Done", key=f"wizard_done_{current_run['id']}", type="primary", use_container_width=True):
+                updated_store = podcast_tracker.deepcopy_store(store)
+                podcast_tracker.transition_run(updated_store, run_id=current_run["id"], actor=actor, state="done", blocker="", note="Wizard marked the run done.")
+                _save_and_stay(updated_store)
+
+        def _render_done_step() -> None:
             st.success("This run is done.")
             if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_done", type="primary", use_container_width=True):
                 st.session_state[wizard_open_key] = False
                 st.rerun()
+
+        def _render_fallback_step() -> None:
+            fallback_actions = _guided_actions_for_run(current_run)
+            if fallback_actions:
+                next_action = fallback_actions[0]
+                st.info(next_action["help"])
+                if st.button(next_action["label"], key=f"wizard_fallback_{current_run['id']}_{next_action['id']}", type="primary", use_container_width=True, disabled=next_action.get("disabled", False)):
+                    updated_store = podcast_tracker.deepcopy_store(store)
+                    try:
+                        _run_guided_action(updated_store, current_run["id"], next_action["id"])
+                    except Exception as exc:
+                        st.error(_podcast_user_error_text(str(exc)))
+                    else:
+                        _save_and_stay(updated_store)
+            if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_fallback", use_container_width=True):
+                st.session_state[wizard_open_key] = False
+                st.rerun()
+
+        if state == "blocked_manual_fix":
+            _render_blocked_step()
             return
 
-        fallback_actions = _guided_actions_for_run(current_run)
-        if fallback_actions:
-            next_action = fallback_actions[0]
-            st.info(next_action["help"])
-            if st.button(next_action["label"], key=f"wizard_fallback_{current_run['id']}_{next_action['id']}", type="primary", use_container_width=True, disabled=next_action.get("disabled", False)):
-                updated_store = podcast_tracker.deepcopy_store(store)
-                try:
-                    _run_guided_action(updated_store, current_run["id"], next_action["id"])
-                except Exception as exc:
-                    st.error(_podcast_user_error_text(str(exc)))
-                else:
-                    _save_and_stay(updated_store)
-        if st.button("Hide Wizard", key=f"wizard_hide_{current_run['id']}_fallback", use_container_width=True):
-            st.session_state[wizard_open_key] = False
-            st.rerun()
+        if state == "initialized":
+            _render_initialized_step()
+            return
+
+        if state == "transcribing" or str(current_proxy_job.get("status", "")).strip() in {"queued", "running"}:
+            _render_transcribing_step()
+            return
+
+        wizard_state_renderers = {
+            "gate1_waiting": _render_gate1_step,
+            "gate1_approved": _render_packaging_step,
+            "metadata_ready": _render_packaging_step,
+            "gate2_waiting": _render_gate2_step,
+            "gate2_approved": _render_gate2_approved_step,
+            "ready_to_publish": _render_ready_to_publish_step,
+            "publish_pending": _render_publish_pending_step,
+            "public_verified": _render_public_verified_step,
+            "done": _render_done_step,
+        }
+        render_step = wizard_state_renderers.get(state)
+        if render_step:
+            render_step()
+            return
+
+        _render_fallback_step()
 
     if st.session_state.get(wizard_open_key):
         _podcast_workflow_wizard_dialog(f"{selected_run_id}:{store.get('updated_at', '')}:{len(runs)}")

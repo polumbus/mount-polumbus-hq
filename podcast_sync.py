@@ -6,13 +6,13 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+import podcast_store
 import podcast_tracker
 
 DEFAULT_GIST_ID = os.environ.get("HQ_GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
 DEFAULT_GITHUB_PAT = os.environ.get("HQ_GITHUB_PAT", "")
 DEFAULT_DATA_DIR = Path(os.environ.get("HQ_DATA_DIR", os.path.expanduser("~/.openclaw/workspace-omaha/data")))
 DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-PODCAST_STORE_FILENAME = "podcast_runs.json"
 PODCAST_GIST_FILENAME = "hq_podcast_runs.json"
 _EARLY_LOCAL_STATES = {"initialized", "transcribing", "blocked_manual_fix"}
 _POST_GATE1_STATES = {
@@ -31,7 +31,7 @@ _POST_GATE1_STATES = {
 def podcast_store_path(data_dir: Path | None = None) -> Path:
     root = Path(data_dir or DEFAULT_DATA_DIR)
     root.mkdir(parents=True, exist_ok=True)
-    return root / PODCAST_STORE_FILENAME
+    return podcast_store.legacy_store_path(root)
 
 
 def gist_headers(github_pat: str | None = None) -> dict[str, str]:
@@ -129,22 +129,15 @@ def filtered_clip_files(raw_clip_files: list[dict[str, Any]] | None, cached_clip
 
 
 def load_local_store_raw(*, data_dir: Path | None = None) -> tuple[dict[str, Any], str]:
-    path = podcast_store_path(data_dir)
-    if not path.exists():
-        return podcast_tracker.empty_podcast_store(), ""
-    try:
-        return json.loads(path.read_text(encoding="utf-8")), ""
-    except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Local podcast backup could not be parsed: {exc}"
+    root = Path(data_dir or DEFAULT_DATA_DIR)
+    root.mkdir(parents=True, exist_ok=True)
+    return podcast_store.load_local_store_raw(root)
 
 
 def write_local_store(store: dict[str, Any], *, data_dir: Path | None = None) -> dict[str, Any]:
-    normalized = podcast_tracker.normalize_podcast_store(store)
-    path = podcast_store_path(data_dir)
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    temp_path.write_text(json.dumps(normalized, indent=2, default=str), encoding="utf-8")
-    temp_path.replace(path)
-    return normalized
+    root = Path(data_dir or DEFAULT_DATA_DIR)
+    root.mkdir(parents=True, exist_ok=True)
+    return podcast_store.write_local_store(store, root)
 
 
 def load_remote_store_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str]:
