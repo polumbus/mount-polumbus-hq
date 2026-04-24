@@ -26,9 +26,8 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   get_google_trends, get_reddit_trending, get_newsapi_headlines,
                   get_coingecko_trending)
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG, GAMEDAY_URL,
-                    _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE,
-                    _DEFAULT_TWEET_FORMAT, _DEFAULT_TWEET_VOICE, _FORMAT_ORDER)
-from shared_voice import BANNED_OPENERS
+                    _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
+from shared_voice import BANNED_OPENERS, DEFAULT_TWEET_FORMAT, DEFAULT_TWEET_VOICE, FORMAT_ORDER
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -1620,19 +1619,32 @@ def save_json(filename: str, data):
 # Creator Studio owns the actual prompt formula; these helpers prevent What Hot,
 # Signals, Reply Guy, Raw Thoughts, and future agents from drifting back to
 # hard-coded "under X chars" or alternate default voice rules.
-CANONICAL_TWEET_DEFAULT_FORMAT = _DEFAULT_TWEET_FORMAT
-CANONICAL_TWEET_DEFAULT_VOICE = _DEFAULT_TWEET_VOICE
+_FALLBACK_TWEET_FORMATS = ("Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article")
+_FALLBACK_TWEET_VOICES = ("Default", "Critical", "Hype", "Sarcastic")
+CANONICAL_TWEET_DEFAULT_FORMAT = (
+    DEFAULT_TWEET_FORMAT if DEFAULT_TWEET_FORMAT in _FORMAT_GUIDES else "Normal Tweet"
+)
+CANONICAL_TWEET_DEFAULT_VOICE = (
+    DEFAULT_TWEET_VOICE if DEFAULT_TWEET_VOICE in _VOICE_LABELS else "Default"
+)
 
 
 def _tweet_format_options(include_article: bool = True) -> list[str]:
-    opts = [fmt for fmt in _FORMAT_ORDER if fmt in _FORMAT_GUIDES]
+    order = tuple(FORMAT_ORDER or ()) or tuple(_FORMAT_GUIDES.keys()) or _FALLBACK_TWEET_FORMATS
+    opts = [
+        fmt
+        for fmt in order
+        if fmt in _FORMAT_GUIDES or fmt in _FALLBACK_TWEET_FORMATS
+    ]
+    if not opts:
+        opts = list(_FALLBACK_TWEET_FORMATS)
     if not include_article:
         opts = [fmt for fmt in opts if fmt != "Article"]
     return opts
 
 
 def _tweet_voice_options(include_custom: bool = True) -> list[str]:
-    opts = list(_VOICE_LABELS.keys())
+    opts = list(_VOICE_LABELS.keys()) or list(_FALLBACK_TWEET_VOICES)
     if include_custom:
         for style in load_json("voice_styles.json", []):
             name = style.get("name") if isinstance(style, dict) else ""
@@ -2941,7 +2953,7 @@ _sidebar_html = f"""
     </div>
   </div>
 
-	  <div class="mp-zone mp-zone-insights">
+  <div class="mp-zone mp-zone-insights">
     <div class="mp-zone-label">INSIGHTS</div>
     <a href="/?{_tok_qp}page=Post+History" class="mp-ico {_act('Post History')}" target="_self">
       <div class="mp-active-pip"></div>
@@ -3001,11 +3013,11 @@ _sidebar_html = f"""
         Profile Analyzer
       </a>
     </div>
-	  </div>
-	  {_owner_debug_zone}
+  </div>
+  {_owner_debug_zone}
 
-	  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
-	</div>
+  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
+</div>
 
 """
 
