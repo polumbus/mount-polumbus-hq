@@ -1686,6 +1686,28 @@ if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
 
 
+def _clear_auth_session():
+    st.session_state["auth_role"] = None
+    st.session_state["_clear_client_auth"] = True
+    for key in [
+        "_auth_token",
+        "auth_username",
+        "user_handle",
+        "user_display_name",
+        "user_avatar",
+        "onboarding_complete",
+        "onboarding_step",
+    ]:
+        st.session_state.pop(key, None)
+    for key in ["token", "user", "guest_id", "logout"]:
+        if key in st.query_params:
+            del st.query_params[key]
+
+
+if st.query_params.get("logout") == "1":
+    _clear_auth_session()
+
+
 def _read_client_auth_component() -> str:
     global _AUTH_RESTORE_COMPONENT
     if _AUTH_RESTORE_COMPONENT is None:
@@ -2669,12 +2691,19 @@ _sidebar_html = f"""
 .mp-panel-item:hover svg {{ opacity: 1; }}
 .mp-panel-item.active svg {{ opacity: 1; }}
 .mp-spacer {{ flex: 1; }}
-.mp-pro {{
-    font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: #C49E3C;
-    background: #C49E3C14; border: 1px solid #C49E3C33; border-radius: 6px;
-    padding: 4px 8px; font-family: sans-serif; margin-top: auto;
-}}
-</style>
+	.mp-pro {{
+	    font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: #C49E3C;
+	    background: #C49E3C14; border: 1px solid #C49E3C33; border-radius: 6px;
+	    padding: 4px 8px; font-family: sans-serif; margin-top: auto;
+	}}
+	.mp-logout {{
+	    font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: #6B8AAA !important;
+	    background: #111A2A; border: 1px solid #1E3050; border-radius: 6px;
+	    padding: 5px 8px; font-family: sans-serif; text-decoration: none !important;
+	    margin-top: auto;
+	}}
+	.mp-logout:hover {{ color: #2DD4BF !important; border-color: #2DD4BF66; }}
+	</style>
 
 <div class="mp-rail">
 
@@ -2776,7 +2805,7 @@ _sidebar_html = f"""
     </div>
   </div>
 
-  <div class="mp-zone mp-zone-insights">
+	  <div class="mp-zone mp-zone-insights">
     <div class="mp-zone-label">INSIGHTS</div>
     <a href="/?{_tok_qp}page=Post+History" class="mp-ico {_act('Post History')}" target="_self">
       <div class="mp-active-pip"></div>
@@ -2836,11 +2865,12 @@ _sidebar_html = f"""
         Profile Analyzer
       </a>
     </div>
-  </div>
-  {_owner_debug_zone}
+	  </div>
+	  {_owner_debug_zone}
 
-  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
-</div>
+	  <a href="/?logout=1" class="mp-logout" target="_self">OUT</a>
+	  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
+	</div>
 
 """
 
@@ -2860,18 +2890,7 @@ with st.sidebar:
         elif _g_username:
             st.markdown(f'<div style="text-align:center;margin:-6px 0 8px;font-size:11px;color:#6E7681;">{_g_username}</div>', unsafe_allow_html=True)
     if st.button("Logout", key="_logout", type="secondary", use_container_width=True):
-        st.session_state["auth_role"] = None
-        st.session_state["_clear_client_auth"] = True
-        st.session_state.pop("_auth_token", None)
-        st.session_state.pop("auth_username", None)
-        st.session_state.pop("user_handle", None)
-        st.session_state.pop("user_display_name", None)
-        st.session_state.pop("user_avatar", None)
-        st.session_state.pop("onboarding_complete", None)
-        st.session_state.pop("onboarding_step", None)
-        for _k in ["token", "user", "guest_id"]:
-            if _k in st.query_params:
-                del st.query_params[_k]
+        _clear_auth_session()
         st.rerun()
     # Hidden buttons for each page — JS wires sidebar links to click these
     # instead of doing full page reloads (eliminates white flash)
