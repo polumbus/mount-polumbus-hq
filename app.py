@@ -1830,6 +1830,35 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
     )
 
 
+def _get_request_cookie(name: str) -> str:
+    try:
+        raw = st.context.cookies.get(name, "")
+        if raw:
+            return raw
+    except Exception:
+        pass
+    try:
+        from http.cookies import SimpleCookie
+
+        headers = getattr(st.context, "headers", {}) or {}
+        cookie_header = ""
+        for key in ("cookie", "Cookie"):
+            try:
+                cookie_header = headers.get(key, "")
+            except Exception:
+                cookie_header = ""
+            if cookie_header:
+                break
+        if not cookie_header:
+            return ""
+        jar = SimpleCookie()
+        jar.load(cookie_header)
+        morsel = jar.get(name)
+        return morsel.value if morsel else ""
+    except Exception:
+        return ""
+
+
 def _render_canonical_origin_bridge():
     if not _CANONICAL_ORIGIN:
         return
@@ -1881,7 +1910,7 @@ if not st.session_state["auth_role"]:
     # Fallback: read cookie directly (survives browser close, no JS needed)
     if not st.session_state["auth_role"]:
         try:
-            _cookie_raw = st.context.cookies.get("mp_auth", "")
+            _cookie_raw = _get_request_cookie("mp_auth")
             if _cookie_raw:
                 _cookie_data = json.loads(urllib.parse.unquote(_cookie_raw))
                 _c_role = _cookie_data.get("role", "")
