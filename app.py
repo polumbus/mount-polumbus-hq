@@ -26,7 +26,9 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   get_google_trends, get_reddit_trending, get_newsapi_headlines,
                   get_coingecko_trending)
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG, GAMEDAY_URL,
-                    _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
+                    _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE,
+                    _DEFAULT_TWEET_FORMAT, _DEFAULT_TWEET_VOICE, _FORMAT_ORDER)
+from shared_voice import BANNED_OPENERS
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -212,7 +214,7 @@ Voice on X — CRITICAL (read their actual tweets below and MATCH their exact to
 {tone_block}
 
 Format rules:
-- Keep tweets under 280 characters. Under 200 when possible for max punch.
+- Default tweet format: {_DEFAULT_TWEET_FORMAT} ({_FORMAT_GUIDES.get(_DEFAULT_TWEET_FORMAT, {}).get('chars', 'Creator Studio default')}).
 - No hashtags unless specifically requested
 - No emojis in output. Write plain text only.
 
@@ -1520,6 +1522,56 @@ def load_json(filename: str, default=None):
 def save_json(filename: str, data):
     path = get_data_dir() / filename
     path.write_text(json.dumps(data, indent=2, default=str))
+
+
+# Single source for every Streamlit surface that builds tweet copy with AI.
+# Creator Studio owns the actual prompt formula; these helpers prevent What Hot,
+# Signals, Reply Guy, Raw Thoughts, and future agents from drifting back to
+# hard-coded "under X chars" or alternate default voice rules.
+CANONICAL_TWEET_DEFAULT_FORMAT = _DEFAULT_TWEET_FORMAT
+CANONICAL_TWEET_DEFAULT_VOICE = _DEFAULT_TWEET_VOICE
+
+
+def _tweet_format_options(include_article: bool = True) -> list[str]:
+    opts = [fmt for fmt in _FORMAT_ORDER if fmt in _FORMAT_GUIDES]
+    if not include_article:
+        opts = [fmt for fmt in opts if fmt != "Article"]
+    return opts
+
+
+def _tweet_voice_options(include_custom: bool = True) -> list[str]:
+    opts = list(_VOICE_LABELS.keys())
+    if include_custom:
+        for style in load_json("voice_styles.json", []):
+            name = style.get("name") if isinstance(style, dict) else ""
+            if name and name not in opts:
+                opts.append(name)
+    return opts
+
+
+def _normalize_tweet_format(fmt: str | None, *, include_article: bool = True) -> str:
+    opts = _tweet_format_options(include_article=include_article)
+    if fmt in opts:
+        return fmt
+    if CANONICAL_TWEET_DEFAULT_FORMAT in opts:
+        return CANONICAL_TWEET_DEFAULT_FORMAT
+    return opts[0] if opts else CANONICAL_TWEET_DEFAULT_FORMAT
+
+
+def _normalize_tweet_voice(voice: str | None) -> str:
+    opts = _tweet_voice_options(include_custom=True)
+    if voice in opts:
+        return voice
+    return CANONICAL_TWEET_DEFAULT_VOICE
+
+
+def _tweet_format_short_label(fmt: str) -> str:
+    return (fmt or "").replace(" Tweet", "").replace("Long", "Long").strip() or fmt
+
+
+def _tweet_select_index(options: list[str], current: str | None, fallback: str) -> int:
+    value = current if current in options else fallback
+    return options.index(value) if value in options else 0
 
 
 def _get_engagement_lists_path():
@@ -3247,7 +3299,14 @@ def page_brain_dump():
     if st.button("bd_gen_tweets", key="bd_gen_tweets"):
         if dump_text.strip():
             with st.spinner("Generating tweets..."):
-                result = call_claude(f'Brain dump:\n\n"{dump_text}"\n\nWrite 5 tweet options from this. Each under 220 characters. Different angles and hooks. Number them. No hashtags. No emojis.', system=build_user_context(), max_tokens=500)
+                opts, _raw = _creator_build_options(
+                    f'Brain dump:\n\n"{dump_text}"',
+                    CANONICAL_TWEET_DEFAULT_FORMAT,
+                    CANONICAL_TWEET_DEFAULT_VOICE,
+                    limit=3,
+                    strict=True,
+                )
+                result = "\n\n".join(f"{idx}. {opt}" for idx, opt in enumerate(opts, 1))
                 st.session_state["bd_tweets"] = result
     if st.button("bd_gen_long", key="bd_gen_long"):
         if dump_text.strip():
@@ -3554,6 +3613,8 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
     """Run the exact Creator Studio build prompt and return parsed options + raw text."""
     if not (tweet_text or "").strip():
         return None, ""
+    fmt = _normalize_tweet_format(fmt)
+    voice = _normalize_tweet_voice(voice)
 
     voice_mod = voice_mod if voice_mod is not None else _build_voice_mod(voice)
     pp = pp if pp is not None else analyze_personal_patterns()
@@ -3636,31 +3697,107 @@ Return ONLY this JSON, no other text:
     return build_data, raw
 
 
+def _is_valid_ai_tweet_for_format(text: str, fmt: str | None = None, voice: str | None = None) -> bool:
+    clean = (text or "").strip()
+    if not clean:
+        return False
+    fmt = _normalize_tweet_format(fmt)
+    voice = _normalize_tweet_voice(voice)
+    chars = len(clean)
+    if fmt == "Normal Tweet" and not (161 <= chars <= 260):
+        return False
+    if fmt == "Punchy Tweet" and chars > 160:
+        return False
+    if fmt == "Long Tweet" and chars < 280:
+        return False
+    lower = clean.lower().lstrip('"\'“”‘’ ')
+    banned = tuple(BANNED_OPENERS) + (
+        "one word to describe",
+        "someone help me understand",
+        "unpopular opinion",
+        "nobody is talking about",
+        "not enough people are talking about",
+        "let that sink in",
+        "this is your reminder",
+    )
+    if lower.startswith(banned):
+        return False
+    if voice == CANONICAL_TWEET_DEFAULT_VOICE and "?" in clean:
+        return False
+    return True
+
+
+def _ordered_creator_build_options(build_data: dict | None, *, limit: int = 3,
+                                   fmt: str | None = None, voice: str | None = None,
+                                   strict: bool = False) -> list[str]:
+    if not build_data:
+        return []
+    pick = str(build_data.get("pick", "1")).strip()
+    if pick not in ("1", "2", "3"):
+        pick = "1"
+    keys = [f"option{pick}", "option1", "option2", "option3"]
+    seen_keys: set[str] = set()
+    seen_text: set[str] = set()
+    out: list[str] = []
+    for key in keys:
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        text = _sanitize_output(build_data.get(key) or "").strip()
+        if not text or text in seen_text:
+            continue
+        if strict and not _is_valid_ai_tweet_for_format(text, fmt, voice):
+            continue
+        seen_text.add(text)
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _creator_build_options(seed: str, fmt: str | None = None, voice: str | None = None,
+                           *, limit: int = 3, strict: bool = False,
+                           live_stats_block: str = "", sports_ctx: str = "") -> tuple[list[str], str]:
+    fmt = _normalize_tweet_format(fmt)
+    voice = _normalize_tweet_voice(voice)
+    build_data, raw = _generate_build_data(
+        seed,
+        fmt,
+        voice,
+        live_stats_block=live_stats_block,
+        sports_ctx=sports_ctx,
+    )
+    return _ordered_creator_build_options(build_data, limit=limit, fmt=fmt, voice=voice, strict=strict), raw
+
+
+def _creator_reply_options(author: str, tweet_text: str, *, parent_text: str = "", count: int = 3) -> list[str]:
+    author = (author or "").lstrip("@") or "this account"
+    parent = (parent_text or "").strip()
+    target = (tweet_text or "").strip()
+    brief = f"""TOPIC: Reply to @{author}'s X post.
+TENSION: The reply must respond directly to the post, but still sound like a complete Tyler tweet.
+KEY STATS: Use only details present in the target post or parent tweet. Do not invent numbers.
+TARGET POST: "{target[:500]}"
+{f'PARENT TWEET: "{parent[:500]}"' if parent else ''}
+ANGLE: Add one specific film-room observation or roster/media read. Use Creator Studio's canonical {CANONICAL_TWEET_DEFAULT_VOICE} voice and {CANONICAL_TWEET_DEFAULT_FORMAT} formula."""
+    opts, _raw = _creator_build_options(
+        brief,
+        CANONICAL_TWEET_DEFAULT_FORMAT,
+        CANONICAL_TWEET_DEFAULT_VOICE,
+        limit=count,
+        strict=True,
+    )
+    return opts[:count]
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
     """Cache What's Hot final build output so repeat opens don't rerun the same seed."""
-    def _is_valid_normal_tweet(_text: str) -> bool:
-        _clean = (_text or "").strip()
-        _chars = len(_clean)
-        if not (161 <= _chars <= 260):
-            return False
-        _lower = _clean.lower().lstrip('"\'“”‘’ ')
-        _banned_openers = (
-            "someone help me understand",
-            "unpopular opinion",
-            "nobody is talking about",
-            "not enough people are talking about",
-            "let that sink in",
-            "this is your reminder",
-            "one word to describe",
-        )
-        if _lower.startswith(_banned_openers):
-            return False
-        if "?" in _clean:
-            return False
-        return True
-
-    _build_data, _raw = _generate_build_data(seed, "Normal Tweet", "Default")
+    _build_data, _raw = _generate_build_data(
+        seed,
+        CANONICAL_TWEET_DEFAULT_FORMAT,
+        CANONICAL_TWEET_DEFAULT_VOICE,
+    )
     if _build_data and _build_data.get("option1"):
         _pick = str(_build_data.get("pick", "1")).strip()
         if _pick not in ("1", "2", "3"):
@@ -3672,116 +3809,13 @@ def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
                 continue
             _seen.add(_key)
             _candidate = (_build_data.get(_key) or "").strip()
-            if _candidate and _is_valid_normal_tweet(_candidate):
+            if _candidate and _is_valid_ai_tweet_for_format(
+                _candidate,
+                CANONICAL_TWEET_DEFAULT_FORMAT,
+                CANONICAL_TWEET_DEFAULT_VOICE,
+            ):
                 return _candidate
     return ""
-
-
-def _parse_build_batch_json(raw: str) -> list:
-    _clean = (raw or "").strip()
-    if not _clean:
-        return []
-    if _clean.startswith("```"):
-        _clean = _clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    try:
-        _obj = json.loads(_clean)
-        if isinstance(_obj, dict):
-            _obj = _obj.get("items", [])
-        if isinstance(_obj, list):
-            return [x for x in _obj if isinstance(x, dict)]
-    except Exception:
-        pass
-    try:
-        _m = re.search(r"\[[\s\S]*\]", _clean)
-        if _m:
-            _obj = json.loads(_m.group(0))
-            if isinstance(_obj, list):
-                return [x for x in _obj if isinstance(x, dict)]
-    except Exception:
-        pass
-    return []
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def _build_wh_hooks_batch_cached(seeds: tuple[str, ...], formula_version: str = "") -> list:
-    """Build multiple What's Hot hooks in one exact-rules batch call."""
-    _seeds = [s.strip() for s in (seeds or ()) if (s or "").strip()]
-    if not _seeds:
-        return []
-
-    voice = "Default"
-    fmt = "Normal Tweet"
-    voice_mod = _build_voice_mod(voice)
-    pp = analyze_personal_patterns()
-    format_mod = _build_format_mod(fmt, pp, voice)
-    _fmt_inject_b = ""
-    _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
-    if _fmt_pats_b:
-        _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
-    _voice_task = "matching the voice in the system prompt exactly"
-    _char_rule_b = "\n- CHARACTER LIMIT: Every option MUST be between 161 and 260 characters for Normal Tweet format. Count carefully."
-    _jobs = []
-    for _idx, _seed in enumerate(_seeds, 1):
-        _jobs.append(f"JOB {_idx}\nCONCEPT/ANGLE:\n\"{_seed}\"")
-    _jobs_block = "\n\n".join(_jobs)
-    _handle = get_current_handle()
-    _prompt = f"""You are running multiple independent Creator Studio BUILD jobs in one batch.
-
-Apply the exact same BUILD rules to each job independently.
-
-JOBS:
-{_jobs_block}
-
-{format_mod}{_fmt_inject_b}
-
-STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
-- ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
-- If no detailed stats are available, use team records, named events, or concrete observations. Never fabricate a number to fill a slot.
-- A tweet with a specific observation is ALWAYS better than one with a fabricated stat.
-
-TASK: For EACH job, write 3 distinct, finished tweets from that concept. Each should take a different angle or structure while {_voice_task}. NOT rewrites of each other — each a unique execution of the idea.
-
-Rules:
-- Strong hook — first line stops the scroll
-- No hashtags, no emojis
-- 7th-9th grade reading level
-- End with something that makes people reply or argue
-- Algorithm optimized: strong opinion, relatable, invites engagement
-- Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
-
-CRITICAL: Each option field must contain the ACTUAL TWEET TEXT that @{_handle} would post — not a description, not a pattern label, not instructions. Write the real tweet.
-
-Return ONLY this JSON array, no other text:
-[
-  {{
-    "job": 1,
-    "option1": "full tweet text",
-    "option1_pattern": "angle label",
-    "option2": "full tweet text",
-    "option2_pattern": "angle label",
-    "option3": "full tweet text",
-    "option3_pattern": "angle label",
-    "pick": "1, 2, or 3"
-  }}
-]"""
-    _raw = call_claude(_prompt, system=get_system_for_voice(voice, voice_mod), max_tokens=2600)
-    _items = _parse_build_batch_json(_raw)
-    _out = [""] * len(_seeds)
-    for _item in _items:
-        try:
-            _job = int(str(_item.get("job", "")).strip()) - 1
-        except Exception:
-            continue
-        if not (0 <= _job < len(_out)):
-            continue
-        _pick = str(_item.get("pick", "1")).strip()
-        if _pick not in ("1", "2", "3"):
-            _pick = "1"
-        _hook = (_item.get(f"option{_pick}") or _item.get("option1") or "").strip()
-        if _hook:
-            _out[_job] = _sanitize_output(_hook)
-    return _out
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CREATOR STUDIO — BUILDER FUNCTIONS (voice, format, patterns, grades)
@@ -6349,7 +6383,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-24-creator-default-normal-v2"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-24-canonical-creator-v1"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -6525,7 +6559,7 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 
     def _append(text: str, source: str):
         _topic = _topic_from_text(text)
-        _voice = "Default"
+        _voice = CANONICAL_TWEET_DEFAULT_VOICE
         _hook = _build_hook(text, _topic, source)
         if _hook in _seen_hooks:
             return
@@ -6570,7 +6604,7 @@ def _run_inspiration_claude(_cache_key: str = ""):
         _updated = dict(_idea)
         _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
         _updated["_seed"] = _seed
-        _updated["voice"] = "Default"
+        _updated["voice"] = CANONICAL_TWEET_DEFAULT_VOICE
         return _updated
 
     _prepared = [_materialize_idea(_idea) for _idea in _ideas]
@@ -6643,8 +6677,8 @@ def _ci_build_dialog():
         if not _bd_take.strip() and not _bd_tension.strip() and not _bd_stats.strip():
             _assembled = _bd_topic.strip()
 
-        _bd_fmt = st.session_state.get("ci_format", "Normal Tweet")
-        _bd_voice = st.session_state.get("ci_voice", "Default")
+        _bd_fmt = _normalize_tweet_format(st.session_state.get("ci_format"))
+        _bd_voice = _normalize_tweet_voice(st.session_state.get("ci_voice"))
 
         with st.spinner("Building your tweets..."):
             st.session_state["ci_text"] = _assembled
@@ -6787,8 +6821,8 @@ def _ci_inspiration_dialog():
             if st.button("USE THIS", key=f"inspo_use_{_i}", use_container_width=True, type="primary"):
                 if _hook:
                     st.session_state["ci_text"] = _hook
-                    st.session_state["ci_format"] = "Normal Tweet"
-                    st.session_state["ci_voice"] = "Default"
+                    st.session_state["ci_format"] = CANONICAL_TWEET_DEFAULT_FORMAT
+                    st.session_state["ci_voice"] = CANONICAL_TWEET_DEFAULT_VOICE
                 st.rerun(scope="app")
         with _ib2:
             if pplx_available() and st.button("Verify", key=f"inspo_verify_{_i}", use_container_width=True):
@@ -7119,9 +7153,9 @@ def _render_creator_studio_editor():
         </div>''', unsafe_allow_html=True)
 
         # ── Format pills (real Streamlit buttons, CSS makes them compact) ──
-        _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
-        _fmt_short = {"Punchy Tweet": "Punchy", "Normal Tweet": "Normal", "Long Tweet": "Long", "Thread": "Thread", "Article": "Article"}
-        _cur_fmt = st.session_state.get("ci_format", "Normal Tweet")
+        _fmt_opts = _tweet_format_options()
+        _fmt_short = {fmt: _tweet_format_short_label(fmt) for fmt in _fmt_opts}
+        _cur_fmt = _normalize_tweet_format(st.session_state.get("ci_format"))
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;">Format</div>', unsafe_allow_html=True)
         _fc = st.columns(len(_fmt_opts))
         for _i, _fo in enumerate(_fmt_opts):
@@ -7132,9 +7166,8 @@ def _render_creator_studio_editor():
                     st.rerun(scope="fragment")
 
         # ── Voice pills ──
-        _custom_voices = load_json("voice_styles.json", [])
-        _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
-        _cur_voice = st.session_state.get("ci_voice", "Default")
+        _voice_opts = _tweet_voice_options()
+        _cur_voice = _normalize_tweet_voice(st.session_state.get("ci_voice"))
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
         _vc = st.columns(len(_voice_opts))
         for _i, _vo in enumerate(_voice_opts):
@@ -7154,12 +7187,12 @@ def _render_creator_studio_editor():
             if action == "banger" and len(_ci_input.split()) < 8:
                 st.session_state["_ci_show_build_dialog"] = True
                 st.rerun(scope="app")
-            st.session_state["_ci_pending"] = (
-                action,
-                _ci_input,
-                st.session_state.get("ci_format", "Normal Tweet"),
-                st.session_state.get("ci_voice", "Default"),
-            )
+                st.session_state["_ci_pending"] = (
+                    action,
+                    _ci_input,
+                    _normalize_tweet_format(st.session_state.get("ci_format")),
+                    _normalize_tweet_voice(st.session_state.get("ci_voice")),
+                )
             st.rerun(scope="app")
 
         st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
@@ -7206,7 +7239,7 @@ def _render_creator_studio_editor():
         if st.button("bot_save", key="ci_save"):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
-                ideas.append({"text": tweet_text, "format": st.session_state.get("ci_format", "Normal Tweet"),
+                ideas.append({"text": tweet_text, "format": _normalize_tweet_format(st.session_state.get("ci_format")),
                               "category": "Uncategorized", "saved_at": datetime.now().isoformat()})
                 save_json("saved_ideas.json", ideas)
                 st.success("Saved.")
@@ -7263,8 +7296,8 @@ def page_compose_ideas():
         seed = st.session_state.pop("ci_repurpose_seed")
         st.session_state.pop("ci_auto_repurpose", None)
         st.session_state["ci_text"] = seed
-        _fmt = st.session_state.get("ci_format", "Normal Tweet")
-        _vc = st.session_state.get("ci_voice", "Default")
+        _fmt = _normalize_tweet_format(st.session_state.get("ci_format"))
+        _vc = _normalize_tweet_voice(st.session_state.get("ci_voice"))
         with st.spinner("Post Ascend AI is working..."):
             _run_ci_ai("rewrite", seed, _fmt, _vc)
         _ci_output_panel(str(time.time()), "rewrite", seed, _fmt, _vc)
@@ -7275,9 +7308,9 @@ def page_compose_ideas():
 
     # ── Init format/voice in session state ──
     if "ci_format" not in st.session_state:
-        st.session_state["ci_format"] = "Normal Tweet"
+        st.session_state["ci_format"] = CANONICAL_TWEET_DEFAULT_FORMAT
     if "ci_voice" not in st.session_state:
-        st.session_state["ci_voice"] = "Default"
+        st.session_state["ci_voice"] = CANONICAL_TWEET_DEFAULT_VOICE
 
     _render_creator_studio_editor()
 
@@ -7452,7 +7485,7 @@ Your coaching style:
         st.rerun()
 
     # --- Output Format as HTML pills ---
-    _fmt_opts = ["General Advice", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+    _fmt_opts = ["General Advice"] + [fmt for fmt in _tweet_format_options() if fmt != "Punchy Tweet"]
     if "coach_fmt_sel" not in st.session_state:
         st.session_state.coach_fmt_sel = "General Advice"
     _cur_fmt = st.session_state.coach_fmt_sel
@@ -7521,7 +7554,14 @@ Your coaching style:
         _last_ai = next((m["content"] for m in reversed(st.session_state.coach_current.get("messages", [])) if m["role"] == "assistant"), "")
         if _last_ai.strip():
             with st.spinner("Repurposing..."):
-                repurposed = call_claude(f"Rewrite this into a compelling tweet:\n\n{_last_ai.strip()}", system=build_user_context(), max_tokens=600)
+                opts, _raw = _creator_build_options(
+                    f"Rewrite this into a compelling tweet:\n\n{_last_ai.strip()}",
+                    CANONICAL_TWEET_DEFAULT_FORMAT,
+                    CANONICAL_TWEET_DEFAULT_VOICE,
+                    limit=1,
+                    strict=True,
+                )
+                repurposed = opts[0] if opts else ""
                 st.session_state.coach_save_text_result = repurposed
 
     if "coach_save_text_result" in st.session_state:
@@ -7536,8 +7576,7 @@ Your coaching style:
 @st.dialog("New Article", width="large")
 def _aw_create_new_dialog():
     """Popup for writing a new article from scratch."""
-    _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
+    _voice_opts = _tweet_voice_options()
     voice_pick = st.selectbox("Voice", _voice_opts, key="aw_dialog_voice",
         help="Default = natural | Critical = tough love | Hype = ultra positive | Sarcastic = short column, implied story")
     freeform = st.text_area("Write or paste your seed / article here:", height=300, key="aw_dialog_freeform",
@@ -9232,8 +9271,9 @@ def page_reply_guy():
                 "Based on these tweets from accounts in the feed:\n\n"
                 + "\n".join(f"- {l}" for l in _lines)
                 + f"\n\nGenerate 5 fresh, punchy tweet ideas for @{_insp_handle}. "
-                "Each should react to something in the feed, match the voice in the system prompt, be under 280 chars. "
-                "Numbered list. No hashtags. No emojis."
+                f"Each should be a seed angle that will later be built with Creator Studio's "
+                f"{CANONICAL_TWEET_DEFAULT_VOICE} / {CANONICAL_TWEET_DEFAULT_FORMAT} formula. "
+                "Numbered list. No hashtags. No emojis. Do not write finished tweets here."
             )
             with st.spinner("Reading the feed..."):
                 st.session_state["rg_inspiration_ideas"] = call_claude(_prompt, system=build_user_context(), max_tokens=1000)
@@ -9257,8 +9297,8 @@ def page_reply_guy():
                     st.session_state.pop("_ci_pending", None)
                     st.session_state.pop("_ci_reopen_dialog", None)
                     st.session_state["rg_viral_idea"] = _idea
-                    st.session_state["rg_viral_fmt"] = "Normal Tweet"
-                    st.session_state["rg_viral_voice"] = "Default"
+                    st.session_state["rg_viral_fmt"] = CANONICAL_TWEET_DEFAULT_FORMAT
+                    st.session_state["rg_viral_voice"] = CANONICAL_TWEET_DEFAULT_VOICE
                     st.rerun()
             if st.button("↺ Regen", use_container_width=True, key="btn_regen_insp"):
                 del st.session_state["rg_inspiration_ideas"]
@@ -9316,7 +9356,8 @@ def page_reply_guy():
                     tid_ = t.get("id","")
                     key_ = f"rg_et_{tweets_data.index(t)}"
                     if not st.session_state.get(key_,"").strip():
-                        sug = call_claude(f'Reply to @{acc_}\'s tweet: "{text_[:150]}". Write ONE reply under 150 chars. Match the voice in the system prompt. No emojis.', system=build_user_context(), max_tokens=80)
+                        _opts = _creator_reply_options(acc_, text_, count=1)
+                        sug = _opts[0] if _opts else ""
                         st.session_state[key_] = sug
             st.rerun()
 
@@ -9426,13 +9467,7 @@ def page_reply_guy():
             # Hidden buttons for actions
             if st.button(f"rg_etg_{i}", key=f"rg_etg_{i}"):
                 with st.spinner(""):
-                    raw = call_claude(
-                        f'Reply to @{acc}\'s tweet: "{text[:150]}". '
-                        f'Write exactly 3 different reply options, each under 150 chars. '
-                        f'Match the voice in the system prompt. No emojis. '
-                        f'Format: one reply per line, no numbering, no labels.',
-                        system=build_user_context(), max_tokens=250)
-                    opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
+                    opts = _creator_reply_options(acc, text, count=3)
                     if opts:
                         st.session_state[options_key] = opts
                         if not st.session_state.get(et_input_key,"").strip():
@@ -9472,17 +9507,19 @@ def page_reply_guy():
     # ── Go Viral modal (from Inspiration Engine) ──
     if st.session_state.get("rg_viral_idea"):
         _viral_idea = st.session_state["rg_viral_idea"]
-        _viral_fmt = st.session_state.get("rg_viral_fmt", "Normal Tweet")
-        _viral_voice = st.session_state.get("rg_viral_voice", "Default")
+        _viral_fmt = _normalize_tweet_format(st.session_state.get("rg_viral_fmt"))
+        _viral_voice = _normalize_tweet_voice(st.session_state.get("rg_viral_voice"))
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
         _vf1, _vf2, _vclose = st.columns([2, 2, 1])
         with _vf1:
-            _viral_fmt = st.selectbox("Format", ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"],
-                index=["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"].index(_viral_fmt),
+            _viral_fmt_opts = _tweet_format_options()
+            _viral_fmt = st.selectbox("Format", _viral_fmt_opts,
+                index=_tweet_select_index(_viral_fmt_opts, _viral_fmt, CANONICAL_TWEET_DEFAULT_FORMAT),
                 key="rg_viral_fmt_sel", label_visibility="collapsed")
         with _vf2:
-            _viral_voice = st.selectbox("Voice", ["Default", "Critical", "Hype", "Sarcastic"],
-                index=["Default", "Critical", "Hype", "Sarcastic"].index(_viral_voice),
+            _viral_voice_opts = _tweet_voice_options()
+            _viral_voice = st.selectbox("Voice", _viral_voice_opts,
+                index=_tweet_select_index(_viral_voice_opts, _viral_voice, CANONICAL_TWEET_DEFAULT_VOICE),
                 key="rg_viral_voice_sel", label_visibility="collapsed")
         with _vclose:
             if st.button("✕ Close", key="rg_viral_close", use_container_width=True):
@@ -9571,14 +9608,7 @@ def page_reply_guy():
                 with ab1:
                     if st.button("🤖 AI", key=f"rg_gen_{idx}_{ri}", use_container_width=True, help="Generate 3 reply options"):
                         with st.spinner(""):
-                            raw = call_claude(
-                                f'Original tweet: "{txt[:200]}"\n\n'
-                                f'@{rauthor} replied: "{rtext[:200]}"\n\n'
-                                f'Write exactly 3 different reply options. Under 150 chars each. '
-                                f'Match the voice in the system prompt. No emojis. '
-                                f'One reply per line, no numbering.',
-                                system=build_user_context(), max_tokens=250)
-                            opts = [o.strip() for o in raw.strip().split("\n") if o.strip()][:3]
+                            opts = _creator_reply_options(rauthor, rtext, parent_text=txt, count=3)
                             if opts:
                                 st.session_state[opts_key] = opts
                                 if not st.session_state.get(input_key, "").strip():
@@ -10079,8 +10109,8 @@ def _signal_brief_dialog(_nonce):
 
     # If AI already ran, show results directly
     if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result") or st.session_state.get("ci_error"):
-        fmt = st.session_state.get("_sig_last_fmt", "Normal Tweet")
-        voice = st.session_state.get("_sig_last_voice", "Default")
+        fmt = _normalize_tweet_format(st.session_state.get("_sig_last_fmt"))
+        voice = _normalize_tweet_voice(st.session_state.get("_sig_last_voice"))
         _ci_output_panel_impl("build", brief, fmt, voice)
         return
 
@@ -10088,12 +10118,11 @@ def _signal_brief_dialog(_nonce):
     st.markdown(f'<div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:16px;margin-bottom:12px;font-size:12px;color:#b8c8d8;line-height:1.7;white-space:pre-wrap;">{brief}</div>', unsafe_allow_html=True)
     edited_brief = st.text_area("Edit brief:", value=brief, height=160, key="sig_brief_edit")
 
-    _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
-    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+    _voice_opts = _tweet_voice_options()
+    _fmt_opts = _tweet_format_options()
     # Use session state defaults so changing voice/format doesn't close dialog
-    _v_idx = _voice_opts.index(st.session_state.get("sig_voice", "Default")) if st.session_state.get("sig_voice", "Default") in _voice_opts else 0
-    _f_idx = _fmt_opts.index(st.session_state.get("sig_fmt", "Normal Tweet")) if st.session_state.get("sig_fmt", "Normal Tweet") in _fmt_opts else 1
+    _v_idx = _tweet_select_index(_voice_opts, st.session_state.get("sig_voice"), CANONICAL_TWEET_DEFAULT_VOICE)
+    _f_idx = _tweet_select_index(_fmt_opts, st.session_state.get("sig_fmt"), CANONICAL_TWEET_DEFAULT_FORMAT)
     vc1, vc2 = st.columns(2)
     with vc1:
         sig_voice = st.selectbox("Voice", _voice_opts, index=_v_idx, key="sig_voice")
@@ -11129,8 +11158,8 @@ def _gd_draft_dialog(_nonce):
         return
 
     if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result") or st.session_state.get("ci_error"):
-        _sig_fmt = st.session_state.get("_gd_last_fmt", "Normal Tweet")
-        _sig_voice = st.session_state.get("_gd_last_voice", "Default")
+        _sig_fmt = _normalize_tweet_format(st.session_state.get("_gd_last_fmt"), include_article=False)
+        _sig_voice = _normalize_tweet_voice(st.session_state.get("_gd_last_voice"))
         _ci_output_panel_impl("build", "", _sig_fmt, _sig_voice)
         return
 
@@ -11156,11 +11185,10 @@ ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == 
 
     edited_brief = st.text_area("Edit brief:", value=brief, height=120, key="gd_brief_edit")
 
-    _custom_voices = load_json("voice_styles.json", [])
-    _voice_opts = ["Default", "Critical", "Hype", "Sarcastic"] + [s["name"] for s in _custom_voices]
-    _fmt_opts = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread"]
-    _v_idx = _voice_opts.index(st.session_state.get("gd_voice", "Default")) if st.session_state.get("gd_voice", "Default") in _voice_opts else 0
-    _f_idx = _fmt_opts.index(st.session_state.get("gd_fmt", "Normal Tweet")) if st.session_state.get("gd_fmt", "Normal Tweet") in _fmt_opts else 1
+    _voice_opts = _tweet_voice_options()
+    _fmt_opts = _tweet_format_options(include_article=False)
+    _v_idx = _tweet_select_index(_voice_opts, st.session_state.get("gd_voice"), CANONICAL_TWEET_DEFAULT_VOICE)
+    _f_idx = _tweet_select_index(_fmt_opts, st.session_state.get("gd_fmt"), CANONICAL_TWEET_DEFAULT_FORMAT)
     vc1, vc2 = st.columns(2)
     with vc1:
         gd_voice = st.selectbox("Voice", _voice_opts, index=_v_idx, key="gd_voice")

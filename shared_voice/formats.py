@@ -67,6 +67,12 @@ FORMAT_KEYS: dict[str, str] = {
     "article": "Article",
 }
 
+# Canonical AI tweet contract. Streamlit HQ, What's Hot, Signals, Reply Guy,
+# and web builds should import these instead of hard-coding voice/length rules.
+DEFAULT_TWEET_FORMAT = "Normal Tweet"
+DEFAULT_TWEET_VOICE = "Default"
+FORMAT_ORDER: tuple[str, ...] = tuple(FORMAT_GUIDES.keys())
+
 
 def get_format(key: str) -> dict:
     """Return a format guide dict by lowercase key. Raises KeyError if unknown."""
