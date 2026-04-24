@@ -1680,9 +1680,22 @@ def _hash_pw(username: str, password: str) -> str:
 
 _OWNER_TOKEN = _hl.sha256(f"mp_owner_{_OWNER_PW}".encode()).hexdigest()[:16] if _OWNER_PW else ""
 _CANONICAL_ORIGIN = os.getenv("POSTASCEND_CANONICAL_ORIGIN", "http://localhost:8501").strip()
+_AUTH_RESTORE_COMPONENT = None
 
 if "auth_role" not in st.session_state:
     st.session_state["auth_role"] = None
+
+
+def _read_client_auth_component() -> str:
+    global _AUTH_RESTORE_COMPONENT
+    if _AUTH_RESTORE_COMPONENT is None:
+        import streamlit.components.v1 as _stc_restore
+
+        _AUTH_RESTORE_COMPONENT = _stc_restore.declare_component(
+            "auth_restore",
+            path=str(Path(__file__).resolve().parent / "components" / "auth_restore"),
+        )
+    return _AUTH_RESTORE_COMPONENT(default="", key="auth_restore") or ""
 
 
 def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_qp: bool = False):
@@ -1859,6 +1872,39 @@ def _get_request_cookie(name: str) -> str:
         return ""
 
 
+def _restore_auth_payload(raw: str | dict | None) -> bool:
+    if not raw:
+        return False
+    try:
+        if isinstance(raw, dict):
+            data = raw
+        else:
+            data = json.loads(urllib.parse.unquote(str(raw)))
+        role = data.get("role", "")
+        token = data.get("token", "")
+        user = data.get("user", "")
+        if role == "owner" and token == _OWNER_TOKEN:
+            st.session_state["auth_role"] = "owner"
+            st.session_state["auth_username"] = "owner"
+            st.query_params["token"] = token
+            st.query_params["user"] = "owner"
+            return True
+        if role == "guest" and user:
+            accounts = _load_accounts()
+            if user in accounts and accounts[user].get("token") == token:
+                st.session_state["auth_role"] = "guest"
+                st.session_state["auth_username"] = user
+                st.query_params["token"] = token
+                st.query_params["user"] = user
+                guest_id = accounts[user].get("guest_id", "")
+                if guest_id:
+                    st.query_params["guest_id"] = guest_id
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _render_canonical_origin_bridge():
     if not _CANONICAL_ORIGIN:
         return
@@ -1909,30 +1955,7 @@ if not st.session_state["auth_role"]:
 
     # Fallback: read cookie directly (survives browser close, no JS needed)
     if not st.session_state["auth_role"]:
-        try:
-            _cookie_raw = _get_request_cookie("mp_auth")
-            if _cookie_raw:
-                _cookie_data = json.loads(urllib.parse.unquote(_cookie_raw))
-                _c_role = _cookie_data.get("role", "")
-                _c_token = _cookie_data.get("token", "")
-                _c_user = _cookie_data.get("user", "")
-                if _c_role == "owner" and _c_token == _OWNER_TOKEN:
-                    st.session_state["auth_role"] = "owner"
-                    st.session_state["auth_username"] = "owner"
-                    st.query_params["token"] = _c_token
-                    st.query_params["user"] = "owner"
-                elif _c_role == "guest" and _c_user:
-                    _accts = _load_accounts()
-                    if _c_user in _accts and _accts[_c_user].get("token") == _c_token:
-                        st.session_state["auth_role"] = "guest"
-                        st.session_state["auth_username"] = _c_user
-                        st.query_params["token"] = _c_token
-                        st.query_params["user"] = _c_user
-                        _gid = _accts[_c_user].get("guest_id", "")
-                        if _gid:
-                            st.query_params["guest_id"] = _gid
-        except Exception:
-            pass
+        _restore_auth_payload(_get_request_cookie("mp_auth"))
 
 if not st.session_state["auth_role"]:
     _clear_client_auth = bool(st.session_state.pop("_clear_client_auth", False))
@@ -1947,6 +1970,8 @@ if not st.session_state["auth_role"]:
                 _accts = _load_accounts()
                 if not (_tok_user and _tok_user in _accts and _accts[_tok_user].get("token") == _tok):
                     _invalid_auth_qp = True
+        if _restore_auth_payload(_read_client_auth_component()):
+            st.rerun()
     st.markdown("""<style>
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }

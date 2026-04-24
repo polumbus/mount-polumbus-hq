@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      (function () {
+        var KEY = "mp_auth";
+
+        function send(type, data) {
+          window.parent.postMessage(
+            Object.assign({ isStreamlitMessage: true, type: type }, data || {}),
+            "*"
+          );
+        }
+
+        function windowChain() {
+          var wins = [window];
+          try {
+            if (window.parent && wins.indexOf(window.parent) === -1) wins.push(window.parent);
+          } catch (e) {}
+          try {
+            if (window.top && wins.indexOf(window.top) === -1) wins.push(window.top);
+          } catch (e) {}
+          return wins;
+        }
+
+        function readCookie() {
+          var prefix = KEY + "=";
+          var wins = windowChain();
+          for (var w = 0; w < wins.length; w++) {
+            try {
+              var parts = wins[w].document.cookie.split(";");
+              for (var i = 0; i < parts.length; i++) {
+                var part = parts[i].trim();
+                if (part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
+              }
+            } catch (e) {}
+          }
+          return "";
+        }
+
+        function readLocal() {
+          var wins = windowChain();
+          for (var i = 0; i < wins.length; i++) {
+            try {
+              var raw = wins[i].localStorage.getItem(KEY) || wins[i].sessionStorage.getItem(KEY);
+              if (raw) return raw;
+            } catch (e) {}
+          }
+          return "";
+        }
+
+        send("streamlit:componentReady", { apiVersion: 1 });
+        send("streamlit:setFrameHeight", { height: 0 });
+        send("streamlit:setComponentValue", {
+          value: readLocal() || readCookie() || "",
+          dataType: "json",
+        });
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
