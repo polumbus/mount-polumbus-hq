@@ -3855,7 +3855,7 @@ DEFAULT VOICE OVERRIDE:
 - Do NOT ask direct questions in Default voice.
 - Maximize replies through a declarative final statement that creates tension, consequence, or an unfinished thought readers want to complete or argue with.
 - End with an ellipsis or incomplete analytical thought, not a question mark.
-- For Broncos roster, GM, coach, draft, free-agency, or depth-chart topics, the open-door ending should subtly highlight roster consequence or decision tension. For non-Broncos topics, use the equivalent team/player/series consequence instead.
+- The open-door ending should subtly surface the consequence, tradeoff, or decision tension implied by the concept so readers feel the unresolved stakes.
 - Avoid leaning on overused openers like "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", "Let that sink in", or "This is your reminder". They are reference patterns, not default starters. Prefer a fresh, topic-specific first line.
 - The output must feel like film-room observation: specific observation, context underneath it, open-door trailing thought.
 - Do not lead with generic hot-take framing, forced humor, or accountability theater. A little edge is allowed when it naturally comes from the observation.""" if voice == "Default" else ""
@@ -4553,11 +4553,10 @@ Still not an opinion.
 	Not a question. Not a conclusion. Just the film
 	running with the sound off and room for the reader
 	to add their own read.
-	For Broncos roster, GM, coach, draft, free-agency,
-	or depth-chart topics, subtly surface roster consequence
-	or decision tension in the open door. For non-Broncos
-	topics, use the equivalent team/player/series consequence
-	instead. Never force Broncos framing onto another sport.
+	Subtly surface the consequence, tradeoff, or decision
+	tension implied by the concept in the open door. The
+	reader should feel the unresolved stakes without being
+	told exactly what to think.
 
 TONE RULES:
 - Informative not opinionated — the facts carry the weight
@@ -4819,7 +4818,7 @@ RULES:
 	- Default voice does NOT ask direct questions
 	- Maximize replies through a declarative final statement that creates tension, consequence, or an unfinished thought readers want to complete or argue with
 	- End with ellipsis or an incomplete analytical thought, not a question mark
-	- For Broncos roster/GM/coach/draft/free-agency topics, the final open door should subtly highlight roster consequence or decision tension; for other topics, use the equivalent team/player/series consequence
+	- The final open door should subtly surface the consequence, tradeoff, or decision tension implied by the concept so readers feel the unresolved stakes
 	- Avoid overusing "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder". Prefer a fresh, topic-specific opener.
 	- Must sound like film-room observation, not generic hot-take framing
 	- A little edge or personality is allowed when it comes naturally from the observation, especially in the open-door final line

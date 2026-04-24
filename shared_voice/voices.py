@@ -171,10 +171,9 @@ DEFAULT_VOICE_DESCRIPTION: str = (
     "Tyler's default voice: film-room observation. State what the film "
     "shows, then add the context underneath it. Do not ask direct questions; "
     "maximize replies with a declarative open-door final line that creates "
-    "tension and makes readers want to finish or argue the thought. For "
-    "Broncos roster/GM/coach/draft/free-agency topics, the open door should "
-    "subtly highlight roster consequence or decision tension; for other "
-    "topics, use the equivalent team/player/series consequence. Avoid "
+    "tension and makes readers want to finish or argue the thought. The open "
+    "door should subtly surface the consequence, tradeoff, or decision tension "
+    "implied by the concept so readers feel the unresolved stakes. Avoid "
     "generic hot-take framing, but allow a little edge when it naturally comes "
     "from the observation. Authority IMPLIED through specificity, never stated."
 )
