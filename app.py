@@ -510,13 +510,13 @@ def build_patterns_context(patterns, fmt=""):
 
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
         top_pool = patterns["top_examples_punchy"]
-        pool_label = "Hall of Fame PUNCHY Tweets <=160 chars (model these — 2 sentences max)"
+        pool_label = "Hall of Fame PUNCHY Tweets <=160 chars (reference only — 2 sentences max)"
     elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
         top_pool = patterns["top_examples_normal"]
-        pool_label = "Hall of Fame NORMAL Tweets 161-260 chars (model these)"
+        pool_label = "Hall of Fame NORMAL Tweets 161-260 chars (reference only)"
     elif _long_fmt and patterns.get("top_examples_long"):
         top_pool = patterns["top_examples_long"]
-        pool_label = "Hall of Fame LONG Tweets (model these)"
+        pool_label = "Hall of Fame LONG Tweets (reference only)"
     else:
         top_pool = patterns.get("top_examples", [])
         pool_label = "Hall of Fame Tweets"
@@ -537,7 +537,7 @@ Character Length:
 Style Patterns (top performers):
 {_sig}- {patterns.get("top_question_pct", 0)}% end with a question
 - Average {patterns.get("top_linebreaks_avg", 0)} line breaks per top tweet
-- Common first words: {first_words}
+- Common first words: {first_words} (cadence signal only — do not reuse as hooks)
 
 {pool_label}:
 {top_ex}
@@ -545,7 +545,7 @@ Style Patterns (top performers):
 
 
 def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
-    """Prompt block that makes Hall of Fame examples the primary build reference."""
+    """Prompt block that uses Hall of Fame examples as calibration, not a rewrite rule."""
     if not patterns:
         return ""
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
@@ -576,10 +576,14 @@ def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
         return ""
     return f"""
 
-HALL OF FAME REFERENCE TWEETS ({label}) — PRIMARY SOURCE OF TRUTH:
-These are the examples the whole system is built around. Model their rhythm,
-line breaks, density, specificity, and endings. Do NOT copy wording or facts.
-Use the current brief/topic only for subject matter.
+HALL OF FAME REFERENCE TWEETS ({label}) — CALIBRATION LAYER, NOT AN OVERRIDE:
+Creator Studio's format, voice, length, banned-openers, and stat-integrity rules
+remain the source of truth. Use these Hall of Fame tweets only to calibrate what
+"good" feels like: rhythm, density, specificity, confidence, and restraint.
+Do NOT reuse their exact hooks, closers, first words, sentence frames, wording,
+facts, or topic logic. The output should feel influenced by the benchmark,
+not patterned after a specific example. Use the current brief/topic only for
+subject matter.
 {chr(10).join(lines)}
 """
 
@@ -3729,7 +3733,7 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
     if voice == "Default":
         _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
         if _fmt_pats_b:
-            _fmt_inject_b = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Hall of Fame references — use only for current structure trends):\n{_fmt_pats_b}\n"
+            _fmt_inject_b = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Creator Studio rules; Hall of Fame is calibration only — use only for current structure trends):\n{_fmt_pats_b}\n"
     _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
     _default_voice_override = """
 DEFAULT VOICE OVERRIDE:
@@ -4039,7 +4043,7 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
 
-EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+EXAMPLE TWEETS — use these as energy and structure references
 (these stats were real at the time — do NOT reuse them,
 only use numbers from LIVE STATS in the prompt):
 - "We passed on 52% of third downs last year and went 8-9.
@@ -4229,7 +4233,7 @@ Every contender in the West built their defensive scheme around
 stopping him this offseason. They don't scheme for players who
 aren't problems."
 
-EXAMPLE TWEETS — copy this exact energy and STRUCTURE
+EXAMPLE TWEETS — use these as energy and structure references
 (but only use stats from LIVE STATS — these example numbers
 are from real games, do not reuse or invent similar ones):
 - "Jokic dropped 30, 12, and 10 last night. On a Tuesday.
@@ -5412,7 +5416,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         if voice == "Default":
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
-                _fmt_inject = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Hall of Fame references — use only for current structure trends):\n{_fmt_pats}\n"
+                _fmt_inject = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Creator Studio rules; Hall of Fame is calibration only — use only for current structure trends):\n{_fmt_pats}\n"
         _bg_is_g = is_guest()
         _bg_examples = "" if _bg_is_g else """
 EXAMPLE WITH STATS:
