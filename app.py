@@ -3516,12 +3516,24 @@ Return ONLY this JSON, no other text:
 @st.cache_data(ttl=1800, show_spinner=False)
 def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
     """Cache What's Hot final build output so repeat opens don't rerun the same seed."""
+    def _is_valid_normal_tweet(_text: str) -> bool:
+        _chars = len((_text or "").strip())
+        return 161 <= _chars <= 260
+
     _build_data, _raw = _generate_build_data(seed, "Normal Tweet", "Default")
     if _build_data and _build_data.get("option1"):
         _pick = str(_build_data.get("pick", "1")).strip()
         if _pick not in ("1", "2", "3"):
             _pick = "1"
-        return (_build_data.get(f"option{_pick}") or _build_data.get("option1") or "").strip()
+        _candidate_keys = [f"option{_pick}", "option1", "option2", "option3"]
+        _seen = set()
+        for _key in _candidate_keys:
+            if _key in _seen:
+                continue
+            _seen.add(_key)
+            _candidate = (_build_data.get(_key) or "").strip()
+            if _candidate and _is_valid_normal_tweet(_candidate):
+                return _candidate
     return ""
 
 
@@ -6154,7 +6166,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-20-batched-fast-build"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-24-exact-default-normal"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -6374,33 +6386,22 @@ def _run_inspiration_claude(_cache_key: str = ""):
     def _materialize_idea(_idea: dict) -> dict:
         _updated = dict(_idea)
         _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
-        _hook = ""
         _updated["_seed"] = _seed
         _updated["voice"] = "Default"
         return _updated
 
     _prepared = [_materialize_idea(_idea) for _idea in _ideas]
-    _seeds = [(_item.get("_seed") or "").strip() for _item in _prepared if (_item.get("_seed") or "").strip()]
-    _built_hooks = []
-    for _i in range(0, len(_seeds), 4):
-        _batch = tuple(_seeds[_i:_i + 4])
-        _built_hooks.extend(_build_wh_hooks_batch_cached(_batch, _WHATS_HOT_FORMULA_VERSION))
     _materialized = []
-    _hook_idx = 0
     for _item in _prepared:
         _seed = (_item.get("_seed") or "").strip()
-        if _seed:
-            _hook = _built_hooks[_hook_idx] if _hook_idx < len(_built_hooks) else ""
-            _hook_idx += 1
-        else:
-            _hook = ""
+        _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION) if _seed else ""
         if not _hook:
-            _hook = (_item.get("hook") or _seed).strip()
+            continue
         _item["hook"] = _hook[:1200]
         _item.pop("_seed", None)
         if _item.get("hook", "").strip():
             _materialized.append(_item)
-    _ideas = _materialized or _ideas
+    _ideas = _materialized
 
     # Save to gist for instant loads on future visits
     if _ideas:
