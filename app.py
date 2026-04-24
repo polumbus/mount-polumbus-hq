@@ -1193,7 +1193,37 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
         pass
 
-    return "AI unavailable — check Anthropic and ChatGPT credentials."
+    return "AI unavailable — Anthropic direct/CLI, proxy, and ChatGPT fallback all failed."
+
+
+def _is_ai_unavailable_text(value: str) -> bool:
+    _text = str(value or "").strip().lower()
+    if not _text:
+        return False
+    return (
+        _text.startswith("ai unavailable")
+        or _text.startswith("error: no oauth token")
+        or "no proxy configured" in _text
+    )
+
+
+def _ci_capture_ai_error(raw_text: str) -> bool:
+    if not _is_ai_unavailable_text(raw_text):
+        return False
+    _detail = str(st.session_state.get("_ai_last_error", "") or "").strip()
+    _route = str(st.session_state.get("_ai_last_route", "") or "").strip()
+    _source = str(st.session_state.get("_ai_last_source", "") or "").strip()
+    _message = str(raw_text or "").strip()
+    if _detail:
+        _message = f"{_message}\n\nLast failure: {_detail}"
+    if _route or _source:
+        _message += f"\nRoute: {_route or 'unknown'}"
+        if _source:
+            _message += f" ({_source})"
+    st.session_state["ci_error"] = _message
+    for _k in ["ci_result", "ci_banger_data", "ci_repurposed", "ci_preview", "ci_grades"]:
+        st.session_state.pop(_k, None)
+    return True
 
 
 def _gist_headers():
@@ -5009,7 +5039,7 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     # Force clear all previous results before every new generation
     for _clear_key in [
         "ci_banger_data", "ci_result", "ci_repurposed", "ci_preview",
-        "ci_grades", "ci_banger_opt_1", "ci_banger_opt_2", "ci_banger_opt_3",
+        "ci_grades", "ci_error", "ci_banger_opt_1", "ci_banger_opt_2", "ci_banger_opt_3",
         "_verify_1", "_verify_2", "_verify_3", "_verify_result"
     ]:
         st.session_state.pop(_clear_key, None)
@@ -5380,12 +5410,13 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
             st.session_state["ci_banger_data"] = build_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
-            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_error"]:
                 st.session_state.pop(_k, None)
         else:
-            st.session_state["ci_result"] = raw
-            for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                st.session_state.pop(_k, None)
+            if not _ci_capture_ai_error(raw):
+                st.session_state["ci_result"] = raw
+                for _k in ["ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data", "ci_error"]:
+                    st.session_state.pop(_k, None)
 
     elif action == "rewrite" and tweet_text.strip() and fmt == "Article":
         # Article format: rewrite as full article
@@ -5475,18 +5506,20 @@ Return ONLY this JSON, no other text:
             st.session_state["ci_banger_data"] = rw_data
             for _i in [1, 2, 3]:
                 st.session_state.pop(f"ci_banger_opt_{_i}", None)
-            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview"]:
+            for _k in ["ci_result", "ci_repurposed", "ci_viral_data", "ci_grades", "ci_preview", "ci_error"]:
                 st.session_state.pop(_k, None)
         else:
-            st.session_state["ci_repurposed"] = raw
-            for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data"]:
-                st.session_state.pop(_k, None)
+            if not _ci_capture_ai_error(raw):
+                st.session_state["ci_repurposed"] = raw
+                for _k in ["ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_banger_data", "ci_error"]:
+                    st.session_state.pop(_k, None)
 
     if result:
-        st.session_state["ci_result"] = result
-        st.session_state["ci_result_edit"] = result
-        for _k in ["ci_viral_data", "ci_grades", "ci_preview", "ci_repurposed", "ci_banger_data"]:
-            st.session_state.pop(_k, None)
+        if not _ci_capture_ai_error(result):
+            st.session_state["ci_result"] = result
+            st.session_state["ci_result_edit"] = result
+            for _k in ["ci_viral_data", "ci_grades", "ci_preview", "ci_repurposed", "ci_banger_data", "ci_error"]:
+                st.session_state.pop(_k, None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5498,6 +5531,16 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
     # AI already ran before dialog opened — do NOT call _run_ci_ai here
     # (calling it inside @st.dialog caused fragment caching to serve stale results)
+
+    if st.session_state.get("ci_error"):
+        _err = st.session_state.get("ci_error", "")
+        st.error(_err)
+        if st.session_state.get("_ai_last_provider") or st.session_state.get("_ai_last_source"):
+            st.caption(
+                f"Provider: {st.session_state.get('_ai_last_provider', 'unknown')} · "
+                f"Source: {st.session_state.get('_ai_last_source', 'unknown')}"
+            )
+        return
 
     # Track last action for Redo
     st.session_state["ci_last_action"] = {"type": action, "text": tweet_text, "fmt": fmt, "voice": voice}
@@ -6492,6 +6535,8 @@ def _ci_build_dialog():
                     if _bd_voice in ("Default", "Critical", "Hype", "Sarcastic"):
                         st.session_state["ci_voice"] = _bd_voice
                     st.rerun(scope="app")
+        elif st.session_state.get("ci_error"):
+            st.error(st.session_state["ci_error"])
         elif st.session_state.get("ci_result"):
             st.markdown(
                 f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;padding:12px;white-space:pre-wrap;">{st.session_state["ci_result"]}</div>',
@@ -9890,7 +9935,7 @@ def _signal_brief_dialog(_nonce):
         return
 
     # If AI already ran, show results directly
-    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result") or st.session_state.get("ci_error"):
         fmt = st.session_state.get("_sig_last_fmt", "Normal Tweet")
         voice = st.session_state.get("_sig_last_voice", "Default")
         _ci_output_panel_impl("build", brief, fmt, voice)
@@ -9917,7 +9962,7 @@ def _signal_brief_dialog(_nonce):
         st.session_state["_sig_last_fmt"] = sig_fmt
         st.session_state["_sig_last_voice"] = sig_voice
         # Clear old results
-        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_error"]:
             st.session_state.pop(_k, None)
         # Run AI right here inside the dialog — spinner is visible to user
         with st.spinner("Building your tweets... AI is generating 3 options"):
@@ -9967,7 +10012,7 @@ def page_signals_prompts():
         }
         st.session_state["sig_selected"] = _ext_tweet
         st.session_state["sig_brief"] = _build_signal_brief(_ext_tweet)
-        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview", "ci_error"]:
             st.session_state.pop(_k, None)
         _signal_brief_dialog(str(time.time()))
 
@@ -10940,7 +10985,7 @@ def _gd_draft_dialog(_nonce):
         st.warning("No game selected.")
         return
 
-    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result"):
+    if st.session_state.get("ci_banger_data") or st.session_state.get("ci_result") or st.session_state.get("ci_error"):
         _sig_fmt = st.session_state.get("_gd_last_fmt", "Normal Tweet")
         _sig_voice = st.session_state.get("_gd_last_voice", "Default")
         _ci_output_panel_impl("build", "", _sig_fmt, _sig_voice)
