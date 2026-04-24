@@ -34,3 +34,17 @@ Then remind the user to reload in chrome://extensions.
 ## Deployment
 
 This app runs on Streamlit Cloud. Edits require `git push` to take effect. The repo is `github.com/polumbus/mount-polumbus-hq` on the `master` branch.
+
+## HQ Proxy
+
+When work touches the local HQ proxy, use the runbook in [docs/hq-proxy-runbook.md](docs/hq-proxy-runbook.md).
+
+Important: `/health` now requires `X-Proxy-Key`, and the proxy should run under `claude-proxy.service` instead of a background `nohup` process.
+
+## AI Provider Boundary
+
+There are two separate AI profiles. Read [docs/ai-provider-profiles.md](docs/ai-provider-profiles.md) before changing provider routing.
+
+- Streamlit root app uses OAuth/direct, Claude CLI, local proxy, and ChatGPT OAuth fallback.
+- Website under `web/` uses direct API keys only.
+- Do not make one shared provider router that auto-detects both profiles. Share prompts and schemas if needed, not credential transport.

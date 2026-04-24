@@ -7,7 +7,7 @@ Streamlit Cloud sends prompts here; this calls the local Claude CLI (sonnet).
 Start: python3 /home/polfam/mount_polumbus_hq/claude_proxy.py
 Then run: ssh -R 80:localhost:7821 nokey@localhost.run
 """
-import json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading, sys, site, mimetypes
+import hmac, json, os, subprocess, time, urllib.request, urllib.error, urllib.parse, re, hashlib, threading, sys, site, mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -65,7 +65,19 @@ _bootstrap_proxy_env()
 
 CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
-PROXY_API_KEY = os.environ.get("HQ_PROXY_KEY", "")
+def _proxy_api_keys() -> list[str]:
+    keys = []
+    for env_name in ("HQ_PROXY_KEY", "CLAUDE_PROXY_KEY"):
+        raw = os.environ.get(env_name, "")
+        for part in str(raw or "").split(","):
+            key = part.strip()
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+PROXY_API_KEYS = _proxy_api_keys()
+PROXY_API_KEY = PROXY_API_KEYS[0] if PROXY_API_KEYS else ""
 PORT = 7821
 CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
@@ -1041,8 +1053,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def _check_auth(self):
         auth = self.headers.get("X-Proxy-Key", "")
-        if PROXY_API_KEY and auth != PROXY_API_KEY:
-            self.send_json(403, {"error": "forbidden"})
+        if PROXY_API_KEYS and not any(hmac.compare_digest(auth, key) for key in PROXY_API_KEYS):
+            print(f"[auth] forbidden path={self.path} has_key={bool(auth)} configured_keys={len(PROXY_API_KEYS)}")
+            self.send_json(403, {"error": "forbidden: proxy key mismatch"})
             return False
         return True
 
@@ -1554,8 +1567,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if not PROXY_API_KEY:
+    if not PROXY_API_KEYS:
         print("WARNING: HQ_PROXY_KEY not set — proxy is unprotected!")
+    elif len(PROXY_API_KEYS) > 1:
+        print(f"Proxy auth loaded {len(PROXY_API_KEYS)} accepted keys")
     _ensure_recovery_thread()
     _ensure_podcast_sync_thread()
     server = ThreadedHTTPServer(("0.0.0.0", PORT), ProxyHandler)

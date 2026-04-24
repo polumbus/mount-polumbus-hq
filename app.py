@@ -752,6 +752,27 @@ def _get_proxy_url() -> str:
     return st.secrets.get("CLAUDE_PROXY_URL", "")
 
 
+def _proxy_key_candidates() -> list[str]:
+    keys = []
+    for name in ("CLAUDE_PROXY_KEY", "HQ_PROXY_KEY"):
+        try:
+            raw = st.secrets.get(name, "")
+        except Exception:
+            raw = ""
+        if not raw:
+            raw = os.environ.get(name, "")
+        for part in str(raw or "").split(","):
+            key = part.strip()
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _get_proxy_key() -> str:
+    keys = _proxy_key_candidates()
+    return keys[0] if keys else ""
+
+
 def _get_oauth_token() -> str:
     """Get valid OAuth access token from ~/.claude/.credentials.json, refreshing if expired."""
     import urllib.request
@@ -888,26 +909,30 @@ def _call_claude_proxy(prompt: str, system: str, max_tokens: int, model: str = "
     proxy_url = _get_proxy_url()
     if not proxy_url:
         raise Exception("No proxy configured")
-    try:
-        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-    except Exception:
-        proxy_key = ""
-
     body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens, "model": model}).encode()
-    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
-    if proxy_key:
-        headers["X-Proxy-Key"] = proxy_key
-    req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        raw_error = exc.read().decode("utf-8", errors="ignore")
+    key_candidates = _proxy_key_candidates() or [""]
+    last_error = ""
+    for proxy_key in key_candidates:
+        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        req = urllib.request.Request(f"{proxy_url.rstrip('/')}/call", data=body, headers=headers, method="POST")
         try:
-            payload = json.loads(raw_error)
-        except Exception:
-            payload = None
-        raise Exception((payload or {}).get("error") or raw_error or f"Proxy request failed with HTTP {exc.code}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as exc:
+            raw_error = exc.read().decode("utf-8", errors="ignore")
+            try:
+                payload = json.loads(raw_error)
+            except Exception:
+                payload = None
+            last_error = (payload or {}).get("error") or raw_error or f"Proxy request failed with HTTP {exc.code}"
+            if exc.code == 403 and proxy_key != key_candidates[-1]:
+                continue
+            raise Exception(last_error)
+    else:
+        raise Exception(last_error or "Proxy request failed")
     if "error" in data:
         raise Exception(data["error"])
     return data["text"]
@@ -918,10 +943,7 @@ def _proxy_json_request(path: str, payload: dict | None = None, *, method: str =
     proxy_url = _get_proxy_url()
     if not proxy_url:
         raise Exception("No proxy configured")
-    try:
-        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-    except Exception:
-        proxy_key = ""
+    proxy_key = _get_proxy_key()
     headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
@@ -949,10 +971,7 @@ def _proxy_binary_request(path: str, *, timeout: int = 90) -> tuple[bytes, str]:
     proxy_url = _get_proxy_url()
     if not proxy_url:
         raise Exception("No proxy configured")
-    try:
-        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-    except Exception:
-        proxy_key = ""
+    proxy_key = _get_proxy_key()
     headers = {"ngrok-skip-browser-warning": "1"}
     if proxy_key:
         headers["X-Proxy-Key"] = proxy_key
@@ -1044,10 +1063,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
     import urllib.request
     proxy_url = _get_proxy_url()
     if proxy_url:
-        try:
-            proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-        except Exception:
-            proxy_key = ""
+        proxy_key = _get_proxy_key()
         body = json.dumps({"text": text}).encode()
         headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
         if proxy_key:
@@ -1083,10 +1099,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
     """Route like/reply through local proxy. Returns True on success."""
     import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
-    try:
-        proxy_key = st.secrets.get("CLAUDE_PROXY_KEY", "")
-    except Exception:
-        proxy_key = ""
+    proxy_key = _get_proxy_key()
     body = json.dumps({"tweet_id": tweet_id, "text": text}).encode()
     headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
     if proxy_key:

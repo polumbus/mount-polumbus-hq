@@ -15,6 +15,19 @@
 5. Validate what changed.
 6. Preserve user work and unrelated changes.
 
+## AI Provider Profiles
+
+Mount Polumbus HQ has two intentionally separate AI runtime profiles. Read [docs/ai-provider-profiles.md](docs/ai-provider-profiles.md) before changing AI routing, provider credentials, prompt execution, or generation fallbacks.
+
+- Root Streamlit app: OAuth/Claude CLI/local proxy/ChatGPT OAuth profile. Do not convert `app.py`, `claude_proxy.py`, or root Python AI calls to direct API-key routing unless the user explicitly asks for that Streamlit contract change.
+- Website under `web/`: direct API-key profile using `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. Do not add Streamlit OAuth, Claude CLI, local proxy, or Codex OAuth requirements to the website runtime.
+- Shared behavior may include prompts, schemas, validation, tests, and fixtures. Shared behavior must not include a single auto-detecting provider transport that mixes these credentials.
+- When debugging AI failures, identify whether the active runtime is the Streamlit app or the website before editing secrets, env vars, or provider code.
+
+## HQ Proxy
+
+If a task touches Claude fallback, podcast actions, tweet actions, or `hq_watchdog.sh`, read [docs/hq-proxy-runbook.md](docs/hq-proxy-runbook.md) first.
+
 ## App Load Time Rules
 
 These rules are mandatory for `app.py`. Breaking any of them can cause 30+ second page loads on Streamlit Cloud.
