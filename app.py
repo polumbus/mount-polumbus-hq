@@ -3493,6 +3493,13 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
         if _fmt_pats_b:
             _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
     _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
+    _default_voice_override = """
+DEFAULT VOICE OVERRIDE:
+- Default voice beats any generic engagement/question instruction from the format block.
+- Do NOT ask direct questions in Default voice.
+- End with an ellipsis or incomplete analytical thought, not a question mark.
+- Never open with "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", "Let that sink in", or "This is your reminder".
+- The output must feel like film-room observation: specific observation, context underneath it, open-door trailing thought.""" if voice == "Default" else ""
     _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
     _has_brief = any(d in tweet_text for d in _brief_delimiters)
     if _has_brief:
@@ -3506,6 +3513,7 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
 {_brief_block}
 {live_stats_block}
 {format_mod}{_sports_ctx_b}{_fmt_inject_b}
+{_default_voice_override}
 
 STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - ONLY use stats from LIVE STATS above or from the brief. Do not invent, estimate, or round any numbers.
@@ -3560,8 +3568,25 @@ Return ONLY this JSON, no other text:
 def _build_wh_hook_cached(seed: str, formula_version: str = "") -> str:
     """Cache What's Hot final build output so repeat opens don't rerun the same seed."""
     def _is_valid_normal_tweet(_text: str) -> bool:
-        _chars = len((_text or "").strip())
-        return 161 <= _chars <= 260
+        _clean = (_text or "").strip()
+        _chars = len(_clean)
+        if not (161 <= _chars <= 260):
+            return False
+        _lower = _clean.lower().lstrip('"\'“”‘’ ')
+        _banned_openers = (
+            "someone help me understand",
+            "unpopular opinion",
+            "nobody is talking about",
+            "not enough people are talking about",
+            "let that sink in",
+            "this is your reminder",
+            "one word to describe",
+        )
+        if _lower.startswith(_banned_openers):
+            return False
+        if "?" in _clean:
+            return False
+        return True
 
     _build_data, _raw = _generate_build_data(seed, "Normal Tweet", "Default")
     if _build_data and _build_data.get("option1"):
@@ -4397,6 +4422,36 @@ RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
     elif fmt == "Normal Tweet":
         _nt_lo = max(_fp_range[0], 161)
         _nt_hi = min(_fp_range[1], 260)
+        if voice == "Default":
+            return f"""FORMAT: NORMAL TWEET (161-260 characters)
+
+TYLER'S LIVE DATA (from synced tweet history — updates every sync):
+- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
+- {_fp_ell}% of top tweets use ellipsis (his Default voice signature)
+- Top performing hooks to study for rhythm only, NOT literal opener wording:
+{_hooks_str}
+
+STRUCTURE:
+[Specific film-room observation]
+
+[Context underneath the surface read]
+
+[Open-door trailing thought with ellipsis]
+
+RULES:
+- Between 161 and 260 characters total — don't be too brief
+- Use line break between observation and context/open-door payoff
+- No hashtags, no links, no emojis
+- Default voice does NOT ask direct questions
+- End with ellipsis or an incomplete analytical thought
+- Never open with "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder"
+- Must sound like film-room observation, not hot-take framing
+
+IMAGE RECOMMENDATION:
+- Specific stat or comparison → YES — simple stat graphic
+- Film-room observation or roster read → OPTIONAL
+- Pure opinion → NO image"""
+
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
 
 TYLER'S LIVE DATA (from synced tweet history — updates every sync):
@@ -6222,7 +6277,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-24-exact-default-normal"
+_WHATS_HOT_FORMULA_VERSION = "2026-04-24-creator-default-normal-v2"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -6607,7 +6662,10 @@ def _ci_inspiration_dialog():
         st.session_state["inspo_page"] = 0
 
     _start = (_page * _per_page) % max(len(_all_ideas), 1)
-    _ideas = (_all_ideas + _all_ideas)[_start:_start + _per_page]  # wrap-around slice
+    if len(_all_ideas) <= _per_page:
+        _ideas = _all_ideas
+    else:
+        _ideas = (_all_ideas + _all_ideas)[_start:_start + _per_page]  # wrap-around slice
 
     # ── Header ──
     st.markdown(
