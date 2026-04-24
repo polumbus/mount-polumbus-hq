@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import podcast_event_log
 import podcast_tracker
 
 
@@ -49,6 +50,10 @@ def _read_json(path: Path) -> Any:
 
 
 def load_local_store_raw(data_dir: Path) -> tuple[dict[str, Any], str]:
+    event_store, event_error, _batch_ids = podcast_event_log.load_local_store_from_event_log(data_dir)
+    if _batch_ids and not event_error:
+        return event_store, ""
+
     manifest = manifest_path(data_dir)
     if manifest.exists():
         try:
@@ -64,21 +69,39 @@ def load_local_store_raw(data_dir: Path) -> tuple[dict[str, Any], str]:
                 "active_run_id": str(manifest_data.get("active_run_id", "")).strip(),
                 "updated_at": str(manifest_data.get("updated_at", "")).strip(),
             }
-            return podcast_tracker.normalize_podcast_store(store), ""
+            normalized = podcast_tracker.normalize_podcast_store(store)
+            if event_error:
+                return normalized, event_error
+            return normalized, ""
         except Exception as exc:
             return podcast_tracker.empty_podcast_store(), f"Local per-run podcast store could not be parsed: {exc}"
 
     legacy_path = legacy_store_path(data_dir)
     if not legacy_path.exists():
-        return podcast_tracker.empty_podcast_store(), ""
+        return podcast_tracker.empty_podcast_store(), event_error
     try:
-        return podcast_tracker.normalize_podcast_store(_read_json(legacy_path)), ""
+        normalized = podcast_tracker.normalize_podcast_store(_read_json(legacy_path))
+        if event_error:
+            return normalized, event_error
+        return normalized, ""
     except Exception as exc:
         return podcast_tracker.empty_podcast_store(), f"Local podcast backup could not be parsed: {exc}"
 
 
 def write_local_store(store: dict[str, Any], data_dir: Path) -> dict[str, Any]:
     normalized = podcast_tracker.normalize_podcast_store(store)
+    previous_store, _previous_error, previous_batch_ids = podcast_event_log.load_local_store_from_event_log(data_dir)
+    force_full_snapshot = not previous_batch_ids
+    batch = podcast_event_log.build_event_batch(normalized, previous_store, force_full_snapshot=force_full_snapshot)
+    if batch:
+        podcast_event_log.append_local_event_batch(
+            data_dir,
+            batch=batch,
+            previous_batch_ids=previous_batch_ids,
+            active_run_id=normalized.get("active_run_id", ""),
+            updated_at=normalized.get("updated_at", ""),
+        )
+
     root = runs_root(data_dir)
     runs_dir = root / RUNS_SUBDIRNAME
     runs_dir.mkdir(parents=True, exist_ok=True)

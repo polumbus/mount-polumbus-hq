@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import podcast_event_log
 import podcast_remote_store
 import podcast_store
 import podcast_tracker
@@ -128,8 +129,27 @@ class PodcastStoreTests(unittest.TestCase):
         self.assertEqual(error, "")
         self.assertEqual(loaded["runs"][0]["id"], run["id"])
 
+    def test_write_local_store_creates_append_only_event_log(self):
+        store = podcast_tracker.empty_podcast_store()
+        run = podcast_tracker.create_run(store, actor="tester", title="Eventful", source_path=r"C:\eventful.mp4", run_mode="local")
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            podcast_store.write_local_store(store, data_dir)
+            loaded, error, batch_ids = podcast_event_log.load_local_store_from_event_log(data_dir)
+        self.assertEqual(error, "")
+        self.assertEqual(loaded["runs"][0]["id"], run["id"])
+        self.assertTrue(batch_ids)
+
 
 class PodcastRemoteStoreTests(unittest.TestCase):
+    def test_event_batch_round_trip_rebuilds_store(self):
+        store = podcast_tracker.empty_podcast_store()
+        created = podcast_tracker.create_run(store, actor="tester", title="Round Trip", source_path="https://youtu.be/roundtrip", run_mode="url")
+        batch = podcast_event_log.build_event_batch(store, previous_store=podcast_tracker.empty_podcast_store(), force_full_snapshot=True)
+        rebuilt = podcast_event_log.build_store_from_batches([batch], active_run_id=store["active_run_id"], updated_at=store["updated_at"])
+        self.assertEqual(rebuilt["runs"][0]["id"], created["id"])
+        self.assertEqual(rebuilt["active_run_id"], store["active_run_id"])
+
     def test_load_remote_store_from_manifest_files(self):
         store = podcast_tracker.empty_podcast_store()
         first = podcast_tracker.create_run(store, actor="tester", title="One", source_path=r"C:\one.mp4", run_mode="local")
@@ -173,6 +193,11 @@ class PodcastRemoteStoreTests(unittest.TestCase):
         self.assertIn(podcast_remote_store.remote_manifest_filename(), payload)
         self.assertIn(podcast_remote_store.remote_run_filename(first["id"]), payload)
         self.assertNotIn(podcast_remote_store.remote_run_filename(second["id"]), payload)
+        self.assertIn(podcast_remote_store.remote_event_manifest_filename(), payload)
+        self.assertEqual(
+            len([name for name in payload if name.startswith(podcast_remote_store.REMOTE_EVENT_BATCH_PREFIX)]),
+            1,
+        )
 
     def test_remote_payload_can_force_full_run_write_for_legacy_migration(self):
         store = podcast_tracker.empty_podcast_store()
@@ -187,6 +212,18 @@ class PodcastRemoteStoreTests(unittest.TestCase):
         )
         self.assertIn(podcast_remote_store.remote_run_filename(first["id"]), payload)
         self.assertIn(podcast_remote_store.remote_run_filename(second["id"]), payload)
+
+    def test_remote_store_prefers_event_log_manifest(self):
+        store = podcast_tracker.empty_podcast_store()
+        run = podcast_tracker.create_run(store, actor="tester", title="Remote Event", source_path="https://youtu.be/event", run_mode="url")
+        payload = podcast_remote_store.build_remote_files_payload(store, previous_store=podcast_tracker.empty_podcast_store(), previous_event_batch_ids=[], include_snapshot=False, force_all_runs=True)
+        loaded, error, meta = podcast_remote_store.load_remote_store_bundle_from_files(
+            payload,
+            fetch_text=lambda _raw_url: "",
+        )
+        self.assertEqual(error, "")
+        self.assertTrue(meta["has_event_manifest"])
+        self.assertEqual(loaded["runs"][0]["id"], run["id"])
 
 
 if __name__ == "__main__":

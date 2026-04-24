@@ -140,10 +140,14 @@ def write_local_store(store: dict[str, Any], *, data_dir: Path | None = None) ->
     return podcast_store.write_local_store(store, root)
 
 
-def load_remote_store_bundle_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str, bool]:
+def load_remote_store_bundle_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str, dict[str, Any]]:
     token = str(github_pat if github_pat is not None else DEFAULT_GITHUB_PAT).strip()
     if not token:
-        return podcast_tracker.empty_podcast_store(), "HQ_GITHUB_PAT is not configured.", False
+        return podcast_tracker.empty_podcast_store(), "HQ_GITHUB_PAT is not configured.", {
+            "has_event_manifest": False,
+            "event_batch_ids": [],
+            "has_run_manifest": False,
+        }
     try:
         active_gist_id = str(gist_id or DEFAULT_GIST_ID).strip()
         req = urllib.request.Request(
@@ -159,25 +163,29 @@ def load_remote_store_bundle_raw(*, gist_id: str | None = None, github_pat: str 
                 return resp.read().decode("utf-8")
 
         files = data.get("files", {})
-        store, error = podcast_remote_store.load_remote_store_from_files(files, fetch_text=_fetch_text)
-        return store, error, podcast_remote_store.has_remote_manifest(files)
+        return podcast_remote_store.load_remote_store_bundle_from_files(files, fetch_text=_fetch_text)
     except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", False
+        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", {
+            "has_event_manifest": False,
+            "event_batch_ids": [],
+            "has_run_manifest": False,
+        }
 
 
 def load_remote_store_raw(*, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], str]:
-    store, error, _uses_manifest = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
+    store, error, _remote_meta = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
     return store, error
 
 
 def save_remote_store(store: dict[str, Any], *, gist_id: str | None = None, github_pat: str | None = None) -> str:
-    return save_remote_store_delta(store, previous_store=None, gist_id=gist_id, github_pat=github_pat)
+    return save_remote_store_delta(store, previous_store=None, previous_event_batch_ids=None, gist_id=gist_id, github_pat=github_pat)
 
 
 def save_remote_store_delta(
     store: dict[str, Any],
     *,
     previous_store: dict[str, Any] | None = None,
+    previous_event_batch_ids: list[str] | None = None,
     remote_has_manifest: bool = True,
     gist_id: str | None = None,
     github_pat: str | None = None,
@@ -190,6 +198,7 @@ def save_remote_store_delta(
     files_payload = podcast_remote_store.build_remote_files_payload(
         normalized,
         previous_store=previous_store,
+        previous_event_batch_ids=previous_event_batch_ids,
         include_snapshot=False,
         force_all_runs=not remote_has_manifest,
     )
@@ -233,13 +242,14 @@ def load_merged_store(*, data_dir: Path | None = None, gist_id: str | None = Non
 
 def save_merged_store(store: dict[str, Any], *, data_dir: Path | None = None, gist_id: str | None = None, github_pat: str | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     normalized = podcast_tracker.normalize_podcast_store(store)
-    remote_store, remote_error, remote_has_manifest = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
+    remote_store, remote_error, remote_meta = load_remote_store_bundle_raw(gist_id=gist_id, github_pat=github_pat)
     merged = normalized if remote_error else podcast_tracker.merge_podcast_stores(normalized, remote_store)
     write_local_store(merged, data_dir=data_dir)
     remote_error = save_remote_store_delta(
         merged,
         previous_store=None if remote_error else remote_store,
-        remote_has_manifest=remote_has_manifest,
+        previous_event_batch_ids=remote_meta.get("event_batch_ids", []),
+        remote_has_manifest=remote_meta.get("has_run_manifest", False),
         gist_id=gist_id,
         github_pat=github_pat,
     )

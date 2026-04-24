@@ -1315,7 +1315,7 @@ def _write_podcast_local_store(store: dict) -> None:
     podcast_store.write_local_store(store, get_data_dir())
 
 
-def _load_podcast_remote_store_bundle_raw() -> tuple[dict, str, bool]:
+def _load_podcast_remote_store_bundle_raw() -> tuple[dict, str, dict]:
     try:
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
@@ -1328,14 +1328,17 @@ def _load_podcast_remote_store_bundle_raw() -> tuple[dict, str, bool]:
             raw_resp.raise_for_status()
             return raw_resp.text
 
-        store, error = podcast_remote_store.load_remote_store_from_files(files, fetch_text=_fetch_text)
-        return store, error, podcast_remote_store.has_remote_manifest(files)
+        return podcast_remote_store.load_remote_store_bundle_from_files(files, fetch_text=_fetch_text)
     except Exception as exc:
-        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", False
+        return podcast_tracker.empty_podcast_store(), f"Gist read failed: {exc}", {
+            "has_event_manifest": False,
+            "event_batch_ids": [],
+            "has_run_manifest": False,
+        }
 
 
 def _load_podcast_remote_store_raw() -> tuple[dict, str]:
-    store, error, _uses_manifest = _load_podcast_remote_store_bundle_raw()
+    store, error, _remote_meta = _load_podcast_remote_store_bundle_raw()
     return store, error
 
 
@@ -1358,12 +1361,12 @@ def _load_podcast_runs_store() -> dict:
             remote_store = podcast_tracker.deepcopy_store(st.session_state.get("_podcast_runs_remote_cache", podcast_tracker.empty_podcast_store()))
             remote_error = ""
         else:
-            remote_store, remote_error, remote_has_manifest = _load_podcast_remote_store_bundle_raw()
+            remote_store, remote_error, remote_meta = _load_podcast_remote_store_bundle_raw()
             if not remote_error:
                 st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
                 st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
                 st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
-                st.session_state["_podcast_runs_remote_has_manifest"] = remote_has_manifest
+                st.session_state["_podcast_runs_remote_meta"] = remote_meta
         store = podcast_tracker.merge_podcast_stores(local_store, remote_store)
         if remote_error:
             load_source = "local_backup"
@@ -1390,12 +1393,12 @@ def _save_podcast_runs_store(store: dict) -> dict:
         return normalized
 
     cache_handle = _podcast_store_cache_handle()
-    remote_store, remote_error, remote_has_manifest = _load_podcast_remote_store_bundle_raw()
+    remote_store, remote_error, remote_meta = _load_podcast_remote_store_bundle_raw()
     if not remote_error:
         st.session_state["_podcast_runs_remote_cache"] = podcast_tracker.normalize_podcast_store(remote_store)
         st.session_state["_podcast_runs_remote_cache_handle"] = cache_handle
         st.session_state["_podcast_runs_remote_cache_loaded_at"] = time.time()
-        st.session_state["_podcast_runs_remote_has_manifest"] = remote_has_manifest
+        st.session_state["_podcast_runs_remote_meta"] = remote_meta
     merged = podcast_tracker.merge_podcast_stores(normalized, remote_store)
     if remote_error:
         _write_podcast_local_store(merged)
@@ -1417,8 +1420,9 @@ def _save_podcast_runs_store(store: dict) -> dict:
             "files": podcast_remote_store.build_remote_files_payload(
                 merged,
                 previous_store=remote_previous,
+                previous_event_batch_ids=remote_meta.get("event_batch_ids", []),
                 include_snapshot=False,
-                force_all_runs=not remote_has_manifest,
+                force_all_runs=not remote_meta.get("has_run_manifest", False),
             )
         })
         resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
