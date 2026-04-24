@@ -2696,13 +2696,6 @@ _sidebar_html = f"""
 	    background: #C49E3C14; border: 1px solid #C49E3C33; border-radius: 6px;
 	    padding: 4px 8px; font-family: sans-serif; margin-top: auto;
 	}}
-	.mp-logout {{
-	    font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: #6B8AAA !important;
-	    background: #111A2A; border: 1px solid #1E3050; border-radius: 6px;
-	    padding: 5px 8px; font-family: sans-serif; text-decoration: none !important;
-	    margin-top: auto;
-	}}
-	.mp-logout:hover {{ color: #2DD4BF !important; border-color: #2DD4BF66; }}
 	</style>
 
 <div class="mp-rail">
@@ -2868,7 +2861,6 @@ _sidebar_html = f"""
 	  </div>
 	  {_owner_debug_zone}
 
-	  <a href="/?logout=1" class="mp-logout" target="_self">OUT</a>
 	  <div class="mp-pro">{'GUEST' if is_guest() else 'PRO'}</div>
 	</div>
 
@@ -3057,11 +3049,20 @@ _stc.html("""<script>
       });
     });
     /* Hide buttons that are wired to cs-bot spans (gd_, sig_beat_, sig_nat_, sig_tab_, sig_next) */
-    for(var i=0;i<btns.length;i++){
-      var t=btns[i].textContent.trim();
-      if(/^(gd_|sig_beat_|sig_nat_|sig_tab_|sig_next)/.test(t)){
-        var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].closest('[data-testid="element-container"]')||btns[i].parentElement.parentElement;
-        if(el&&!el._csHidden){el._csHidden=true;el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';}
+	    for(var i=0;i<btns.length;i++){
+	      var t=btns[i].textContent.trim();
+	      if(t==='Logout'){
+	        var logoutEl=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].closest('[data-testid="element-container"]')||btns[i].parentElement.parentElement;
+	        if(logoutEl&&!logoutEl._csLogoutPinned){
+	          logoutEl._csLogoutPinned=true;
+	          logoutEl.style.cssText='position:fixed;left:12px;bottom:42px;width:56px;height:28px;z-index:1000001;overflow:visible;';
+	          btns[i].style.cssText='width:56px;height:28px;min-height:28px;padding:0;border-radius:7px;border:1px solid #1E3050;background:#111A2A;color:#6B8AAA;font-size:8px;font-weight:700;letter-spacing:1px;';
+	        }
+	        continue;
+	      }
+	      if(/^(gd_|sig_beat_|sig_nat_|sig_tab_|sig_next)/.test(t)){
+	        var el=btns[i].closest('[data-testid="stElementContainer"]')||btns[i].closest('[data-testid="element-container"]')||btns[i].parentElement.parentElement;
+	        if(el&&!el._csHidden){el._csHidden=true;el.style.cssText='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';}
       }
     }
   }
