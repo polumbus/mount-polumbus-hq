@@ -943,41 +943,59 @@ def _proxy_json_request(path: str, payload: dict | None = None, *, method: str =
     proxy_url = _get_proxy_url()
     if not proxy_url:
         raise Exception("No proxy configured")
-    proxy_key = _get_proxy_key()
-    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
-    if proxy_key:
-        headers["X-Proxy-Key"] = proxy_key
     body = None
     if method.upper() != "GET":
         body = json.dumps(payload or {}).encode()
-    req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", data=body, headers=headers, method=method.upper())
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        raw_error = exc.read().decode("utf-8", errors="ignore")
+    key_candidates = _proxy_key_candidates() or [""]
+    last_error = ""
+    for proxy_key in key_candidates:
+        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", data=body, headers=headers, method=method.upper())
         try:
-            payload = json.loads(raw_error)
-        except Exception:
-            payload = None
-        raise Exception((payload or {}).get("error") or raw_error or f"Proxy request failed with HTTP {exc.code}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as exc:
+            raw_error = exc.read().decode("utf-8", errors="ignore")
+            try:
+                error_payload = json.loads(raw_error)
+            except Exception:
+                error_payload = None
+            last_error = (error_payload or {}).get("error") or raw_error or f"Proxy request failed with HTTP {exc.code}"
+            if exc.code == 403 and proxy_key != key_candidates[-1]:
+                continue
+            raise Exception(last_error)
+    else:
+        raise Exception(last_error or "Proxy request failed")
     if data.get("error"):
         raise Exception(data["error"])
     return data
 
 
 def _proxy_binary_request(path: str, *, timeout: int = 90) -> tuple[bytes, str]:
-    import urllib.request
+    import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
     if not proxy_url:
         raise Exception("No proxy configured")
-    proxy_key = _get_proxy_key()
-    headers = {"ngrok-skip-browser-warning": "1"}
-    if proxy_key:
-        headers["X-Proxy-Key"] = proxy_key
-    req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", headers=headers, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read(), resp.headers.get_content_type() or "application/octet-stream"
+    key_candidates = _proxy_key_candidates() or [""]
+    last_error = ""
+    for proxy_key in key_candidates:
+        headers = {"ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        req = urllib.request.Request(f"{proxy_url.rstrip('/')}{path}", headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read(), resp.headers.get_content_type() or "application/octet-stream"
+        except urllib.error.HTTPError as exc:
+            raw_error = exc.read().decode("utf-8", errors="ignore")
+            last_error = raw_error or f"Proxy request failed with HTTP {exc.code}"
+            if exc.code == 403 and proxy_key != key_candidates[-1]:
+                continue
+            raise Exception(last_error)
+    raise Exception(last_error or "Proxy request failed")
 
 
 def _podcast_proxy_start(run_id: str, source_path: str, title: str = "", force: bool = False) -> dict:
@@ -1060,25 +1078,14 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
     """Post a new tweet via proxy or shared local helper. Returns (success, detail_or_error)."""
-    import urllib.request
     proxy_url = _get_proxy_url()
     if proxy_url:
-        proxy_key = _get_proxy_key()
-        body = json.dumps({"text": text}).encode()
-        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
-        if proxy_key:
-            headers["X-Proxy-Key"] = proxy_key
         try:
-            req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/post", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read())
+            data = _proxy_json_request("/tweet/post", {"text": text}, method="POST", timeout=30)
             if data.get("ok", False):
                 detail = data.get("tweet_url") or data.get("screen_name") or ""
                 return True, detail
             return False, data.get("error", "Proxy returned not ok")
-        except urllib.request.HTTPError as e:
-            _err = e.read().decode("utf-8", errors="replace")[:200]
-            return False, f"Proxy HTTP {e.code}: {_err}"
         except Exception as e:
             return False, f"Proxy error: {e}"
     helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
@@ -1097,17 +1104,9 @@ def _post_tweet(text: str) -> tuple[bool, str]:
 
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
     """Route like/reply through local proxy. Returns True on success."""
-    import urllib.request, urllib.error
     proxy_url = _get_proxy_url()
-    proxy_key = _get_proxy_key()
-    body = json.dumps({"tweet_id": tweet_id, "text": text}).encode()
-    headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
-    if proxy_key:
-        headers["X-Proxy-Key"] = proxy_key
     try:
-        req = urllib.request.Request(f"{proxy_url.rstrip('/')}/tweet/{action}", data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
+        data = _proxy_json_request(f"/tweet/{action}", {"tweet_id": tweet_id, "text": text}, method="POST", timeout=30)
         return data.get("ok", False)
     except Exception:
         # Fall back to the shared local helper for replies if available.
