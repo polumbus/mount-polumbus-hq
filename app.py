@@ -5905,7 +5905,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             else:
                 # Non-thread: show editable text area as before
                 _widget_key = f"{opt_key}_{hash(_display_text) % 100000}"
-                edited_opt = st.text_area("", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed")
+                edited_opt = st.text_area("Generated option", value=_display_text, height=auto_height(_display_text, min_h=100), key=_widget_key, label_visibility="collapsed")
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("↓ Save", key=f"modal_bsave_{ti+1}", use_container_width=True):
@@ -6292,7 +6292,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
         _rkey = "ci_result" if st.session_state.get("ci_result") else "ci_repurposed"
         _val = st.session_state[_rkey]
         _edit_key = f"modal_edit_{hash(_val) & 0xFFFFFF}"
-        edited = st.text_area("", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
+        edited = st.text_area("Generated option", value=_val, height=auto_height(_val, min_h=160), key=_edit_key, label_visibility="collapsed")
         r1, r2, r3 = st.columns(3)
         with r1:
             if st.button("↓ Save", key="modal_result_save", use_container_width=True):
@@ -7315,14 +7315,16 @@ def _render_creator_studio_editor():
             _ci_input = st.session_state.get("ci_text", "").strip()
             if not _ci_input:
                 return
+            _ci_fmt = _normalize_tweet_format(st.session_state.get("ci_format"))
+            _ci_voice = _normalize_tweet_voice(st.session_state.get("ci_voice"))
             if action == "banger" and len(_ci_input.split()) < 8:
                 st.session_state["_ci_show_build_dialog"] = True
-                st.rerun(scope="app")
+            else:
                 st.session_state["_ci_pending"] = (
                     action,
                     _ci_input,
-                    _normalize_tweet_format(st.session_state.get("ci_format")),
-                    _normalize_tweet_voice(st.session_state.get("ci_voice")),
+                    _ci_fmt,
+                    _ci_voice,
                 )
             st.rerun(scope="app")
 
