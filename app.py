@@ -229,14 +229,13 @@ def get_voice_context():
     if not tweets:
         return _base
 
-    # Get top 15 tweets by engagement as voice examples
-    top = sorted(tweets, key=lambda t: t.get("likeCount", 0) + t.get("retweetCount", 0) * 3, reverse=True)[:15]
-    examples = "\n".join([f"- {t.get('text', '')}" for t in top if not t.get("text", "").startswith("RT ")])
+    top = _select_hall_of_fame_tweets(tweets, limit=15)
+    examples = "\n".join([f"- {t.get('text', '')}" for t in top])
 
     _label = "YOUR" if is_guest() else "TYLER'S"
     return _base + f"""
 
-{_label} ACTUAL TOP-PERFORMING TWEETS (use these as voice/style reference):
+{_label} HALL OF FAME TWEETS (primary voice/style reference):
 {examples}
 
 Match this exact voice, tone, sentence structure, and style in everything you write.
@@ -359,6 +358,58 @@ IMPORTANT: Write in @{s_handle}'s STYLE as described above."""
     return _base
 
 
+def _metric(t: dict, camel: str, snake: str = "") -> int:
+    try:
+        return int(t.get(camel, t.get(snake or camel, 0)) or 0)
+    except Exception:
+        return 0
+
+
+def _tweet_text(t: dict) -> str:
+    return (t.get("text", "") or "").strip()
+
+
+def _is_hof_candidate(t: dict) -> bool:
+    text = _tweet_text(t)
+    return bool(text) and not text.startswith("RT ") and not text.startswith("@")
+
+
+def _hall_of_fame_score(t: dict) -> int:
+    """Impressions-first Hall of Fame ranking used by Post History and AI prompts."""
+    views = _metric(t, "viewCount", "view_count")
+    likes = _metric(t, "likeCount", "like_count")
+    rts = _metric(t, "retweetCount", "retweet_count")
+    reps = _metric(t, "replyCount", "reply_count")
+    return views * 10 + likes * 100 + rts * 300 + reps * 200
+
+
+def _tweet_matches_format(t: dict, fmt: str | None) -> bool:
+    text_len = len(_tweet_text(t))
+    if fmt == "Punchy Tweet":
+        return text_len <= 160
+    if fmt == "Normal Tweet":
+        return 161 <= text_len <= 260
+    if fmt in ("Long Tweet", "Thread", "Article"):
+        return text_len > 260
+    return True
+
+
+def _select_hall_of_fame_tweets(tweets: list, *, limit: int = 20,
+                                fmt: str | None = None,
+                                prefer_no_links: bool = True) -> list:
+    candidates = [t for t in tweets if isinstance(t, dict) and _is_hof_candidate(t)]
+    if prefer_no_links:
+        no_link = [t for t in candidates if "http" not in _tweet_text(t)]
+        if len(no_link) >= max(3, min(limit, 5)):
+            candidates = no_link
+    ranked = sorted(candidates, key=_hall_of_fame_score, reverse=True)
+    if fmt:
+        matching = [t for t in ranked if _tweet_matches_format(t, fmt)]
+        if matching:
+            ranked = matching
+    return ranked[:limit]
+
+
 @st.cache_data(ttl=3600)
 def analyze_personal_patterns():
     """Analyze Tyler's tweet history to build personal scoring benchmarks. Cached per session."""
@@ -368,40 +419,32 @@ def analyze_personal_patterns():
     if len(tweets) < 20:
         return None
 
-    # Filter: exclude RTs, @-replies, and URL tweets (different engagement dynamics)
+    # Hall of Fame is the source of truth for voice/style. Exclude RTs/replies;
+    # prefer non-link posts so the generator does not learn link-post structure.
     originals = [
         t for t in tweets
-        if not t.get("text", "").startswith("RT ")
-        and not t.get("text", "").startswith("@")
-        and "http" not in t.get("text", "")
+        if isinstance(t, dict)
+        and _is_hof_candidate(t)
+        and "http" not in _tweet_text(t)
     ]
+    if len(originals) < 10:
+        originals = [t for t in tweets if isinstance(t, dict) and _is_hof_candidate(t)]
     if len(originals) < 10:
         return None
 
-    # Field-safe getters — API returns likeCount or like_count depending on endpoint
-    def _likes(t): return t.get("likeCount", t.get("like_count", 0))
-    def _rts(t):   return t.get("retweetCount", t.get("retweet_count", 0))
-    def _reps(t):  return t.get("replyCount", t.get("reply_count", 0))
-    def _views(t): return t.get("viewCount", t.get("view_count", 0))
-
-    # Engagement score: 70% raw (reach) + 30% rate (efficiency vs views)
-    def _eng(t):
-        raw = _likes(t) + _rts(t) * 3 + _reps(t) * 2
-        rate_bonus = (raw / max(_views(t), 1)) * 10000
-        return raw * 0.7 + rate_bonus * 0.3
-
     for t in originals:
-        t["_eng"] = _eng(t)
+        t["_hof"] = _hall_of_fame_score(t)
 
-    sorted_tweets = sorted(originals, key=lambda t: t["_eng"], reverse=True)
-    n = len(sorted_tweets)
-    top_n = max(5, n // 5)
+    sorted_tweets = sorted(originals, key=lambda t: t["_hof"], reverse=True)
+    top_n = min(20, max(5, len(sorted_tweets) // 5))
     top_20pct  = sorted_tweets[:top_n]
     bottom_20pct = sorted_tweets[-top_n:]
 
     patterns = {}
+    patterns["source_of_truth"] = "hall_of_fame"
+    patterns["hall_of_fame_score_formula"] = "views*10 + likes*100 + retweets*300 + replies*200"
 
-    # Percentile-based char range — 25th to 75th of top performers (not min-max)
+    # Percentile-based char range from Hall of Fame performers (not min-max)
     top_lengths = sorted(len(t.get("text", "")) for t in top_20pct)
     p25 = top_lengths[max(0, len(top_lengths) // 4)]
     p75 = top_lengths[min(len(top_lengths) - 1, 3 * len(top_lengths) // 4)]
@@ -417,15 +460,19 @@ def analyze_personal_patterns():
     patterns["top_linebreaks_avg"]  = round(sum(t.get("text", "").count("\n") for t in top_20pct) / len(top_20pct), 1)
 
     # Engagement averages
-    patterns["avg_likes"]  = sum(_likes(t)  for t in originals) // len(originals)
-    patterns["avg_rts"]    = sum(_rts(t)    for t in originals) // len(originals)
-    patterns["avg_replies"]= sum(_reps(t)   for t in originals) // len(originals)
-    patterns["avg_views"]  = sum(_views(t)  for t in originals) // len(originals)
+    patterns["avg_likes"]  = sum(_metric(t, "likeCount", "like_count") for t in originals) // len(originals)
+    patterns["avg_rts"]    = sum(_metric(t, "retweetCount", "retweet_count") for t in originals) // len(originals)
+    patterns["avg_replies"]= sum(_metric(t, "replyCount", "reply_count") for t in originals) // len(originals)
+    patterns["avg_views"]  = sum(_metric(t, "viewCount", "view_count") for t in originals) // len(originals)
 
     # Format-split top examples so short formats get short examples, long gets long
     def _ex(t):
-        return {"text": t.get("text", ""), "likes": _likes(t), "rts": _rts(t),
-                "replies": _reps(t), "score": round(t["_eng"])}
+        return {"text": t.get("text", ""),
+                "likes": _metric(t, "likeCount", "like_count"),
+                "rts": _metric(t, "retweetCount", "retweet_count"),
+                "replies": _metric(t, "replyCount", "reply_count"),
+                "views": _metric(t, "viewCount", "view_count"),
+                "score": round(t["_hof"])}
 
     punchy_tops = [t for t in top_20pct if len(t.get("text", "")) <= 160]
     normal_tops = [t for t in top_20pct if 160 < len(t.get("text", "")) <= 260]
@@ -434,15 +481,20 @@ def analyze_personal_patterns():
     patterns["top_examples_punchy"] = [_ex(t) for t in punchy_tops[:8]]
     patterns["top_examples_normal"] = [_ex(t) for t in normal_tops[:8]]
     patterns["top_examples_long"]   = [_ex(t) for t in long_tops[:8]]
-    patterns["bottom_examples"]    = [{"text": t.get("text", ""), "likes": _likes(t)} for t in bottom_20pct[:5]]
+    patterns["bottom_examples"]    = [
+        {"text": t.get("text", ""), "likes": _metric(t, "likeCount", "like_count")}
+        for t in bottom_20pct[:5]
+    ]
 
     patterns["top_first_words"] = [
         t.get("text", "").split()[0].lower() for t in top_20pct if t.get("text", "").split()
     ]
 
-    reply_sorted = sorted(originals, key=lambda t: _reps(t), reverse=True)[:5]
+    reply_sorted = sorted(originals, key=lambda t: _metric(t, "replyCount", "reply_count"), reverse=True)[:5]
     patterns["top_reply_examples"] = [
-        {"text": t.get("text", ""), "replies": _reps(t), "likes": _likes(t)} for t in reply_sorted
+        {"text": t.get("text", ""),
+         "replies": _metric(t, "replyCount", "reply_count"),
+         "likes": _metric(t, "likeCount", "like_count")} for t in reply_sorted
     ]
 
     st.session_state["_pp_cache"] = patterns
@@ -459,16 +511,16 @@ def build_patterns_context(patterns, fmt=""):
 
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
         top_pool = patterns["top_examples_punchy"]
-        pool_label = "Top Performing PUNCHY Tweets ≤160 chars (model these — 2 sentences max)"
+        pool_label = "Hall of Fame PUNCHY Tweets <=160 chars (model these — 2 sentences max)"
     elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
         top_pool = patterns["top_examples_normal"]
-        pool_label = "Top Performing NORMAL Tweets 161-260 chars (model these)"
+        pool_label = "Hall of Fame NORMAL Tweets 161-260 chars (model these)"
     elif _long_fmt and patterns.get("top_examples_long"):
         top_pool = patterns["top_examples_long"]
-        pool_label = "Top Performing LONG Tweets (model these)"
+        pool_label = "Hall of Fame LONG Tweets (model these)"
     else:
         top_pool = patterns.get("top_examples", [])
-        pool_label = "Top Performing Tweets"
+        pool_label = "Hall of Fame Tweets"
 
     top_ex    = "\n".join([f'  - "{ex["text"][:120]}"' for ex in top_pool[:2]])
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
@@ -478,7 +530,7 @@ def build_patterns_context(patterns, fmt=""):
     _poss = "his" if not is_guest() else "your"
     _sig = f"- {patterns.get('top_ellipsis_pct', 0)}% use ellipsis (...) — {_poss} signature\n" if patterns.get("top_ellipsis_pct", 0) > 10 else ""
     return f"""
-{_owner_label} TWEET BENCHMARKS (from actual tweet history):
+{_owner_label} HALL OF FAME TWEET BENCHMARKS (from actual tweet history):
 
 Character Length:
 - Sweet spot: {opt_range[0]}–{opt_range[1]} characters
@@ -490,6 +542,46 @@ Style Patterns (top performers):
 
 {pool_label}:
 {top_ex}
+"""
+
+
+def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
+    """Prompt block that makes Hall of Fame examples the primary build reference."""
+    if not patterns:
+        return ""
+    if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
+        pool = patterns["top_examples_punchy"]
+        label = "PUNCHY"
+    elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
+        pool = patterns["top_examples_normal"]
+        label = "NORMAL"
+    elif fmt in ("Long Tweet", "Thread", "Article") and patterns.get("top_examples_long"):
+        pool = patterns["top_examples_long"]
+        label = "LONG"
+    else:
+        pool = patterns.get("top_examples", [])
+        label = "ALL"
+    if not pool:
+        return ""
+    lines = []
+    for ex in pool[:5]:
+        text = (ex.get("text") or "").strip().replace("\n", " / ")
+        if not text:
+            continue
+        lines.append(
+            f'- "{text[:240]}" '
+            f"(views {int(ex.get('views', 0)):,}, likes {int(ex.get('likes', 0)):,}, "
+            f"RT {int(ex.get('rts', 0)):,}, replies {int(ex.get('replies', 0)):,})"
+        )
+    if not lines:
+        return ""
+    return f"""
+
+HALL OF FAME REFERENCE TWEETS ({label}) — PRIMARY SOURCE OF TRUTH:
+These are the examples the whole system is built around. Model their rhythm,
+line breaks, density, specificity, and endings. Do NOT copy wording or facts.
+Use the current brief/topic only for subject matter.
+{chr(10).join(lines)}
 """
 
 
@@ -3619,12 +3711,13 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
     voice_mod = voice_mod if voice_mod is not None else _build_voice_mod(voice)
     pp = pp if pp is not None else analyze_personal_patterns()
     format_mod = _build_format_mod(fmt, pp, voice)
+    _hof_ref_b = _hall_of_fame_reference_block(pp, fmt)
     _sports_ctx_b = sports_ctx
     _fmt_inject_b = ""
     if voice == "Default":
         _fmt_pats_b = _get_format_patterns_with_fallback(fmt)
         if _fmt_pats_b:
-            _fmt_inject_b = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats_b}\n"
+            _fmt_inject_b = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Hall of Fame references — use only for current structure trends):\n{_fmt_pats_b}\n"
     _voice_task = f"matching the {voice} voice described in the system prompt" if voice != "Default" else "matching the voice in the system prompt exactly"
     _default_voice_override = """
 DEFAULT VOICE OVERRIDE:
@@ -3645,7 +3738,7 @@ DEFAULT VOICE OVERRIDE:
 
 {_brief_block}
 {live_stats_block}
-{format_mod}{_sports_ctx_b}{_fmt_inject_b}
+    {format_mod}{_hof_ref_b}{_sports_ctx_b}{_fmt_inject_b}
 {_default_voice_override}
 
 STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
@@ -4502,7 +4595,7 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
             else _pp.get("top_examples", [])
         )
         _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
-    _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your top hooks)"
+    _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your Hall of Fame hooks)"
 
     if fmt == "Punchy Tweet":
         return f"""FORMAT: PUNCHY TWEET (2 sentences maximum — get in, bait engagement, get out)
@@ -4519,7 +4612,7 @@ RULES:
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
 
-Top hooks to model Sentence 1 after:
+Hall of Fame hooks to model Sentence 1 after:
 {_hooks_str}
 
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
@@ -4531,10 +4624,10 @@ RIGHT: "The 2026 WR room is better than 2015. Prove me wrong." """
         if voice == "Default":
             return f"""FORMAT: NORMAL TWEET (161-260 characters)
 
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
-- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
-- {_fp_ell}% of top tweets use ellipsis (his Default voice signature)
-- Top performing hooks to study for rhythm only, NOT literal opener wording:
+TYLER'S HALL OF FAME DATA (from synced tweet history — updates every sync):
+- Optimal range from Hall of Fame tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
+- {_fp_ell}% of Hall of Fame tweets use ellipsis (his Default voice signature)
+- Hall of Fame hooks to study for rhythm only, NOT literal opener wording:
 {_hooks_str}
 
 STRUCTURE:
@@ -4560,11 +4653,11 @@ IMAGE RECOMMENDATION:
 
         return f"""FORMAT: NORMAL TWEET (161-260 characters)
 
-TYLER'S LIVE DATA (from synced tweet history — updates every sync):
-- Optimal range for top tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
-- {_fp_q}% of top tweets use questions (algorithm: replies = 13.5x a like)
-- {_fp_ell}% of top tweets use ellipsis (his signature)
-- Top performing hooks to model after:
+TYLER'S HALL OF FAME DATA (from synced tweet history — updates every sync):
+- Optimal range from Hall of Fame tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
+- {_fp_q}% of Hall of Fame tweets use questions (algorithm: replies = 13.5x a like)
+- {_fp_ell}% of Hall of Fame tweets use ellipsis (his signature)
+- Hall of Fame hooks to model after:
 {_hooks_str}
 
 STRUCTURE:
@@ -4588,9 +4681,9 @@ IMAGE RECOMMENDATION:
     elif fmt == "Long Tweet":
         return f"""FORMAT: LONG TWEET (280-1200 characters)
 
-TYLER'S LIVE DATA (updates every sync):
+TYLER'S HALL OF FAME DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model the opening after:
+- Hall of Fame hooks to model the opening after:
 {_hooks_str}
 
 STRUCTURE:
@@ -4625,9 +4718,9 @@ IMAGE RECOMMENDATION:
     elif fmt == "Thread":
         return f"""FORMAT: THREAD (5-8 tweets)
 
-TYLER'S LIVE DATA (updates every sync):
+TYLER'S HALL OF FAME DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Top hooks to model Tweet 1 after:
+- Hall of Fame hooks to model Tweet 1 after:
 {_hooks_str}
 
 STRUCTURE:
@@ -4666,8 +4759,8 @@ IMAGE RECOMMENDATION:
 
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
-TYLER'S LIVE DATA (updates every sync):
-- Top hooks to model headline/intro after:
+TYLER'S HALL OF FAME DATA (updates every sync):
+- Hall of Fame hooks to model headline/intro after:
 {_hooks_str}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
@@ -5297,6 +5390,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
 
     elif action == "banger" and tweet_text.strip():
         patterns_ctx = build_patterns_context(pp, fmt) if pp else ""
+        _hof_ref = _hall_of_fame_reference_block(pp, fmt)
         _char_limit = 160 if fmt == "Punchy Tweet" else (260 if fmt == "Normal Tweet" else None)
         _opt_range = pp.get("optimal_char_range", (0, 280)) if pp else (0, 280)
         if _char_limit:
@@ -5306,7 +5400,7 @@ Return the article as plain text. Do NOT wrap in JSON or code blocks."""
         if voice == "Default":
             _fmt_pats = _get_format_patterns_with_fallback(fmt)
             if _fmt_pats:
-                _fmt_inject = f"\n\nFORMAT PATTERNS (from top-performing tweets THIS WEEK — match these structures):\n{_fmt_pats}\n"
+                _fmt_inject = f"\n\nSUPPLEMENTAL LIVE FORMAT PATTERNS (secondary to Hall of Fame references — use only for current structure trends):\n{_fmt_pats}\n"
         _bg_is_g = is_guest()
         _bg_examples = "" if _bg_is_g else """
 EXAMPLE WITH STATS:
@@ -5329,8 +5423,8 @@ Draft: "{tweet_text}"
 This draft is a CONCEPT — the take, the angle, the topic. Your job is to turn that concept into a polished, high-performing tweet. Keep the point of view and personality but IMPROVE the hook, tighten the structure, strengthen the closer, and weave in real stats from LIVE STATS below.
 {_bg_examples}
 {_live_stats_block}
-{format_mod}
-{patterns_ctx}{_sports_ctx}{_fmt_inject}
+    {format_mod}
+    {_hof_ref}{patterns_ctx}{_sports_ctx}{_fmt_inject}
 
 STAT INTEGRITY RULE (ZERO TOLERANCE — overrides voice rules):
 - ONLY use stats that appear in LIVE STATS above or in the draft. Do not invent, estimate, or round any numbers.
@@ -8250,16 +8344,10 @@ def page_tweet_history():
 
     # ── Hall of Fame ──
     def _eng_score(t):
-        likes = t.get("likeCount", t.get("like_count", 0))
-        rts   = t.get("retweetCount", t.get("retweet_count", 0))
-        reps  = t.get("replyCount", t.get("reply_count", 0))
-        views = t.get("viewCount", t.get("view_count", 0))
         # HOF = impressions first — views so dominant that engagement is just a tiebreaker
-        return views * 10 + likes * 100 + rts * 300 + reps * 200
+        return _hall_of_fame_score(t)
 
-    hof_candidates = [t for t in tweets
-        if not t.get("text", "").startswith("RT ")
-        and not t.get("text", "").startswith("@")]
+    hof_candidates = [t for t in tweets if isinstance(t, dict) and _is_hof_candidate(t)]
     hof_tweets = sorted(hof_candidates, key=_eng_score, reverse=True)[:20]
 
     with st.expander(f"★ Hall of Fame — Top {len(hof_tweets)} Tweets", expanded=False):
