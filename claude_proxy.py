@@ -67,7 +67,7 @@ CLAUDE_CLI = "/home/polfam/mount_polumbus_hq/scripts/claude-cli"
 XURL = "/home/linuxbrew/.linuxbrew/bin/xurl"
 def _proxy_api_keys() -> list[str]:
     keys = []
-    for env_name in ("HQ_PROXY_KEY", "CLAUDE_PROXY_KEY"):
+    for env_name in ("HQ_PROXY_KEY", "CLAUDE_PROXY_KEY", "HQ_GITHUB_PAT", "GITHUB_PAT"):
         raw = os.environ.get(env_name, "")
         for part in str(raw or "").split(","):
             key = part.strip()

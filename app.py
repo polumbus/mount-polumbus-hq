@@ -754,7 +754,7 @@ def _get_proxy_url() -> str:
 
 def _proxy_key_candidates() -> list[str]:
     keys = []
-    for name in ("CLAUDE_PROXY_KEY", "HQ_PROXY_KEY"):
+    for name in ("CLAUDE_PROXY_KEY", "HQ_PROXY_KEY", "GITHUB_PAT", "HQ_GITHUB_PAT"):
         try:
             raw = st.secrets.get(name, "")
         except Exception:
