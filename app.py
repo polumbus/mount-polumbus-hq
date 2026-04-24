@@ -1706,6 +1706,24 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
     return wins;
   }
 
+  function usableUrl(win){
+    try{
+      var url = new URL(win.location.href);
+      if(url.protocol === "http:" || url.protocol === "https:") return url;
+    }catch(e){}
+    return null;
+  }
+
+  function hostWindow(){
+    // Streamlit Cloud can wrap the app; use the first accessible HTTP frame.
+    var wins = windowChain();
+    for(var i=1; i<wins.length; i++){
+      if(usableUrl(wins[i])) return wins[i];
+    }
+    if(usableUrl(window)) return window;
+    return null;
+  }
+
   function writeCookie(value, maxAge){
     windowChain().forEach(function(win){
       try{
@@ -1760,9 +1778,11 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
 
   function stripAuthParams(){
     try{
-      var current = new URL(window.parent.location.href);
+      var hostWin = hostWindow();
+      if(!hostWin) return;
+      var current = new URL(hostWin.location.href);
       ["token", "user", "guest_id"].forEach(function(key){ current.searchParams.delete(key); });
-      window.parent.location.replace(current.toString());
+      hostWin.location.replace(current.toString());
     }catch(e){}
   }
 
@@ -1783,7 +1803,8 @@ def _render_client_auth_bridge(mode: str, payload: dict | None = None, invalid_q
 
   if(mode === "restore"){
     try{
-      var hostWin = window.top || window.parent || window;
+      var hostWin = hostWindow();
+      if(!hostWin) return;
       var current = new URL(hostWin.location.href);
       if(current.searchParams.get("token")) return;
       var raw = readLocal() || readCookie();
@@ -2808,33 +2829,11 @@ with st.sidebar:
                   type="secondary", use_container_width=True)
 
 # ── Desktop flyout panels (JS, same-origin iframe) ──────────────────────────
-_auth_payload = {
-    "role": st.session_state.get("auth_role", ""),
-    "token": st.query_params.get("token", ""),
-    "user": st.session_state.get("auth_username", ""),
-}
-if st.session_state.get("auth_role") == "guest":
-    _guest_accounts = _load_accounts()
-    _guest_user = st.session_state.get("auth_username", "")
-    if _guest_user in _guest_accounts:
-        _auth_payload["guest_id"] = _guest_accounts[_guest_user].get("guest_id", "")
-_auth_payload_js = json.dumps(_auth_payload, separators=(",", ":")).replace("</", "<\\/")
-
 import streamlit.components.v1 as _stc
 _stc.html("""<script>
 (function(){
   var doc=window.parent.document;
   var win=window.parent;
-  var authPayload=__AUTH_PAYLOAD__;
-  try{
-    if(authPayload && authPayload.token && authPayload.role){
-      var authValue=JSON.stringify(authPayload);
-      win.localStorage.setItem("mp_auth", authValue);
-      var cookie="mp_auth="+encodeURIComponent(authValue)+"; path=/; max-age=31536000; SameSite=Lax";
-      if(win.location && win.location.protocol === "https:") cookie += "; Secure";
-      doc.cookie=cookie;
-    }
-  }catch(e){}
 
   /* ── Desktop flyout panels (skip on mobile) ── */
   var _isDesktop=win.innerWidth>768;
@@ -3002,7 +3001,7 @@ _stc.html("""<script>
   });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
-</script>""".replace("__PAGE_NAMES__", _nav_pages_js).replace("__AUTH_PAYLOAD__", _auth_payload_js), height=0)
+</script>""".replace("__PAGE_NAMES__", _nav_pages_js), height=0)
 
 # ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
 _lnk = "display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;"
