@@ -13,7 +13,7 @@ import requests
 import tomli
 import urllib.error
 import urllib.parse
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from pathlib import Path
 import podcast_tracker
 import podcast_remote_store
@@ -215,7 +215,7 @@ Voice on X — CRITICAL (read their actual tweets below and MATCH their exact to
 Format rules:
 - Default tweet format: {_DEFAULT_TWEET_FORMAT} ({_FORMAT_GUIDES.get(_DEFAULT_TWEET_FORMAT, {}).get('chars', 'Creator Studio default')}).
 - No hashtags unless specifically requested
-- No emojis in output. Write plain text only.
+- Emoji policy: Default voice uses no emojis. Non-Default voices may use max 1 high-ROI fire/sport emoji only when it improves punch; never combine emoji with ALL CAPS.
 
 VOICE MATCHING IS THE #1 PRIORITY. A tweet that sounds like @{handle} actually wrote it is always better than a "well-crafted" tweet that sounds like an AI."""
 
@@ -237,7 +237,8 @@ def get_voice_context():
 {_label} HALL OF FAME TWEETS (primary voice/style reference):
 {examples}
 
-Match this exact voice, tone, sentence structure, and style in everything you write.
+Use these as calibration for voice, tone, rhythm, specificity, confidence, and restraint.
+Do NOT copy exact hooks, closers, first words, sentence frames, wording, facts, or topic logic.
 
 Note: Format-specific rules (character limits, structure, thread formatting, article layout) will be provided separately. Follow those format rules for structure while maintaining this voice."""
 
@@ -364,6 +365,34 @@ def _metric(t: dict, camel: str, snake: str = "") -> int:
         return 0
 
 
+def _tweet_datetime(t: dict) -> datetime | None:
+    """Parse common tweet timestamp fields into a timezone-aware datetime when possible."""
+    raw = (
+        t.get("createdAt")
+        or t.get("created_at")
+        or t.get("timestamp")
+        or t.get("time")
+        or t.get("date")
+        or ""
+    )
+    if not raw:
+        return None
+    raw = str(raw).strip()
+    for fmt in ("%a %b %d %H:%M:%S %z %Y", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            if raw.endswith("Z"):
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            pass
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt
+    except Exception:
+        return None
+
+
 def _tweet_text(t: dict) -> str:
     return (t.get("text", "") or "").strip()
 
@@ -439,9 +468,34 @@ def analyze_personal_patterns():
     top_20pct  = sorted_tweets[:top_n]
     bottom_20pct = sorted_tweets[-top_n:]
 
+    now_utc = datetime.now(timezone.utc)
+    recent_cutoff = now_utc - timedelta(days=7)
+    recent_originals = []
+    for t in originals:
+        dt = _tweet_datetime(t)
+        if not dt:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt.astimezone(timezone.utc) >= recent_cutoff:
+            recent_originals.append(t)
+    if len(recent_originals) < 3:
+        recent_cutoff = now_utc - timedelta(days=14)
+        recent_originals = []
+        for t in originals:
+            dt = _tweet_datetime(t)
+            if not dt:
+                continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt.astimezone(timezone.utc) >= recent_cutoff:
+                recent_originals.append(t)
+    recent_top = sorted(recent_originals, key=lambda t: t["_hof"], reverse=True)[:8]
+
     patterns = {}
     patterns["source_of_truth"] = "hall_of_fame"
     patterns["hall_of_fame_score_formula"] = "views*10 + likes*100 + retweets*300 + replies*200"
+    patterns["recent_window_days"] = 7 if recent_cutoff >= now_utc - timedelta(days=8) else 14
 
     # Percentile-based char range from Hall of Fame performers (not min-max)
     top_lengths = sorted(len(t.get("text", "")) for t in top_20pct)
@@ -480,6 +534,10 @@ def analyze_personal_patterns():
     patterns["top_examples_punchy"] = [_ex(t) for t in punchy_tops[:8]]
     patterns["top_examples_normal"] = [_ex(t) for t in normal_tops[:8]]
     patterns["top_examples_long"]   = [_ex(t) for t in long_tops[:8]]
+    patterns["top_examples_recent"] = [_ex(t) for t in recent_top]
+    patterns["top_examples_recent_punchy"] = [_ex(t) for t in recent_top if len(t.get("text", "")) <= 160][:5]
+    patterns["top_examples_recent_normal"] = [_ex(t) for t in recent_top if 160 < len(t.get("text", "")) <= 260][:5]
+    patterns["top_examples_recent_long"] = [_ex(t) for t in recent_top if len(t.get("text", "")) > 260][:5]
     patterns["bottom_examples"]    = [
         {"text": t.get("text", ""), "likes": _metric(t, "likeCount", "like_count")}
         for t in bottom_20pct[:5]
@@ -510,18 +568,27 @@ def build_patterns_context(patterns, fmt=""):
 
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
         top_pool = patterns["top_examples_punchy"]
+        recent_pool = patterns.get("top_examples_recent_punchy") or patterns.get("top_examples_recent", [])
         pool_label = "Hall of Fame PUNCHY Tweets <=160 chars (reference only — 2 sentences max)"
     elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
         top_pool = patterns["top_examples_normal"]
+        recent_pool = patterns.get("top_examples_recent_normal") or patterns.get("top_examples_recent", [])
         pool_label = "Hall of Fame NORMAL Tweets 161-260 chars (reference only)"
     elif _long_fmt and patterns.get("top_examples_long"):
         top_pool = patterns["top_examples_long"]
+        recent_pool = patterns.get("top_examples_recent_long") or patterns.get("top_examples_recent", [])
         pool_label = "Hall of Fame LONG Tweets (reference only)"
     else:
         top_pool = patterns.get("top_examples", [])
+        recent_pool = patterns.get("top_examples_recent", [])
         pool_label = "Hall of Fame Tweets"
 
     top_ex    = "\n".join([f'  - "{ex["text"][:120]}"' for ex in top_pool[:2]])
+    recent_ex = "\n".join([f'  - "{ex["text"][:120]}"' for ex in recent_pool[:3]])
+    recent_block = (
+        f"\nRecent high-performing tweets from the last {patterns.get('recent_window_days', 7)} days (freshness signal only):\n{recent_ex}\n"
+        if recent_ex else ""
+    )
     first_words = ", ".join(patterns.get("top_first_words", [])[:10])
     opt_range = patterns.get("optimal_char_range", (0, 280))
 
@@ -541,6 +608,7 @@ Style Patterns (top performers):
 
 {pool_label}:
 {top_ex}
+{recent_block}
 """
 
 
@@ -550,15 +618,19 @@ def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
         return ""
     if fmt == "Punchy Tweet" and patterns.get("top_examples_punchy"):
         pool = patterns["top_examples_punchy"]
+        recent_pool = patterns.get("top_examples_recent_punchy") or patterns.get("top_examples_recent", [])
         label = "PUNCHY"
     elif fmt == "Normal Tweet" and patterns.get("top_examples_normal"):
         pool = patterns["top_examples_normal"]
+        recent_pool = patterns.get("top_examples_recent_normal") or patterns.get("top_examples_recent", [])
         label = "NORMAL"
     elif fmt in ("Long Tweet", "Thread", "Article") and patterns.get("top_examples_long"):
         pool = patterns["top_examples_long"]
+        recent_pool = patterns.get("top_examples_recent_long") or patterns.get("top_examples_recent", [])
         label = "LONG"
     else:
         pool = patterns.get("top_examples", [])
+        recent_pool = patterns.get("top_examples_recent", [])
         label = "ALL"
     if not pool:
         return ""
@@ -574,6 +646,26 @@ def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
         )
     if not lines:
         return ""
+    recent_lines = []
+    for ex in recent_pool[:3]:
+        text = (ex.get("text") or "").strip().replace("\n", " / ")
+        if not text:
+            continue
+        recent_lines.append(
+            f'- "{text[:220]}" '
+            f"(views {int(ex.get('views', 0)):,}, likes {int(ex.get('likes', 0)):,}, "
+            f"RT {int(ex.get('rts', 0)):,}, replies {int(ex.get('replies', 0)):,})"
+        )
+    recent_block = (
+        f"""
+
+RECENT HIGH-PERFORMING TWEETS (last {patterns.get('recent_window_days', 7)} days if available) — CURRENT AUDIENCE TASTE ONLY:
+Use these to understand what is hot right now for rhythm, bite, and local sports frustration.
+Do NOT copy their wording, opener, topic logic, or joke structure.
+{chr(10).join(recent_lines)}
+"""
+        if recent_lines else ""
+    )
     return f"""
 
 HALL OF FAME REFERENCE TWEETS ({label}) — CALIBRATION LAYER, NOT AN OVERRIDE:
@@ -585,6 +677,7 @@ facts, or topic logic. The output should feel influenced by the benchmark,
 not patterned after a specific example. Use the current brief/topic only for
 subject matter.
 {chr(10).join(lines)}
+{recent_block}
 """
 
 
@@ -2334,6 +2427,24 @@ def _quick_tweet_sync_due(hours: int = 72) -> bool:
     return datetime.now() - last_dt >= timedelta(hours=hours)
 
 
+def _refresh_tweet_history_for_ai_if_due(hours: int = 12):
+    """Keep recent HOF prompt data fresh without syncing on every AI click."""
+    if not st.session_state.get("auth_role") or not get_current_handle():
+        return
+    session_key = f"_ai_tweet_sync_attempted_{get_current_handle()}"
+    if st.session_state.get(session_key):
+        return
+    if not _quick_tweet_sync_due(hours=hours):
+        return
+    st.session_state[session_key] = True
+    try:
+        sync_tweet_history(quick=True)
+        st.session_state.pop("_pp_cache", None)
+        st.session_state.pop("_tweet_history_cache", None)
+    except Exception:
+        pass
+
+
 # ─── Guest Registry ───────────────────────────────────────────────────────
 _GUEST_REGISTRY_PATH = Path(os.path.expanduser("~/.openclaw/guests/registry.json"))
 
@@ -3725,8 +3836,11 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
     voice = _normalize_tweet_voice(voice)
 
     voice_mod = voice_mod if voice_mod is not None else _build_voice_mod(voice)
+    if pp is None:
+        _refresh_tweet_history_for_ai_if_due(hours=12)
     pp = pp if pp is not None else analyze_personal_patterns()
     format_mod = _build_format_mod(fmt, pp, voice)
+    _emoji_rule = _emoji_policy_for_voice(voice)
     _hof_ref_b = _hall_of_fame_reference_block(pp, fmt)
     _sports_ctx_b = sports_ctx
     _fmt_inject_b = ""
@@ -3739,9 +3853,11 @@ def _generate_build_data(tweet_text: str, fmt: str, voice: str,
 DEFAULT VOICE OVERRIDE:
 - Default voice beats any generic engagement/question instruction from the format block.
 - Do NOT ask direct questions in Default voice.
+- Maximize replies through a declarative final statement that creates tension, consequence, or an unfinished thought readers want to complete or argue with.
 - End with an ellipsis or incomplete analytical thought, not a question mark.
 - Avoid leaning on overused openers like "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", "Let that sink in", or "This is your reminder". They are reference patterns, not default starters. Prefer a fresh, topic-specific first line.
-- The output must feel like film-room observation: specific observation, context underneath it, open-door trailing thought.""" if voice == "Default" else ""
+- The output must feel like film-room observation: specific observation, context underneath it, open-door trailing thought.
+- Do not lead with generic hot-take framing, forced humor, or accountability theater. A little edge is allowed when it naturally comes from the observation.""" if voice == "Default" else ""
     _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
     _has_brief = any(d in tweet_text for d in _brief_delimiters)
     if _has_brief:
@@ -3767,9 +3883,10 @@ TASK: Write 3 distinct, finished tweets from this concept. Each should take a di
 
 Rules:
 - Strong hook — first line stops the scroll
-- No hashtags, no emojis
+- No hashtags
+- {_emoji_rule}
 - 7th-9th grade reading level
-- End with something that makes people reply or argue
+- End with something that makes people reply, argue, or quote without using lazy engagement bait
 - Algorithm optimized: strong opinion, relatable, invites engagement
 - Structure each option to match the FORMAT PATTERNS above{_char_rule_b}
 
@@ -4617,9 +4734,16 @@ For long-form X Articles, adapt the voice mode above to full article structure:
     return base + article_overlay
 
 
+def _emoji_policy_for_voice(voice: str) -> str:
+    if voice == "Default":
+        return "Default voice uses no emojis. Plain text only."
+    return "Emoji policy: max 1 high-ROI fire/sport emoji only if it improves punch; never combine emoji with ALL CAPS."
+
+
 def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
     """Return the Creator Studio format instructions for the given fmt."""
     _pp = patterns or {}
+    _emoji_rule = _emoji_policy_for_voice(voice)
     _fp_q = _pp.get("top_question_pct", 28)
     _fp_ell = _pp.get("top_ellipsis_pct", 28)
     _fp_range = _pp.get("optimal_char_range", (40, 250))
@@ -4631,7 +4755,13 @@ def _build_format_mod(fmt: str, patterns: dict, voice: str = "Default") -> str:
             else _pp.get("top_examples_long", []) if fmt in ("Long Tweet", "Thread", "Article")
             else _pp.get("top_examples", [])
         )
-        _fp_hooks = [ex.get("text", "")[:80] for ex in _hook_pool[:5]]
+        _recent_pool = (
+            _pp.get("top_examples_recent_punchy", []) if fmt == "Punchy Tweet"
+            else _pp.get("top_examples_recent_normal", []) if fmt == "Normal Tweet"
+            else _pp.get("top_examples_recent_long", []) if fmt in ("Long Tweet", "Thread", "Article")
+            else _pp.get("top_examples_recent", [])
+        )
+        _fp_hooks = [ex.get("text", "")[:80] for ex in (_recent_pool[:3] + _hook_pool[:5])]
     _hooks_str = "\n".join([f'  - "{h}..."' for h in _fp_hooks]) if _fp_hooks else "  (sync tweets to see your Hall of Fame hooks)"
 
     if fmt == "Punchy Tweet":
@@ -4644,10 +4774,11 @@ SENTENCE 2: The engagement hook. A direct question, forced choice, or bold state
 RULES:
 - Exactly 2 sentences. Not one. Not three. Two.
 - Under 160 characters total
-- No hashtags, no emojis, no ellipsis
+	- No hashtags, no ellipsis
+	- {_emoji_rule}
 - No "I think" / "maybe" / "honestly" — state it flat
 - Every word earns its place or gets cut
-- Sentence 2 must make the reader feel compelled to reply
+	- Sentence 2 must make the reader feel compelled to reply or quote without using lazy engagement bait
 
 Hall of Fame hooks to study for Sentence 1 rhythm only, NOT literal opener wording:
 {_hooks_str}
@@ -4677,11 +4808,14 @@ STRUCTURE:
 RULES:
 - Between 161 and 260 characters total — don't be too brief
 - Use line break between observation and context/open-door payoff
-- No hashtags, no links, no emojis
-- Default voice does NOT ask direct questions
-- End with ellipsis or an incomplete analytical thought
-- Avoid overusing "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder". Prefer a fresh, topic-specific opener.
-- Must sound like film-room observation, not hot-take framing
+	- No hashtags, no links
+	- {_emoji_rule}
+	- Default voice does NOT ask direct questions
+	- Maximize replies through a declarative final statement that creates tension, consequence, or an unfinished thought readers want to complete or argue with
+	- End with ellipsis or an incomplete analytical thought, not a question mark
+	- Avoid overusing "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder". Prefer a fresh, topic-specific opener.
+	- Must sound like film-room observation, not generic hot-take framing
+	- A little edge or personality is allowed when it comes naturally from the observation, especially in the open-door final line
 
 IMAGE RECOMMENDATION:
 - Specific stat or comparison → YES — simple stat graphic
@@ -4705,7 +4839,8 @@ STRUCTURE:
 RULES:
 - Between 161 and 260 characters total — don't be too brief
 - Use line break between hook and payoff
-- No hashtags, no links, no emojis
+	- No hashtags, no links
+	- {_emoji_rule}
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
 - Let the hook feel as sharp as Tyler's top hooks above, but use fresh wording
@@ -5353,6 +5488,8 @@ def _run_ci_ai(action, tweet_text, fmt, voice):
     print(f"[AI-CALL] action={action} voice={voice} fmt={fmt} text={tweet_text[:80]!r}", file=sys.stderr, flush=True)
 
     voice_mod = _build_voice_mod(voice)
+    _emoji_rule = _emoji_policy_for_voice(voice)
+    _refresh_tweet_history_for_ai_if_due(hours=12)
     pp = analyze_personal_patterns()
     format_mod = _build_format_mod(fmt, pp, voice)
 
@@ -5479,9 +5616,11 @@ OPTION-SPECIFIC RULES:
 
 Rules:
 - Reading Level (7th-9th grade)
-- No Hashtags, Links, Tags, Emojis
-- Hook & Pattern Breakers (first line stops the scroll)
-- Structure each option to match the FORMAT PATTERNS above
+	- No Hashtags, Links, or Tags
+	- {_emoji_rule}
+	- Hook & Pattern Breakers (first line stops the scroll)
+	- Incite replies and quote-tweets through tension, stakes, specificity, or a declarative open loop. Default voice should not use direct questions.
+	- Structure each option to match the FORMAT PATTERNS above
 {_char_rule}
 
 {"THREAD FORMAT: Inside each option, separate individual tweets with the marker ---TWEET--- between them. Example: first tweet text here---TWEET---second tweet text here---TWEET---third tweet text here" if fmt == "Thread" else ""}
@@ -5778,7 +5917,8 @@ REPURPOSING RULES:
 
 - Strong hook in the first line
 - Invites engagement/replies
-- No hashtags, no emojis, no character count
+	- No hashtags, no character count
+	- {_emoji_rule}
 - 7th-9th grade reading level
 
 {"HOMER ENDING RULE: BOTH options MUST end with a period. No question closers. No ellipsis. Replace question closers with declarative outside-reaction statements." if voice == "Hype" else ""}{"CRITICAL ENDING RULE: BOTH options MUST end with a period. No question marks. Critical voice closes the door." if voice == "Critical" else ""}
@@ -13767,7 +13907,7 @@ finally:
 
 # Periodic quick sync:
 # - never on first render
-# - only once every 72 hours per user
+# - only once every 12 hours per user so weekly Hall of Fame prompt data stays fresh
 # - only on pages that actually benefit from fresh tweet history
 _auto_sync_pages = {
     "Creator Studio",
@@ -13782,7 +13922,7 @@ _auto_sync_due = (
     st.session_state.get("auth_role")
     and page in _auto_sync_pages
     and bool(get_current_handle())
-    and _quick_tweet_sync_due(hours=72)
+    and _quick_tweet_sync_due(hours=12)
 )
 if _auto_sync_due:
     if st.session_state.get("_tweet_sync_ready"):
