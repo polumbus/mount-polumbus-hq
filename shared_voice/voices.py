@@ -2,7 +2,7 @@
 Canonical voice definitions for Tyler Polumbus content tools.
 
 Source of truth for voice labels, Tyler's identity context, voice-specific
-instructions, examples, and banned words/openers. Used by both Mount
+instructions, examples, banned words, and overused opener guardrails. Used by both Mount
 Polumbus HQ and Post Ascend Gameday.
 
 HQ's get_system_for_voice() adds Streamlit-specific layers (guest mode,
@@ -190,7 +190,7 @@ BANNED_WORDS: list[str] = [
     "hot take",
 ]
 
-BANNED_OPENERS: list[str] = [
+OVERUSED_OPENERS: list[str] = [
     "Someone help me understand",
     "Nobody is talking about",
     "Not enough people are talking about",
@@ -199,6 +199,10 @@ BANNED_OPENERS: list[str] = [
     "This is your reminder",
     "Connect the dots",
 ]
+
+# Backwards-compatible alias. These are not illegal phrases; they are freshness
+# guardrails so AI does not keep using the same opener patterns every time.
+BANNED_OPENERS = OVERUSED_OPENERS
 
 
 def get_voice_instructions(voice_key: str) -> str:

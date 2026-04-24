@@ -27,7 +27,7 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
                   get_coingecko_trending)
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG, GAMEDAY_URL,
                     _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
-from shared_voice import BANNED_OPENERS, DEFAULT_TWEET_FORMAT, DEFAULT_TWEET_VOICE, FORMAT_ORDER
+from shared_voice import OVERUSED_OPENERS, DEFAULT_TWEET_FORMAT, DEFAULT_TWEET_VOICE, FORMAT_ORDER
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -577,7 +577,7 @@ def _hall_of_fame_reference_block(patterns: dict | None, fmt: str) -> str:
     return f"""
 
 HALL OF FAME REFERENCE TWEETS ({label}) — CALIBRATION LAYER, NOT AN OVERRIDE:
-Creator Studio's format, voice, length, banned-openers, and stat-integrity rules
+Creator Studio's format, voice, length, opener-freshness, and stat-integrity rules
 remain the source of truth. Use these Hall of Fame tweets only to calibrate what
 "good" feels like: rhythm, density, specificity, confidence, and restraint.
 Do NOT reuse their exact hooks, closers, first words, sentence frames, wording,
@@ -3740,7 +3740,7 @@ DEFAULT VOICE OVERRIDE:
 - Default voice beats any generic engagement/question instruction from the format block.
 - Do NOT ask direct questions in Default voice.
 - End with an ellipsis or incomplete analytical thought, not a question mark.
-- Never open with "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", "Let that sink in", or "This is your reminder".
+- Avoid leaning on overused openers like "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", "Let that sink in", or "This is your reminder". They are reference patterns, not default starters. Prefer a fresh, topic-specific first line.
 - The output must feel like film-room observation: specific observation, context underneath it, open-door trailing thought.""" if voice == "Default" else ""
     _brief_delimiters = ["TOPIC:", "TENSION:", "KEY STATS:", "ANGLE:"]
     _has_brief = any(d in tweet_text for d in _brief_delimiters)
@@ -3806,6 +3806,27 @@ Return ONLY this JSON, no other text:
     return build_data, raw
 
 
+_OVERUSED_OPENER_PHRASES = tuple(
+    dict.fromkeys(
+        [phrase.lower() for phrase in OVERUSED_OPENERS]
+        + [
+            "one word to describe",
+            "someone help me understand",
+            "unpopular opinion",
+            "nobody is talking about",
+            "not enough people are talking about",
+            "let that sink in",
+            "this is your reminder",
+        ]
+    )
+)
+
+
+def _starts_with_overused_opener(text: str) -> bool:
+    lower = (text or "").strip().lower().lstrip('"\'“”‘’ ')
+    return lower.startswith(_OVERUSED_OPENER_PHRASES)
+
+
 def _is_valid_ai_tweet_for_format(text: str, fmt: str | None = None, voice: str | None = None) -> bool:
     clean = (text or "").strip()
     if not clean:
@@ -3818,18 +3839,6 @@ def _is_valid_ai_tweet_for_format(text: str, fmt: str | None = None, voice: str 
     if fmt == "Punchy Tweet" and chars > 160:
         return False
     if fmt == "Long Tweet" and chars < 280:
-        return False
-    lower = clean.lower().lstrip('"\'“”‘’ ')
-    banned = tuple(BANNED_OPENERS) + (
-        "one word to describe",
-        "someone help me understand",
-        "unpopular opinion",
-        "nobody is talking about",
-        "not enough people are talking about",
-        "let that sink in",
-        "this is your reminder",
-    )
-    if lower.startswith(banned):
         return False
     if voice == CANONICAL_TWEET_DEFAULT_VOICE and "?" in clean:
         return False
@@ -3848,6 +3857,7 @@ def _ordered_creator_build_options(build_data: dict | None, *, limit: int = 3,
     seen_keys: set[str] = set()
     seen_text: set[str] = set()
     out: list[str] = []
+    fallback_overused: list[str] = []
     for key in keys:
         if key in seen_keys:
             continue
@@ -3858,10 +3868,13 @@ def _ordered_creator_build_options(build_data: dict | None, *, limit: int = 3,
         if strict and not _is_valid_ai_tweet_for_format(text, fmt, voice):
             continue
         seen_text.add(text)
-        out.append(text)
+        if _starts_with_overused_opener(text):
+            fallback_overused.append(text)
+        else:
+            out.append(text)
         if len(out) >= limit:
             break
-    return out
+    return (out + fallback_overused)[:limit]
 
 
 def _creator_build_options(seed: str, fmt: str | None = None, voice: str | None = None,
@@ -4030,7 +4043,7 @@ TONE RULES:
 - The reader should think "he's right and he knows why"
   without Tyler ever having to say he knows why
 
-BANNED OPENERS — never use these exact phrases as tweet openers:
+OVERUSED OPENER GUARD — avoid repeating these as default tweet openers:
 - "Someone help me understand" — overused, treat as structural
   model only never as literal words to copy
 - "Nobody is talking about" — announces the observation instead
@@ -4042,6 +4055,8 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
+If the topic truly demands one of these frames, use it rarely. Never make it
+the default pattern across options.
 
 EXAMPLE TWEETS — use these as energy and structure references
 (these stats were real at the time — do NOT reuse them,
@@ -4181,7 +4196,7 @@ ENDING RULES — NON-NEGOTIABLE:
 - The final sentence must show an outside party already reacting
 - This applies to BOTH Option 1 AND Option 2 — no exceptions
 
-BANNED OPENERS — never use these exact phrases as tweet openers:
+OVERUSED OPENER GUARD — avoid repeating these as default tweet openers:
 - "Someone help me understand" — overused, treat as structural
   model only never as literal words to copy
 - "Nobody is talking about" — announces the observation instead
@@ -4193,6 +4208,8 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
+If the topic truly demands one of these frames, use it rarely. Never make it
+the default pattern across options.
 
 WRONG ENDINGS:
 - "We're built for this." — Tyler as subject not opponent
@@ -4351,7 +4368,7 @@ RULES:
   as openers — these are generic and predictable.
   Find the specific reaction that fits THIS moment.
 
-BANNED OPENERS — never use these exact phrases as tweet openers:
+OVERUSED OPENER GUARD — avoid repeating these as default tweet openers:
 - "Someone help me understand" — overused, treat as structural
   model only never as literal words to copy
 - "Nobody is talking about" — announces the observation instead
@@ -4363,6 +4380,8 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
+If the topic truly demands one of these frames, use it rarely. Never make it
+the default pattern across options.
 
 WRONG: "The Broncos offensive line strategy is terrible
 and everyone knows it."
@@ -4463,7 +4482,7 @@ The math does the rest..."
 The reader should reach the conclusion themselves.
 That act of reaching it is what drives the reply.
 
-BANNED WORDS IN DEFAULT VOICE — never appear in output:
+DEFAULT VOICE OPINION FILTER — avoid these unless the user explicitly asks for the phrase:
 - "no-brainer"
 - "obvious" / "obviously"
 - "clearly"
@@ -4473,7 +4492,7 @@ BANNED WORDS IN DEFAULT VOICE — never appear in output:
 - "unpopular opinion"
 - "hot take"
 
-BANNED OPENERS — never use these exact phrases as tweet openers:
+OVERUSED OPENER GUARD — avoid repeating these as default tweet openers:
 - "Someone help me understand" — overused, treat as structural
   model only never as literal words to copy
 - "Nobody is talking about" — announces the observation instead
@@ -4485,6 +4504,8 @@ BANNED OPENERS — never use these exact phrases as tweet openers:
 - "Connect the dots" — tells the reader what to think
 Every opener must be original and specific to the topic at hand.
 The examples in this prompt show STRUCTURE not words to copy.
+If the topic truly demands one of these frames, use it rarely. Never make it
+the default pattern across options.
 
 FORMAT NOTE:
 Default works across all lengths but the core principle
@@ -4628,7 +4649,7 @@ RULES:
 - Every word earns its place or gets cut
 - Sentence 2 must make the reader feel compelled to reply
 
-Hall of Fame hooks to model Sentence 1 after:
+Hall of Fame hooks to study for Sentence 1 rhythm only, NOT literal opener wording:
 {_hooks_str}
 
 WRONG: "The Broncos have some interesting decisions to make this offseason and it will be fun to watch. What do you guys think will happen?"
@@ -4659,7 +4680,7 @@ RULES:
 - No hashtags, no links, no emojis
 - Default voice does NOT ask direct questions
 - End with ellipsis or an incomplete analytical thought
-- Never open with "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder"
+- Avoid overusing "Someone help me understand", "Unpopular opinion", "Nobody is talking about", "Not enough people are talking about", or "This is your reminder". Prefer a fresh, topic-specific opener.
 - Must sound like film-room observation, not hot-take framing
 
 IMAGE RECOMMENDATION:
@@ -4673,7 +4694,7 @@ TYLER'S HALL OF FAME DATA (from synced tweet history — updates every sync):
 - Optimal range from Hall of Fame tweets: {_nt_lo}-{_nt_hi} chars — aim for the UPPER half of this range
 - {_fp_q}% of Hall of Fame tweets use questions (algorithm: replies = 13.5x a like)
 - {_fp_ell}% of Hall of Fame tweets use ellipsis (his signature)
-- Hall of Fame hooks to model after:
+- Hall of Fame hooks to study for rhythm only, NOT literal opener wording:
 {_hooks_str}
 
 STRUCTURE:
@@ -4687,7 +4708,7 @@ RULES:
 - No hashtags, no links, no emojis
 - End with question OR ellipsis, not both
 - Must stop the scroll in the first 8 words
-- Model the hook after one of Tyler's top hooks above
+- Let the hook feel as sharp as Tyler's top hooks above, but use fresh wording
 
 IMAGE RECOMMENDATION:
 - Hot take / opinion → NO image (text-only gets higher engagement rate)
@@ -4699,7 +4720,7 @@ IMAGE RECOMMENDATION:
 
 TYLER'S HALL OF FAME DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Hall of Fame hooks to model the opening after:
+- Hall of Fame hooks to study for opening rhythm only, NOT literal opener wording:
 {_hooks_str}
 
 STRUCTURE:
@@ -4736,7 +4757,7 @@ IMAGE RECOMMENDATION:
 
 TYLER'S HALL OF FAME DATA (updates every sync):
 - {_fp_q}% of top tweets use questions, {_fp_ell}% use ellipsis
-- Hall of Fame hooks to model Tweet 1 after:
+- Hall of Fame hooks to study for Tweet 1 rhythm only, NOT literal opener wording:
 {_hooks_str}
 
 STRUCTURE:
@@ -4776,7 +4797,7 @@ IMAGE RECOMMENDATION:
 WHY ARTICLES MATTER: X Articles grew 20x since Dec 2025 ($2.15M contest prizes). They keep users on-platform (no link penalty), generate 2+ min dwell time (+10 algorithm weight), and Premium subscribers get 2-4x reach boost. This is the HIGHEST PRIORITY content format.
 
 TYLER'S HALL OF FAME DATA (updates every sync):
-- Hall of Fame hooks to model headline/intro after:
+- Hall of Fame hooks to study for headline/intro rhythm only, NOT literal opener wording:
 {_hooks_str}
 - {_fp_q}% of top tweets use questions — use them between sections
 - {_fp_ell}% use ellipsis — use sparingly in articles for emphasis
@@ -4785,7 +4806,7 @@ STRUCTURE:
 HEADLINE: [50-75 chars, includes number or specific claim, takes a position]
 - Numbers perform 2x better than vague headlines
 - Specificity over vagueness — name the player, name the stat
-- Model after Tyler's top hooks above
+- Use Tyler's top hooks as a quality bar, but write a fresh headline
 [IMAGE: Hero image — game photo, player photo, or custom graphic. This becomes the feed thumbnail.]
 
 INTRO (2-3 paragraphs — this is the feed preview, must hook):
