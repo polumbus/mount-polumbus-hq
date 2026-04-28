@@ -11761,6 +11761,58 @@ def page_podcast():
             st.session_state["_podcast_flash_message"] = {"level": "warning", "text": "Run created. Add a local source path when you are ready to launch the independent runner."}
         _save_podcast_and_rerun(updated_store, new_run["id"])
 
+    def _render_podcast_start_form(form_key: str = "podcast_wizard_start_form") -> None:
+        with st.form(form_key, clear_on_submit=True):
+            wizard_mode = st.radio(
+                "How are you starting this run?",
+                (
+                    "Start From Local Video",
+                    "Track External Video URL",
+                    "Mirror Discord Run",
+                ),
+                horizontal=True,
+                key=f"{form_key}_mode",
+            )
+            wizard_title = st.text_input("Episode Title (Optional)", placeholder="Leave blank if you do not know it yet", key=f"{form_key}_title")
+            wizard_source = ""
+            wizard_discord = ""
+            if wizard_mode == "Start From Local Video":
+                wizard_source = st.text_input("Local Video File Path", placeholder=r"C:\Videos\episode_042.mp4", key=f"{form_key}_source_local")
+                st.caption("This is the full independent HQ path. HQ will run the transcript and clip flow itself.")
+            elif wizard_mode == "Track External Video URL":
+                wizard_source = st.text_input("Video URL", placeholder="https://youtu.be/...", key=f"{form_key}_source_url")
+                st.caption("Use this when you want HQ to track the run but you are not running the local transcript worker from a file path.")
+            else:
+                wizard_discord = st.text_input("Discord Thread Link", placeholder="https://discord.com/channels/...", key=f"{form_key}_discord")
+                st.caption("Use this when you only want HQ to mirror a Discord-first workflow.")
+            wizard_start = st.form_submit_button(
+                "Start Podcast Workflow" if wizard_mode != "Mirror Discord Run" else "Create Discord Mirror Run",
+                type="primary",
+                use_container_width=True,
+            )
+        if wizard_start:
+            if wizard_mode == "Mirror Discord Run" and not wizard_discord.strip():
+                st.error("Paste the Discord thread link first.")
+                return
+            if wizard_mode != "Mirror Discord Run" and not wizard_source.strip():
+                st.error("Add the video path or URL first.")
+                return
+            if wizard_mode == "Start From Local Video" and not _podcast_is_local_source_path(wizard_source):
+                st.error("Use a real local file path for this mode.")
+                return
+            if wizard_mode == "Track External Video URL" and _podcast_is_local_source_path(wizard_source):
+                st.error("Use a real URL for this mode.")
+                return
+            st.session_state["_podcast_wizard_start_new"] = False
+            st.session_state["_podcast_wizard_open"] = True
+            _create_hq_run(
+                title=wizard_title,
+                discord_reference=wizard_discord,
+                run_mode="local" if wizard_mode == "Start From Local Video" else ("url" if wizard_mode == "Track External Video URL" else "discord"),
+                source_path=wizard_source,
+                notes=f"Started from the Podcast wizard ({wizard_mode}).",
+            )
+
     def _podcast_card_html(label: str, value: str, meta: str) -> str:
         return (
             '<div class="podcast-status-card">'
@@ -12402,6 +12454,8 @@ Return strict JSON with exactly these keys:
         st.session_state[wizard_open_key] = True
     if advanced_open_key not in st.session_state:
         st.session_state[advanced_open_key] = False
+    if "_podcast_wizard_start_new" not in st.session_state:
+        st.session_state["_podcast_wizard_start_new"] = False
 
     @st.dialog("Podcast Workflow", width="large")
     def _podcast_workflow_wizard_dialog(dialog_nonce: str):
@@ -12410,55 +12464,17 @@ Return strict JSON with exactly these keys:
             unsafe_allow_html=True,
         )
         if not runs:
-            with st.form("podcast_wizard_start_form", clear_on_submit=True):
-                wizard_mode = st.radio(
-                    "How are you starting this run?",
-                    (
-                        "Start From Local Video",
-                        "Track External Video URL",
-                        "Mirror Discord Run",
-                    ),
-                    horizontal=True,
-                )
-                wizard_title = st.text_input("Episode Title (Optional)", placeholder="Leave blank if you do not know it yet")
-                wizard_source = ""
-                wizard_discord = ""
-                if wizard_mode == "Start From Local Video":
-                    wizard_source = st.text_input("Local Video File Path", placeholder=r"C:\Videos\episode_042.mp4")
-                    st.caption("This is the full independent HQ path. HQ will run the transcript and clip flow itself.")
-                elif wizard_mode == "Track External Video URL":
-                    wizard_source = st.text_input("Video URL", placeholder="https://youtu.be/...")
-                    st.caption("Use this when you want HQ to track the run but you are not running the local transcript worker from a file path.")
-                else:
-                    wizard_discord = st.text_input("Discord Thread Link", placeholder="https://discord.com/channels/...")
-                    st.caption("Use this when you only want HQ to mirror a Discord-first workflow.")
-                wizard_start = st.form_submit_button(
-                    "Start Podcast Workflow" if wizard_mode != "Mirror Discord Run" else "Create Discord Mirror Run",
-                    type="primary",
-                    use_container_width=True,
-                )
-            if wizard_start:
-                if wizard_mode == "Mirror Discord Run" and not wizard_discord.strip():
-                    st.error("Paste the Discord thread link first.")
-                    return
-                if wizard_mode != "Mirror Discord Run" and not wizard_source.strip():
-                    st.error("Add the video path or URL first.")
-                    return
-                if wizard_mode == "Start From Local Video" and not _podcast_is_local_source_path(wizard_source):
-                    st.error("Use a real local file path for this mode.")
-                    return
-                if wizard_mode == "Track External Video URL" and _podcast_is_local_source_path(wizard_source):
-                    st.error("Use a real URL for this mode.")
-                    return
-                _create_hq_run(
-                    title=wizard_title,
-                    discord_reference=wizard_discord,
-                    run_mode="local" if wizard_mode == "Start From Local Video" else ("url" if wizard_mode == "Track External Video URL" else "discord"),
-                    source_path=wizard_source,
-                    notes=f"Started from the Podcast wizard ({wizard_mode}).",
-                )
+            _render_podcast_start_form("podcast_wizard_start_form")
             if st.button("Hide Wizard", key="podcast_hide_wizard_empty", use_container_width=True):
                 st.session_state[wizard_open_key] = False
+                st.rerun()
+            return
+
+        if st.session_state.get("_podcast_wizard_start_new"):
+            st.info("Start a new podcast workflow here. Existing runs stay saved and can be reopened from the run selector.")
+            _render_podcast_start_form("podcast_wizard_start_new_form")
+            if st.button("Back To Current Run", key="podcast_wizard_back_to_current", use_container_width=True):
+                st.session_state["_podcast_wizard_start_new"] = False
                 st.rerun()
             return
 
@@ -12490,6 +12506,9 @@ Return strict JSON with exactly these keys:
             f'<div class="podcast-panel"><div class="podcast-status-kicker">Active Run</div><div style="font-size:20px;color:#E6EDF3;font-weight:700;line-height:1.3;">{html.escape(current_run["title"])}</div><div class="podcast-status-meta">{html.escape(_PODCAST_STATE_LABELS.get(current_run["current_state"], current_run["current_state"]))}</div></div>',
             unsafe_allow_html=True,
         )
+        if st.button("Start A New Workflow", key=f"podcast_wizard_start_new_{current_run['id']}", type="secondary", use_container_width=True):
+            st.session_state["_podcast_wizard_start_new"] = True
+            st.rerun()
         st.progress(
             100 if current_run["current_state"] == "done" else max(5, int(round((completed_steps / max(1, len(progress_steps))) * 100))),
             text=f"Step {min(len(progress_steps), completed_steps + (0 if current_run['current_state'] == 'done' else 1))} of {len(progress_steps)}",
@@ -13027,16 +13046,21 @@ Return strict JSON with exactly these keys:
     if st.session_state.get(wizard_open_key):
         _podcast_workflow_wizard_dialog(f"{selected_run_id}:{store.get('updated_at', '')}:{len(runs)}")
 
-    toolbar_cols = st.columns([1.1, 1.1, 1.6], gap="small")
+    toolbar_cols = st.columns([1.1, 1.1, 1.1, 1.6], gap="small")
     with toolbar_cols[0]:
         if st.button("Reopen Wizard" if not st.session_state.get(wizard_open_key) else "Wizard Open", key="podcast_open_wizard_toolbar", type="primary", use_container_width=True, disabled=st.session_state.get(wizard_open_key)):
             st.session_state[wizard_open_key] = True
             st.rerun()
     with toolbar_cols[1]:
+        if st.button("Start New Workflow", key="podcast_start_new_toolbar", type="secondary", use_container_width=True):
+            st.session_state["_podcast_wizard_start_new"] = True
+            st.session_state[wizard_open_key] = True
+            st.rerun()
+    with toolbar_cols[2]:
         if st.button("Open Advanced Workspace" if not st.session_state.get(advanced_open_key) else "Hide Advanced Workspace", key="podcast_toggle_advanced_toolbar", type="secondary", use_container_width=True):
             st.session_state[advanced_open_key] = not st.session_state.get(advanced_open_key)
             st.rerun()
-    with toolbar_cols[2]:
+    with toolbar_cols[3]:
         if runs:
             current_label = _podcast_run_label(run_lookup[selected_run_id])
             st.caption(f"Current run: {current_label}")
