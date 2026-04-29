@@ -5220,6 +5220,8 @@ def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_
         "- Only suggest a literal question if the tweet already clearly wants one and it fits the format/voice rules.\n"
         f"- Respect the active voice mode: {voice}.\n"
         "- Every fix must obey the current format rules and voice rules.\n"
+        "- Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.\n"
+        "- The fix field should be a targeted edit instruction for that category, not a full rewritten tweet, unless the category explicitly needs a full opener/closer replacement.\n"
         "- Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions.\n"
         "- Never mention a player, coach, or team not already present in the tweet or the verification context."
     )
@@ -5277,6 +5279,8 @@ DISCUSSION INVITE RULE:
 - Only suggest a literal question if the tweet already clearly wants one and it fits the format/voice rules.
 - Respect the active voice mode: {voice}.
 - Every fix must obey the current format rules and voice rules.
+- Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.
+- The fix field should be a targeted edit instruction for that category, not a full rewritten tweet, unless the category explicitly needs a full opener/closer replacement.
 - Never mention a player, coach, or team not already present in the tweet or the verification context.
 
 [TWEET]: "{tweet_text}" ({char_count} chars)
@@ -5318,6 +5322,100 @@ def _normalize_grade_items(grades: list) -> list:
         else:
             normalized.append(item)
     return normalized
+
+
+def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
+    """Category-specific grade fixes so every score panel has its own next move."""
+    text = (tweet_text or "").strip()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    first_line = lines[0] if lines else text
+    last_line = lines[-1] if lines else text
+    stat_line = next((line for line in lines if re.search(r"\d", line)), "")
+    middle_line = lines[1] if len(lines) > 1 else ""
+    _pp = pp or {}
+    _fp_range = _pp.get("optimal_char_range", (40, 250))
+    _fp_lo, _fp_hi = _fp_range
+
+    def _q(value: str) -> str:
+        return str(value or "").strip().replace('"', "'")
+
+    def _dequestion(value: str) -> str:
+        base = re.sub(r"[?!…\.]+$", "", str(value or "")).strip()
+        base = re.sub(r"^in what world is that\s+", "That is ", base, flags=re.I).strip()
+        base = re.sub(r"^(in what world is|how is|why is|what if|does that mean)\s+", "", base, flags=re.I).strip()
+        if re.match(r"^that is nothing to see here$", base, flags=re.I):
+            base = "That is not nothing to see here"
+        return base or "That is where the real conversation starts"
+
+    if fmt == "Punchy Tweet":
+        dwell_fix = "Compress to one setup beat and one punch line so the whole thought lands under 160 characters."
+    elif fmt == "Normal Tweet":
+        dwell_fix = f"Keep this in the {max(_fp_lo, 161)}-{min(_fp_hi, 260)} character window, but add one short context beat before the closer."
+    elif fmt == "Long Tweet":
+        dwell_fix = "Add one specific context paragraph above the fold before expanding the larger takeaway."
+    elif fmt == "Thread":
+        dwell_fix = "Turn the current opener into Tweet 1, then split each supporting beat into its own follow-up tweet."
+    else:
+        dwell_fix = "Add one clean context beat before the final line so the reader has a reason to slow down."
+
+    hook_source = stat_line or middle_line or first_line
+    hook_fix = f'Replace opening line with a sharper version of this concrete beat: "{_q(hook_source)}"'
+    convo_fix = f'Replace final line with a declarative open loop based on: "{_q(_dequestion(last_line))}..."'
+    bookmark_source = stat_line or middle_line or first_line
+    bookmark_fix = f'Move the most concrete detail directly under the opener and make it carry the insight: "{_q(bookmark_source)}"'
+    share_source = middle_line or stat_line or first_line
+    share_fix = f'Sharpen the most quoteable tension into one clean sentence using only this existing detail: "{_q(share_source)}"'
+    engagement_fix = f'Swap the rhetorical closer for a reply-inciting statement: "{_q(_dequestion(last_line))} is not nothing..."'
+    compliance_fix = "Remove any links, hashtags, excessive exclamation points, or platform-suppressed formatting. If none exist, no changes needed."
+    voice_fix = f'Make the ending more like Tyler: direct, specific, less rhetorical, built from this thought: "{_q(_dequestion(last_line))}..."'
+
+    return {
+        "Hook Strength": hook_fix,
+        "Conversation Catalyst": convo_fix,
+        "Bookmark Worthiness": bookmark_fix,
+        "Share/Quote Potential": share_fix,
+        "Engagement Triggers": engagement_fix,
+        "Algorithm Compliance": compliance_fix,
+        "Dwell Time Potential": dwell_fix,
+        "Voice Match": voice_fix,
+    }
+
+
+def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
+    """Replace duplicate or generic grade fixes with category-specific instructions."""
+    if not isinstance(gdata, dict):
+        return gdata
+    grades = gdata.get("grades", [])
+    if not isinstance(grades, list):
+        return gdata
+    library = _build_grade_fix_library(tweet_text, fmt, pp, voice)
+    seen = set()
+    normalized_grades = []
+    for item in grades:
+        if not isinstance(item, dict):
+            normalized_grades.append(item)
+            continue
+        entry = dict(item)
+        name = str(entry.get("name", "") or "").strip()
+        fix = str(entry.get("fix", "") or "").strip()
+        fix_key = re.sub(r"\s+", " ", fix.lower())
+        score = _normalize_grade_score(entry.get("score", 0))
+        is_noop = not fix or fix_key == "no changes needed"
+        looks_like_full_tweet = bool(
+            fix
+            and len(fix) > 110
+            and not re.match(r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b", fix.lower())
+        )
+        if name in library and score < 8 and (is_noop or fix_key in seen or looks_like_full_tweet):
+            fix = library[name]
+            fix_key = re.sub(r"\s+", " ", fix.lower())
+        if fix_key and fix_key != "no changes needed":
+            seen.add(fix_key)
+        entry["fix"] = fix
+        normalized_grades.append(entry)
+    updated = dict(gdata)
+    updated["grades"] = normalized_grades
+    return updated
 
 
 def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
@@ -5690,7 +5788,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         # ── Cache check ──
-        _grade_hash = hashlib.md5(f"{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
+        _grade_hash = hashlib.md5(f"grade-fix-v2|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
         _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
         if _cached:
             st.session_state["ci_grades"] = _cached
@@ -5752,6 +5850,7 @@ Return ONLY this JSON, no other text:
                     "tyler_score": _voice_score,
                     "grades": _da["grades"] + _db["grades"],
                 }
+                gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
                 _cache = st.session_state.get("ci_grades_cache", {})
                 _cache[_grade_hash] = gdata
                 st.session_state["ci_grades_cache"] = _cache
@@ -5770,6 +5869,7 @@ Return ONLY this JSON, no other text:
                         "tyler_score": _voice_score,
                         "grades": _fallback_data["grades"],
                     }
+                    gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
                     _cache = st.session_state.get("ci_grades_cache", {})
                     _cache[_grade_hash] = gdata
                     st.session_state["ci_grades_cache"] = _cache
@@ -5801,6 +5901,7 @@ Return ONLY this JSON, no other text:
                             "tyler_score": _voice_score,
                             "grades": _fallback_data_main["grades"],
                         }
+                        gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
                         _cache = st.session_state.get("ci_grades_cache", {})
                         _cache[_grade_hash] = gdata
                         st.session_state["ci_grades_cache"] = _cache
@@ -5813,6 +5914,7 @@ Return ONLY this JSON, no other text:
                             "len_main": len(_fallback_raw_main or ""),
                         })
                         gdata = _build_local_grades_fallback(tweet_text, fmt, pp, voice)
+                        gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
                         _cache = st.session_state.get("ci_grades_cache", {})
                         _cache[_grade_hash] = gdata
                         st.session_state["ci_grades_cache"] = _cache
