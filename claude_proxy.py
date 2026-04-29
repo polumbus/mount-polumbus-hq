@@ -26,6 +26,14 @@ from anthropic_circuit import (
     should_probe as anthropic_should_probe,
 )
 
+_oauth_status = {
+    "credentials_found": False,
+    "credentials_path": "",
+    "last_error": "",
+    "last_loaded_at": "",
+}
+
+
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -467,12 +475,62 @@ def _run_podcast_clip_generation(job_seed: dict) -> None:
         )
 
 
+def _set_oauth_status(**updates):
+    _oauth_status.update({k: v for k, v in updates.items() if v is not None})
+
+
+def _oauth_credentials_candidates():
+    raw_candidates = [
+        os.environ.get("CLAUDE_CREDENTIALS_PATH", ""),
+        os.environ.get("CLAUDE_CONFIG_DIR", "") and os.path.join(os.environ.get("CLAUDE_CONFIG_DIR", ""), ".credentials.json"),
+        os.environ.get("CLAUDE_HOME", "") and os.path.join(os.environ.get("CLAUDE_HOME", ""), ".credentials.json"),
+        os.path.expanduser("~/.claude/.credentials.json"),
+        "/home/polfam/.claude/.credentials.json",
+        "/home/appuser/.claude/.credentials.json",
+    ]
+    seen = set()
+    for candidate in raw_candidates:
+        path = str(candidate or "").strip()
+        if not path:
+            continue
+        expanded = os.path.abspath(os.path.expanduser(path))
+        if expanded not in seen:
+            seen.add(expanded)
+            yield expanded
+
+
+def _safe_oauth_error(exc):
+    text = str(exc or "").strip()
+    text = re.sub(r"(access[_-]?token|refresh[_-]?token|authorization|bearer)[^\s,;]*", r"\1=[redacted]", text, flags=re.I)
+    return text[:240] or exc.__class__.__name__
+
+
 def _load_oauth_access_token():
     """Read Claude OAuth access token from local credentials file and refresh if needed."""
+    searched = []
     try:
-        creds_path = os.path.expanduser("~/.claude/.credentials.json")
+        creds_path = ""
+        for candidate in _oauth_credentials_candidates():
+            searched.append(candidate)
+            if os.path.exists(candidate):
+                creds_path = candidate
+                break
+        if not creds_path:
+            _set_oauth_status(
+                credentials_found=False,
+                credentials_path="",
+                last_error=f"credentials file not found; searched {', '.join(searched[:4])}",
+                last_loaded_at="",
+            )
+            return ""
         with open(creds_path, "r", encoding="utf-8") as f:
             creds = json.load(f)
+        _set_oauth_status(
+            credentials_found=True,
+            credentials_path=creds_path,
+            last_error="",
+            last_loaded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
         oauth = creds.get("claudeAiOauth", creds)
         access_token = oauth.get("accessToken", "")
         expires_at = oauth.get("expiresAt", 0) or 0
@@ -480,6 +538,8 @@ def _load_oauth_access_token():
         if access_token and expires_at and (time.time() * 1000) < (int(expires_at) - 300000):
             return access_token
         if not refresh_token:
+            if not access_token:
+                _set_oauth_status(last_error="credentials loaded but no accessToken or refreshToken found")
             return access_token
 
         body = json.dumps({
@@ -515,8 +575,10 @@ def _load_oauth_access_token():
         creds["claudeAiOauth"] = oauth
         with open(creds_path, "w", encoding="utf-8") as f:
             json.dump(creds, f, indent=2)
+        _set_oauth_status(last_error="", last_loaded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
         return fresh_access
-    except Exception:
+    except Exception as exc:
+        _set_oauth_status(last_error=_safe_oauth_error(exc))
         return ""
 
 
@@ -1228,6 +1290,25 @@ class ProxyHandler(BaseHTTPRequestHandler):
             prompt = body.get("prompt", "")
             system = body.get("system", "")
             model = body.get("model", "claude-sonnet-4-6")
+            preliminary_cli_error = ""
+            try:
+                clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+                cmd = [CLAUDE_CLI, "-p", "--model", model]
+                if system:
+                    cmd += ["--system-prompt", system]
+                result = subprocess.run(
+                    cmd,
+                    input=prompt, capture_output=True, text=True, timeout=120, env=clean_env,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    anthropic_mark_available("proxy_cli")
+                    self.send_json(200, {"text": result.stdout.strip(), "route": "proxy_cli"})
+                    return
+                preliminary_cli_error = result.stderr.strip() or "empty response"
+                if "Credit balance is too low" in preliminary_cli_error:
+                    anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="proxy_cli", error=preliminary_cli_error)
+            except Exception as exc:
+                preliminary_cli_error = str(exc)
             _maybe_restore_anthropic()
             if anthropic_is_blocked():
                 try:
@@ -1235,7 +1316,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     self.send_json(200, {"text": chatgpt_text, "fallback": "chatgpt_oauth", "anthropic_state": get_anthropic_state()})
                     return
                 except Exception as chatgpt_error:
-                    self.send_json(500, {"error": f"Anthropic blocked | ChatGPT: {str(chatgpt_error)}", "anthropic_state": get_anthropic_state()})
+                    self.send_json(500, {"error": f"CLI: {preliminary_cli_error or 'not available'} | Anthropic blocked | ChatGPT: {str(chatgpt_error)}", "anthropic_state": get_anthropic_state(), "oauth": dict(_oauth_status)})
                     return
             try:
                 clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
@@ -1451,6 +1532,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 {
                     "status": "ok",
                     "anthropic_state": get_anthropic_state(),
+                    "oauth": dict(_oauth_status),
                     "podcast_sync": _podcast_sync_status_snapshot(),
                 },
             )

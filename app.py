@@ -1308,11 +1308,24 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         return False
 
 
+def _ai_failure_chain_start():
+    st.session_state["_ai_error_chain"] = []
+    st.session_state["_ai_last_error"] = ""
+
+
+def _record_ai_failure(route: str, error: object) -> None:
+    detail = f"{route} {str(error).strip()}"
+    st.session_state["_ai_last_error"] = detail
+    chain = st.session_state.setdefault("_ai_error_chain", [])
+    chain.append(detail[:500])
+
+
 def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6") -> str:
     if system is None:
         system = get_voice_context()
 
     st.session_state["_ai_last_model"] = model
+    _ai_failure_chain_start()
 
     # 1. Direct OAuth HTTP — fastest, no subprocess overhead
     if not anthropic_is_blocked():
@@ -1332,16 +1345,16 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                     source="streamlit_direct",
                     error=f"HTTP {e.code}",
                 )
-                st.session_state["_ai_last_error"] = f"anthropic_direct HTTP {e.code}"
+                _record_ai_failure("anthropic_direct", f"HTTP {e.code}")
                 _append_debug_event("ai_call", "error", f"anthropic_direct HTTP {e.code}", {"model": model})
         except Exception as e:
             if "Credit balance is too low" in str(e):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_direct", error=str(e))
-            st.session_state["_ai_last_error"] = f"anthropic_direct {e}"
+            _record_ai_failure("anthropic_direct", e)
             _append_debug_event("ai_call", "error", f"anthropic_direct {e}", {"model": model})
 
     # 2. Local CLI fallback
-    if not anthropic_is_blocked() and os.path.exists(CLAUDE_CLI):
+    if os.path.exists(CLAUDE_CLI):
         try:
             clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             cmd = [CLAUDE_CLI, "-p", "--model", model]
@@ -1362,10 +1375,10 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
             if "Credit balance is too low" in (result.stderr or ""):
                 anthropic_block_for(DEFAULT_UNAVAILABLE_COOLDOWN, source="streamlit_cli", error=result.stderr.strip())
             if result.stderr:
-                st.session_state["_ai_last_error"] = f"anthropic_cli {result.stderr.strip()}"
+                _record_ai_failure("anthropic_cli", result.stderr.strip())
                 _append_debug_event("ai_call", "error", f"anthropic_cli {result.stderr.strip()}", {"model": model})
-        except Exception:
-            pass
+        except Exception as e:
+            _record_ai_failure("anthropic_cli", e)
 
     # 3. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
@@ -1377,7 +1390,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         _append_debug_event("ai_call", "ok", "proxy", {"model": model})
         return proxy_text
     except Exception as e:
-        st.session_state["_ai_last_error"] = f"proxy {e}"
+        _record_ai_failure("proxy", e)
         _append_debug_event("ai_call", "error", f"proxy {e}", {"model": model})
         pass
 
@@ -1391,7 +1404,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         _append_debug_event("ai_call", "ok", "chatgpt_oauth", {"model": model})
         return chatgpt_text
     except Exception as e:
-        st.session_state["_ai_last_error"] = f"chatgpt_oauth {e}"
+        _record_ai_failure("chatgpt_oauth", e)
         _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
         pass
 
@@ -1416,8 +1429,11 @@ def _ci_capture_ai_error(raw_text: str) -> bool:
     _route = str(st.session_state.get("_ai_last_route", "") or "").strip()
     _source = str(st.session_state.get("_ai_last_source", "") or "").strip()
     _message = str(raw_text or "").strip()
+    _chain = [str(item).strip() for item in st.session_state.get("_ai_error_chain", []) if str(item).strip()]
     if _detail:
         _message = f"{_message}\n\nLast failure: {_detail}"
+    if _chain:
+        _message += "\n\nRoute failures:\n" + "\n".join(f"- {item}" for item in _chain[-6:])
     if _route or _source:
         _message += f"\nRoute: {_route or 'unknown'}"
         if _source:
@@ -11126,6 +11142,7 @@ def page_debug_console():
         {"item": "Last route used", "value": st.session_state.get("_ai_last_route", "no AI call yet"), "notes": st.session_state.get("_ai_last_provider", "")},
         {"item": "Last route source", "value": st.session_state.get("_ai_last_source", "unknown"), "notes": st.session_state.get("_ai_last_at", "")},
         {"item": "Last AI error", "value": st.session_state.get("_ai_last_error", "") or "none", "notes": ""},
+        {"item": "AI failure chain", "value": " | ".join(st.session_state.get("_ai_error_chain", [])[-4:]) or "none", "notes": "latest call"},
         {"item": "Anthropic blocked", "value": str(bool(anthropic_state.get("blocked_until", 0) > time.time())), "notes": anthropic_state.get("source", "")},
         {"item": "Anthropic last error", "value": anthropic_state.get("last_error", "") or "none", "notes": ""},
         {"item": "Proxy health", "value": "ok" if proxy_health.get("ok") else "down", "notes": proxy_health.get("proxy_url", "")},
