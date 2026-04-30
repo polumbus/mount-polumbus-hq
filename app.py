@@ -5221,7 +5221,8 @@ def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_
         f"- Respect the active voice mode: {voice}.\n"
         "- Every fix must obey the current format rules and voice rules.\n"
         "- Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.\n"
-        "- The fix field should be a targeted edit instruction for that category, not a full rewritten tweet, unless the category explicitly needs a full opener/closer replacement.\n"
+        "- The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.\n"
+        "- Each replacement tweet must visibly differ from the original in the specific category being graded.\n"
         "- Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions.\n"
         "- Never mention a player, coach, or team not already present in the tweet or the verification context."
     )
@@ -5280,7 +5281,8 @@ DISCUSSION INVITE RULE:
 - Respect the active voice mode: {voice}.
 - Every fix must obey the current format rules and voice rules.
 - Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.
-- The fix field should be a targeted edit instruction for that category, not a full rewritten tweet, unless the category explicitly needs a full opener/closer replacement.
+- The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.
+- Each replacement tweet must visibly differ from the original in the specific category being graded.
 - Never mention a player, coach, or team not already present in the tweet or the verification context.
 
 [TWEET]: "{tweet_text}" ({char_count} chars)
@@ -5325,7 +5327,7 @@ def _normalize_grade_items(grades: list) -> list:
 
 
 def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
-    """Category-specific grade fixes so every score panel has its own next move."""
+    """Category-specific grade fixes as actual replacement tweet text."""
     text = (tweet_text or "").strip()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     first_line = lines[0] if lines else text
@@ -5337,7 +5339,33 @@ def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "
     _fp_lo, _fp_hi = _fp_range
 
     def _q(value: str) -> str:
-        return str(value or "").strip().replace('"', "'")
+        return str(value or "").strip()
+
+    def _join(parts: list[str]) -> str:
+        return "\n\n".join([str(part or "").strip() for part in parts if str(part or "").strip()])
+
+    def _line_key(value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip().lower().replace('"', "'"))
+
+    def _replace_first(new_line: str) -> str:
+        if not lines:
+            return str(new_line or "").strip()
+        new_key = _line_key(new_line)
+        rest = [line for line in lines[1:] if _line_key(line) != new_key]
+        return _join([new_line] + rest)
+
+    def _replace_last(new_line: str) -> str:
+        if not lines:
+            return str(new_line or "").strip()
+        return _join(lines[:-1] + [new_line])
+
+    def _without_suppression() -> str:
+        cleaned = re.sub(r"https?://\S+|www\.\S+", "", text)
+        cleaned = re.sub(r"#\w+", "", cleaned)
+        cleaned = re.sub(r"!{2,}", "!", cleaned)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        return cleaned if cleaned and cleaned != text else "No changes needed"
 
     def _dequestion(value: str) -> str:
         base = re.sub(r"[?!…\.]+$", "", str(value or "")).strip()
@@ -5347,27 +5375,28 @@ def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "
             base = "That is not nothing to see here"
         return base or "That is where the real conversation starts"
 
-    if fmt == "Punchy Tweet":
-        dwell_fix = "Compress to one setup beat and one punch line so the whole thought lands under 160 characters."
-    elif fmt == "Normal Tweet":
-        dwell_fix = f"Keep this in the {max(_fp_lo, 161)}-{min(_fp_hi, 260)} character window, but add one short context beat before the closer."
-    elif fmt == "Long Tweet":
-        dwell_fix = "Add one specific context paragraph above the fold before expanding the larger takeaway."
-    elif fmt == "Thread":
-        dwell_fix = "Turn the current opener into Tweet 1, then split each supporting beat into its own follow-up tweet."
-    else:
-        dwell_fix = "Add one clean context beat before the final line so the reader has a reason to slow down."
-
     hook_source = stat_line or middle_line or first_line
-    hook_fix = f'Replace opening line with a sharper version of this concrete beat: "{_q(hook_source)}"'
-    convo_fix = f'Replace final line with a declarative open loop based on: "{_q(_dequestion(last_line))}..."'
+    hook_fix = _replace_first(_q(hook_source))
+    convo_fix = _replace_last(f"{_q(_dequestion(last_line))}...")
     bookmark_source = stat_line or middle_line or first_line
-    bookmark_fix = f'Move the most concrete detail directly under the opener and make it carry the insight: "{_q(bookmark_source)}"'
+    bookmark_fix = _join([first_line, bookmark_source, "That is the part worth saving because it changes how the whole thing reads."] + lines[2:])
     share_source = middle_line or stat_line or first_line
-    share_fix = f'Sharpen the most quoteable tension into one clean sentence using only this existing detail: "{_q(share_source)}"'
-    engagement_fix = f'Swap the rhetorical closer for a reply-inciting statement: "{_q(_dequestion(last_line))} is not nothing..."'
-    compliance_fix = "Remove any links, hashtags, excessive exclamation points, or platform-suppressed formatting. If none exist, no changes needed."
-    voice_fix = f'Make the ending more like Tyler: direct, specific, less rhetorical, built from this thought: "{_q(_dequestion(last_line))}..."'
+    share_fix = _join([first_line, _q(share_source), "That is the tension people are going to argue about."])
+    engagement_fix = _join(lines[:-1] + [last_line, "That part is not nothing..."])
+    compliance_fix = _without_suppression()
+    if fmt == "Punchy Tweet":
+        dwell_fix = _join([first_line, f"{_q(_dequestion(last_line))}..."])[:280].strip()
+    elif fmt == "Long Tweet":
+        dwell_fix = _join([first_line, "The part that matters is not just the headline. It is what the detail tells you underneath it.", *lines[1:]])
+    elif fmt == "Thread":
+        dwell_fix = _join([f"1/ {first_line}", *[f"{idx + 2}/ {line}" for idx, line in enumerate(lines[1:])]])
+    else:
+        dwell_middle = middle_line or bookmark_source
+        dwell_close = f"{_q(_dequestion(last_line))}..."
+        if _line_key(dwell_middle) == _line_key(last_line):
+            dwell_close = "That is where the argument gets real..."
+        dwell_fix = _join([first_line, dwell_middle, dwell_close])
+    voice_fix = _join(lines[:-1] + [last_line, "That is the part that sticks..."])
 
     return {
         "Hook Strength": hook_fix,
@@ -5390,6 +5419,7 @@ def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice:
         return gdata
     library = _build_grade_fix_library(tweet_text, fmt, pp, voice)
     seen = set()
+    original_key = re.sub(r"\s+", " ", (tweet_text or "").strip().lower())
     normalized_grades = []
     for item in grades:
         if not isinstance(item, dict):
@@ -5401,12 +5431,14 @@ def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice:
         fix_key = re.sub(r"\s+", " ", fix.lower())
         score = _normalize_grade_score(entry.get("score", 0))
         is_noop = not fix or fix_key == "no changes needed"
+        looks_like_instruction = bool(re.match(r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b", fix.lower()))
         looks_like_full_tweet = bool(
             fix
             and len(fix) > 110
-            and not re.match(r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b", fix.lower())
+            and not looks_like_instruction
         )
-        if name in library and score < 8 and (is_noop or fix_key in seen or looks_like_full_tweet):
+        repeats_original = bool(fix_key and original_key and fix_key == original_key)
+        if name in library and score < 8 and (is_noop or fix_key in seen or looks_like_instruction or looks_like_full_tweet or repeats_original):
             fix = library[name]
             fix_key = re.sub(r"\s+", " ", fix.lower())
         if fix_key and fix_key != "no changes needed":
@@ -5788,7 +5820,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         # ── Cache check ──
-        _grade_hash = hashlib.md5(f"grade-fix-v2|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
+        _grade_hash = hashlib.md5(f"grade-fix-v3|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
         _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
         if _cached:
             st.session_state["ci_grades"] = _cached
@@ -6259,6 +6291,9 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
             def _apply_local_fix(base_text: str, fix_text: str) -> str | None:
                 if not base_text or not fix_text:
                     return None
+                _instruction_prefix = r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b"
+                if fix_text.strip().lower() != "no changes needed" and not re.match(_instruction_prefix, fix_text.strip().lower()):
+                    return fix_text.strip()
                 _lines = base_text.splitlines()
                 _non_empty_idx = [i for i, l in enumerate(_lines) if l.strip()]
                 if not _non_empty_idx:
