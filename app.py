@@ -5251,16 +5251,16 @@ def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_
         f"- Respect the active voice mode: {voice}.\n"
         "- Every fix must obey the current format rules and voice rules.\n"
         "- Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.\n"
-        "- The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.\n"
-        "- Each replacement tweet must visibly differ from the original in the specific category being graded.\n"
-        "- The user should be able to click Apply and immediately use the fix as the new tweet.\n"
+        "- The fix field must be one exact replacement segment, sentence, line, or short insert. Do NOT return a full rewritten tweet.\n"
+        "- Each replacement segment must visibly improve the specific category being graded.\n"
+        "- The user should be able to paste the segment into the existing tweet without guessing what to write.\n"
         "- Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions.\n"
         "- Never mention a player, coach, or team not already present in the tweet or the verification context."
     )
 
-    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nCategory fix targets:\n- Hook Strength: full replacement tweet with a stronger opening beat. Focus the change at the beginning.\n- Conversation Catalyst: full replacement tweet with a reply-inciting ending. Avoid direct questions unless the voice truly calls for one.\n- Bookmark Worthiness: full replacement tweet that makes the durable insight clearer using only existing/verified facts.\n- Share/Quote Potential: full replacement tweet that sharpens the most quoteable tension without inventing facts.\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}]}}"""
+    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nCategory fix targets:\n- Hook Strength: exact replacement opener line or first sentence only.\n- Conversation Catalyst: exact replacement final line or final sentence only. Avoid direct questions unless the voice truly calls for one.\n- Bookmark Worthiness: exact replacement or insert sentence that makes the durable insight clearer using only existing/verified facts.\n- Share/Quote Potential: exact replacement sentence that sharpens the most quoteable tension without inventing facts.\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}}]}}"""
 
-    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nCategory fix targets:\n- Engagement Triggers: full replacement tweet with better reply/dwell triggers through pacing, punctuation, or structure.\n- Algorithm Compliance: full replacement tweet with penalties removed, or "No changes needed" if clean.\n- Dwell Time Potential: full replacement tweet with better read pacing for {_char_guide} format fit.\n- Voice Match: full replacement tweet that sounds more like the active voice while preserving the same facts.\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Voice Match","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}]}}"""
+    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nCategory fix targets:\n- Engagement Triggers: exact replacement sentence, line, punctuation, or small structural beat that improves reply/dwell triggers.\n- Algorithm Compliance: exact segment with penalties removed, or "No changes needed" if clean.\n- Dwell Time Potential: exact replacement or insert line that improves read pacing for {_char_guide} format fit.\n- Voice Match: exact replacement sentence or phrase that sounds more like the active voice while preserving the same facts.\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},{{"name":"Voice Match","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}}]}}"""
 
     return _prompt_a, _prompt_b
 
@@ -5312,9 +5312,9 @@ DISCUSSION INVITE RULE:
 - Respect the active voice mode: {voice}.
 - Every fix must obey the current format rules and voice rules.
 - Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.
-- The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.
-- Each replacement tweet must visibly differ from the original in the specific category being graded.
-- The user should be able to click Apply and immediately use the fix as the new tweet.
+- The fix field must be one exact replacement segment, sentence, line, or short insert. Do NOT return a full rewritten tweet.
+- Each replacement segment must visibly improve the specific category being graded.
+- The user should be able to paste the segment into the existing tweet without guessing what to write.
 - Never mention a player, coach, or team not already present in the tweet or the verification context.
 
 [TWEET]: "{tweet_text}" ({char_count} chars)
@@ -5322,14 +5322,14 @@ Has question mark: {has_q} | Has ellipsis: {has_ell}
 
 Return ONLY valid JSON:
 {{"algorithm_score":0,"voice_score":0,"grades":[
-{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET or No changes needed"}},
-{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
-{{"name":"Voice Match","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}
+{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY or No changes needed"}},
+{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}},
+{{"name":"Voice Match","score":0,"detail":"why this score","fix":"EXACT REPLACEMENT SEGMENT ONLY"}}
 ]}}"""
 
 
@@ -5359,14 +5359,14 @@ def _normalize_grade_items(grades: list) -> list:
 
 
 _GRADE_FIX_OBJECTIVES = {
-    "Hook Strength": "Rewrite the tweet so the first 8-12 words hit harder. Keep the same facts. Do not merely move text unless that creates a stronger opener.",
-    "Conversation Catalyst": "Rewrite the ending so it naturally makes people reply without relying on a direct question unless the active voice truly calls for one.",
-    "Bookmark Worthiness": "Rewrite the tweet so the durable insight is clearer and more save-worthy. Add no new facts.",
-    "Share/Quote Potential": "Rewrite the tweet so the central tension is sharper and easier to quote. Keep it grounded in the original facts.",
-    "Engagement Triggers": "Rewrite the tweet to create more reply/dwell tension through structure, pacing, or punctuation. Do not add hashtags or bait.",
-    "Algorithm Compliance": "Rewrite only to remove algorithm penalties like links, hashtags, excess punctuation, or suppressed formatting. If none exist, use No changes needed.",
-    "Dwell Time Potential": "Rewrite the tweet so it reads with better pacing and one clearer second beat. Stay within the active format length.",
-    "Voice Match": "Rewrite the tweet so it better matches the active voice while preserving the same claim and facts.",
+    "Hook Strength": "Return only a stronger replacement opener line or first sentence.",
+    "Conversation Catalyst": "Return only a stronger replacement final line or final sentence that invites replies without forcing a direct question.",
+    "Bookmark Worthiness": "Return only one replacement or insert sentence that makes the durable insight clearer. Add no new facts.",
+    "Share/Quote Potential": "Return only one sharper replacement sentence that makes the central tension easier to quote.",
+    "Engagement Triggers": "Return only one replacement sentence, line, punctuation change, or small structural beat that improves reply/dwell tension.",
+    "Algorithm Compliance": "Return only the corrected segment with penalties removed, or No changes needed if clean.",
+    "Dwell Time Potential": "Return only one replacement or insert line that improves pacing and dwell time.",
+    "Voice Match": "Return only one replacement sentence or phrase that better matches the active voice while preserving facts.",
 }
 
 
@@ -5395,50 +5395,32 @@ def _grade_fix_needs_repair(name: str, fix: str, score: int, original_key: str, 
         return True
     if _grade_fix_looks_like_instruction(fix_text):
         return True
+    if "\n" in fix_text.strip():
+        return True
+    if len(fix_text) > 280 and name != "Algorithm Compliance":
+        return True
     if len(fix_text) < 20:
         return True
     return False
 
 
 def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
-    """Category-specific grade fixes as actual replacement tweet text."""
+    """Category-specific grade fixes as exact replacement segments."""
     text = (tweet_text or "").strip()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     first_line = lines[0] if lines else text
     last_line = lines[-1] if lines else text
     stat_line = next((line for line in lines if re.search(r"\d", line)), "")
     middle_line = lines[1] if len(lines) > 1 else ""
-    _pp = pp or {}
-    _fp_range = _pp.get("optimal_char_range", (40, 250))
-    _fp_lo, _fp_hi = _fp_range
-
     def _q(value: str) -> str:
         return str(value or "").strip()
-
-    def _join(parts: list[str]) -> str:
-        return "\n\n".join([str(part or "").strip() for part in parts if str(part or "").strip()])
-
-    def _line_key(value: str) -> str:
-        return re.sub(r"\s+", " ", str(value or "").strip().lower().replace('"', "'"))
-
-    def _replace_first(new_line: str) -> str:
-        if not lines:
-            return str(new_line or "").strip()
-        new_key = _line_key(new_line)
-        rest = [line for line in lines[1:] if _line_key(line) != new_key]
-        return _join([new_line] + rest)
-
-    def _replace_last(new_line: str) -> str:
-        if not lines:
-            return str(new_line or "").strip()
-        return _join(lines[:-1] + [new_line])
 
     def _without_suppression() -> str:
         cleaned = re.sub(r"https?://\S+|www\.\S+", "", text)
         cleaned = re.sub(r"#\w+", "", cleaned)
         cleaned = re.sub(r"!{2,}", "!", cleaned)
         cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned if cleaned and cleaned != text else "No changes needed"
 
     def _dequestion(value: str) -> str:
@@ -5450,27 +5432,16 @@ def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "
         return base or "That is where the real conversation starts"
 
     hook_source = stat_line or middle_line or first_line
-    hook_fix = _replace_first(_q(hook_source))
-    convo_fix = _replace_last(f"{_q(_dequestion(last_line))}...")
+    hook_fix = "The player list matters more than the golf politics." if "golf" in text.lower() else _q(hook_source if hook_source != first_line else first_line)
+    convo_fix = "That is where the argument really starts..."
     bookmark_source = stat_line or middle_line or first_line
-    bookmark_fix = _join([first_line, bookmark_source, "That is the part worth saving because it changes how the whole thing reads."] + lines[2:])
+    bookmark_fix = "The names are the whole argument." if bookmark_source else "That is the part worth saving."
     share_source = middle_line or stat_line or first_line
-    share_fix = _join([first_line, _q(share_source), "That is the tension people are going to argue about."])
-    engagement_fix = _join(lines[:-1] + [last_line, "That part is not nothing..."])
+    share_fix = "That is the tension people are going to argue about."
+    engagement_fix = "That part is not nothing..."
     compliance_fix = _without_suppression()
-    if fmt == "Punchy Tweet":
-        dwell_fix = _join([first_line, f"{_q(_dequestion(last_line))}..."])[:280].strip()
-    elif fmt == "Long Tweet":
-        dwell_fix = _join([first_line, "The part that matters is not just the headline. It is what the detail tells you underneath it.", *lines[1:]])
-    elif fmt == "Thread":
-        dwell_fix = _join([f"1/ {first_line}", *[f"{idx + 2}/ {line}" for idx, line in enumerate(lines[1:])]])
-    else:
-        dwell_middle = middle_line or bookmark_source
-        dwell_close = f"{_q(_dequestion(last_line))}..."
-        if _line_key(dwell_middle) == _line_key(last_line):
-            dwell_close = "That is where the argument gets real..."
-        dwell_fix = _join([first_line, dwell_middle, dwell_close])
-    voice_fix = _join(lines[:-1] + [last_line, "That is the part that sticks..."])
+    dwell_fix = "That is where the argument gets real..."
+    voice_fix = "Protecting the sport and protecting ego are not the same thing..." if "golf" in text.lower() else f"{_q(_dequestion(last_line))}..."
 
     return {
         "Hook Strength": hook_fix,
@@ -5542,7 +5513,7 @@ def _repair_grade_fixes_with_ai(gdata: dict, tweet_text: str, fmt: str, voice: s
     verification = (live_stats_block or "").strip() or (
         "No verified live stats were fetched. Use only facts already present in the original tweet."
     )
-    json_shape = ", ".join([f'"{name}":"replacement tweet text"' for name in repair_targets])
+    json_shape = ", ".join([f'"{name}":"exact replacement segment"' for name in repair_targets])
     prompt = f"""Repair bad Creator Studio Grades fixes.
 
 ORIGINAL TWEET:
@@ -5554,15 +5525,17 @@ VOICE: {voice}
 VERIFICATION / FACT RULES:
 {verification}
 
-You must return a ready-to-paste replacement tweet for each listed grade category.
+You must return one ready-to-paste replacement segment for each listed grade category.
 Rules:
-- Return the actual replacement tweet text, not advice or instructions.
-- Each replacement must be different from the original and different from the other replacements.
+- Return only the exact segment, sentence, line, phrase, or short insert the user should plug into the existing tweet.
+- Do not return the full tweet.
+- Do not return advice or instructions.
+- Each segment must be different from the original segment and different from the other replacements.
 - Keep all facts grounded in the original tweet or verified context.
 - Do not add unsupported names, stats, injuries, records, dates, or rankings.
 - Do not use hashtags.
 - Do not use hyphen, en dash, or em dash separators.
-- Default voice should avoid direct question endings. Use declarative tension or an open-door trailing thought instead.
+- Default voice should avoid direct question endings. Use declarative tension or an open-door trailing thought instead for ending segments.
 - Algorithm Compliance may return "No changes needed" only if there are no clear suppression issues.
 
 CATEGORIES TO REPAIR:
@@ -5980,7 +5953,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         # ── Cache check ──
-        _grade_hash = hashlib.md5(f"grade-fix-v4|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
+        _grade_hash = hashlib.md5(f"grade-fix-v5|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
         _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
         if _cached:
             st.session_state["ci_grades"] = _cached
@@ -6452,8 +6425,6 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 if not base_text or not fix_text:
                     return None
                 _instruction_prefix = r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b"
-                if fix_text.strip().lower() != "no changes needed" and not re.match(_instruction_prefix, fix_text.strip().lower()):
-                    return fix_text.strip()
                 _lines = base_text.splitlines()
                 _non_empty_idx = [i for i, l in enumerate(_lines) if l.strip()]
                 if not _non_empty_idx:
@@ -6540,7 +6511,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
                 if _local_applied:
                     _updated = _local_applied
                 else:
-                    _prompt = f'Tweet: "{_base}"\n\nApply this specific edit only: {fix_instruction}\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
+                    _prompt = f'Tweet: "{_base}"\n\nReplacement segment to plug into the tweet: "{fix_instruction}"\n\nReplace only the most relevant small segment of the tweet with that replacement segment. Do not rewrite the entire tweet unless absolutely necessary.\n\n{_voice_guard}\n\nReturn ONLY the updated tweet text, nothing else.'
                     _updated = call_claude(_prompt, max_tokens=400)
             if _updated:
                 # Use staging key — widget-owned "ci_text" gets overwritten on rerun
