@@ -5253,13 +5253,14 @@ def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_
         "- Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.\n"
         "- The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.\n"
         "- Each replacement tweet must visibly differ from the original in the specific category being graded.\n"
+        "- The user should be able to click Apply and immediately use the fix as the new tweet.\n"
         "- Never use hyphen, en dash, or em dash separators in tweet copy or fix suggestions.\n"
         "- Never mention a player, coach, or team not already present in the tweet or the verification context."
     )
 
-    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"...","fix":"{_fmt_fix_a}"}},{{"name":"Conversation Catalyst","score":0,"detail":"benchmark: {_fp_q}% question rate, {_fp_ell}% ellipsis rate","fix":"exact ending edit that invites replies without forcing a literal question"}},{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact structural or insight-based edit using ONLY verified details already present"}},{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take without inventing facts"}}]}}"""
+    _prompt_a = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10). Also compute algorithm_score and voice_score (0-100).\n\nCategory fix targets:\n- Hook Strength: full replacement tweet with a stronger opening beat. Focus the change at the beginning.\n- Conversation Catalyst: full replacement tweet with a reply-inciting ending. Avoid direct questions unless the voice truly calls for one.\n- Bookmark Worthiness: full replacement tweet that makes the durable insight clearer using only existing/verified facts.\n- Share/Quote Potential: full replacement tweet that sharpens the most quoteable tension without inventing facts.\n\nReturn ONLY valid JSON:\n{{"algorithm_score":0,"voice_score":0,"grades":[{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}]}}"""
 
-    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit that fits the voice rules"}},{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"format: {_char_guide}","fix":"exact structural edit to increase read time"}},{{"name":"Voice Match","score":0,"detail":"benchmark: {_fp_ell}% ellipsis rate","fix":"exact word, phrase, or ending change to sound more like the writer"}}]}}"""
+    _prompt_b = f"""Grade this tweet for X algorithm performance.\n\n{_algo}\n\n{_benchmarks}\n\n{_verification_block}\n\n{_voice_guard}\n\n[TWEET]: "{{tweet_text}}" ({{char_count}} chars)\nHas question mark: {{has_q}} | Has ellipsis: {{has_ell}}\n\nGrade ONLY these 4 categories (score 1-10).\n\nCategory fix targets:\n- Engagement Triggers: full replacement tweet with better reply/dwell triggers through pacing, punctuation, or structure.\n- Algorithm Compliance: full replacement tweet with penalties removed, or "No changes needed" if clean.\n- Dwell Time Potential: full replacement tweet with better read pacing for {_char_guide} format fit.\n- Voice Match: full replacement tweet that sounds more like the active voice while preserving the same facts.\n\nReturn ONLY valid JSON:\n{{"grades":[{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET or No changes needed"}},{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},{{"name":"Voice Match","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}]}}"""
 
     return _prompt_a, _prompt_b
 
@@ -5313,6 +5314,7 @@ DISCUSSION INVITE RULE:
 - Every category must get a distinct fix. Do not repeat the same rewritten tweet or same fix across categories.
 - The fix field must be the actual suggested replacement tweet text, not advice, not an instruction, not a description.
 - Each replacement tweet must visibly differ from the original in the specific category being graded.
+- The user should be able to click Apply and immediately use the fix as the new tweet.
 - Never mention a player, coach, or team not already present in the tweet or the verification context.
 
 [TWEET]: "{tweet_text}" ({char_count} chars)
@@ -5320,14 +5322,14 @@ Has question mark: {has_q} | Has ellipsis: {has_ell}
 
 Return ONLY valid JSON:
 {{"algorithm_score":0,"voice_score":0,"grades":[
-{{"name":"Hook Strength","score":0,"detail":"...","fix":"exact first-line fix"}},
-{{"name":"Conversation Catalyst","score":0,"detail":"...","fix":"exact ending edit that invites replies without forcing a literal question"}},
-{{"name":"Bookmark Worthiness","score":0,"detail":"...","fix":"exact structural or insight-based edit using ONLY verified details already present"}},
-{{"name":"Share/Quote Potential","score":0,"detail":"...","fix":"exact phrasing to sharpen the take"}},
-{{"name":"Engagement Triggers","score":0,"detail":"...","fix":"exact punctuation or structural edit that fits the voice rules"}},
-{{"name":"Algorithm Compliance","score":0,"detail":"...","fix":"exact penalty to remove or No changes needed"}},
-{{"name":"Dwell Time Potential","score":0,"detail":"...","fix":"exact structural edit to increase read time"}},
-{{"name":"Voice Match","score":0,"detail":"...","fix":"exact word, phrase, or ending change to sound more like the writer"}}
+{{"name":"Hook Strength","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Conversation Catalyst","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Bookmark Worthiness","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Share/Quote Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Engagement Triggers","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Algorithm Compliance","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET or No changes needed"}},
+{{"name":"Dwell Time Potential","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}},
+{{"name":"Voice Match","score":0,"detail":"why this score","fix":"FULL READY-TO-POST REPLACEMENT TWEET"}}
 ]}}"""
 
 
@@ -5354,6 +5356,48 @@ def _normalize_grade_items(grades: list) -> list:
         else:
             normalized.append(item)
     return normalized
+
+
+_GRADE_FIX_OBJECTIVES = {
+    "Hook Strength": "Rewrite the tweet so the first 8-12 words hit harder. Keep the same facts. Do not merely move text unless that creates a stronger opener.",
+    "Conversation Catalyst": "Rewrite the ending so it naturally makes people reply without relying on a direct question unless the active voice truly calls for one.",
+    "Bookmark Worthiness": "Rewrite the tweet so the durable insight is clearer and more save-worthy. Add no new facts.",
+    "Share/Quote Potential": "Rewrite the tweet so the central tension is sharper and easier to quote. Keep it grounded in the original facts.",
+    "Engagement Triggers": "Rewrite the tweet to create more reply/dwell tension through structure, pacing, or punctuation. Do not add hashtags or bait.",
+    "Algorithm Compliance": "Rewrite only to remove algorithm penalties like links, hashtags, excess punctuation, or suppressed formatting. If none exist, use No changes needed.",
+    "Dwell Time Potential": "Rewrite the tweet so it reads with better pacing and one clearer second beat. Stay within the active format length.",
+    "Voice Match": "Rewrite the tweet so it better matches the active voice while preserving the same claim and facts.",
+}
+
+
+def _grade_text_key(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _grade_fix_looks_like_instruction(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    return bool(re.match(
+        r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make|cut|tighten|change|use|start|end)\b",
+        text,
+    ))
+
+
+def _grade_fix_needs_repair(name: str, fix: str, score: int, original_key: str, seen: set[str]) -> bool:
+    fix_text = str(fix or "").strip()
+    fix_key = _grade_text_key(fix_text)
+    if not fix_text:
+        return True
+    if fix_key == "no changes needed":
+        return score < 8 and name != "Algorithm Compliance"
+    if fix_key == original_key:
+        return True
+    if fix_key in seen:
+        return True
+    if _grade_fix_looks_like_instruction(fix_text):
+        return True
+    if len(fix_text) < 20:
+        return True
+    return False
 
 
 def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
@@ -5441,7 +5485,7 @@ def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "
 
 
 def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
-    """Replace duplicate or generic grade fixes with category-specific instructions."""
+    """Replace missing, duplicated, or instruction-style fixes with concrete fallback text."""
     if not isinstance(gdata, dict):
         return gdata
     grades = gdata.get("grades", [])
@@ -5460,15 +5504,7 @@ def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice:
         fix = str(entry.get("fix", "") or "").strip()
         fix_key = re.sub(r"\s+", " ", fix.lower())
         score = _normalize_grade_score(entry.get("score", 0))
-        is_noop = not fix or fix_key == "no changes needed"
-        looks_like_instruction = bool(re.match(r"^(replace|rewrite|move|remove|insert|swap|sharpen|compress|keep|add|turn|make)\b", fix.lower()))
-        looks_like_full_tweet = bool(
-            fix
-            and len(fix) > 110
-            and not looks_like_instruction
-        )
-        repeats_original = bool(fix_key and original_key and fix_key == original_key)
-        if name in library and score < 8 and (is_noop or fix_key in seen or looks_like_instruction or looks_like_full_tweet or repeats_original):
+        if name in library and _grade_fix_needs_repair(name, fix, score, original_key, seen):
             fix = library[name]
             fix_key = re.sub(r"\s+", " ", fix.lower())
         if fix_key and fix_key != "no changes needed":
@@ -5478,6 +5514,100 @@ def _dedupe_grade_fixes(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice:
     updated = dict(gdata)
     updated["grades"] = normalized_grades
     return updated
+
+
+def _repair_grade_fixes_with_ai(gdata: dict, tweet_text: str, fmt: str, voice: str, live_stats_block: str = "") -> dict:
+    """Ask AI to repair only invalid grade fixes while preserving scores/details."""
+    if not isinstance(gdata, dict) or not isinstance(gdata.get("grades"), list):
+        return gdata
+    original_key = _grade_text_key(tweet_text)
+    seen: set[str] = set()
+    repair_targets = []
+    for grade in gdata.get("grades", []):
+        if not isinstance(grade, dict):
+            continue
+        name = str(grade.get("name", "") or "").strip()
+        if name not in _GRADE_FIX_OBJECTIVES:
+            continue
+        score = _normalize_grade_score(grade.get("score", 0))
+        fix = str(grade.get("fix", "") or "").strip()
+        if _grade_fix_needs_repair(name, fix, score, original_key, seen):
+            repair_targets.append(name)
+        else:
+            seen.add(_grade_text_key(fix))
+    if not repair_targets:
+        return gdata
+
+    objectives = "\n".join(f"- {name}: {_GRADE_FIX_OBJECTIVES[name]}" for name in repair_targets)
+    verification = (live_stats_block or "").strip() or (
+        "No verified live stats were fetched. Use only facts already present in the original tweet."
+    )
+    json_shape = ", ".join([f'"{name}":"replacement tweet text"' for name in repair_targets])
+    prompt = f"""Repair bad Creator Studio Grades fixes.
+
+ORIGINAL TWEET:
+{tweet_text}
+
+FORMAT: {fmt}
+VOICE: {voice}
+
+VERIFICATION / FACT RULES:
+{verification}
+
+You must return a ready-to-paste replacement tweet for each listed grade category.
+Rules:
+- Return the actual replacement tweet text, not advice or instructions.
+- Each replacement must be different from the original and different from the other replacements.
+- Keep all facts grounded in the original tweet or verified context.
+- Do not add unsupported names, stats, injuries, records, dates, or rankings.
+- Do not use hashtags.
+- Do not use hyphen, en dash, or em dash separators.
+- Default voice should avoid direct question endings. Use declarative tension or an open-door trailing thought instead.
+- Algorithm Compliance may return "No changes needed" only if there are no clear suppression issues.
+
+CATEGORIES TO REPAIR:
+{objectives}
+
+Return ONLY valid JSON in this exact shape:
+{{"fixes":{{{json_shape}}}}}"""
+    try:
+        raw = call_claude(prompt, "You repair tweet grade suggestions into concrete, ready-to-paste replacement tweets. Return only valid JSON.", 1200)
+        clean = re.sub(r'```(?:json)?\s*', '', raw or '').strip().rstrip('`').strip()
+        match = re.search(r'\{.*\}', clean, re.DOTALL)
+        repaired = json.loads(match.group()) if match else {}
+        fixes = repaired.get("fixes", {}) if isinstance(repaired, dict) else {}
+    except Exception as exc:
+        _append_debug_event("grades", "error", f"repair_fixes_failed {exc}", {"targets": repair_targets})
+        return gdata
+    if not isinstance(fixes, dict):
+        return gdata
+
+    updated = dict(gdata)
+    updated_grades = []
+    used = {_grade_text_key(g.get("fix", "")) for g in gdata.get("grades", []) if isinstance(g, dict) and str(g.get("fix", "")).strip()}
+    used.discard("no changes needed")
+    used.discard(original_key)
+    for grade in gdata.get("grades", []):
+        if not isinstance(grade, dict):
+            updated_grades.append(grade)
+            continue
+        entry = dict(grade)
+        name = str(entry.get("name", "") or "").strip()
+        candidate = str(fixes.get(name, "") or "").strip()
+        candidate_key = _grade_text_key(candidate)
+        score = _normalize_grade_score(entry.get("score", 0))
+        if candidate and not _grade_fix_needs_repair(name, candidate, score, original_key, used):
+            entry["fix"] = candidate
+            used.add(candidate_key)
+        updated_grades.append(entry)
+    updated["grades"] = updated_grades
+    return updated
+
+
+def _finalize_grade_data(gdata: dict, tweet_text: str, fmt: str, pp: dict, voice: str, live_stats_block: str = "") -> dict:
+    """Normalize Grades output while preserving the current voice/live-stat rules."""
+    repaired = _repair_grade_fixes_with_ai(gdata, tweet_text, fmt, voice, live_stats_block)
+    return _dedupe_grade_fixes(repaired, tweet_text, fmt, pp, voice)
 
 
 def _build_local_grades_fallback(tweet_text: str, fmt: str, pp: dict, voice: str = "Default") -> dict:
@@ -5850,7 +5980,7 @@ Return ONLY this JSON, no other text:
 
     elif action == "grades" and tweet_text.strip():
         # ── Cache check ──
-        _grade_hash = hashlib.md5(f"grade-fix-v3|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
+        _grade_hash = hashlib.md5(f"grade-fix-v4|{fmt}|{voice}|{tweet_text.strip()}".encode()).hexdigest()
         _cached = st.session_state.get("ci_grades_cache", {}).get(_grade_hash)
         if _cached:
             st.session_state["ci_grades"] = _cached
@@ -5912,7 +6042,7 @@ Return ONLY this JSON, no other text:
                     "tyler_score": _voice_score,
                     "grades": _da["grades"] + _db["grades"],
                 }
-                gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
+                gdata = _finalize_grade_data(gdata, tweet_text, fmt, pp, voice, _live_stats_block)
                 _cache = st.session_state.get("ci_grades_cache", {})
                 _cache[_grade_hash] = gdata
                 st.session_state["ci_grades_cache"] = _cache
@@ -5931,7 +6061,7 @@ Return ONLY this JSON, no other text:
                         "tyler_score": _voice_score,
                         "grades": _fallback_data["grades"],
                     }
-                    gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
+                    gdata = _finalize_grade_data(gdata, tweet_text, fmt, pp, voice, _live_stats_block)
                     _cache = st.session_state.get("ci_grades_cache", {})
                     _cache[_grade_hash] = gdata
                     st.session_state["ci_grades_cache"] = _cache
@@ -5963,7 +6093,7 @@ Return ONLY this JSON, no other text:
                             "tyler_score": _voice_score,
                             "grades": _fallback_data_main["grades"],
                         }
-                        gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
+                        gdata = _finalize_grade_data(gdata, tweet_text, fmt, pp, voice, _live_stats_block)
                         _cache = st.session_state.get("ci_grades_cache", {})
                         _cache[_grade_hash] = gdata
                         st.session_state["ci_grades_cache"] = _cache
@@ -5976,7 +6106,7 @@ Return ONLY this JSON, no other text:
                             "len_main": len(_fallback_raw_main or ""),
                         })
                         gdata = _build_local_grades_fallback(tweet_text, fmt, pp, voice)
-                        gdata = _dedupe_grade_fixes(gdata, tweet_text, fmt, pp, voice)
+                        gdata = _finalize_grade_data(gdata, tweet_text, fmt, pp, voice, _live_stats_block)
                         _cache = st.session_state.get("ci_grades_cache", {})
                         _cache[_grade_hash] = gdata
                         st.session_state["ci_grades_cache"] = _cache
