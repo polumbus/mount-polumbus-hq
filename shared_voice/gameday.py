@@ -67,6 +67,22 @@ _UNSUPPORTED_EVENT_CLAIMS = (
     "coach",
     "collapse",
     "big play",
+    "foul",
+    "flag",
+    "interception",
+    "fumble",
+    "injury",
+    "timeout",
+    "three",
+    "dunk",
+    "save",
+    "goal",
+    "power play",
+    "penalty",
+    "review",
+    "challenge",
+    "overturned",
+    "ejected",
     "hit that",
     "just happened",
     "momentum",
@@ -211,11 +227,6 @@ def build_gameday_prompt(
     source_author = str((signal_tweet or {}).get("author") or "").strip().lstrip("@")
     char_rule = "180 characters max" if not longer_take else "280 characters max"
     example_block = "\n".join(f'- "{ex}"' for ex in examples[:8]) or "- No examples available."
-    signal_block = (
-        f'\nLIVE SIGNAL FROM @{source_author or "feed"}: "{source_text[:360]}"'
-        if source_text
-        else ""
-    )
     verified_facts = [
         f"Team: {team}",
         f"Opponent: {opponent}",

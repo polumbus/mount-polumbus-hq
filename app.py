@@ -33,6 +33,7 @@ from shared_voice.gameday import (
     has_actionable_gameday_context,
     normalize_lane, normalize_moment, select_gameday_examples,
     validate_gameday_draft,
+    validate_gameday_draft_against_facts,
 )
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
@@ -11439,6 +11440,7 @@ def _gd_fetch_live_scores():
     if _GD_SCORE_CACHE["data"] is not None and (time.time() - _GD_SCORE_CACHE["ts"]) < 60:
         return _GD_SCORE_CACHE["data"]
     results = []
+    fetched_at = time.time()
     for league, teams in _GAMEDAY_TEAMS.items():
         try:
             scores = espn_scores(league, limit=15)
@@ -11464,6 +11466,8 @@ def _gd_fetch_live_scores():
                             "status": g.get("status", "Scheduled"),
                             "completed": g.get("completed", False),
                             "broadcast": g.get("broadcast", ""),
+                            "fetched_at": fetched_at,
+                            "provider": "ESPN",
                         })
         except Exception:
             pass
@@ -11504,6 +11508,8 @@ def _gd_fetch_live_scores():
                         "status": status_obj.get("type", {}).get("description", "Scheduled"),
                         "completed": status_obj.get("type", {}).get("completed", False),
                         "broadcast": comp.get("broadcasts", [{}])[0].get("names", [""])[0] if comp.get("broadcasts") else "",
+                        "fetched_at": fetched_at,
+                        "provider": "ESPN",
                     })
     except Exception:
         pass
@@ -11636,6 +11642,62 @@ def _gd_signal_payload(tweet: dict | None) -> dict | None:
     }
 
 
+_GAMEDAY_REACTION_PRESETS = (
+    ("Big play", "Fired Up", "Big Play"),
+    ("What are we doing", "Mad", "Bad Possession"),
+    ("Refs", "Petty", "Refs"),
+    ("I'm nervous", "Nervous", "Collapse"),
+    ("We're back", "Fired Up", "We're Back"),
+    ("Petty", "Petty", "Star Player"),
+    ("Group chat", "Group Chat", "Big Play"),
+)
+
+
+def _gd_fact_packet(game: dict, tweet: dict | None = None, context: str = "") -> dict:
+    author = ""
+    tweet_text = ""
+    if tweet:
+        author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
+        tweet_text = tweet.get("text", "")
+    return {
+        "game": _gd_game_payload(game),
+        "tweet": _gd_signal_payload(tweet),
+        "tweet_author": author,
+        "tweet_text": tweet_text,
+        "context": context.strip(),
+        "score_line": _gd_score_line(game),
+        "status": game.get("status", ""),
+        "fetched_at": game.get("fetched_at", 0),
+        "provider": game.get("provider", "ESPN"),
+    }
+
+
+def _gd_fact_label(packet: dict | None) -> str:
+    if not packet:
+        return "No verified source selected yet."
+    parts = []
+    if packet.get("score_line"):
+        parts.append(packet["score_line"])
+    if packet.get("status"):
+        parts.append(packet["status"])
+    if packet.get("tweet_text"):
+        author = packet.get("tweet_author") or "feed"
+        parts.append(f"@{author}: {packet['tweet_text'][:120]}")
+    if packet.get("context"):
+        parts.append(f"Note: {packet['context'][:120]}")
+    return " | ".join(parts) or "Verified game context"
+
+
+def _gd_score_is_stale(game: dict) -> bool:
+    fetched_at = float(game.get("fetched_at") or 0)
+    return bool(fetched_at and (time.time() - fetched_at) > 120 and _gd_game_state(game) == "live")
+
+
+def _gd_clear_drafts() -> None:
+    for _k in ["gd_drafts", "gd_raw", "gd_error", "gd_fact_packet", "gd_copy_text", "gd_post_message"]:
+        st.session_state.pop(_k, None)
+
+
 def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     lane = normalize_lane(st.session_state.get("gd_lane"))
     moment = normalize_moment(st.session_state.get("gd_moment"))
@@ -11655,6 +11717,14 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
         st.session_state["gd_drafts"] = []
         st.session_state["gd_raw"] = ""
         st.session_state["gd_error"] = reason
+        st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
+        return
+
+    if _gd_score_is_stale(game) and not tweet and not context.strip():
+        st.session_state["gd_drafts"] = []
+        st.session_state["gd_raw"] = ""
+        st.session_state["gd_error"] = "Live score data is over 2 minutes old. Refresh scores or react to a fresh feed item before generating."
+        st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
         return
 
     drafts, raw = generate_gameday_drafts(
@@ -11672,24 +11742,33 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     st.session_state["gd_error"] = "" if drafts else "AI did not return any safe drafts from the verified live facts. Add a clearer live note or react to a feed item."
     st.session_state["gd_last_lane"] = lane
     st.session_state["gd_last_moment"] = moment
+    st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
 
 
 def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
     drafts = st.session_state.get("gd_drafts", [])
     if st.session_state.get("gd_error"):
         st.warning(st.session_state["gd_error"])
+    if st.session_state.get("gd_post_message"):
+        level, detail = st.session_state["gd_post_message"]
+        (st.success if level == "success" else st.error)(detail)
     if not drafts:
         return
     lane = html.escape(st.session_state.get("gd_last_lane") or st.session_state.get("gd_lane") or "Fan Pulse")
     moment = html.escape(st.session_state.get("gd_last_moment") or st.session_state.get("gd_moment") or "Big Play")
+    packet = st.session_state.get("gd_fact_packet") or {}
+    grounded = html.escape(_gd_fact_label(packet))
     st.markdown(
-        f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">GENERATED FAN REACTIONS</div>'
-        f'<div style="font-size:11px;color:#5a7090;margin-bottom:10px;">{moment} - {lane}</div>',
+        f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">READY DRAFTS</div>'
+        f'<div style="font-size:11px;color:#5a7090;margin-bottom:10px;">{moment} - {lane} | Grounded in: {grounded}</div>',
         unsafe_allow_html=True,
     )
     for i, draft in enumerate(drafts):
-        ok, reason = validate_gameday_draft(
+        ok, reason = validate_gameday_draft_against_facts(
             draft,
+            game=packet.get("game") or {},
+            context=packet.get("context", ""),
+            signal_tweet=packet.get("tweet"),
             longer_take=bool(st.session_state.get("gd_longer_take", False)),
         )
         _warn = "" if ok else f'<div style="font-size:10px;color:#FBBF24;margin-top:6px;">Needs review: {html.escape(reason)}</div>'
@@ -11700,46 +11779,75 @@ def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
             f'<div style="font-size:10px;color:#566b85;margin-top:8px;">{len(draft)} chars</div>{_warn}</div>',
             unsafe_allow_html=True,
         )
-        c1, c2 = st.columns([1, 3])
+        c1, c2, c3 = st.columns([1, 1, 2])
         with c1:
-            if st.button("Use This", key=f"{prefix}_use_{i}", use_container_width=True):
+            if st.button("Copy", key=f"{prefix}_use_{i}", use_container_width=True):
                 st.session_state["gd_copy_text"] = draft
         with c2:
+            if st.button("Post", key=f"{prefix}_post_{i}", use_container_width=True, disabled=not ok):
+                ok_now, reason_now = validate_gameday_draft_against_facts(
+                    draft,
+                    game=packet.get("game") or {},
+                    context=packet.get("context", ""),
+                    signal_tweet=packet.get("tweet"),
+                    longer_take=bool(st.session_state.get("gd_longer_take", False)),
+                )
+                if not ok_now:
+                    st.session_state["gd_post_message"] = ("error", f"Blocked before posting: {reason_now}")
+                elif is_guest():
+                    enc = urllib.parse.quote(draft)
+                    st.session_state["gd_post_message"] = ("success", f"Guest mode: open X composer manually: https://twitter.com/intent/tweet?text={enc}")
+                else:
+                    success, detail = _post_tweet(draft)
+                    st.session_state["gd_post_message"] = (
+                        "success" if success else "error",
+                        f"Posted. {detail}" if success else f"Post failed: {detail}",
+                    )
+                st.rerun()
+        with c3:
             if st.session_state.get("gd_copy_text") == draft:
                 st.text_area("Copy-ready text", value=draft, height=80, key=f"{prefix}_copy_{i}")
 
 
-def _gd_render_fan_controls(control_prefix: str = "gd") -> None:
+def _gd_apply_preset(label: str, lane: str, moment: str) -> None:
+    st.session_state["gd_lane"] = lane
+    st.session_state["gd_moment"] = moment
+    st.session_state["gd_selected_preset"] = label
+
+
+def _gd_render_fan_controls(active_game: dict, selected_tweet: dict | None, control_prefix: str = "gd") -> None:
     if "gd_lane" not in st.session_state:
-        st.session_state["gd_lane"] = "Fan Pulse"
+        st.session_state["gd_lane"] = "Group Chat"
     if "gd_moment" not in st.session_state:
         st.session_state["gd_moment"] = "Big Play"
 
-    st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">FAN PULSE</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:11px;color:#5a7090;margin-bottom:8px;">Pick the feeling first. Gameday writes like a fan in the moment, not a postgame analyst.</div>', unsafe_allow_html=True)
-    _lane_cols = st.columns(len(GAMEDAY_LANES))
-    for _li, _lane in enumerate(GAMEDAY_LANES):
-        with _lane_cols[_li]:
-            if st.button(_lane, key=f"{control_prefix}_lane_{_li}", use_container_width=True,
-                         type="primary" if normalize_lane(st.session_state.get("gd_lane")) == _lane else "secondary"):
-                st.session_state["gd_lane"] = _lane
-                st.session_state.pop("gd_drafts", None)
-                st.rerun()
+    packet = _gd_fact_packet(active_game, selected_tweet, st.session_state.get("gd_context", ""))
+    st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">LIVE REACTION</div>', unsafe_allow_html=True)
+    st.caption(f"Grounding: {_gd_fact_label(packet)}")
+    if _gd_score_is_stale(active_game):
+        st.warning("Score data is older than 2 minutes. Refresh scores before trusting a score-only draft.")
+    if selected_tweet:
+        author = selected_tweet.get("author", {}).get("userName", "") or selected_tweet.get("user", {}).get("screen_name", "")
+        st.markdown(
+            f'<div class="tweet-card"><div style="font-size:11px;color:#2DD4BF;font-weight:600;">Selected source: @{html.escape(author)}</div>'
+            f'<div style="font-size:13px;color:#d8d8e8;line-height:1.45;margin-top:6px;">{html.escape(selected_tweet.get("text", "")[:260])}</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    _moment_cols = st.columns(4)
-    for _mi, _moment in enumerate(GAMEDAY_MOMENTS):
-        with _moment_cols[_mi % 4]:
-            if st.button(_moment, key=f"{control_prefix}_moment_{_mi}", use_container_width=True,
-                         type="primary" if normalize_moment(st.session_state.get("gd_moment")) == _moment else "secondary"):
-                st.session_state["gd_moment"] = _moment
-                st.session_state.pop("gd_drafts", None)
-                st.rerun()
-
-    st.text_input(
-        "What just happened?",
+    st.text_area(
+        "What actually happened?",
         key="gd_context",
-        placeholder="Optional: Jokic ridiculous pass, refs missed a call, bench blew the lead...",
+        placeholder="Optional, but this becomes the truth source: Jokic just hit the dagger, refs missed the hold, Broncos muffed the punt...",
+        height=72,
     )
+    cols = st.columns(4)
+    for idx, (label, lane, moment) in enumerate(_GAMEDAY_REACTION_PRESETS):
+        with cols[idx % 4]:
+            active = st.session_state.get("gd_selected_preset") == label
+            if st.button(label, key=f"{control_prefix}_preset_{idx}", use_container_width=True, type="primary" if active else "secondary"):
+                _gd_apply_preset(label, lane, moment)
+                st.rerun()
+
     st.toggle(
         "Longer take",
         key="gd_longer_take",
@@ -11907,7 +12015,7 @@ def _gd_draft_dialog(_nonce):
         st.rerun()
 
 
-def page_gameday():
+def page_gameday_legacy():
     _target = _build_gameday_url()
     _target_html = html.escape(_target, quote=True)
     st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
@@ -12083,6 +12191,175 @@ def page_gameday():
     if any(_gd_game_state(g) == "live" for g in games):
         st.markdown("<div style='font-size:10px;color:#2a3a50;text-align:center;margin-top:16px;'>Scores refresh every 60s. Tweets refresh manually.</div>", unsafe_allow_html=True)
     st.markdown('<style>@keyframes gd-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}</style>', unsafe_allow_html=True)
+
+
+def page_gameday():
+    _target = _build_gameday_url()
+    st.markdown('<div class="main-header">FAN PULSE <span>GAMEDAY</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tool-desc">Source-first live reactions. Pick the real moment, then make it sound like Tyler watching with fans.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div style="font-size:11px;color:#5a7090;margin:0 0 12px;">External Gameday remains available: '
+        f'<a href="{html.escape(_target, quote=True)}" target="_blank" rel="noopener noreferrer">open full Gameday app</a></div>',
+        unsafe_allow_html=True,
+    )
+
+    games = _gd_fetch_live_scores()
+    if not games:
+        st.markdown("""<div style="text-align:center;padding:60px 20px;">
+            <div style="font-size:16px;color:#3a5070;font-weight:600;">No Denver games today</div>
+            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">Fan Pulse only generates from live score data, a live feed item, or a verified note during a real game.</div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    _state_order = {"live": 0, "pre": 1, "post": 2}
+    games.sort(key=lambda g: _state_order.get(_gd_game_state(g), 1))
+    game_labels = [
+        f"{g['team']} {g['our_score']} - {g['opponent']} {g['opp_score']} | {g['status']}"
+        if _gd_game_state(g) != "pre"
+        else f"{g['team']} vs {g['opponent']} | {g['status']}"
+        for g in games
+    ]
+    if "_gd_active_game" not in st.session_state:
+        live = [g for g in games if _gd_game_state(g) == "live"]
+        st.session_state["_gd_active_game"] = (live[0] if live else games[0])["team"]
+
+    selected_idx = next((i for i, g in enumerate(games) if g["team"] == st.session_state.get("_gd_active_game")), 0)
+    picked_label = st.selectbox("Game", game_labels, index=selected_idx, key="gd_game_picker_v2")
+    active_game = games[game_labels.index(picked_label)]
+    if active_game["team"] != st.session_state.get("_gd_active_game"):
+        st.session_state["_gd_active_game"] = active_game["team"]
+        st.session_state.pop("_gd_selected_tweet", None)
+        _gd_clear_drafts()
+        st.rerun()
+
+    state = _gd_game_state(active_game)
+    status_color = "#FF4444" if state == "live" else "#2DD4BF" if state == "pre" else "#667"
+    freshness = ""
+    if active_game.get("fetched_at"):
+        freshness = f" | score refresh {int((time.time() - active_game['fetched_at']) / 60)}m ago"
+    st.markdown(
+        f'<div style="border:1px solid rgba(45,212,191,0.18);border-radius:8px;padding:12px 14px;margin-bottom:12px;">'
+        f'<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">'
+        f'<div style="font-size:18px;font-weight:800;color:#f3f7fb;">{html.escape(_gd_score_line(active_game))}</div>'
+        f'<div style="font-size:12px;color:{status_color};font-weight:700;">{html.escape(active_game.get("status", ""))}</div>'
+        f'</div><div style="font-size:10px;color:#5a7090;margin-top:4px;">'
+        f'{html.escape(active_game.get("sport", ""))}{html.escape(freshness)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    selected_tweet = st.session_state.get("_gd_selected_tweet")
+    _gd_render_fan_controls(active_game, selected_tweet, "gd_live_v2")
+
+    c_gen, c_clear = st.columns([3, 1])
+    with c_gen:
+        if st.button("Generate Grounded Drafts", key="gd_draft_visible_v2", use_container_width=True, type="primary"):
+            for _k in ["gd_drafts", "gd_raw", "gd_error", "gd_post_message"]:
+                st.session_state.pop(_k, None)
+            with st.spinner("Building grounded fan reactions..."):
+                _gd_build_drafts(active_game, selected_tweet)
+            st.rerun()
+    with c_clear:
+        if st.button("Clear source", key="gd_clear_source_v2", use_container_width=True):
+            st.session_state.pop("_gd_selected_tweet", None)
+            st.session_state["gd_context"] = ""
+            _gd_clear_drafts()
+            st.rerun()
+
+    if st.session_state.get("gd_drafts"):
+        r1, r2, r3 = st.columns(3)
+        with r1:
+            if st.button("Make angrier", key="gd_angrier_inline_v2", use_container_width=True):
+                st.session_state["gd_lane"] = "Mad"
+                with st.spinner("Turning it up from the same facts..."):
+                    _gd_build_drafts(active_game, selected_tweet)
+                st.rerun()
+        with r2:
+            if st.button("Make pettier", key="gd_pettier_inline_v2", use_container_width=True):
+                st.session_state["gd_lane"] = "Petty"
+                with st.spinner("Finding the edge from the same facts..."):
+                    _gd_build_drafts(active_game, selected_tweet)
+                st.rerun()
+        with r3:
+            if st.button("More group chat", key="gd_groupchat_inline_v2", use_container_width=True):
+                st.session_state["gd_lane"] = "Group Chat"
+                with st.spinner("Making it shorter and more human..."):
+                    _gd_build_drafts(active_game, selected_tweet)
+                st.rerun()
+
+    _gd_render_inline_drafts("gd_live_inline_v2")
+
+    st.markdown(
+        f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:22px 0 10px 0;">LIVE FEED - {active_game["team"].upper()}</div>',
+        unsafe_allow_html=True,
+    )
+    f1, f2 = st.columns([1, 1])
+    with f1:
+        feed_filter = st.radio("Feed", ["Reporter / Beat", "Hot", "Fan chatter"], index=1, horizontal=True, key="gd_feed_filter_v2")
+    with f2:
+        _do_refresh = st.button("Refresh feed", key="gd_refresh_v2", use_container_width=True)
+
+    _cache_key = f"_gd_tweets_{active_game['team']}"
+    _cache_ts_key = f"_gd_tweets_ts_{active_game['team']}"
+    if _do_refresh or _cache_key not in st.session_state:
+        with st.spinner("Loading live feed..."):
+            tweets = _gd_fetch_game_tweets(active_game)
+            tweets.sort(key=lambda t: t.get("_gd_velocity", 0), reverse=True)
+            st.session_state[_cache_key] = tweets
+            st.session_state[_cache_ts_key] = time.time()
+
+    tweets = st.session_state.get(_cache_key, [])
+    if feed_filter == "Reporter / Beat":
+        tweets = [t for t in tweets if t.get("_gd_source") == "reporter"]
+    elif feed_filter == "Fan chatter":
+        tweets = [t for t in tweets if t.get("_gd_source") != "reporter"]
+
+    _ts = st.session_state.get(_cache_ts_key, 0)
+    if _ts:
+        _ago_min = int((time.time() - _ts) / 60)
+        st.markdown(f"<div style='font-size:10px;color:#3a5070;margin-bottom:8px;'>{_ago_min}m ago | {len(tweets)} tweets</div>", unsafe_allow_html=True)
+    if not tweets:
+        st.markdown("<div style='font-size:12px;color:#3a5070;font-style:italic;padding:16px 0;'>No recent tweets. Hit Refresh to check again.</div>", unsafe_allow_html=True)
+
+    for idx, t in enumerate(tweets[:12]):
+        author = t.get("author", {}).get("userName", "") or t.get("user", {}).get("screen_name", "")
+        text = t.get("text", "")[:280]
+        replies = t.get("replyCount", 0)
+        rts = t.get("retweetCount", 0)
+        _ago = _relative_time(t.get("createdAt", ""))
+        _tw_url = t.get("tweetUrl") or t.get("url") or ""
+        _ellip = "..." if len(t.get("text", "")) > 280 else ""
+        _src = t.get("_gd_source", "")
+        _src_tag = '<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(196,158,60,0.12);color:#C49E3C;font-weight:600;margin-left:6px;">REPORTER</span>' if _src == "reporter" else ""
+        _vel = t.get("_gd_velocity", 0)
+        _vel_tag = f'<span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(239,68,68,0.12);color:#EF4444;font-weight:600;">HOT</span>' if _vel > 5 else ""
+        st.markdown(
+            f'<div class="tweet-card" style="cursor:pointer;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            f'<span style="font-size:11px;color:#2DD4BF;font-weight:600;">@{html.escape(author)}{_src_tag}</span>'
+            f'<span style="display:flex;align-items:center;gap:6px;">{_vel_tag}<span style="font-size:9px;color:#445;">{html.escape(_ago)}</span></span></div>'
+            f'<div style="font-size:14px;color:#d8d8e8;line-height:1.6;">{html.escape(text)}{_ellip}</div>'
+            f'<div style="margin-top:6px;font-size:10px;color:#666888;">{replies} replies | {rts} RTs</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        b1, b2 = st.columns([1, 3])
+        with b1:
+            if st.button("React to this", key=f"gd_r_v2_{idx}", use_container_width=True):
+                st.session_state["_gd_selected_tweet"] = t
+                st.session_state["gd_context"] = ""
+                _gd_clear_drafts()
+                with st.spinner("Building from this verified feed item..."):
+                    _gd_build_drafts(active_game, t)
+                st.rerun()
+        with b2:
+            if _tw_url:
+                st.markdown(f"[Open in X]({_tw_url})")
+
+    if any(_gd_game_state(g) == "live" for g in games):
+        st.markdown("<div style='font-size:10px;color:#2a3a50;text-align:center;margin-top:16px;'>Scores refresh every 60s. Tweets refresh manually.</div>", unsafe_allow_html=True)
 
 
 def page_podcast():
