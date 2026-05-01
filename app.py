@@ -28,6 +28,11 @@ from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_avail
 from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER_IMG, GAMEDAY_URL,
                     _VOICE_LABELS, _FORMAT_GUIDES, _WHATS_HOT_VOICE_GUIDE)
 from shared_voice import OVERUSED_OPENERS, DEFAULT_TWEET_FORMAT, DEFAULT_TWEET_VOICE, FORMAT_ORDER
+from shared_voice.gameday import (
+    GAMEDAY_LANES, GAMEDAY_MOMENTS, generate_gameday_drafts,
+    normalize_lane, normalize_moment, select_gameday_examples,
+    validate_gameday_draft,
+)
 from chatgpt_oauth import call_chatgpt_oauth
 from anthropic_circuit import (
     DEFAULT_UNAVAILABLE_COOLDOWN,
@@ -2841,6 +2846,9 @@ _podcast_state_qp = f"podcast_state={urllib.parse.quote(_podcast_state)}&" if _p
 _podcast_run_qp = f"podcast_run={urllib.parse.quote(_podcast_run)}&" if _podcast_run else ""
 _gameday_url = _build_gameday_url()
 _gameday_url_html = html.escape(_gameday_url, quote=True)
+_gameday_page_label = "Fan Pulse Gameday"
+_gameday_local_href = f"/?{_tok_qp}page=Fan+Pulse+Gameday"
+_gameday_local_href_js = json.dumps(_gameday_local_href)
 _owner_debug_zone = ""
 _owner_podcast_icon = ""
 _owner_podcast_panel = ""
@@ -2876,17 +2884,17 @@ if is_owner():
         Signals & Prompts
       </a>"""
     _nav_pages.insert(5, "Signals & Prompts")
-    _nav_pages.insert(6, "Gameday Mode")
-    _owner_gameday_icon = f"""<a href="{_gameday_url_html}" class="mp-ico mp-external-top {_act('Gameday Mode')}" data-external-top="1" target="_blank" rel="noopener noreferrer">
+    _nav_pages.insert(6, _gameday_page_label)
+    _owner_gameday_icon = f"""<a href="{html.escape(_gameday_local_href, quote=True)}" class="mp-ico {_act(_gameday_page_label)}" target="_self" title="Fan Pulse Gameday">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="15" rx="2" stroke="#00E5CC" stroke-width="1.5" opacity="0.4"/>
         <path d="M17 2l-5 5-5-5" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
       </svg>
     </a>"""
-    _owner_gameday_panel = f"""<a href="{_gameday_url_html}" class="mp-panel-item mp-external-top {_act('Gameday Mode')}" data-external-top="1" target="_blank" rel="noopener noreferrer">
+    _owner_gameday_panel = f"""<a href="{html.escape(_gameday_local_href, quote=True)}" class="mp-panel-item {_act(_gameday_page_label)}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="15" rx="2" stroke="#6B8AAA" stroke-width="1.5"/><path d="M17 2l-5 5-5-5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Gameday Mode
+        Fan Pulse Gameday
       </a>"""
 _nav_pages_js = json.dumps(_nav_pages)
 
@@ -3185,11 +3193,27 @@ _stc.html("""<script>
 (function(){
   var doc=window.parent.document;
   var win=window.parent;
+  var gamedayLocalHref=__GAMEDAY_LOCAL_HREF__;
+
+  function forceLocalGamedayLinks(root){
+    (root||doc).querySelectorAll('a').forEach(function(a){
+      var label=(a.textContent||'').trim();
+      var href=a.getAttribute('href')||'';
+      var isGamedayNav=label==='Gameday Mode' || label==='Fan Pulse Gameday' || href.indexOf('gameday-open.postascend.io')!==-1 || href.indexOf('live-gameday.postascend.io')!==-1;
+      if(!isGamedayNav) return;
+      if(!(a.classList.contains('mp-ico') || a.classList.contains('mp-panel-item') || label==='Gameday Mode' || label==='Fan Pulse Gameday')) return;
+      a.setAttribute('href',gamedayLocalHref);
+      a.setAttribute('target','_self');
+      a.removeAttribute('data-external-top');
+      a.classList.remove('mp-external-top');
+    });
+  }
 
   /* ── Desktop flyout panels (skip on mobile) ── */
   var _isDesktop=win.innerWidth>768;
   function init(){
     if(!_isDesktop) return;
+    forceLocalGamedayLinks(doc);
     doc.querySelectorAll('.mp-zone').forEach(function(zone){
       if(zone._mpReady) return;
       zone._mpReady=true;
@@ -3213,6 +3237,7 @@ _stc.html("""<script>
       function hide(){t=setTimeout(function(){panel.style.opacity='0';panel.style.transform='translateX(-4px)';panel.style.pointerEvents='none';},300);}
       zone.addEventListener('mouseenter',show);zone.addEventListener('mouseleave',hide);
       panel.addEventListener('mouseenter',function(){clearTimeout(t);});panel.addEventListener('mouseleave',hide);
+      forceLocalGamedayLinks(panel);
     });
   }
   setTimeout(init,600);setTimeout(init,1500);setTimeout(init,3000);
@@ -3221,6 +3246,7 @@ _stc.html("""<script>
   function wireNav(){
     var sidebar=doc.querySelector('section[data-testid="stSidebar"]');
     if(!sidebar) return;
+    forceLocalGamedayLinks(doc);
     var pageNames=__PAGE_NAMES__;
     /* Hide nav buttons visually but keep clickable */
     sidebar.querySelectorAll('button').forEach(function(btn){
@@ -3288,11 +3314,13 @@ _stc.html("""<script>
     });
   }
   setTimeout(wireNav,800);setTimeout(wireNav,2000);setTimeout(wireNav,4000);
+  setTimeout(function(){forceLocalGamedayLinks(doc);},6000);
 
   /* ── Global: MutationObserver that wires docks/bottoms + tags pill rows ── */
   /* Hidden buttons are now hidden by CSS (clip:rect) in the global stylesheet — no JS hiding needed */
   /* Runs on EVERY DOM change so it works on reruns (not just full page loads) */
   function processDOM(){
+    forceLocalGamedayLinks(doc);
     var btns=doc.querySelectorAll('button');
     /* Tag pill rows */
     var labels=['Punchy','Normal','Long','Thread','Article'];
@@ -3361,7 +3389,7 @@ _stc.html("""<script>
   });
   _observer.observe(doc.body||doc.documentElement,{childList:true,subtree:true});
 })();
-</script>""".replace("__PAGE_NAMES__", _nav_pages_js), height=0)
+</script>""".replace("__PAGE_NAMES__", _nav_pages_js).replace("__GAMEDAY_LOCAL_HREF__", _gameday_local_href_js), height=0)
 
 # ── Mobile hamburger nav (CSS-only toggle, main page DOM, no iframe) ─────────
 _lnk = "display:block;padding:14px 0;font-size:16px;color:#c0c8d8;text-decoration:none;border-bottom:1px solid #111a2a;"
@@ -3394,7 +3422,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
   {'<a href="/?'+_tok_qp+_podcast_state_qp+_podcast_run_qp+'page=Podcast" target="_self" style="'+_lnk+'">Podcast</a>' if is_owner() else ''}
   {'<a href="/?'+_tok_qp+'page=Signals+%26+Prompts" target="_self" style="'+_lnk+'">Signals & Prompts</a>' if is_owner() else ''}
-  {'<a href="'+_gameday_url_html+'" data-external-top="1" target="_blank" rel="noopener noreferrer" style="'+_lnk+'">Gameday Mode</a>' if is_owner() else ''}
+  {'<a href="/?'+_tok_qp+'page=Fan+Pulse+Gameday" target="_self" style="'+_lnk+'">Fan Pulse Gameday</a>' if is_owner() else ''}
   <div style="{_sec}">INTERACT</div>
   <a href="/?{_tok_qp}page=Reply+Mode" target="_self" style="{_lnk}">Reply Mode</a>
   <a href="/?{_tok_qp}page=Idea+Bank" target="_self" style="{_lnk}">Idea Bank</a>
@@ -3417,7 +3445,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Podcast"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Fan Pulse Gameday", "Podcast"} and not is_owner():
     _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
@@ -11576,8 +11604,137 @@ def _gd_fetch_game_tweets(game):
     return all_tweets
 
 
-@st.dialog("Gameday Draft", width="large")
-def _gd_draft_dialog(_nonce):
+def _gd_score_line(game: dict) -> str:
+    state = _gd_game_state(game)
+    if state == "pre":
+        return f"{game.get('team', 'Denver')} vs {game.get('opponent', 'Opponent')}"
+    return (
+        f"{game.get('team', 'Denver')} {game.get('our_score', '0')} - "
+        f"{game.get('opponent', 'Opponent')} {game.get('opp_score', '0')}"
+    )
+
+
+def _gd_game_payload(game: dict) -> dict:
+    return {
+        "team": game.get("team", "Denver"),
+        "opponent": game.get("opponent", "Opponent"),
+        "score_line": _gd_score_line(game),
+        "status": game.get("status", ""),
+        "state": _gd_game_state(game),
+        "sport": game.get("sport", ""),
+    }
+
+
+def _gd_signal_payload(tweet: dict | None) -> dict | None:
+    if not tweet:
+        return None
+    author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
+    return {
+        "author": author,
+        "text": tweet.get("text", ""),
+    }
+
+
+def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
+    lane = normalize_lane(st.session_state.get("gd_lane"))
+    moment = normalize_moment(st.session_state.get("gd_moment"))
+    context = st.session_state.get("gd_context", "")
+    longer = bool(st.session_state.get("gd_longer_take", False))
+    examples = select_gameday_examples(load_json("tweet_history.json", []), limit=8)
+
+    def _ai(prompt: str, system: str, max_tokens: int) -> str:
+        return call_claude(prompt, system=system, max_tokens=max_tokens)
+
+    drafts, raw = generate_gameday_drafts(
+        game=_gd_game_payload(game),
+        lane=lane,
+        moment=moment,
+        context=context,
+        signal_tweet=_gd_signal_payload(tweet),
+        examples=examples,
+        ai_call=_ai,
+        longer_take=longer,
+    )
+    st.session_state["gd_drafts"] = drafts
+    st.session_state["gd_raw"] = raw
+    st.session_state["gd_last_lane"] = lane
+    st.session_state["gd_last_moment"] = moment
+
+
+def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
+    drafts = st.session_state.get("gd_drafts", [])
+    if not drafts:
+        return
+    lane = html.escape(st.session_state.get("gd_last_lane") or st.session_state.get("gd_lane") or "Fan Pulse")
+    moment = html.escape(st.session_state.get("gd_last_moment") or st.session_state.get("gd_moment") or "Big Play")
+    st.markdown(
+        f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">GENERATED FAN REACTIONS</div>'
+        f'<div style="font-size:11px;color:#5a7090;margin-bottom:10px;">{moment} - {lane}</div>',
+        unsafe_allow_html=True,
+    )
+    for i, draft in enumerate(drafts):
+        ok, reason = validate_gameday_draft(
+            draft,
+            longer_take=bool(st.session_state.get("gd_longer_take", False)),
+        )
+        _warn = "" if ok else f'<div style="font-size:10px;color:#FBBF24;margin-top:6px;">Needs review: {html.escape(reason)}</div>'
+        st.markdown(
+            f'<div class="tweet-card">'
+            f'<div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:8px;">OPTION {i + 1}</div>'
+            f'<div style="font-size:18px;color:#f3f7fb;line-height:1.45;">{html.escape(draft)}</div>'
+            f'<div style="font-size:10px;color:#566b85;margin-top:8px;">{len(draft)} chars</div>{_warn}</div>',
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns([1, 3])
+        with c1:
+            if st.button("Use This", key=f"{prefix}_use_{i}", use_container_width=True):
+                st.session_state["gd_copy_text"] = draft
+        with c2:
+            if st.session_state.get("gd_copy_text") == draft:
+                st.text_area("Copy-ready text", value=draft, height=80, key=f"{prefix}_copy_{i}")
+
+
+def _gd_render_fan_controls(control_prefix: str = "gd") -> None:
+    if "gd_lane" not in st.session_state:
+        st.session_state["gd_lane"] = "Fan Pulse"
+    if "gd_moment" not in st.session_state:
+        st.session_state["gd_moment"] = "Big Play"
+
+    st.markdown('<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">FAN PULSE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:11px;color:#5a7090;margin-bottom:8px;">Pick the feeling first. Gameday writes like a fan in the moment, not a postgame analyst.</div>', unsafe_allow_html=True)
+    _lane_cols = st.columns(len(GAMEDAY_LANES))
+    for _li, _lane in enumerate(GAMEDAY_LANES):
+        with _lane_cols[_li]:
+            if st.button(_lane, key=f"{control_prefix}_lane_{_li}", use_container_width=True,
+                         type="primary" if normalize_lane(st.session_state.get("gd_lane")) == _lane else "secondary"):
+                st.session_state["gd_lane"] = _lane
+                st.session_state.pop("gd_drafts", None)
+                st.rerun()
+
+    _moment_cols = st.columns(4)
+    for _mi, _moment in enumerate(GAMEDAY_MOMENTS):
+        with _moment_cols[_mi % 4]:
+            if st.button(_moment, key=f"{control_prefix}_moment_{_mi}", use_container_width=True,
+                         type="primary" if normalize_moment(st.session_state.get("gd_moment")) == _moment else "secondary"):
+                st.session_state["gd_moment"] = _moment
+                st.session_state.pop("gd_drafts", None)
+                st.rerun()
+
+    st.text_input(
+        "What just happened?",
+        key="gd_context",
+        placeholder="Optional: Jokic ridiculous pass, refs missed a call, bench blew the lead...",
+    )
+    st.toggle(
+        "Longer take",
+        key="gd_longer_take",
+        value=bool(st.session_state.get("gd_longer_take", False)),
+        help="Use up to 280 characters instead of the default 180.",
+    )
+
+
+@st.dialog("Gameday Draft Legacy", width="large")
+def _gd_draft_dialog_creator_legacy(_nonce):
     game = st.session_state.get("_gd_selected_game")
     tweet = st.session_state.get("_gd_selected_tweet")
     if not game:
@@ -11633,27 +11790,117 @@ ANGLE: {"In-game reaction — real-time energy, hot take territory" if state == 
         st.session_state["_gd_reopen_results"] = True
         st.rerun()
 
+@st.dialog("Gameday Draft", width="large")
+def _gd_draft_dialog(_nonce):
+    """Fast fan-reaction Gameday dialog.
+
+    This intentionally bypasses Creator Studio's analytical build prompt.
+    """
+    game = st.session_state.get("_gd_selected_game")
+    tweet = st.session_state.get("_gd_selected_tweet")
+    if not game:
+        st.warning("No game selected.")
+        return
+
+    score_line = _gd_score_line(game)
+    status_line = game.get("status", "")
+    st.markdown(f"""<div style="background:#161B22;border:1px solid rgba(45,212,191,0.08);border-radius:14px;padding:16px 20px;margin-bottom:12px;">
+        <div style="font-size:11px;color:#2DD4BF;font-weight:600;letter-spacing:1px;margin-bottom:6px;">{game['sport']} - {status_line}</div>
+        <div style="font-size:20px;color:#e8e8f0;font-weight:700;">{score_line}</div>
+    </div>""", unsafe_allow_html=True)
+
+    if tweet:
+        author = tweet.get("author", {}).get("userName", "") or tweet.get("user", {}).get("screen_name", "")
+        st.markdown(
+            f'<div class="tweet-card"><div style="font-size:11px;color:#2DD4BF;font-weight:600;">Reacting to @{html.escape(author)}</div>'
+            f'<div style="font-size:13px;color:#d8d8e8;line-height:1.5;margin-top:6px;">{html.escape(tweet.get("text", "")[:360])}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    lane = normalize_lane(st.session_state.get("gd_lane"))
+    moment = normalize_moment(st.session_state.get("gd_moment"))
+    st.markdown(
+        f'<div style="font-size:11px;color:#7c8ea5;margin:6px 0 12px;">'
+        f'Fan Pulse mode - {html.escape(moment)} - {html.escape(lane)}. Fast, emotional, no ESPN voice.</div>',
+        unsafe_allow_html=True,
+    )
+
+    if "gd_drafts" not in st.session_state:
+        with st.spinner("Building fan reactions..."):
+            _gd_build_drafts(game, tweet)
+
+    drafts = st.session_state.get("gd_drafts", [])
+    for i, draft in enumerate(drafts):
+        ok, reason = validate_gameday_draft(draft, longer_take=bool(st.session_state.get("gd_longer_take", False)))
+        _warn = "" if ok else f'<div style="font-size:10px;color:#FBBF24;margin-top:6px;">Needs review: {html.escape(reason)}</div>'
+        st.markdown(
+            f'<div class="tweet-card">'
+            f'<div style="font-size:10px;color:#2DD4BF;font-weight:700;letter-spacing:1px;margin-bottom:8px;">OPTION {i + 1}</div>'
+            f'<div style="font-size:18px;color:#f3f7fb;line-height:1.45;">{html.escape(draft)}</div>'
+            f'<div style="font-size:10px;color:#566b85;margin-top:8px;">{len(draft)} chars</div>{_warn}</div>',
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            if st.button("Post", key=f"gd_post_{i}", use_container_width=True, type="primary"):
+                if is_guest():
+                    enc = urllib.parse.quote(draft)
+                    st.markdown(f'<a href="https://twitter.com/intent/tweet?text={enc}" target="_blank">Open in X to Post</a>', unsafe_allow_html=True)
+                else:
+                    with st.spinner("Posting..."):
+                        post_ok, detail = _post_tweet(draft)
+                    if post_ok:
+                        st.success("Posted to X.")
+                        if detail.startswith("https://"):
+                            st.markdown(f"[Open posted tweet]({detail})")
+                    else:
+                        st.error(f"Post failed - {detail}")
+        with c2:
+            if st.button("Copy", key=f"gd_copy_{i}", use_container_width=True):
+                st.session_state["gd_copy_text"] = draft
+        with c3:
+            if st.button("Angrier", key=f"gd_angry_{i}", use_container_width=True):
+                st.session_state["gd_lane"] = "Mad"
+                st.session_state["gd_context"] = (st.session_state.get("gd_context", "") + f"\nMake this angrier: {draft}").strip()
+                with st.spinner("Turning it up..."):
+                    _gd_build_drafts(game, tweet)
+                st.rerun()
+        with c4:
+            if st.button("Funnier", key=f"gd_funny_{i}", use_container_width=True):
+                st.session_state["gd_lane"] = "Petty"
+                st.session_state["gd_context"] = (st.session_state.get("gd_context", "") + f"\nMake this funnier or pettier: {draft}").strip()
+                with st.spinner("Finding the edge..."):
+                    _gd_build_drafts(game, tweet)
+                st.rerun()
+        with c5:
+            if st.button("More Me", key=f"gd_me_{i}", use_container_width=True):
+                st.session_state["gd_lane"] = "Fan Pulse"
+                st.session_state["gd_context"] = (st.session_state.get("gd_context", "") + f"\nMake this sound more like my live tweets: {draft}").strip()
+                with st.spinner("Matching Tyler..."):
+                    _gd_build_drafts(game, tweet)
+                st.rerun()
+
+    if st.session_state.get("gd_copy_text"):
+        st.text_area("Copy-ready text", value=st.session_state["gd_copy_text"], height=90, key="gd_copy_box")
+
+    if st.button("Refresh 5 New Fan Reactions", use_container_width=True, key="gd_refresh_drafts"):
+        with st.spinner("Building new reactions..."):
+            _gd_build_drafts(game, tweet)
+        st.rerun()
+
 
 def page_gameday():
     _target = _build_gameday_url()
-    _target_json = json.dumps(_target)
     _target_html = html.escape(_target, quote=True)
     st.markdown('<div class="main-header">GAMEDAY <span>MODE</span></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="tool-desc">Opening the full live gameday app with pregame keys, generated tweets, and the complete game workflow.</div>',
+        '<div class="tool-desc">Live scores, fan-pulse reactions, and fast posts that sound like watching the game with Denver fans.</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        f'<div class="tweet-card"><div style="font-size:12px;color:#7c8ea5;">If you are not redirected automatically, <a href="{_target_html}" target="_self">open Gameday Mode</a>.</div></div>',
+        f'<div class="tweet-card"><div style="font-size:12px;color:#7c8ea5;">External Gameday remains available here: <a href="{_target_html}" target="_blank" rel="noopener noreferrer">open full Gameday app</a>. This HQ view now uses the dedicated Fan Pulse engine instead of Creator Studio.</div></div>',
         unsafe_allow_html=True,
     )
-    import streamlit.components.v1 as _stc_gameday
-
-    _stc_gameday.html(
-        f"<script>window.top.location.replace({_target_json});</script>",
-        height=0,
-    )
-    return
 
     _gd_btn = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#0a1220;border:1px solid #1a2a45;color:#5a7090;cursor:pointer;display:inline-flex;align-items:center;"
     _gd_btn_pri = "height:44px;padding:0 16px;border-radius:14px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.4);color:#2DD4BF;cursor:pointer;display:inline-flex;align-items:center;"
@@ -11669,8 +11916,26 @@ def page_gameday():
     if not games:
         st.markdown("""<div style="text-align:center;padding:60px 20px;">
             <div style="font-size:16px;color:#3a5070;font-weight:600;">No Denver games today</div>
-            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">Broncos, Nuggets, Avalanche, or CU Buffs football.</div>
+            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">You can still test Fan Pulse with a manual game moment.</div>
         </div>""", unsafe_allow_html=True)
+        _gd_render_fan_controls("gd_empty")
+        if st.button("Generate Manual Fan Reactions", key="gd_empty_generate", use_container_width=True, type="primary"):
+            manual_game = {
+                "team": "Denver",
+                "opponent": "the other side",
+                "our_score": "",
+                "opp_score": "",
+                "status": "Manual Moment",
+                "sport": "Gameday",
+                "home": True,
+            }
+            st.session_state["_gd_selected_game"] = manual_game
+            st.session_state["_gd_selected_tweet"] = None
+            for _k in ["gd_drafts", "gd_raw"]:
+                st.session_state.pop(_k, None)
+            with st.spinner("Building fan reactions..."):
+                _gd_build_drafts(manual_game, None)
+        _gd_render_inline_drafts("gd_empty_inline")
         for sport_key, abbr, name in [("nfl", "DEN", "Broncos"), ("nba", "DEN", "Nuggets"), ("nhl", "COL", "Avalanche")]:
             try:
                 info = espn_team(sport_key, abbr)
@@ -11727,6 +11992,7 @@ def page_gameday():
         if st.button(_sel_key, key=_sel_key):
             st.session_state["_gd_active_game"] = g["team"]
             st.session_state.pop(f"_gd_tweets_{g['team']}", None)
+            st.session_state.pop("gd_drafts", None)
             st.rerun()
 
     active_name = st.session_state.get("_gd_active_game", "")
@@ -11734,20 +12000,26 @@ def page_gameday():
     if not active_game:
         return
 
+    _gd_render_fan_controls("gd_live")
+
     st.markdown(f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">{active_game["sport"]} FEED — {active_game["team"].upper()}</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div style="display:flex;gap:8px;margin-bottom:14px;">'
-        f'<span class="cs-bot" data-bot="gd_draft" style="{_gd_btn_pri}">Draft Take</span>'
+        f'<span class="cs-bot" data-bot="gd_draft" style="{_gd_btn_pri}">Generate Fan Reactions</span>'
         f'<span class="cs-bot" data-bot="gd_refresh" style="{_gd_btn}">Refresh</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
-    if st.button("gd_draft", key="gd_draft"):
+    _visible_generate = st.button("Generate Fan Reactions Now", key="gd_draft_visible", use_container_width=True, type="primary")
+    if st.button("gd_draft", key="gd_draft") or _visible_generate:
         st.session_state["_gd_selected_game"] = active_game
         st.session_state["_gd_selected_tweet"] = None
-        for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+        for _k in ["gd_drafts", "gd_raw", "ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
             st.session_state.pop(_k, None)
+        with st.spinner("Building fan reactions..."):
+            _gd_build_drafts(active_game, None)
         _gd_draft_dialog(str(time.time()))
+    _gd_render_inline_drafts("gd_live_inline")
     _do_refresh = st.button("gd_refresh", key="gd_refresh")
 
     _cache_key = f"_gd_tweets_{active_name}"
@@ -11802,8 +12074,10 @@ def page_gameday():
         if st.button(_rkey, key=_rkey):
             st.session_state["_gd_selected_game"] = active_game
             st.session_state["_gd_selected_tweet"] = t
-            for _k in ["ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
+            for _k in ["gd_drafts", "gd_raw", "ci_banger_data", "ci_result", "ci_viral_data", "ci_grades", "ci_preview"]:
                 st.session_state.pop(_k, None)
+            with st.spinner("Building fan reactions..."):
+                _gd_build_drafts(active_game, t)
             _gd_draft_dialog(str(time.time()))
 
     if any(_gd_game_state(g) == "live" for g in games):
@@ -14007,6 +14281,7 @@ if is_owner():
     page_map["Podcast"] = page_podcast
 if is_owner():
     page_map["Signals & Prompts"] = page_signals_prompts
+    page_map["Fan Pulse Gameday"] = page_gameday
     page_map["Gameday Mode"] = page_gameday
 if is_owner():
     page_map["Debug Console"] = page_debug_console
