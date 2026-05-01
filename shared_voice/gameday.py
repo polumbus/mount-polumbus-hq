@@ -88,6 +88,26 @@ _UNSUPPORTED_EVENT_CLAIMS = (
     "momentum",
 )
 
+_TIME_PHASE_CLAIMS = (
+    "halftime",
+    "half time",
+    "first half",
+    "second half",
+    "1st quarter",
+    "first quarter",
+    "2nd quarter",
+    "second quarter",
+    "3rd quarter",
+    "third quarter",
+    "4th quarter",
+    "fourth quarter",
+    "end of 1st",
+    "end of 2nd",
+    "end of 3rd",
+    "end of the 3rd",
+    "end of 4th",
+)
+
 _LIVE_REACTION_MARKERS = (
     "we ",
     "us ",
@@ -223,6 +243,9 @@ def build_gameday_prompt(
     opponent = str(game.get("opponent") or "the opponent").strip()
     score = str(game.get("score_line") or "").strip()
     status = str(game.get("status") or "").strip()
+    period = str(game.get("period") or "").strip()
+    clock = str(game.get("clock") or "").strip()
+    source_age = str((signal_tweet or {}).get("age_label") or "").strip()
     source_text = str((signal_tweet or {}).get("text") or "").strip()
     source_author = str((signal_tweet or {}).get("author") or "").strip().lstrip("@")
     char_rule = "180 characters max" if not longer_take else "280 characters max"
@@ -231,10 +254,12 @@ def build_gameday_prompt(
         f"Team: {team}",
         f"Opponent: {opponent}",
         f"Score/status: {score} {status}".strip(),
+        f"Clock/period: {clock or 'not provided'} {('period ' + period) if period else ''}".strip(),
         f"Game state: {state or 'live/near-live'}",
     ]
     if source_text:
-        verified_facts.append(f'Live feed signal from @{source_author or "feed"}: "{source_text[:360]}"')
+        age_suffix = f" ({source_age})" if source_age else ""
+        verified_facts.append(f'Live feed signal from @{source_author or "feed"}{age_suffix}: "{source_text[:360]}"')
     if context.strip():
         verified_facts.append(f'Tyler-entered live note: "{context.strip()[:360]}"')
     facts_block = "\n".join(f"- {fact}" for fact in verified_facts if fact.strip())
@@ -250,6 +275,7 @@ No hashtags. No links. No generic recap. No press-conference voice.
 TRUST RULE:
 You may ONLY reference facts explicitly provided in the prompt.
 Do not infer a turnover, missed shot, bad possession, referee mistake, injury, bench issue, coaching mistake, momentum swing, comeback, collapse, or big play unless that exact event is in the live feed signal or Tyler-entered live note.
+Never mention a game phase such as halftime or a quarter unless that exact current phase appears in VERIFIED LIVE FACTS.
 If the only fact is the score/status, react only to the score/status."""
 
     prompt = f"""Build 5 ready-to-post Gameday reactions.
@@ -277,6 +303,7 @@ RULES:
 - Use numbers only if they appear in VERIFIED LIVE FACTS.
 - Do not invent stats, rankings, shot charts, formations, or play analysis.
 - Do not invent game events.
+- Do not mention halftime, quarter, clock, or period unless it is explicitly in VERIFIED LIVE FACTS.
 - Ban ESPN-style analysis: no "what it means", no schematic breakdown, no "film-room observation", no "structural failure".
 - Avoid polished column language. Short, human, immediate.
 - Match the selected lane and moment.
@@ -366,12 +393,24 @@ def validate_gameday_draft_against_facts(
             str(game.get("opponent") or ""),
             str(game.get("score_line") or ""),
             str(game.get("status") or ""),
+            str(game.get("period") or ""),
+            str(game.get("clock") or ""),
             str(game.get("state") or ""),
             str(context or ""),
             str((signal_tweet or {}).get("text") or ""),
         ]
     ).lower()
     lower = (text or "").lower()
+
+    def _phase_supported(claim: str) -> bool:
+        if claim in facts_text:
+            return True
+        if claim == "end of the 3rd" and "end of 3rd" in facts_text:
+            return True
+        if claim == "end of 3rd" and "end of the 3rd" in facts_text:
+            return True
+        return False
+
     unsupported = [
         claim
         for claim in _UNSUPPORTED_EVENT_CLAIMS
@@ -379,6 +418,13 @@ def validate_gameday_draft_against_facts(
     ]
     if unsupported:
         return False, f"unsupported live event claim: {unsupported[0]}"
+    phase_conflict = [
+        claim
+        for claim in _TIME_PHASE_CLAIMS
+        if claim in lower and not _phase_supported(claim)
+    ]
+    if phase_conflict:
+        return False, f"unsupported game phase claim: {phase_conflict[0]}"
     return True, ""
 
 

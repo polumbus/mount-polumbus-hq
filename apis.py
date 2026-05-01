@@ -51,11 +51,15 @@ def espn_scores(sport: str, limit: int = 20) -> list:
             else:
                 away = td
         status = event.get("status", {})
+        status_type = status.get("type", {})
         games.append({
             "name": event.get("name", ""),
             "date": event.get("date", ""),
-            "status": status.get("type", {}).get("description", ""),
-            "completed": status.get("type", {}).get("completed", False),
+            "status": status_type.get("description", ""),
+            "status_detail": status_type.get("detail", ""),
+            "period": status.get("period", 0),
+            "clock": status.get("displayClock", ""),
+            "completed": status_type.get("completed", False),
             "home": home, "away": away,
             "broadcast": comp.get("broadcasts", [{}])[0].get("names", [""])[0] if comp.get("broadcasts") else "",
         })

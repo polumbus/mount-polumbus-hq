@@ -15,7 +15,9 @@ def _game():
         "team": "Nuggets",
         "opponent": "Blazers",
         "score_line": "Nuggets 92 - Blazers 106",
-        "status": "4th Quarter",
+        "status": "End of 3rd Quarter",
+        "period": 3,
+        "clock": "0.0",
         "state": "live",
         "sport": "NBA",
     }
@@ -144,5 +146,25 @@ def test_unsupported_event_claims_are_rejected_unless_in_facts():
 
 def test_score_status_counts_as_context_but_not_event_detail():
     ok, reason = has_actionable_gameday_context(game=_game(), context="", signal_tweet=None)
+    assert ok
+    assert reason == ""
+
+
+def test_rejects_stale_or_invented_game_phase():
+    ok, reason = validate_gameday_draft_against_facts(
+        "Halftime and we still have no idea what this team is doing.",
+        game=_game(),
+        context="",
+        signal_tweet=None,
+    )
+    assert not ok
+    assert "unsupported game phase claim" in reason
+
+    ok, reason = validate_gameday_draft_against_facts(
+        "End of the 3rd and this still feels way too familiar.",
+        game=_game(),
+        context="",
+        signal_tweet=None,
+    )
     assert ok
     assert reason == ""

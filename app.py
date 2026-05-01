@@ -11464,6 +11464,9 @@ def _gd_fetch_live_scores():
                             "opp_abbr": opp.get("abbr", ""),
                             "home": is_home,
                             "status": g.get("status", "Scheduled"),
+                            "status_detail": g.get("status_detail", ""),
+                            "period": g.get("period", ""),
+                            "clock": g.get("clock", ""),
                             "completed": g.get("completed", False),
                             "broadcast": g.get("broadcast", ""),
                             "fetched_at": fetched_at,
@@ -11496,6 +11499,7 @@ def _gd_fetch_live_scores():
                     us = home_c if is_home else away_c
                     opp = away_c if is_home else home_c
                     status_obj = event.get("status", {})
+                    status_type = status_obj.get("type", {})
                     results.append({
                         "team": info["name"],
                         "sport": info["sport"],
@@ -11505,8 +11509,11 @@ def _gd_fetch_live_scores():
                         "opponent": opp.get("name", "Unknown"),
                         "opp_abbr": opp.get("abbr", ""),
                         "home": is_home,
-                        "status": status_obj.get("type", {}).get("description", "Scheduled"),
-                        "completed": status_obj.get("type", {}).get("completed", False),
+                        "status": status_type.get("description", "Scheduled"),
+                        "status_detail": status_type.get("detail", ""),
+                        "period": status_obj.get("period", ""),
+                        "clock": status_obj.get("displayClock", ""),
+                        "completed": status_type.get("completed", False),
                         "broadcast": comp.get("broadcasts", [{}])[0].get("names", [""])[0] if comp.get("broadcasts") else "",
                         "fetched_at": fetched_at,
                         "provider": "ESPN",
@@ -11627,9 +11634,40 @@ def _gd_game_payload(game: dict) -> dict:
         "opponent": game.get("opponent", "Opponent"),
         "score_line": _gd_score_line(game),
         "status": game.get("status", ""),
+        "period": game.get("period", ""),
+        "clock": game.get("clock", ""),
         "state": _gd_game_state(game),
         "sport": game.get("sport", ""),
     }
+
+
+def _gd_tweet_age_minutes(tweet: dict | None) -> float | None:
+    if not tweet:
+        return None
+    raw = str(tweet.get("createdAt") or tweet.get("created_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        created = datetime.strptime(raw, "%a %b %d %H:%M:%S %z %Y")
+    except Exception:
+        try:
+            created = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return max((datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds() / 60, 0)
+
+
+def _gd_tweet_age_label(tweet: dict | None) -> str:
+    age = _gd_tweet_age_minutes(tweet)
+    if age is None:
+        return ""
+    if age < 1:
+        return "less than 1m old"
+    if age < 60:
+        return f"{int(age)}m old"
+    return f"{int(age // 60)}h old"
 
 
 def _gd_signal_payload(tweet: dict | None) -> dict | None:
@@ -11639,6 +11677,8 @@ def _gd_signal_payload(tweet: dict | None) -> dict | None:
     return {
         "author": author,
         "text": tweet.get("text", ""),
+        "created_at": tweet.get("createdAt") or tweet.get("created_at", ""),
+        "age_label": _gd_tweet_age_label(tweet),
     }
 
 
@@ -11664,9 +11704,12 @@ def _gd_fact_packet(game: dict, tweet: dict | None = None, context: str = "") ->
         "tweet": _gd_signal_payload(tweet),
         "tweet_author": author,
         "tweet_text": tweet_text,
+        "tweet_age": _gd_tweet_age_label(tweet),
         "context": context.strip(),
         "score_line": _gd_score_line(game),
         "status": game.get("status", ""),
+        "period": game.get("period", ""),
+        "clock": game.get("clock", ""),
         "fetched_at": game.get("fetched_at", 0),
         "provider": game.get("provider", "ESPN"),
     }
@@ -11682,7 +11725,8 @@ def _gd_fact_label(packet: dict | None) -> str:
         parts.append(packet["status"])
     if packet.get("tweet_text"):
         author = packet.get("tweet_author") or "feed"
-        parts.append(f"@{author}: {packet['tweet_text'][:120]}")
+        age = f" ({packet['tweet_age']})" if packet.get("tweet_age") else ""
+        parts.append(f"@{author}{age}: {packet['tweet_text'][:120]}")
     if packet.get("context"):
         parts.append(f"Note: {packet['context'][:120]}")
     return " | ".join(parts) or "Verified game context"
@@ -11691,6 +11735,11 @@ def _gd_fact_label(packet: dict | None) -> str:
 def _gd_score_is_stale(game: dict) -> bool:
     fetched_at = float(game.get("fetched_at") or 0)
     return bool(fetched_at and (time.time() - fetched_at) > 120 and _gd_game_state(game) == "live")
+
+
+def _gd_tweet_is_stale_for_live_game(game: dict, tweet: dict | None) -> bool:
+    age = _gd_tweet_age_minutes(tweet)
+    return bool(tweet and age is not None and age > 12 and _gd_game_state(game) == "live")
 
 
 def _gd_clear_drafts() -> None:
@@ -11727,6 +11776,13 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
         st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
         return
 
+    if _gd_tweet_is_stale_for_live_game(game, tweet):
+        st.session_state["gd_drafts"] = []
+        st.session_state["gd_raw"] = ""
+        st.session_state["gd_error"] = f"That feed item is {_gd_tweet_age_label(tweet)}. For live Gameday, react to a fresher item or type what just happened."
+        st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
+        return
+
     drafts, raw = generate_gameday_drafts(
         game=_gd_game_payload(game),
         lane=lane,
@@ -11743,6 +11799,7 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     st.session_state["gd_last_lane"] = lane
     st.session_state["gd_last_moment"] = moment
     st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
+    st.session_state["gd_generated_at"] = time.time()
 
 
 def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
@@ -11758,9 +11815,11 @@ def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
     moment = html.escape(st.session_state.get("gd_last_moment") or st.session_state.get("gd_moment") or "Big Play")
     packet = st.session_state.get("gd_fact_packet") or {}
     grounded = html.escape(_gd_fact_label(packet))
+    generated_at = float(st.session_state.get("gd_generated_at") or 0)
+    generated_label = f"Generated {int((time.time() - generated_at) / 60)}m ago" if generated_at else "Generated just now"
     st.markdown(
         f'<div style="font-size:13px;font-weight:700;color:#2DD4BF;letter-spacing:1px;margin:20px 0 10px 0;">READY DRAFTS</div>'
-        f'<div style="font-size:11px;color:#5a7090;margin-bottom:10px;">{moment} - {lane} | Grounded in: {grounded}</div>',
+        f'<div style="font-size:11px;color:#5a7090;margin-bottom:10px;">{moment} - {lane} | {html.escape(generated_label)} | Grounded in: {grounded}</div>',
         unsafe_allow_html=True,
     )
     for i, draft in enumerate(drafts):
@@ -11828,9 +11887,12 @@ def _gd_render_fan_controls(active_game: dict, selected_tweet: dict | None, cont
         st.warning("Score data is older than 2 minutes. Refresh scores before trusting a score-only draft.")
     if selected_tweet:
         author = selected_tweet.get("author", {}).get("userName", "") or selected_tweet.get("user", {}).get("screen_name", "")
+        stale_note = ""
+        if _gd_tweet_is_stale_for_live_game(active_game, selected_tweet):
+            stale_note = f'<div style="font-size:11px;color:#FBBF24;margin-top:6px;">This source is {_gd_tweet_age_label(selected_tweet)}. Use a fresher source for live reactions.</div>'
         st.markdown(
-            f'<div class="tweet-card"><div style="font-size:11px;color:#2DD4BF;font-weight:600;">Selected source: @{html.escape(author)}</div>'
-            f'<div style="font-size:13px;color:#d8d8e8;line-height:1.45;margin-top:6px;">{html.escape(selected_tweet.get("text", "")[:260])}</div></div>',
+            f'<div class="tweet-card"><div style="font-size:11px;color:#2DD4BF;font-weight:600;">Selected source: @{html.escape(author)} {html.escape(_gd_tweet_age_label(selected_tweet))}</div>'
+            f'<div style="font-size:13px;color:#d8d8e8;line-height:1.45;margin-top:6px;">{html.escape(selected_tweet.get("text", "")[:260])}</div>{stale_note}</div>',
             unsafe_allow_html=True,
         )
 
@@ -12240,13 +12302,16 @@ def page_gameday():
     freshness = ""
     if active_game.get("fetched_at"):
         freshness = f" | score refresh {int((time.time() - active_game['fetched_at']) / 60)}m ago"
+    clock_bits = " ".join(str(active_game.get(k) or "").strip() for k in ("clock", "status_detail") if active_game.get(k)).strip()
+    if active_game.get("period"):
+        clock_bits = f"{clock_bits} | period {active_game['period']}".strip(" |")
     st.markdown(
         f'<div style="border:1px solid rgba(45,212,191,0.18);border-radius:8px;padding:12px 14px;margin-bottom:12px;">'
         f'<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">'
         f'<div style="font-size:18px;font-weight:800;color:#f3f7fb;">{html.escape(_gd_score_line(active_game))}</div>'
         f'<div style="font-size:12px;color:{status_color};font-weight:700;">{html.escape(active_game.get("status", ""))}</div>'
         f'</div><div style="font-size:10px;color:#5a7090;margin-top:4px;">'
-        f'{html.escape(active_game.get("sport", ""))}{html.escape(freshness)}</div></div>',
+        f'{html.escape(active_game.get("sport", ""))}{(" | " + html.escape(clock_bits)) if clock_bits else ""}{html.escape(freshness)}</div></div>',
         unsafe_allow_html=True,
     )
 
