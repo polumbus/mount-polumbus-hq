@@ -56,6 +56,22 @@ _ANALYTICAL_DRIFT = (
     "from an analytical standpoint",
 )
 
+_UNSUPPORTED_EVENT_CLAIMS = (
+    "possession",
+    "turnover",
+    "missed call",
+    "bad call",
+    "refs",
+    "ref ",
+    "bench",
+    "coach",
+    "collapse",
+    "big play",
+    "hit that",
+    "just happened",
+    "momentum",
+)
+
 _LIVE_REACTION_MARKERS = (
     "we ",
     "us ",
@@ -200,7 +216,17 @@ def build_gameday_prompt(
         if source_text
         else ""
     )
-    context_block = f'\nWHAT TYLER SAW: "{context.strip()[:360]}"' if context.strip() else ""
+    verified_facts = [
+        f"Team: {team}",
+        f"Opponent: {opponent}",
+        f"Score/status: {score} {status}".strip(),
+        f"Game state: {state or 'live/near-live'}",
+    ]
+    if source_text:
+        verified_facts.append(f'Live feed signal from @{source_author or "feed"}: "{source_text[:360]}"')
+    if context.strip():
+        verified_facts.append(f'Tyler-entered live note: "{context.strip()[:360]}"')
+    facts_block = "\n".join(f"- {fact}" for fact in verified_facts if fact.strip())
 
     system = """You write live Gameday tweets for Tyler Polumbus.
 
@@ -208,18 +234,25 @@ This is NOT Creator Studio. This is not ESPN. This is a fan instant-reaction dev
 Sound like Tyler is watching the game with Denver fans in real time.
 Use emotion first, basketball/football knowledge second.
 The goal is connection and replies, not proving expertise.
-No hashtags. No links. No generic recap. No press-conference voice."""
+No hashtags. No links. No generic recap. No press-conference voice.
+
+TRUST RULE:
+You may ONLY reference facts explicitly provided in the prompt.
+Do not infer a turnover, missed shot, bad possession, referee mistake, injury, bench issue, coaching mistake, momentum swing, comeback, collapse, or big play unless that exact event is in the live feed signal or Tyler-entered live note.
+If the only fact is the score/status, react only to the score/status."""
 
     prompt = f"""Build 5 ready-to-post Gameday reactions.
 
-GAME:
-- Team: {team}
-- Opponent: {opponent}
-- Score/status: {score} {status}
-- Game state: {state or "live/near-live"}
-- Moment button: {moment}
+VERIFIED LIVE FACTS:
+{facts_block}
+
+- Button selected: {moment}
 - Emotion lane: {lane} ({_LANE_GUIDES[lane]})
-{signal_block}{context_block}
+
+IMPORTANT:
+- The selected button is a writing lens, NOT a source of truth.
+- Do not claim the button's event happened unless it appears in VERIFIED LIVE FACTS.
+- If facts only support a score/status reaction, write score/status reactions.
 
 TYLER LIVE-REACTION EXAMPLES TO CALIBRATE ENERGY:
 {example_block}
@@ -230,8 +263,9 @@ RULES:
 - Sound like an emotional fan talking to fans during the game.
 - Prefer first person, "we", direct frustration, relief, disbelief, and baitable statements.
 - Make people reply because they agree, disagree, are nervous, or want to pile on.
-- Use stats only when the score or a specific number is the emotional trigger.
+- Use numbers only if they appear in VERIFIED LIVE FACTS.
 - Do not invent stats, rankings, shot charts, formations, or play analysis.
+- Do not invent game events.
 - Ban ESPN-style analysis: no "what it means", no schematic breakdown, no "film-room observation", no "structural failure".
 - Avoid polished column language. Short, human, immediate.
 - Match the selected lane and moment.
@@ -247,6 +281,20 @@ Return ONLY this JSON:
   ]
 }}"""
     return prompt, system
+
+
+def has_actionable_gameday_context(*, game: dict[str, Any], context: str = "", signal_tweet: dict[str, Any] | None = None) -> tuple[bool, str]:
+    """Return whether we have enough truth to draft without making things up."""
+    score = str(game.get("score_line") or "").strip()
+    status = str(game.get("status") or "").strip()
+    source_text = str((signal_tweet or {}).get("text") or "").strip()
+    if source_text:
+        return True, ""
+    if context.strip():
+        return True, ""
+    if score and status and not any(word in score.lower() for word in (" vs ", "unknown")):
+        return True, ""
+    return False, "Need live score/status, a feed tweet, or a typed note about what actually happened."
 
 
 def parse_gameday_drafts(raw: str) -> list[str]:
@@ -290,67 +338,37 @@ def validate_gameday_draft(text: str, *, longer_take: bool = False) -> tuple[boo
     return True, ""
 
 
-def fallback_gameday_drafts(*, game: dict[str, Any], lane: str, moment: str) -> list[str]:
-    lane = normalize_lane(lane)
-    moment = normalize_moment(moment)
-    team = str(game.get("team") or "Denver")
-    opponent = str(game.get("opponent") or "them")
-    score = str(game.get("score_line") or f"{team} vs {opponent}")
-    if lane == "Fired Up":
-        return [
-            f"This is the version of {team} I keep talking myself into.",
-            "I am trying very hard to act normal right now.",
-            f"{score}. I have seen enough. We are allowed to be loud.",
-            "That whole possession felt like the building remembered who we are.",
-            "I need the next five minutes to look exactly like that.",
+def validate_gameday_draft_against_facts(
+    text: str,
+    *,
+    game: dict[str, Any],
+    context: str = "",
+    signal_tweet: dict[str, Any] | None = None,
+    longer_take: bool = False,
+) -> tuple[bool, str]:
+    ok, reason = validate_gameday_draft(text, longer_take=longer_take)
+    if not ok:
+        return ok, reason
+    facts_text = " ".join(
+        [
+            str(game.get("team") or ""),
+            str(game.get("opponent") or ""),
+            str(game.get("score_line") or ""),
+            str(game.get("status") or ""),
+            str(game.get("state") or ""),
+            str(context or ""),
+            str((signal_tweet or {}).get("text") or ""),
         ]
-    if lane == "Nervous":
-        return [
-            "I hate how familiar this feeling is.",
-            "We are officially in the part of the game where every possession feels illegal.",
-            f"{team} cannot keep making this harder than it needs to be.",
-            "This is where Denver sports has trained me to stop breathing.",
-            "I do not enjoy how much this game still feels open.",
-        ]
-    if lane == "Mad":
-        return [
-            "What are we doing.",
-            "That cannot happen in this spot. It just cannot.",
-            f"{team} is making the easy part look impossible right now.",
-            "Somebody has to calm this down before the whole game turns stupid.",
-            "I am begging for one normal possession.",
-        ]
-    if lane == "Petty":
-        return [
-            "Funny how quiet it gets when Denver punches back.",
-            "The other fanbase had tweets ready five minutes ago. Tough scene.",
-            "Refs saw the momentum and immediately wanted camera time.",
-            f"{opponent} fans were a lot louder before that possession.",
-            "Please keep explaining how Denver is lucky. This is going great.",
-        ]
-    if lane == "Group Chat":
-        return [
-            "I cannot believe that worked.",
-            "Not great Bob.",
-            "We are so back until further notice.",
-            "That was disgusting. I loved it.",
-            "Please do not make me regret believing again.",
-        ]
-    if moment == "Collapse":
-        return [
-            "I know this movie and I hate the ending.",
-            "We are really doing this again.",
-            "This game was comfortable about six bad decisions ago.",
-            "Denver sports cannot just let a person relax.",
-            "Somebody stop the bleeding before this gets ridiculous.",
-        ]
-    return [
-        "I am reacting completely normally to this game.",
-        f"{team} is making me feel things I was not emotionally prepared for.",
-        "This is exactly why we watch and exactly why we age.",
-        "The group chat is not surviving this fourth quarter.",
-        "I need everyone to pick a side right now.",
+    ).lower()
+    lower = (text or "").lower()
+    unsupported = [
+        claim
+        for claim in _UNSUPPORTED_EVENT_CLAIMS
+        if claim in lower and claim not in facts_text
     ]
+    if unsupported:
+        return False, f"unsupported live event claim: {unsupported[0]}"
+    return True, ""
 
 
 def generate_gameday_drafts(
@@ -364,6 +382,13 @@ def generate_gameday_drafts(
     ai_call: Callable[[str, str, int], str],
     longer_take: bool = False,
 ) -> tuple[list[str], str]:
+    has_context, reason = has_actionable_gameday_context(
+        game=game,
+        context=context,
+        signal_tweet=signal_tweet,
+    )
+    if not has_context:
+        return [], f"NEEDS_CONTEXT: {reason}"
     prompt, system = build_gameday_prompt(
         game=game,
         lane=lane,
@@ -379,18 +404,16 @@ def generate_gameday_drafts(
     seen: set[str] = set()
     for draft in parsed:
         clean = re.sub(r"\s+", " ", draft).strip()
-        ok, _reason = validate_gameday_draft(clean, longer_take=longer_take)
+        ok, _reason = validate_gameday_draft_against_facts(
+            clean,
+            game=game,
+            context=context,
+            signal_tweet=signal_tweet,
+            longer_take=longer_take,
+        )
         if ok and clean.lower() not in seen:
             seen.add(clean.lower())
             valid.append(clean)
         if len(valid) >= 5:
             break
-    if len(valid) < 5:
-        for fallback in fallback_gameday_drafts(game=game, lane=lane, moment=moment):
-            ok, _reason = validate_gameday_draft(fallback, longer_take=longer_take)
-            if ok and fallback.lower() not in seen:
-                seen.add(fallback.lower())
-                valid.append(fallback)
-            if len(valid) >= 5:
-                break
     return valid[:5], raw

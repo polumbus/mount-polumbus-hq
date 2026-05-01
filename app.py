@@ -30,6 +30,7 @@ from config import (TYLER_HANDLE, TYLER_CONTEXT, AMPLIFIER_AVATAR_URL, AMPLIFIER
 from shared_voice import OVERUSED_OPENERS, DEFAULT_TWEET_FORMAT, DEFAULT_TWEET_VOICE, FORMAT_ORDER
 from shared_voice.gameday import (
     GAMEDAY_LANES, GAMEDAY_MOMENTS, generate_gameday_drafts,
+    has_actionable_gameday_context,
     normalize_lane, normalize_moment, select_gameday_examples,
     validate_gameday_draft,
 )
@@ -11645,6 +11646,17 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     def _ai(prompt: str, system: str, max_tokens: int) -> str:
         return call_claude(prompt, system=system, max_tokens=max_tokens)
 
+    has_context, reason = has_actionable_gameday_context(
+        game=_gd_game_payload(game),
+        context=context,
+        signal_tweet=_gd_signal_payload(tweet),
+    )
+    if not has_context:
+        st.session_state["gd_drafts"] = []
+        st.session_state["gd_raw"] = ""
+        st.session_state["gd_error"] = reason
+        return
+
     drafts, raw = generate_gameday_drafts(
         game=_gd_game_payload(game),
         lane=lane,
@@ -11657,12 +11669,15 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     )
     st.session_state["gd_drafts"] = drafts
     st.session_state["gd_raw"] = raw
+    st.session_state["gd_error"] = "" if drafts else "AI did not return any safe drafts from the verified live facts. Add a clearer live note or react to a feed item."
     st.session_state["gd_last_lane"] = lane
     st.session_state["gd_last_moment"] = moment
 
 
 def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
     drafts = st.session_state.get("gd_drafts", [])
+    if st.session_state.get("gd_error"):
+        st.warning(st.session_state["gd_error"])
     if not drafts:
         return
     lane = html.escape(st.session_state.get("gd_last_lane") or st.session_state.get("gd_lane") or "Fan Pulse")
@@ -11883,6 +11898,9 @@ def _gd_draft_dialog(_nonce):
     if st.session_state.get("gd_copy_text"):
         st.text_area("Copy-ready text", value=st.session_state["gd_copy_text"], height=90, key="gd_copy_box")
 
+    if st.session_state.get("gd_error"):
+        st.warning(st.session_state["gd_error"])
+
     if st.button("Refresh 5 New Fan Reactions", use_container_width=True, key="gd_refresh_drafts"):
         with st.spinner("Building new reactions..."):
             _gd_build_drafts(game, tweet)
@@ -11916,26 +11934,8 @@ def page_gameday():
     if not games:
         st.markdown("""<div style="text-align:center;padding:60px 20px;">
             <div style="font-size:16px;color:#3a5070;font-weight:600;">No Denver games today</div>
-            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">You can still test Fan Pulse with a manual game moment.</div>
+            <div style="font-size:12px;color:#2a3a50;margin-top:8px;">Fan Pulse only generates from live score data, a live feed item, or a verified note during a real game.</div>
         </div>""", unsafe_allow_html=True)
-        _gd_render_fan_controls("gd_empty")
-        if st.button("Generate Manual Fan Reactions", key="gd_empty_generate", use_container_width=True, type="primary"):
-            manual_game = {
-                "team": "Denver",
-                "opponent": "the other side",
-                "our_score": "",
-                "opp_score": "",
-                "status": "Manual Moment",
-                "sport": "Gameday",
-                "home": True,
-            }
-            st.session_state["_gd_selected_game"] = manual_game
-            st.session_state["_gd_selected_tweet"] = None
-            for _k in ["gd_drafts", "gd_raw"]:
-                st.session_state.pop(_k, None)
-            with st.spinner("Building fan reactions..."):
-                _gd_build_drafts(manual_game, None)
-        _gd_render_inline_drafts("gd_empty_inline")
         for sport_key, abbr, name in [("nfl", "DEN", "Broncos"), ("nba", "DEN", "Nuggets"), ("nhl", "COL", "Avalanche")]:
             try:
                 info = espn_team(sport_key, abbr)

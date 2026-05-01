@@ -3,8 +3,10 @@ from shared_voice.gameday import (
     GAMEDAY_MOMENTS,
     build_gameday_prompt,
     generate_gameday_drafts,
+    has_actionable_gameday_context,
     select_gameday_examples,
     validate_gameday_draft,
+    validate_gameday_draft_against_facts,
 )
 
 
@@ -45,7 +47,7 @@ def test_prompt_covers_every_moment():
             context="",
             examples=[],
         )
-        assert f"Moment button: {moment}" in prompt
+        assert f"Button selected: {moment}" in prompt
 
 
 def test_validator_rejects_analytical_drift():
@@ -81,7 +83,7 @@ def test_select_examples_prefers_reply_heavy_live_reactions():
     assert examples == ["I hate how familiar this feels. This team can't afford soft nights in April."]
 
 
-def test_generate_filters_bad_ai_and_fills_fallbacks():
+def test_generate_filters_bad_ai_without_filling_fallbacks():
     def fake_ai(_prompt, _system, _max_tokens):
         return """
         {"drafts":[
@@ -99,6 +101,48 @@ def test_generate_filters_bad_ai_and_fills_fallbacks():
         examples=[],
         ai_call=fake_ai,
     )
-    assert len(drafts) == 5
-    assert "What are we doing." in drafts
+    assert drafts == ["What are we doing."]
     assert all(validate_gameday_draft(draft)[0] for draft in drafts)
+
+
+def test_generate_returns_empty_without_live_context():
+    def fake_ai(_prompt, _system, _max_tokens):
+        raise AssertionError("AI should not be called without verified context")
+
+    drafts, raw = generate_gameday_drafts(
+        game={"team": "Denver", "opponent": "Opponent", "score_line": "", "status": "", "state": "pre"},
+        lane="Mad",
+        moment="Bad Possession",
+        context="",
+        signal_tweet=None,
+        examples=[],
+        ai_call=fake_ai,
+    )
+    assert drafts == []
+    assert raw.startswith("NEEDS_CONTEXT:")
+
+
+def test_unsupported_event_claims_are_rejected_unless_in_facts():
+    ok, reason = validate_gameday_draft_against_facts(
+        "That possession cannot happen in this spot.",
+        game=_game(),
+        context="",
+        signal_tweet=None,
+    )
+    assert not ok
+    assert "unsupported live event claim" in reason
+
+    ok, reason = validate_gameday_draft_against_facts(
+        "That possession cannot happen in this spot.",
+        game=_game(),
+        context="Nuggets just had a brutal empty possession.",
+        signal_tweet=None,
+    )
+    assert ok
+    assert reason == ""
+
+
+def test_score_status_counts_as_context_but_not_event_detail():
+    ok, reason = has_actionable_gameday_context(game=_game(), context="", signal_tweet=None)
+    assert ok
+    assert reason == ""
