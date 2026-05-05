@@ -579,12 +579,27 @@ def performance_context(state: dict[str, Any] | None) -> str:
 
 
 def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any] | None,
-                            *, live_stats_block: str = "", sports_ctx: str = "") -> str:
+                            *, action: str = "evolve",
+                            live_stats_block: str = "", sports_ctx: str = "") -> str:
     lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
     context = performance_context(state)
-    return f"""Turn this concept into 3 post-ready X drafts for Creator Evolution.
+    action = (action or "evolve").strip().lower()
+    is_build = action == "build"
+    source_label = "SOURCE MATERIAL" if is_build else "CONCEPT"
+    opening = (
+        "Build 3 distinct, post-ready X drafts from this source material for Creator Evolution."
+        if is_build
+        else "Turn this concept into 3 post-ready X drafts for Creator Evolution."
+    )
+    build_rule = (
+        "\nBUILD MODE:\n"
+        "- If the source includes TOPIC, TENSION, KEY STATS, or ANGLE lines, treat them as a structured brief.\n"
+        "- Extract the strongest take and write from scratch; do not simply rephrase the form fields.\n"
+        "- Each option should be a different angle or structure, not three small edits of the same draft.\n"
+    ) if is_build else ""
+    return f"""{opening}
 
-CONCEPT:
+{source_label}:
 \"{seed}\"
 
 FORMAT:
@@ -596,6 +611,7 @@ PERSONALITY LANE:
 {context}
 {live_stats_block}
 {sports_ctx}
+{build_rule}
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.

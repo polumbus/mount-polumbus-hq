@@ -41,6 +41,27 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("TYLER'S HALL OF FAME DATA", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
 
+    def test_build_prompt_uses_structured_source_material_without_hof(self):
+        state = ce.refresh_state(None, [
+            _tweet(1, "The best Broncos posts lately all leave the uncomfortable part hanging...", hours_ago=90, views=9000, likes=180, replies=30, reposts=18),
+            _tweet(2, "The funny part is the plan makes sense right until you say it out loud...", hours_ago=110, views=7000, likes=110, replies=22, reposts=13),
+        ], handle="polfam", now=NOW)
+
+        prompt = ce.build_generation_prompt(
+            "TOPIC: Broncos draft needs\nTENSION: fans want the fun pick\nANGLE: the boring pick might be the tell",
+            "Normal Tweet",
+            "Witty Edge",
+            state,
+            action="build",
+        )
+
+        self.assertIn("Build 3 distinct", prompt)
+        self.assertIn("SOURCE MATERIAL", prompt)
+        self.assertIn("BUILD MODE", prompt)
+        self.assertIn("TOPIC:", prompt)
+        self.assertNotIn("HALL OF FAME REFERENCE TWEETS", prompt)
+        self.assertIn("Never use Hall of Fame tweets", prompt)
+
     def test_refresh_state_filters_originals_scores_and_estimates_twitterapi_cost(self):
         tweets = [
             _tweet(1, "A text-only Broncos take with a little tension at the end...", hours_ago=90, views=8000, likes=140, replies=28, reposts=16),
@@ -87,6 +108,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         app_text = Path("app.py").read_text()
         self.assertIn('"Creator Evolution"', app_text)
         self.assertIn("page_creator_evolution", app_text)
+        self.assertIn("_ce_build_dialog", app_text)
+        self.assertIn("_ce_show_build_dialog", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ci_banger_data", app_text)
 

@@ -7655,6 +7655,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         fmt,
         lane,
         state,
+        action=action,
         live_stats_block=live_stats_block,
         sports_ctx=sports_ctx,
     )
@@ -7675,6 +7676,109 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         return
     if not _ce_capture_ai_error(raw or ""):
         st.session_state["ce_result"] = _sanitize_output((raw or "").strip())
+
+
+@st.dialog("Build a Creator Evolution Tweet", width="large")
+def _ce_build_dialog():
+    """Creator Evolution version of Creator Studio's Build mini-form."""
+    st.markdown(
+        '<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:16px;">'
+        "Give Creator Evolution a topic and it will build 3 options using live-performance learning only.</div>",
+        unsafe_allow_html=True,
+    )
+
+    topic = st.text_input(
+        "What's the topic?",
+        placeholder="e.g. Broncos draft needs, Jokic MVP case, Sean Payton play calling",
+        key="ce_build_topic",
+    )
+    take = st.text_input(
+        "What's your take? (optional)",
+        placeholder="e.g. the room is better than people think, this is where the plan gets real",
+        key="ce_build_take",
+    )
+
+    tension_col, stats_col = st.columns(2)
+    with tension_col:
+        tension = st.text_input(
+            "What's the debate? (optional)",
+            placeholder="e.g. fans disagree, media is missing the point",
+            key="ce_build_tension",
+        )
+    with stats_col:
+        stats = st.text_input(
+            "Any specific stats or facts? (optional)",
+            placeholder="Only facts you know are true",
+            key="ce_build_stats",
+        )
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+    if st.button("BUILD IT", key="ce_build_submit", use_container_width=True, type="primary"):
+        if not topic.strip():
+            st.warning("Add a topic first.")
+            return
+        parts = []
+        if topic.strip():
+            parts.append(f"TOPIC: {topic.strip()}")
+        if tension.strip():
+            parts.append(f"TENSION: {tension.strip()}")
+        if stats.strip():
+            parts.append(f"KEY STATS: {stats.strip()}")
+        if take.strip():
+            parts.append(f"ANGLE: {take.strip()}")
+        assembled = "\n".join(parts) if len(parts) > 1 else topic.strip()
+
+        fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
+        lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
+        if lane not in ce.EMOTION_LANES:
+            lane = ce.DEFAULT_LANE
+
+        with st.spinner("Building Creator Evolution options..."):
+            _run_ce_ai("build", assembled, fmt, lane)
+
+        result = st.session_state.get("ce_banger_data")
+        if result:
+            st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:10px;">Your Options</div>',
+                unsafe_allow_html=True,
+            )
+            pick = str(result.get("pick", "1")).strip()
+            for idx in range(1, 4):
+                opt = result.get(f"option{idx}")
+                pattern = result.get(f"option{idx}_pattern", "")
+                if not opt:
+                    continue
+                is_pick = pick == str(idx)
+                border = "rgba(45,212,191,0.4)" if is_pick else "rgba(255,255,255,0.07)"
+                badge = '<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;background:rgba(45,212,191,0.15);color:rgba(45,212,191,0.8);border:1px solid rgba(45,212,191,0.3);margin-left:6px;">CE PICK</span>' if is_pick else ""
+                st.markdown(
+                    f'<div style="border-radius:10px;border:1px solid {border};background:rgba(255,255,255,0.03);padding:14px;margin-bottom:8px;">'
+                    f'<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:6px;">{html.escape(str(pattern))}{badge}</div>'
+                    f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;white-space:pre-wrap;">{html.escape(str(opt))}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"Use Option {idx}", key=f"ce_build_use_{idx}", use_container_width=True, type="primary" if is_pick else "secondary"):
+                    st.session_state["_ce_text_stage"] = opt
+                    st.session_state["_ce_show_build_dialog"] = False
+                    st.query_params["page"] = "Creator Evolution"
+                    st.rerun(scope="app")
+        elif st.session_state.get("ce_error"):
+            st.error(st.session_state["ce_error"])
+        elif st.session_state.get("ce_result"):
+            st.markdown(
+                f'<div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;padding:12px;white-space:pre-wrap;">{html.escape(st.session_state["ce_result"])}</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Use This", key="ce_build_use_raw", use_container_width=True, type="primary"):
+                st.session_state["_ce_text_stage"] = st.session_state["ce_result"]
+                st.session_state["_ce_show_build_dialog"] = False
+                st.query_params["page"] = "Creator Evolution"
+                st.rerun(scope="app")
+        else:
+            st.error("Couldn't generate tweets. Try again or add more detail.")
 
 
 def _ce_output_panel_impl(action, tweet_text, fmt, lane):
@@ -8478,7 +8582,8 @@ def _render_creator_evolution_editor():
         if st.button("ce_evolve", key="ce_evolve"):
             _queue_ce_action("evolve")
         if st.button("ce_build", key="ce_build"):
-            _queue_ce_action("build")
+            st.session_state["_ce_show_build_dialog"] = True
+            st.rerun(scope="app")
         if st.button("ce_save", key="ce_save"):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
@@ -8531,6 +8636,9 @@ def page_creator_evolution():
     _render_creator_evolution_learning_panel(state)
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
     _render_creator_evolution_editor()
+
+    if st.session_state.get("_ce_show_build_dialog"):
+        _ce_build_dialog()
 
     pending = st.session_state.pop("_ce_pending", None)
     if pending:
