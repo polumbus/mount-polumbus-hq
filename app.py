@@ -11864,9 +11864,18 @@ def _gd_score_is_stale(game: dict) -> bool:
     return bool(fetched_at and (time.time() - fetched_at) > 120 and _gd_game_state(game) == "live")
 
 
+def _gd_live_tweet_stale_limit_minutes(game: dict) -> int:
+    sport = str(game.get("sport") or "").upper()
+    if sport in {"NBA", "NHL"}:
+        return 5
+    if sport in {"NFL", "CFB"}:
+        return 8
+    return 10
+
+
 def _gd_tweet_is_stale_for_live_game(game: dict, tweet: dict | None) -> bool:
     age = _gd_tweet_age_minutes(tweet)
-    return bool(tweet and age is not None and age > 12 and _gd_game_state(game) == "live")
+    return bool(tweet and age is not None and age > _gd_live_tweet_stale_limit_minutes(game) and _gd_game_state(game) == "live")
 
 
 def _gd_clear_drafts() -> None:
@@ -11906,7 +11915,8 @@ def _gd_build_drafts(game: dict, tweet: dict | None = None) -> None:
     if _gd_tweet_is_stale_for_live_game(game, tweet):
         st.session_state["gd_drafts"] = []
         st.session_state["gd_raw"] = ""
-        st.session_state["gd_error"] = f"That feed item is {_gd_tweet_age_label(tweet)}. For live Gameday, react to a fresher item or type what just happened."
+        limit = _gd_live_tweet_stale_limit_minutes(game)
+        st.session_state["gd_error"] = f"That feed item is {_gd_tweet_age_label(tweet)}. For live {game.get('sport', 'Gameday')}, use a source under {limit} minutes old or type what just happened."
         st.session_state["gd_fact_packet"] = _gd_fact_packet(game, tweet, context)
         return
 
@@ -12016,7 +12026,7 @@ def _gd_render_fan_controls(active_game: dict, selected_tweet: dict | None, cont
         author = selected_tweet.get("author", {}).get("userName", "") or selected_tweet.get("user", {}).get("screen_name", "")
         stale_note = ""
         if _gd_tweet_is_stale_for_live_game(active_game, selected_tweet):
-            stale_note = f'<div style="font-size:11px;color:#FBBF24;margin-top:6px;">This source is {_gd_tweet_age_label(selected_tweet)}. Use a fresher source for live reactions.</div>'
+            stale_note = f'<div style="font-size:11px;color:#FBBF24;margin-top:6px;">This source is {_gd_tweet_age_label(selected_tweet)}. Use a source under {_gd_live_tweet_stale_limit_minutes(active_game)} minutes old for live reactions.</div>'
         st.markdown(
             f'<div class="tweet-card"><div style="font-size:11px;color:#2DD4BF;font-weight:600;">Selected source: @{html.escape(author)} {html.escape(_gd_tweet_age_label(selected_tweet))}</div>'
             f'<div style="font-size:13px;color:#d8d8e8;line-height:1.45;margin-top:6px;">{html.escape(selected_tweet.get("text", "")[:260])}</div>{stale_note}</div>',
@@ -12394,6 +12404,12 @@ def page_gameday():
         f'<a href="{html.escape(_target, quote=True)}" target="_blank" rel="noopener noreferrer">open full Gameday app</a></div>',
         unsafe_allow_html=True,
     )
+
+    if st.button("Refresh scores now", key="gd_refresh_scores_now", use_container_width=True):
+        _GD_SCORE_CACHE["data"] = None
+        _GD_SCORE_CACHE["ts"] = 0
+        _gd_clear_drafts()
+        st.rerun()
 
     games = _gd_fetch_live_scores()
     if not games:

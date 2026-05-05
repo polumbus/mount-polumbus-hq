@@ -400,14 +400,31 @@ def validate_gameday_draft_against_facts(
             str((signal_tweet or {}).get("text") or ""),
         ]
     ).lower()
+    authoritative_phase_text = " ".join(
+        [
+            str(game.get("status") or ""),
+            str(game.get("period") or ""),
+            str(game.get("clock") or ""),
+            str(context or ""),
+        ]
+    ).lower()
     lower = (text or "").lower()
 
     def _phase_supported(claim: str) -> bool:
-        if claim in facts_text:
+        if claim in authoritative_phase_text:
             return True
-        if claim == "end of the 3rd" and "end of 3rd" in facts_text:
+        period = str(game.get("period") or "").strip()
+        if period == "1" and claim in {"1st quarter", "first quarter"}:
             return True
-        if claim == "end of 3rd" and "end of the 3rd" in facts_text:
+        if period == "2" and claim in {"2nd quarter", "second quarter", "first half"}:
+            return True
+        if period == "3" and claim in {"3rd quarter", "third quarter", "second half"}:
+            return True
+        if period == "4" and claim in {"4th quarter", "fourth quarter", "second half"}:
+            return True
+        if claim == "end of the 3rd" and "end of 3rd" in authoritative_phase_text:
+            return True
+        if claim == "end of 3rd" and "end of the 3rd" in authoritative_phase_text:
             return True
         return False
 

@@ -168,3 +168,25 @@ def test_rejects_stale_or_invented_game_phase():
     )
     assert ok
     assert reason == ""
+
+
+def test_espn_phase_overrides_feed_phase():
+    ok, reason = validate_gameday_draft_against_facts(
+        "Halftime and this still feels way too familiar.",
+        game=_game(),
+        context="",
+        signal_tweet={"author": "feed", "text": "Halftime: Nuggets trail by 14."},
+    )
+    assert not ok
+    assert "unsupported game phase claim" in reason
+
+
+def test_current_period_allows_quarter_language():
+    ok, reason = validate_gameday_draft_against_facts(
+        "3rd quarter and this is getting uncomfortable.",
+        game={**_game(), "status": "In Progress", "period": 3, "clock": "1:22"},
+        context="",
+        signal_tweet=None,
+    )
+    assert ok
+    assert reason == ""
