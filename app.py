@@ -21,6 +21,7 @@ import podcast_store
 import podcast_sync
 import podcast_workflow
 import creator_evolution as ce
+import ten_x_audit
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
                   odds_available, odds_format_block,
@@ -2877,6 +2878,7 @@ if is_owner():
         Creator Evolution
       </a>"""
     _nav_pages.insert(1, "Creator Evolution")
+    _nav_pages.insert(9, "10/10 Audit")
     _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}{_podcast_run_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
       <div class="mp-active-pip"></div>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -3163,6 +3165,7 @@ _sidebar_html = f"""
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><polyline points="22 4 12 14.01 9 11.01" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Account Audit
       </a>
+      {'<a href="/?'+_tok_qp+'page=10%2F10+Audit" class="mp-panel-item '+_act('10/10 Audit')+'" target="_self"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 6.4L21 9l-4.8 4.2 1.5 6.8L12 16.4 6.3 20l1.5-6.8L3 9l6.4-.6L12 2z" stroke="#6B8AAA" stroke-width="1.5" stroke-linejoin="round"/></svg>10/10 Audit</a>' if is_owner() else ''}
       <a href="/?{_tok_qp}page=My+Stats" class="mp-panel-item {_act('My Stats')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         My Stats
@@ -3451,6 +3454,7 @@ st.markdown(f"""
   <a href="/?{_tok_qp}page=Post+History" target="_self" style="{_lnk}">Post History</a>
   <a href="/?{_tok_qp}page=Algorithm+Score" target="_self" style="{_lnk}">Algorithm Score</a>
   <a href="/?{_tok_qp}page=Account+Audit" target="_self" style="{_lnk}">Account Audit</a>
+  {'<a href="/?'+_tok_qp+'page=10%2F10+Audit" target="_self" style="'+_lnk+'">10/10 Audit</a>' if is_owner() else ''}
   <a href="/?{_tok_qp}page=My+Stats" target="_self" style="{_lnk}">My Stats</a>
   <a href="/?{_tok_qp}page=Profile+Analyzer" target="_self" style="{_lnk}">Profile Analyzer</a>
 </div>
@@ -3466,7 +3470,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Fan Pulse Gameday", "Podcast", "Creator Evolution"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Fan Pulse Gameday", "Podcast", "Creator Evolution", "10/10 Audit"} and not is_owner():
     _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
@@ -9651,6 +9655,178 @@ Return as JSON:
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════
+def _ten_x_metadata_for_area(area: str) -> dict:
+    return {
+        "Whole App": {"hidden_controls": True, "duplicate_paths": True},
+        "Creator Studio": {"hidden_controls": True, "duplicate_paths": False},
+        "Gameday": {"hidden_controls": False, "duplicate_paths": True},
+        "Reply Mode": {"hidden_controls": True, "duplicate_paths": False},
+        "Algorithm Score": {"hidden_controls": True, "duplicate_paths": False},
+        "Account Audit": {"hidden_controls": True, "duplicate_paths": False},
+    }.get(area, {})
+
+
+def _ten_x_description_for_area(area: str) -> str:
+    descriptions = {
+        "Whole App": "All major Post Ascend workflows: Creator Studio, Fan Pulse Gameday, Reply Mode, Algorithm Score, Account Audit, Idea Bank, navigation, shared voice, and trust layer.",
+        "Creator Studio": "Build, rewrite, grades, verify, post, save, format controls, voice controls, and paste-ready grade fixes.",
+        "Gameday": "Fan Pulse live-game workflow: score freshness, feed freshness, source grounding, emotional lanes, generated drafts, copy, post, and trust controls.",
+        "Reply Mode": "Reply generation workflow: context awareness, Tyler voice, safe reply controls, and conversation quality.",
+        "Algorithm Score": "Standalone algorithm scoring workflow and whether it should become the shared 10/10 audit rubric.",
+        "Account Audit": "Account-level audit workflow: recent tweets, health score, recommendations, flagged posts, and actionability.",
+    }
+    return descriptions.get(area, descriptions["Whole App"])
+
+
+def _ten_x_cache_path() -> str:
+    return "ten_x_audit_cache.json"
+
+
+def _load_ten_x_result():
+    cached = load_json(_ten_x_cache_path(), {})
+    data = cached.get("data") if isinstance(cached, dict) else None
+    if isinstance(data, dict):
+        try:
+            return ten_x_audit.from_dict(data), cached.get("last_run", "")
+        except Exception:
+            return None, cached.get("last_run", "")
+    return None, ""
+
+
+def _save_ten_x_result(result: ten_x_audit.AuditResult) -> None:
+    save_json(
+        _ten_x_cache_path(),
+        {
+            "last_run": datetime.now().strftime("%Y-%m-%d %H:%M MST"),
+            "data": ten_x_audit.to_dict(result),
+        },
+    )
+
+
+def _render_ten_x_result(result: ten_x_audit.AuditResult) -> None:
+    color = "#22c55e" if result.overall_score >= 9 else "#2DD4BF" if result.overall_score >= 7 else "#ef4444"
+    st.markdown(
+        f"""<div style="text-align:center;padding:20px 0;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:80px;color:{color};line-height:1;">{result.overall_score}/10</div>
+            <div style="color:#8888aa;font-size:13px;letter-spacing:2px;text-transform:uppercase;">10/10 Potential Score</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    st.caption(result.summary)
+
+    blockers = [item for item in result.roadmap if item.priority in {"P0", "P1"}][:5]
+    if blockers:
+        st.markdown("### Top P0/P1 Blockers")
+        for item in blockers:
+            st.markdown(
+                f"""<div class="tweet-card">
+                    <div style="font-size:11px;color:#FBBF24;font-weight:700;">{html.escape(item.priority)} · {html.escape(item.feature_area)} · {html.escape(item.failing_category)} ({item.current_score}/10)</div>
+                    <div style="font-size:13px;color:#d8d8e8;margin-top:6px;line-height:1.5;">{html.escape(item.exact_change)}</div>
+                    <div style="font-size:11px;color:#5a7090;margin-top:6px;">Acceptance: {html.escape(item.acceptance_test)}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("### Category Grades")
+    for item in result.categories:
+        bar_color = "#22c55e" if item.score >= 9 else "#2DD4BF" if item.score >= 7 else "#ef4444"
+        st.markdown(
+            f"""<div style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;gap:12px;">
+                    <span class="metric-label">{html.escape(item.name)}</span>
+                    <span class="metric-score">{item.score}/10 · {html.escape(item.priority)}</span>
+                </div>
+                <div class="score-bar-wrap"><div class="score-bar-fill" style="width:{item.score * 10}%;background:{bar_color};"></div></div>
+                <div style="font-size:12px;color:#888899;line-height:1.5;">{html.escape(item.reason)}</div>
+                <div style="font-size:12px;color:#5a7090;line-height:1.5;margin-top:4px;">Fix: {html.escape(item.fix_plan)}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Path To 10/10")
+    roadmap_rows = [
+        {
+            "Priority": item.priority,
+            "Area": item.feature_area,
+            "Category": item.failing_category,
+            "Score": item.current_score,
+            "Change": item.exact_change,
+            "Acceptance": item.acceptance_test,
+            "Size": item.estimated_size,
+        }
+        for item in result.roadmap
+    ]
+    st.dataframe(roadmap_rows, use_container_width=True, hide_index=True)
+
+    md = ten_x_audit.markdown_summary(result)
+    st.download_button(
+        "Download Markdown Summary",
+        data=md,
+        file_name=f"ten_x_audit_{result.subject.area.lower().replace(' ', '_').replace('/', '_')}.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+    with st.expander("Exportable Markdown", expanded=False):
+        st.text_area("Markdown", value=md, height=320, label_visibility="collapsed")
+
+
+def page_ten_x_audit():
+    st.markdown('<div class="main-header">10/10 <span>AUDIT</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tool-desc">Audit every major workflow for potential, usability, simplicity, accuracy, Tyler voice, reply bait, monetization, and trust.</div>',
+        unsafe_allow_html=True,
+    )
+
+    latest, last_run = _load_ten_x_result()
+    if last_run:
+        st.caption(f"Last run: {last_run}")
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        area = st.selectbox("Audit Area", ten_x_audit.AUDIT_AREAS, index=0, key="ten_x_area")
+    with c2:
+        use_ai = st.toggle("Use AI judgment", value=True, key="ten_x_use_ai", help="Deterministic checks always run. AI adds judgment for voice, usefulness, simplicity, and monetization.")
+
+    content = st.text_area(
+        "Optional tweet/output/context",
+        key="ten_x_content",
+        height=140,
+        placeholder="Paste a generated tweet, Gameday output, reply, or workflow note to include in the audit.",
+    )
+
+    run = st.button("Run 10/10 Audit", key="ten_x_run", type="primary", use_container_width=True)
+    if run:
+        subject = ten_x_audit.AuditSubject(
+            area=area,
+            description=_ten_x_description_for_area(area),
+            content=content,
+            metadata=_ten_x_metadata_for_area(area),
+        )
+
+        def _ai_call(prompt: str) -> str:
+            return call_claude(
+                prompt,
+                system="You are a strict product and X content auditor. Return only valid JSON.",
+                max_tokens=2600,
+            )
+
+        with st.spinner("Running strict 10/10 audit..."):
+            result = ten_x_audit.run_audit(subject, ai_call=_ai_call if use_ai else None)
+            _save_ten_x_result(result)
+        st.rerun()
+
+    if latest:
+        _render_ten_x_result(latest)
+    else:
+        st.markdown(
+            """<div class="tweet-card">
+                <div style="font-size:13px;color:#2DD4BF;font-weight:700;">No audit run yet</div>
+                <div style="font-size:12px;color:#7c8ea5;line-height:1.5;margin-top:6px;">Run the audit to generate strict grades and a prioritized Path To 10/10 roadmap.</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+
 def page_health_check():
     st.markdown('<div class="main-header">ACCOUNT <span>AUDIT</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">Full audit of your X account — posting cadence, engagement rate, hook quality, content mix, and actionable fixes.</div>', unsafe_allow_html=True)
@@ -15342,6 +15518,7 @@ if is_owner():
     page_map["Signals & Prompts"] = page_signals_prompts
     page_map["Fan Pulse Gameday"] = page_gameday
     page_map["Gameday Mode"] = page_gameday
+    page_map["10/10 Audit"] = page_ten_x_audit
 if is_owner():
     page_map["Debug Console"] = page_debug_console
 
@@ -15434,6 +15611,7 @@ _auto_sync_pages = {
     "Article Writer",
     "Post History",
     "Account Audit",
+    "10/10 Audit",
     "My Stats",
     "Profile Analyzer",
 }
