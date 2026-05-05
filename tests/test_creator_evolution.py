@@ -313,11 +313,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         app_text = Path("app.py").read_text()
 
         self.assertIn("def _ce_pulse_error_decision", app_text)
+        self.assertIn("ce-pulse-import-fallback", app_text)
+        self.assertIn("def _ce_pulse_debug_event", app_text)
         self.assertIn("def _safe_find_creator_evolution_pulse", app_text)
         self.assertIn('getattr(pulse, "safe_find_pulse"', app_text)
         self.assertIn('getattr(pulse, "find_pulse"', app_text)
+        self.assertIn("except TypeError as exc", app_text)
         self.assertNotIn("pulse.pulse_error_decision", app_text)
         self.assertNotIn("pulse.safe_find_pulse(", app_text)
+        self.assertEqual(app_text.count('_append_debug_event("creator_evolution_pulse"'), 1)
 
     def test_pulse_suppresses_duplicate_recent_angle(self):
         state = ce.refresh_state(None, [

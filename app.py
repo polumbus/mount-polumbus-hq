@@ -21,7 +21,35 @@ import podcast_store
 import podcast_sync
 import podcast_workflow
 import creator_evolution as ce
-import creator_evolution_pulse as pulse
+try:
+    import creator_evolution_pulse as pulse
+except Exception as _pulse_import_exc:
+    _pulse_import_error = str(_pulse_import_exc)[:240]
+
+    class _CreatorEvolutionPulseFallback:
+        PULSE_VERSION = "ce-pulse-import-fallback"
+
+        @staticmethod
+        def safe_find_pulse(*_args, **kwargs):
+            return {
+                "version": _CreatorEvolutionPulseFallback.PULSE_VERSION,
+                "status": "pulse_error",
+                "handle": str(kwargs.get("handle") or ""),
+                "threshold": 0,
+                "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "fallback_angle", "import_fail_closed"],
+                "signals_checked": 0,
+                "clusters_checked": 0,
+                "best": None,
+                "top_rejected": [],
+                "message": f"Pulse engine failed to load: {_pulse_import_error}",
+                "brief": "",
+                "error": _pulse_import_error,
+            }
+
+        find_pulse = safe_find_pulse
+
+    pulse = _CreatorEvolutionPulseFallback()
 import ten_x_audit
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
@@ -7334,6 +7362,14 @@ def _ce_pulse_error_decision(message: str = "Pulse could not safely read the liv
     }
 
 
+def _ce_pulse_debug_event(status: str, detail: str, meta: dict | None = None) -> None:
+    """Pulse diagnostics must never become the reason Pulse crashes."""
+    try:
+        _append_debug_event("creator_evolution_pulse", status, detail, meta or {})
+    except Exception:
+        pass
+
+
 def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_context: str = "") -> dict:
     """Call whichever Pulse finder is available; never let it bubble to Streamlit."""
     finder = getattr(pulse, "safe_find_pulse", None)
@@ -7342,18 +7378,30 @@ def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_conte
     if not callable(finder):
         return _ce_pulse_error_decision("Pulse engine is still loading on this deploy.")
     try:
+        handle = get_current_handle()
+    except Exception:
+        handle = ""
+    try:
         return finder(
             tweets,
             headlines,
             state,
             sports_context=sports_context,
-            handle=get_current_handle(),
+            handle=handle,
         )
-    except Exception as exc:
+    except TypeError as exc:
         try:
-            _append_debug_event("creator_evolution_pulse", "error", "Pulse finder recovered", {"error": str(exc)[:240]})
+            return finder(
+                tweets,
+                headlines,
+                state,
+                handle=handle,
+            )
         except Exception:
-            pass
+            _ce_pulse_debug_event("error", "Pulse finder recovered", {"error": str(exc)[:240]})
+            return _ce_pulse_error_decision(str(exc)[:240])
+    except Exception as exc:
+        _ce_pulse_debug_event("error", "Pulse finder recovered", {"error": str(exc)[:240]})
         return _ce_pulse_error_decision(str(exc)[:240])
 
 
@@ -7364,16 +7412,16 @@ def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
     try:
         _all_tweets, _rss_headlines = _fetch_inspiration_feed()
     except Exception as exc:
-        _append_debug_event("creator_evolution_pulse", "error", "feed unavailable", {"error": str(exc)[:240]})
+        _ce_pulse_debug_event("error", "feed unavailable", {"error": str(exc)[:240]})
     _sports_ctx = ""
     try:
         _sports_ctx = get_sports_context()
     except Exception as exc:
-        _append_debug_event("creator_evolution_pulse", "warn", "sports context unavailable", {"error": str(exc)[:160]})
+        _ce_pulse_debug_event("warn", "sports context unavailable", {"error": str(exc)[:160]})
     try:
         _state = _creator_evolution_state()
     except Exception as exc:
-        _append_debug_event("creator_evolution_pulse", "warn", "state unavailable", {"error": str(exc)[:160]})
+        _ce_pulse_debug_event("warn", "state unavailable", {"error": str(exc)[:160]})
         _state = {}
     _decision = _safe_find_creator_evolution_pulse(
         _all_tweets,
@@ -7632,7 +7680,7 @@ def _ce_pulse_dialog():
             try:
                 _decision, _n_tweets, _n_heads = _run_creator_evolution_pulse(_lane, _fmt)
             except Exception as exc:
-                _append_debug_event("creator_evolution_pulse", "error", "dialog recovered from Pulse failure", {"error": str(exc)[:240]})
+                _ce_pulse_debug_event("error", "dialog recovered from Pulse failure", {"error": str(exc)[:240]})
                 _decision = _ce_pulse_error_decision(str(exc)[:240])
                 _n_tweets, _n_heads = 0, 0
         st.session_state["ce_pulse_decision"] = _decision
