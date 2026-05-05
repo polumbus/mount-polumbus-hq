@@ -112,6 +112,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("page_creator_evolution", app_text)
         self.assertIn("_ce_build_dialog", app_text)
         self.assertIn("_ce_show_build_dialog", app_text)
+        self.assertIn("_ce_inspiration_dialog", app_text)
+        self.assertIn("_ce_show_inspiration", app_text)
+        self.assertIn("ce_whats_hot", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
         self.assertIn("ce.sync_budget_for_mode(\"backfill\")", app_text)
@@ -124,6 +127,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("_hall_of_fame_reference_block", ce_runner)
         self.assertNotIn("analyze_personal_patterns", ce_runner)
         self.assertNotIn("get_system_for_voice", ce_runner)
+
+        ce_hot = app_text.split("def _ce_inspiration_dialog", 1)[1].split('@st.dialog("Creator Studio"', 1)[0]
+        self.assertIn("_run_creator_evolution_hot_signals", ce_hot)
+        self.assertIn("_ce_pending", ce_hot)
+        self.assertNotIn("_run_ci_ai", ce_hot)
+        self.assertNotIn("_build_wh_hook_cached", ce_hot)
 
     def test_ai_sounding_phrase_detector_catches_generic_content_language(self):
         hits = ce.ai_sounding_hits("Here's the thing: at the end of the day this is a game-changer.")
@@ -173,6 +182,22 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(latest["needs_confirmation"])
         self.assertTrue(backfill["needs_confirmation"])
         self.assertGreater(backfill["estimated_requests"], latest["estimated_requests"])
+
+    def test_hot_signal_brief_uses_creator_evolution_lane_rules_without_hof(self):
+        brief = ce.build_hot_signal_brief(
+            "Broncos draft",
+            "Denver is suddenly tied to another first-round tight end.",
+            "timeline",
+            "active debate in mentions",
+            "Annoyed",
+            "Normal Tweet",
+        )
+
+        self.assertIn("HOT SIGNAL", brief)
+        self.assertIn("Annoyed:", brief)
+        self.assertIn("Do not use Creator Studio voice modes", brief)
+        self.assertNotIn("HALL OF FAME REFERENCE TWEETS", brief)
+        self.assertNotIn("TYLER'S HALL OF FAME DATA", brief)
 
 
 if __name__ == "__main__":

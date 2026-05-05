@@ -7264,6 +7264,33 @@ def _run_inspiration_claude(_cache_key: str = ""):
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFAULT_LANE,
+                                       fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
+    """Fetch What's Hot signals for Creator Evolution without using Creator Studio generation."""
+    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+    _raw_ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
+    _lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    _fmt = _normalize_tweet_format(fmt)
+    _ideas = []
+    for _idea in _raw_ideas:
+        _topic = (_idea.get("topic") or "Trending angle").strip()
+        _seed = (_idea.get("seed") or _idea.get("hook") or _topic).strip()
+        _why = (_idea.get("why") or "Active conversation signal").strip()
+        _source = (_idea.get("source") or "hot feed").strip()
+        _brief = ce.build_hot_signal_brief(_topic, _seed, _source, _why, _lane, _fmt)
+        _ideas.append({
+            "topic": _topic,
+            "source": _source,
+            "seed": _seed,
+            "why": _why,
+            "brief": _brief,
+            "lane": _lane,
+            "format": _fmt,
+        })
+    return _ideas, len(_all_tweets), len(_rss_headlines)
+
+
 @st.dialog("Build a Tweet", width="large")
 def _ci_build_dialog():
     """Mini-form to guide users into providing the right raw material for BUILD."""
@@ -7489,6 +7516,119 @@ def _ci_inspiration_dialog():
         st.session_state["inspo_page"] = 0
         st.session_state["_ci_show_inspiration"] = True
     if st.button("New Ideas", use_container_width=True, key="inspo_regen", on_click=_inspo_regenerate):
+        pass
+
+
+@st.dialog("What's Hot For Creator Evolution", width="large")
+def _ce_inspiration_dialog():
+    """Creator Evolution hot signals: shared discovery, CE-only generation path."""
+    _handle = get_current_handle()
+    _lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
+    if _lane not in ce.EMOTION_LANES:
+        _lane = ce.DEFAULT_LANE
+    _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
+    _cache_key = json.dumps({
+        "formula_version": _WHATS_HOT_FORMULA_VERSION,
+        "prompt_version": ce.PROMPT_VERSION,
+        "handle": _handle,
+        "guest": is_guest(),
+        "lane": _lane,
+        "format": _fmt,
+        "topics": load_json("topics.json", {}) if is_guest() else {},
+    }, sort_keys=True)
+    if st.session_state.get("ce_inspo_context") != _cache_key:
+        for _k in ["ce_inspo_ideas", "ce_inspo_meta", "ce_inspo_page"]:
+            st.session_state.pop(_k, None)
+        st.session_state["ce_inspo_context"] = _cache_key
+
+    if "ce_inspo_ideas" not in st.session_state:
+        with st.spinner("Finding hot signals for Creator Evolution..."):
+            _ideas, _n_tweets, _n_heads = _run_creator_evolution_hot_signals(_cache_key, _lane, _fmt)
+        if not _ideas:
+            st.error("Couldn't find hot signals right now. Try New Ideas in a minute.")
+            return
+        st.session_state["ce_inspo_ideas"] = _ideas
+        st.session_state["ce_inspo_meta"] = (_n_tweets, _n_heads)
+        st.session_state["ce_inspo_page"] = 0
+
+    _all_ideas = st.session_state["ce_inspo_ideas"]
+    _n_tweets, _n_heads = st.session_state.get("ce_inspo_meta", (0, 0))
+    _page = st.session_state.get("ce_inspo_page", 0)
+    _per_page = 7
+    if _page > 0 and _page * _per_page >= len(_all_ideas):
+        _page = 0
+        st.session_state["ce_inspo_page"] = 0
+    _start = (_page * _per_page) % max(len(_all_ideas), 1)
+    _ideas = _all_ideas if len(_all_ideas) <= _per_page else (_all_ideas + _all_ideas)[_start:_start + _per_page]
+
+    st.markdown(
+        f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:3px;">What\'s Hot For Creator Evolution</div>'
+        f'<div style="font-size:10px;color:rgba(255,255,255,0.22);margin-bottom:16px;">'
+        f'{_n_tweets} timeline tweets · {_n_heads} news headlines · {_fmt} · {html.escape(_lane)}</div>',
+        unsafe_allow_html=True,
+    )
+
+    _badge_styles = {
+        "twitter": ("rgba(45,212,191,0.1)", "rgba(45,212,191,0.65)", "rgba(45,212,191,0.18)", "TIMELINE"),
+        "espn": ("rgba(251,191,36,0.1)", "rgba(251,191,36,0.65)", "rgba(251,191,36,0.18)", "ESPN"),
+        "news": ("rgba(167,139,250,0.1)", "rgba(167,139,250,0.65)", "rgba(167,139,250,0.18)", "NEWS"),
+    }
+    _badge_default = ("rgba(100,100,120,0.1)", "rgba(200,200,220,0.5)", "rgba(100,100,120,0.2)", "SOURCE")
+
+    for _i, _idea in enumerate(_ideas):
+        _topic = _idea.get("topic", "")
+        _source = (_idea.get("source") or "source").lower()
+        _seed = _idea.get("seed", "")
+        _why = _idea.get("why", "")
+        _brief = _idea.get("brief", "")
+        _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
+        st.markdown(
+            f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
+              f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">'
+                f'<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.38);">{html.escape(_topic)}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);margin-left:4px;">CE · {html.escape(_lane.upper())}</span>'
+              f'</div>'
+              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;">{html.escape(_seed[:260])}</div>'
+              f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        _use_col, _verify_col = st.columns([2, 1])
+        with _use_col:
+            if st.button("Build With Evolution", key=f"ce_inspo_use_{_i}", use_container_width=True, type="primary"):
+                st.session_state["_ce_text_stage"] = _brief
+                st.session_state["ce_format"] = _fmt
+                st.session_state["ce_lane"] = _lane
+                st.session_state["_ce_pending"] = ("build", _brief, _fmt, _lane)
+                st.rerun(scope="app")
+        with _verify_col:
+            if pplx_available() and st.button("Verify", key=f"ce_inspo_verify_{_i}", use_container_width=True):
+                with st.spinner("Checking..."):
+                    _fci = pplx_fact_check(_seed)
+                if _fci.get("answer"):
+                    st.session_state[f"_ce_inspo_v_{_i}"] = _fci
+                else:
+                    st.warning("Verify failed.")
+        _ivr = st.session_state.get(f"_ce_inspo_v_{_i}")
+        if _ivr:
+            _iva = _ivr["answer"]
+            _ivc = _ivr.get("citations", [])
+            _icol = "#2DD4BF" if "accurate" in _iva.lower() or "correct" in _iva.lower() else "#FBBF24"
+            st.markdown(f'<div style="background:#0d1829;border-left:3px solid {_icol};padding:8px 12px;border-radius:6px;margin:4px 0;font-size:11px;color:#b8c8d8;line-height:1.5;">{html.escape(_iva)}</div>', unsafe_allow_html=True)
+            if _ivc:
+                st.markdown(f'<div style="font-size:9px;color:#3a5070;">Sources: {", ".join(str(c) for c in _ivc[:3])}</div>', unsafe_allow_html=True)
+        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
+
+    def _ce_inspo_regenerate():
+        _run_creator_evolution_hot_signals.clear()
+        st.session_state.pop("ce_inspo_ideas", None)
+        st.session_state.pop("ce_inspo_meta", None)
+        st.session_state["ce_inspo_page"] = 0
+        st.session_state["_ce_show_inspiration"] = True
+
+    if st.button("New Ideas", use_container_width=True, key="ce_inspo_regen", on_click=_ce_inspo_regenerate):
         pass
 
 
@@ -8683,6 +8823,10 @@ def _render_creator_evolution_editor():
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Expand A Topic, Idea, Or Bullet Points</span>
           </div>
+          <div class="cs-idock-btn" data-dock="ce_whats_hot" title="Find hot topics and build with Creator Evolution" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 14c0-4 4-5 4-10 4 3 6 7 4 11 1-1 2-2 2-4 2 3 2 8-3 10-5 2-10-1-10-6 0-3 2-5 4-7-1 3-1 5-1 6z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">HOT</span><span class="pa-tip">Use Trending Signals With Creator Evolution Voice Rules</span>
+          </div>
           <div class="cs-idock-btn" data-dock="ce_save" title="Save draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 21v-8H7v8M7 3v5h8" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">SAVE</span><span class="pa-tip">Save Draft To Idea Bank</span>
@@ -8697,6 +8841,9 @@ def _render_creator_evolution_editor():
             _queue_ce_action("evolve")
         if st.button("ce_build", key="ce_build"):
             st.session_state["_ce_show_build_dialog"] = True
+            st.rerun(scope="app")
+        if st.button("ce_whats_hot", key="ce_whats_hot"):
+            st.session_state["_ce_show_inspiration"] = True
             st.rerun(scope="app")
         if st.button("ce_save", key="ce_save"):
             if tweet_text.strip():
@@ -8733,7 +8880,8 @@ def page_creator_evolution():
         """
 <style>
 [class*="st-key-ce_evolve"], [class*="st-key-ce_build"],
-[class*="st-key-ce_save"], [class*="st-key-ce_post_direct"] {
+[class*="st-key-ce_whats_hot"], [class*="st-key-ce_save"],
+[class*="st-key-ce_post_direct"] {
   position:absolute!important;width:1px!important;height:1px!important;
   overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
   padding:0!important;margin:0!important;border:0!important;
@@ -8757,6 +8905,9 @@ def page_creator_evolution():
 
     if st.session_state.get("_ce_show_build_dialog"):
         _ce_build_dialog()
+
+    if st.session_state.pop("_ce_show_inspiration", False):
+        _ce_inspiration_dialog()
 
     pending = st.session_state.pop("_ce_pending", None)
     if pending:
