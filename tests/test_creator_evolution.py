@@ -292,6 +292,33 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
         self.assertEqual(news_decision["status"], "ready")
 
+    def test_pulse_prioritizes_ready_avalanche_moment_over_generic_noise(self):
+        tweets = [
+            _tweet(
+                14,
+                "NHL draft debate is exploding now because the lottery result made every fan base angry",
+                hours_ago=0.2,
+                views=120000,
+                likes=2600,
+                replies=850,
+                reposts=420,
+                quotes=120,
+            ),
+        ]
+        sports_context = (
+            "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
+            "(Scheduled, puck drop tonight in 30 minutes on ESPN)"
+        )
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), sports_context=sports_context, handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("AVALANCHE GAME", decision["best"]["summary_text"])
+        self.assertTrue(any("draft" in item.get("topic", "") for item in decision["top_rejected"]))
+
+    def test_cavs_does_not_get_tagged_as_avs(self):
+        self.assertNotIn("avs", pulse._ce_topic_tags("Allen going out will help Cavs offense tonight"))
+
     def test_live_sports_context_prioritizes_avalanche_games_and_news(self):
         apis_text = Path("apis.py").read_text()
         app_text = Path("app.py").read_text()

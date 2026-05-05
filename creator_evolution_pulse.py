@@ -149,6 +149,16 @@ def _ce_tweet_text(tweet: dict[str, Any]) -> str:
 
 
 def _ce_topic_tags(text: str) -> list[str]:
+    lower = text.lower()
+
+    def has_topic_word(word: str) -> bool:
+        cleaned = word.strip()
+        if not cleaned:
+            return False
+        if " " in cleaned:
+            return cleaned in lower
+        return bool(re.search(rf"\b{re.escape(cleaned)}\b", lower))
+
     try:
         tagger = getattr(ce, "topic_tags")
     except Exception:
@@ -156,10 +166,12 @@ def _ce_topic_tags(text: str) -> list[str]:
     if callable(tagger):
         try:
             tags = tagger(text)
-            return list(tags or ["general"])
+            tags = list(tags or ["general"])
+            if "avs" in tags and not any(has_topic_word(word) for word in AVALANCHE_PULSE_TERMS + ("mackinnon", "makar")):
+                tags = [tag for tag in tags if tag != "avs"]
+            return tags or ["general"]
         except Exception:
             pass
-    lower = text.lower()
     tags = []
     for tag, words in {
         "broncos": ("broncos", "bo nix", "sean payton", "paton"),
@@ -168,7 +180,7 @@ def _ce_topic_tags(text: str) -> list[str]:
         "draft": ("draft", "pick ", "combine", "prospect"),
         "media": ("media", "espn", "reporter", "narrative"),
     }.items():
-        if any(word in lower for word in words):
+        if any(has_topic_word(word) for word in words):
             tags.append(tag)
     return tags or ["general"]
 
@@ -289,6 +301,18 @@ def _is_avalanche_pregame_or_news(text: str) -> bool:
     return any(term in lower for term in AVALANCHE_PULSE_TERMS) and any(
         term in lower for term in PREGAME_OR_BREAKING_TERMS
     )
+
+
+def _opportunity_text(item: dict[str, Any]) -> str:
+    parts = [str(item.get("summary_text") or "")]
+    for source in item.get("source_basis", []) or []:
+        if isinstance(source, dict):
+            parts.append(str(source.get("text") or ""))
+    return " ".join(parts)
+
+
+def _is_avalanche_opportunity(item: dict[str, Any]) -> bool:
+    return _is_avalanche_pregame_or_news(_opportunity_text(item))
 
 
 def _risk_flags(text: str) -> list[str]:
@@ -632,7 +656,8 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     scored = [item for item in scored if item]
     scored.sort(key=lambda item: item.get("score", 0), reverse=True)
     viable = [item for item in scored if item.get("score", 0) >= threshold and not item.get("hard_blocks")]
-    best = viable[0] if viable else (scored[0] if scored else None)
+    avs_viable = [item for item in viable if _is_avalanche_opportunity(item)]
+    best = avs_viable[0] if avs_viable else (viable[0] if viable else (scored[0] if scored else None))
     status = "ready" if viable else "no_op"
     if best and not viable and best.get("score", 0) >= SAVE_THRESHOLD and not any(
         block in best.get("hard_blocks", []) for block in ("stale_source", "low_fact_confidence", "monetization_risk", "duplicate_recent_angle")
@@ -650,7 +675,7 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
         "signals_checked": len(signals),
         "clusters_checked": len(clusters),
         "best": best,
-        "top_rejected": scored[:5] if not viable else scored[1:5],
+        "top_rejected": [item for item in scored if item.get("id") != (best or {}).get("id")][:5],
         "message": "No strong Pulse right now." if status == "no_op" else "Pulse found a viable moment.",
     }
     if best:
