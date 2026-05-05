@@ -8305,64 +8305,59 @@ def _render_creator_evolution_learning_panel(state: dict):
     spend = float(status.get("estimated_spend_usd", state.get("api_usage", {}).get("estimated_cost_usd", 0.0)) or 0.0)
     sync_status = status.get("status", "never_synced")
     source = status.get("source", "history")
+    best = patterns.get("best_current_patterns", [])[:3]
+    worst = patterns.get("worst_current_patterns", [])[:3]
+    approved_rules = ce.approved_rules_text(state)
+    last_sync_short = str(last_sync)[:16].replace("T", " ") if last_sync != "Never" else "Never"
 
     st.markdown(
         f"""
-<div style="border:1px solid #14203A;background:#0A1628;border-radius:8px;padding:14px 16px;margin:0 0 16px;">
-  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-    <div>
-      <div style="font-size:9px;font-weight:700;letter-spacing:1.6px;color:#2DD4BF;text-transform:uppercase;">Learning Panel</div>
-      <div style="font-size:12px;color:#8FA6C6;margin-top:4px;">@{html.escape(handle)} | {html.escape(sync_status)} | source: {html.escape(source)}</div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(88px,1fr));gap:8px;min-width:360px;">
-      <div style="background:#08111F;border:1px solid #13223A;border-radius:7px;padding:8px;"><div style="font-size:9px;color:#5a7090;">Last Sync</div><div style="font-size:12px;color:#E2E8F0;">{html.escape(str(last_sync)[:19].replace("T", " "))}</div></div>
-      <div style="background:#08111F;border:1px solid #13223A;border-radius:7px;padding:8px;"><div style="font-size:9px;color:#5a7090;">Originals</div><div style="font-size:14px;color:#E2E8F0;font-weight:700;">{original_count}</div></div>
-      <div style="background:#08111F;border:1px solid #13223A;border-radius:7px;padding:8px;"><div style="font-size:9px;color:#5a7090;">Mature</div><div style="font-size:14px;color:#E2E8F0;font-weight:700;">{mature}</div></div>
-      <div style="background:#08111F;border:1px solid #13223A;border-radius:7px;padding:8px;"><div style="font-size:9px;color:#5a7090;">API Est.</div><div style="font-size:14px;color:#E2E8F0;font-weight:700;">${spend:.4f}</div></div>
-    </div>
+<div style="max-width:760px;margin:0 auto 14px;border:1px solid rgba(45,212,191,0.12);background:rgba(10,18,32,0.48);border-radius:8px;padding:9px 12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#2DD4BF;text-transform:uppercase;">Evolution Learning</div>
+    <div style="font-size:11px;color:#5a7090;">@{html.escape(handle)} &nbsp;|&nbsp; {html.escape(sync_status)} &nbsp;|&nbsp; {mature} mature &nbsp;|&nbsp; {len(pending)} pending &nbsp;|&nbsp; ${spend:.4f}</div>
   </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    sync_col, latest_col, backfill_col = st.columns([1, 1, 1])
-    with sync_col:
-        if st.button("Refresh From History", key="ce_refresh_history", use_container_width=True):
-            with st.spinner("Refreshing Creator Evolution from saved tweet history..."):
-                _refresh_creator_evolution_state("history")
-            st.rerun(scope="app")
-    with latest_col:
-        if st.button("Sync Latest Tweets", key="ce_sync_latest", use_container_width=True):
-            with st.spinner("Syncing latest tweets with twitterapi.io..."):
-                _refresh_creator_evolution_state("latest")
-            st.rerun(scope="app")
-    with backfill_col:
-        if st.button("Deep Backfill", key="ce_sync_backfill", use_container_width=True):
-            with st.spinner("Backfilling tweet history with twitterapi.io..."):
-                _refresh_creator_evolution_state("backfill")
-            st.rerun(scope="app")
+    with st.expander("Learning Details", expanded=False):
+        st.caption(f"Last sync: {last_sync_short} | Source: {source} | Originals tracked: {original_count}")
+        sync_col, latest_col, backfill_col = st.columns([1, 1, 1])
+        with sync_col:
+            if st.button("Refresh History", key="ce_refresh_history", use_container_width=True):
+                with st.spinner("Refreshing Creator Evolution from saved tweet history..."):
+                    _refresh_creator_evolution_state("history")
+                st.rerun(scope="app")
+        with latest_col:
+            if st.button("Sync Latest", key="ce_sync_latest", use_container_width=True):
+                with st.spinner("Syncing latest tweets with twitterapi.io..."):
+                    _refresh_creator_evolution_state("latest")
+                st.rerun(scope="app")
+        with backfill_col:
+            if st.button("Deep Backfill", key="ce_sync_backfill", use_container_width=True):
+                with st.spinner("Backfilling tweet history with twitterapi.io..."):
+                    _refresh_creator_evolution_state("backfill")
+                st.rerun(scope="app")
 
-    best = patterns.get("best_current_patterns", [])[:3]
-    worst = patterns.get("worst_current_patterns", [])[:3]
-    approved_rules = ce.approved_rules_text(state)
-    lp_left, lp_right = st.columns([1, 1])
-    with lp_left:
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.4px;color:#2DD4BF;text-transform:uppercase;margin:10px 0 6px;">Best Patterns</div>', unsafe_allow_html=True)
-        if best:
-            for line in best:
-                st.markdown(f'<div style="font-size:12px;color:#B8C8D8;border-left:2px solid #2DD4BF;padding:6px 0 6px 10px;">{html.escape(line)}</div>', unsafe_allow_html=True)
-        else:
-            st.caption("No mature winners yet.")
-    with lp_right:
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.4px;color:#F87171;text-transform:uppercase;margin:10px 0 6px;">Worst Patterns</div>', unsafe_allow_html=True)
-        if worst:
-            for line in worst:
-                st.markdown(f'<div style="font-size:12px;color:#B8C8D8;border-left:2px solid #F87171;padding:6px 0 6px 10px;">{html.escape(line)}</div>', unsafe_allow_html=True)
-        else:
-            st.caption("No mature losers yet.")
+        lp_left, lp_right = st.columns([1, 1])
+        with lp_left:
+            st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2DD4BF;text-transform:uppercase;margin:10px 0 6px;">Best Patterns</div>', unsafe_allow_html=True)
+            if best:
+                for line in best:
+                    st.caption(line)
+            else:
+                st.caption("No mature winners yet.")
+        with lp_right:
+            st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#5a7090;text-transform:uppercase;margin:10px 0 6px;">Weak Patterns</div>', unsafe_allow_html=True)
+            if worst:
+                for line in worst:
+                    st.caption(line)
+            else:
+                st.caption("No mature losers yet.")
 
-    with st.expander(f"Rule Evolution Queue ({len(pending)} pending)", expanded=bool(pending)):
+        st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#C49E3C;text-transform:uppercase;margin:12px 0 6px;">Rule Queue ({len(pending)} pending)</div>', unsafe_allow_html=True)
         if approved_rules:
             st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.4px;color:#C49E3C;text-transform:uppercase;margin-bottom:6px;">Approved Rules</div>', unsafe_allow_html=True)
             st.code(approved_rules, language="text")
@@ -8404,7 +8399,7 @@ def _render_creator_evolution_editor():
             "Your concept",
             height=200,
             key="ce_text",
-            placeholder="Drop the raw thought. Creator Evolution will turn it into something that sounds like a person, not a strategy deck...",
+            placeholder="Drop your concept, angle, or raw thought...",
             label_visibility="collapsed",
         )
         char_len = len(tweet_text)
@@ -8435,15 +8430,16 @@ def _render_creator_evolution_editor():
         cur_lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
         if cur_lane not in ce.EMOTION_LANES:
             cur_lane = ce.DEFAULT_LANE
-        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Human Voice Mixer</div>', unsafe_allow_html=True)
-        lane_rows = [ce.EMOTION_LANES[:4], ce.EMOTION_LANES[4:]]
-        for row_idx, row in enumerate(lane_rows):
-            lane_cols = st.columns(len(row))
-            for idx, lane in enumerate(row):
-                with lane_cols[idx]:
-                    if st.button(lane, key=f"ce_lane_{row_idx}_{idx}", type="primary" if lane == cur_lane else "secondary"):
-                        st.session_state["ce_lane"] = lane
-                        st.rerun(scope="fragment")
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
+        _lane_opts = list(ce.EMOTION_LANES)
+        _lane_idx = _lane_opts.index(cur_lane) if cur_lane in _lane_opts else 0
+        st.selectbox(
+            "Creator Evolution voice lane",
+            _lane_opts,
+            index=_lane_idx,
+            key="ce_lane",
+            label_visibility="collapsed",
+        )
 
         st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
@@ -8459,42 +8455,70 @@ def _render_creator_evolution_editor():
             )
             st.rerun(scope="app")
 
-        evolve_col, build_col, save_col, post_col = st.columns(4)
-        with evolve_col:
-            if st.button("EVOLVE", key="ce_evolve", type="primary", use_container_width=True):
-                _queue_ce_action("evolve")
-        with build_col:
-            if st.button("BUILD", key="ce_build", use_container_width=True):
-                _queue_ce_action("build")
-        with save_col:
-            if st.button("SAVE", key="ce_save", use_container_width=True):
-                if tweet_text.strip():
-                    ideas = load_json("saved_ideas.json", [])
-                    ideas.append({
-                        "text": tweet_text,
-                        "format": cur_fmt,
-                        "category": "Creator Evolution",
-                        "source": "Creator Evolution",
-                        "saved_at": datetime.now().isoformat(),
-                    })
-                    save_json("saved_ideas.json", ideas)
-                    st.success("Saved.")
-        with post_col:
-            if st.button("POST TO X", key="ce_post_direct", use_container_width=True):
-                if tweet_text.strip():
-                    with st.spinner("Posting..."):
-                        ok, detail = _post_tweet(tweet_text.strip())
-                    if ok:
-                        st.success("Posted to X.")
-                        if str(detail).startswith("https://"):
-                            st.markdown(f"[Open posted tweet]({detail})")
-                    else:
-                        st.error(f"Post failed: {detail}")
+        st.markdown('''<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;color:#2a3a55;text-transform:uppercase;margin-bottom:8px;">ACTIONS</div>
+        <div class="cs-icon-dock" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+          <div class="cs-idock-btn cs-idock-primary" data-dock="ce_evolve" title="Generate Creator Evolution options" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1fb8a8,#2DD4BF);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#060A12" stroke-width="2" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">EVOLVE</span><span class="pa-tip">Generate Options From Real Performance Learning</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="ce_build" title="Build from a short idea" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Expand A Topic, Idea, Or Bullet Points</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="ce_save" title="Save draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 21v-8H7v8M7 3v5h8" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">SAVE</span><span class="pa-tip">Save Draft To Idea Bank</span>
+          </div>
+          <div class="cs-idock-btn" data-dock="ce_post_direct" title="Post directly to X" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 4l16 16M20 4L4 20" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">POST</span><span class="pa-tip">Post Directly To X</span>
+          </div>
+        </div>''', unsafe_allow_html=True)
+
+        if st.button("ce_evolve", key="ce_evolve"):
+            _queue_ce_action("evolve")
+        if st.button("ce_build", key="ce_build"):
+            _queue_ce_action("build")
+        if st.button("ce_save", key="ce_save"):
+            if tweet_text.strip():
+                ideas = load_json("saved_ideas.json", [])
+                ideas.append({
+                    "text": tweet_text,
+                    "format": cur_fmt,
+                    "category": "Creator Evolution",
+                    "source": "Creator Evolution",
+                    "saved_at": datetime.now().isoformat(),
+                })
+                save_json("saved_ideas.json", ideas)
+                st.success("Saved.")
+        if st.button("ce_post_direct", key="ce_post_direct"):
+            if tweet_text.strip():
+                with st.spinner("Posting..."):
+                    ok, detail = _post_tweet(tweet_text.strip())
+                if ok:
+                    st.success("Posted to X.")
+                    if str(detail).startswith("https://"):
+                        st.markdown(f"[Open posted tweet]({detail})")
+                else:
+                    st.error(f"Post failed: {detail}")
 
 
 def page_creator_evolution():
     st.markdown('<div class="main-header">CREATOR <span>EVOLUTION</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="tool-desc">A separate learning studio powered by live tweet performance, not Hall of Fame imitation.</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<style>
+[class*="st-key-ce_evolve"], [class*="st-key-ce_build"],
+[class*="st-key-ce_save"], [class*="st-key-ce_post_direct"] {
+  position:absolute!important;width:1px!important;height:1px!important;
+  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
+  padding:0!important;margin:0!important;border:0!important;
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
 
     if "_ce_text_stage" in st.session_state:
         st.session_state["ce_text"] = st.session_state.pop("_ce_text_stage")

@@ -265,6 +265,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 [class~="st-key-ci_save"], [class~="st-key-ci_bank_btn"],
 [class~="st-key-ci_inspiration"], [class~="st-key-ci_post_direct"],
 [class~="st-key-ci_help_video"],
+[class~="st-key-ce_evolve"], [class~="st-key-ce_build"],
+[class~="st-key-ce_save"], [class~="st-key-ce_post_direct"],
 [class*="st-key-coach_help_video"],
 [class*="st-key-coach_new"], [class*="st-key-coach_clear_all"],
 [class*="st-key-cv_"], [class*="st-key-cc_fmt_"],
