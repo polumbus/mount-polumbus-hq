@@ -7313,10 +7313,14 @@ def _ce_pulse_error_decision(message: str = "Pulse could not safely read the liv
         version = getattr(pulse, "PULSE_VERSION", "ce-pulse-app-fallback")
     except Exception:
         version = "ce-pulse-app-fallback"
+    try:
+        handle = get_current_handle()
+    except Exception:
+        handle = ""
     return {
         "version": version,
         "status": "pulse_error",
-        "handle": get_current_handle(),
+        "handle": handle,
         "threshold": 0,
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "fallback_angle", "app_fail_closed"],
@@ -7346,7 +7350,10 @@ def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_conte
             handle=get_current_handle(),
         )
     except Exception as exc:
-        _append_debug_event("creator_evolution_pulse", "error", "Pulse finder recovered", {"error": str(exc)[:240]})
+        try:
+            _append_debug_event("creator_evolution_pulse", "error", "Pulse finder recovered", {"error": str(exc)[:240]})
+        except Exception:
+            pass
         return _ce_pulse_error_decision(str(exc)[:240])
 
 
@@ -7374,6 +7381,8 @@ def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
         _state,
         sports_context=_sports_ctx,
     )
+    if not isinstance(_decision, dict):
+        _decision = _ce_pulse_error_decision("Pulse returned an invalid decision shape.")
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = lane if lane in ce.EMOTION_LANES else _best.get("recommended_lane", ce.DEFAULT_LANE)
     _decision["selected_format"] = _normalize_tweet_format(fmt)
