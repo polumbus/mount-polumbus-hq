@@ -1841,9 +1841,36 @@ def save_engagement_lists(lists: dict):
     _get_engagement_lists_path().write_text(json.dumps(lists, indent=2))
 
 
+def _twitterapi_get_json(endpoint_path: str, params: dict, *, caller: str, timeout: int = 8) -> dict:
+    """Fetch TwitterAPI.io JSON directly, then via local proxy if cloud secrets fail."""
+    endpoint_path = "/" + str(endpoint_path or "").lstrip("/")
+    params = {k: v for k, v in (params or {}).items() if v is not None}
+    direct_error = ""
+    if TWITTER_API_IO_KEY:
+        try:
+            resp = requests.get(
+                f"https://api.twitterapi.io{endpoint_path}",
+                headers={"X-API-Key": TWITTER_API_IO_KEY},
+                params=params,
+                timeout=timeout,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            direct_error = f"HTTP {resp.status_code}: {resp.text[:240].strip()}"
+        except Exception as exc:
+            direct_error = str(exc)[:240]
+    try:
+        query = urllib.parse.urlencode(params)
+        proxy_path = endpoint_path + (f"?{query}" if query else "")
+        return _proxy_json_request(proxy_path, method="GET", timeout=max(timeout, 15))
+    except Exception as exc:
+        proxy_error = str(exc)[:240]
+        raise RuntimeError(f"TwitterAPI fetch failed via direct/proxy. Direct: {direct_error or 'not configured'} | Proxy: {proxy_error}")
+
+
 def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
     """Fetch recent tweets from a Twitter List via twitterapi.io."""
-    if not TWITTER_API_IO_KEY or not list_id:
+    if not list_id:
         return []
     # Strip full URL to bare numeric ID (e.g. https://x.com/i/lists/1234567890)
     if '/' in list_id:
@@ -1852,35 +1879,32 @@ def fetch_tweets_from_list(list_id: str, count: int = 100) -> list:
         list_id = _m.group(1) if _m else list_id
     try:
         _record_twitter_api_call("list/tweets_timeline", "fetch_tweets_from_list", extra={"list_id": str(list_id)})
-        resp = requests.get(
-            "https://api.twitterapi.io/twitter/list/tweets_timeline",
-            headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"listId": list_id},
-            timeout=8,
+        data = _twitterapi_get_json(
+            "/twitter/list/tweets_timeline",
+            {"listId": list_id},
+            caller="fetch_tweets_from_list",
         )
-        if resp.status_code == 200:
-            return resp.json().get("tweets", [])
-    except Exception:
+        return data.get("tweets", []) if isinstance(data, dict) else []
+    except Exception as exc:
+        _append_debug_event("twitter_fetch", "error", f"list fetch failed {exc}", {"list_id": str(list_id)})
         pass
     return []
 
 
 def fetch_tweets(query: str, count: int = 50) -> list:
-    if not TWITTER_API_IO_KEY:
+    if not query:
         return []
     try:
         _record_twitter_api_call("tweet/advanced_search", "fetch_tweets", query=query, extra={"count": min(count, 100)})
-        resp = requests.get(
-            "https://api.twitterapi.io/twitter/tweet/advanced_search",
-            headers={"X-API-Key": TWITTER_API_IO_KEY},
-            params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
-            timeout=8,
+        data = _twitterapi_get_json(
+            "/twitter/tweet/advanced_search",
+            {"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": ""},
+            caller="fetch_tweets",
         )
-        if resp.status_code == 200:
-            data = resp.json()
-            tweets = data.get("tweets", [])
-            return tweets[:count]
-    except Exception:
+        tweets = data.get("tweets", []) if isinstance(data, dict) else []
+        return tweets[:count]
+    except Exception as exc:
+        _append_debug_event("twitter_fetch", "error", f"search fetch failed {exc}", {"query": query[:140]})
         pass
     return []
 
@@ -6993,7 +7017,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-04-24-canonical-creator-v1"
+_WHATS_HOT_FORMULA_VERSION = "2026-05-05-hot-signals-proxy-v2"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -7221,10 +7245,13 @@ def _run_inspiration_claude(_cache_key: str = ""):
     _materialized = []
     for _item in _prepared:
         _seed = (_item.get("_seed") or "").strip()
-        _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION) if _seed else ""
-        if not _hook:
-            continue
-        _item["hook"] = _hook[:1200]
+        _original_hook = (_item.get("hook") or "").strip()
+        try:
+            _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION) if _seed else ""
+        except Exception as exc:
+            _append_debug_event("whats_hot", "error", f"hook materialize failed {exc}", {"seed": _seed[:140]})
+            _hook = ""
+        _item["hook"] = (_hook or _original_hook)[:1200]
         _item.pop("_seed", None)
         if _item.get("hook", "").strip():
             _materialized.append(_item)
@@ -11369,40 +11396,20 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
     """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results.
     Returns (tweets, last_cursor) tuple."""
     global _LAST_SIGNALS_ERROR
-    if not TWITTER_API_IO_KEY:
-        _LAST_SIGNALS_ERROR = {
-            "status": "missing_key",
-            "detail": "TWITTER_API_IO_KEY is not configured.",
-            "at": datetime.now().isoformat(timespec="seconds"),
-        }
-        return [], ""
     try:
         from datetime import timedelta, timezone
         all_tweets = []
         cursor = start_cursor
         for _ in range(pages):
             _record_twitter_api_call("tweet/advanced_search", "signals_fetch", query=query, extra={"count": min(count, 100), "cursor": bool(cursor)})
-            resp = requests.get(
-                "https://api.twitterapi.io/twitter/tweet/advanced_search",
-                headers={"X-API-Key": TWITTER_API_IO_KEY},
-                params={"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": cursor},
-                timeout=8,
+            data = _twitterapi_get_json(
+                "/twitter/tweet/advanced_search",
+                {"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": cursor},
+                caller="signals_fetch",
             )
-            if resp.status_code != 200:
-                detail = resp.text[:240].strip()
-                status = "api_error"
-                if resp.status_code == 402 and "Credits is not enough" in detail:
-                    status = "credits_depleted"
-                _LAST_SIGNALS_ERROR = {
-                    "status": status,
-                    "detail": f"HTTP {resp.status_code}: {detail}",
-                    "at": datetime.now().isoformat(timespec="seconds"),
-                }
-                break
-            data = resp.json()
             _LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
-            all_tweets.extend(data.get("tweets", []))
-            cursor = data.get("next_cursor", "")
+            all_tweets.extend(data.get("tweets", []) if isinstance(data, dict) else [])
+            cursor = data.get("next_cursor", "") if isinstance(data, dict) else ""
             if not cursor:
                 break
         # Filter to recent tweets only
@@ -11417,9 +11424,11 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
                 pass
         return fresh, cursor
     except Exception as e:
+        detail = str(e)[:240]
+        status = "credits_depleted" if "Credits is not enough" in detail else "exception"
         _LAST_SIGNALS_ERROR = {
-            "status": "exception",
-            "detail": str(e)[:240],
+            "status": status,
+            "detail": detail,
             "at": datetime.now().isoformat(timespec="seconds"),
         }
     return [], ""
