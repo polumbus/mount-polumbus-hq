@@ -7307,6 +7307,49 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFA
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+def _ce_pulse_error_decision(message: str = "Pulse could not safely read the live feed.") -> dict:
+    """App-owned Pulse fallback so stale Cloud modules cannot crash rendering."""
+    try:
+        version = getattr(pulse, "PULSE_VERSION", "ce-pulse-app-fallback")
+    except Exception:
+        version = "ce-pulse-app-fallback"
+    return {
+        "version": version,
+        "status": "pulse_error",
+        "handle": get_current_handle(),
+        "threshold": 0,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "fallback_angle", "app_fail_closed"],
+        "signals_checked": 0,
+        "clusters_checked": 0,
+        "best": None,
+        "top_rejected": [],
+        "message": str(message or "Pulse recovered from a live-feed error.")[:240],
+        "brief": "",
+        "error": str(message or "")[:240],
+    }
+
+
+def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_context: str = "") -> dict:
+    """Call whichever Pulse finder is available; never let it bubble to Streamlit."""
+    finder = getattr(pulse, "safe_find_pulse", None)
+    if not callable(finder):
+        finder = getattr(pulse, "find_pulse", None)
+    if not callable(finder):
+        return _ce_pulse_error_decision("Pulse engine is still loading on this deploy.")
+    try:
+        return finder(
+            tweets,
+            headlines,
+            state,
+            sports_context=sports_context,
+            handle=get_current_handle(),
+        )
+    except Exception as exc:
+        _append_debug_event("creator_evolution_pulse", "error", "Pulse finder recovered", {"error": str(exc)[:240]})
+        return _ce_pulse_error_decision(str(exc)[:240])
+
+
 def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
                                  fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT) -> tuple[dict, int, int]:
     """Find one high-confidence Creator Evolution Pulse opportunity."""
@@ -7325,12 +7368,11 @@ def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
     except Exception as exc:
         _append_debug_event("creator_evolution_pulse", "warn", "state unavailable", {"error": str(exc)[:160]})
         _state = {}
-    _decision = pulse.safe_find_pulse(
+    _decision = _safe_find_creator_evolution_pulse(
         _all_tweets,
         _rss_headlines,
         _state,
         sports_context=_sports_ctx,
-        handle=get_current_handle(),
     )
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = lane if lane in ce.EMOTION_LANES else _best.get("recommended_lane", ce.DEFAULT_LANE)
@@ -7582,7 +7624,7 @@ def _ce_pulse_dialog():
                 _decision, _n_tweets, _n_heads = _run_creator_evolution_pulse(_lane, _fmt)
             except Exception as exc:
                 _append_debug_event("creator_evolution_pulse", "error", "dialog recovered from Pulse failure", {"error": str(exc)[:240]})
-                _decision = pulse.pulse_error_decision(str(exc)[:240], handle=get_current_handle())
+                _decision = _ce_pulse_error_decision(str(exc)[:240])
                 _n_tweets, _n_heads = 0, 0
         st.session_state["ce_pulse_decision"] = _decision
         st.session_state["ce_pulse_meta"] = (_n_tweets, _n_heads)

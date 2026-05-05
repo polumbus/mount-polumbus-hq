@@ -312,9 +312,12 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_app_pulse_dialog_has_fail_closed_boundary(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("pulse.safe_find_pulse", app_text)
-        self.assertIn("pulse.pulse_error_decision", app_text)
-        self.assertIn("PULSE RECOVERED", app_text)
+        self.assertIn("def _ce_pulse_error_decision", app_text)
+        self.assertIn("def _safe_find_creator_evolution_pulse", app_text)
+        self.assertIn('getattr(pulse, "safe_find_pulse"', app_text)
+        self.assertIn('getattr(pulse, "find_pulse"', app_text)
+        self.assertNotIn("pulse.pulse_error_decision", app_text)
+        self.assertNotIn("pulse.safe_find_pulse(", app_text)
 
     def test_pulse_suppresses_duplicate_recent_angle(self):
         state = ce.refresh_state(None, [
