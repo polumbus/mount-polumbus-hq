@@ -5431,17 +5431,43 @@ def _build_grade_fix_library(tweet_text: str, fmt: str, pp: dict, voice: str = "
             base = "That is not nothing to see here"
         return base or "That is where the real conversation starts"
 
+    def _short_tension(line: str) -> str:
+        raw = _q(line)
+        if not raw:
+            return "That is the part people are going to argue about."
+        cleaned = re.sub(r"\s+", " ", raw)
+        if len(cleaned) <= 180:
+            return cleaned
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        for sentence in sentences:
+            if 30 <= len(sentence) <= 180:
+                return sentence
+        return cleaned[:177].rstrip(" ,.;:") + "..."
+
+    def _topic_noun() -> str:
+        lowered = text.lower()
+        if "golf" in lowered or "liv" in lowered or "pga" in lowered:
+            return "the player list"
+        if "broncos" in lowered or "bo nix" in lowered:
+            return "the second surgery"
+        if "nuggets" in lowered:
+            return "the roster tension"
+        if "team" in lowered:
+            return "the same problem"
+        return "the detail"
+
     hook_source = stat_line or middle_line or first_line
-    hook_fix = "The player list matters more than the golf politics." if "golf" in text.lower() else _q(hook_source if hook_source != first_line else first_line)
-    convo_fix = "That is where the argument really starts..."
+    topic = _topic_noun()
+    hook_fix = f"{topic[:1].upper() + topic[1:]} matters more than the framing."
+    convo_fix = f"That is where {topic} starts changing the conversation..."
     bookmark_source = stat_line or middle_line or first_line
-    bookmark_fix = "The names are the whole argument." if bookmark_source else "That is the part worth saving."
+    bookmark_fix = f"{topic[:1].upper() + topic[1:]} is the part worth saving."
     share_source = middle_line or stat_line or first_line
-    share_fix = "That is the tension people are going to argue about."
+    share_fix = _short_tension(share_source)
     engagement_fix = "That part is not nothing..."
     compliance_fix = _without_suppression()
-    dwell_fix = "That is where the argument gets real..."
-    voice_fix = "Protecting the sport and protecting ego are not the same thing..." if "golf" in text.lower() else f"{_q(_dequestion(last_line))}..."
+    dwell_fix = f"That is where {topic} gets real..."
+    voice_fix = f"{_q(_dequestion(last_line))}..."
 
     return {
         "Hook Strength": hook_fix,
