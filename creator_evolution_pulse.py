@@ -65,6 +65,122 @@ UNSAFE_MONETIZATION_TERMS = (
     "slur", "kill", "die", "crime", "arrested", "lawsuit", "gambling lock",
     "guaranteed bet", "free money", "medical", "diagnosis",
 )
+FALLBACK_RISK_TERMS = (
+    "idiot", "moron", "clown", "trash", "garbage", "hate", "stupid",
+    "fraud", "loser", "shut up", "dumb",
+)
+
+
+def _ce_default_lane() -> str:
+    try:
+        return str(getattr(ce, "DEFAULT_LANE", "Witty Edge") or "Witty Edge")
+    except Exception:
+        return "Witty Edge"
+
+
+def _ce_metric(item: dict[str, Any], *names: str) -> int:
+    try:
+        metric = getattr(ce, "metric")
+    except Exception:
+        metric = None
+    if callable(metric):
+        try:
+            return int(metric(item, *names))
+        except Exception:
+            pass
+    for name in names:
+        try:
+            value = item.get(name)
+            if value is not None:
+                return int(value)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _ce_parse_datetime(value: Any) -> datetime | None:
+    try:
+        parser = getattr(ce, "parse_datetime")
+    except Exception:
+        parser = None
+    if callable(parser):
+        try:
+            return parser(value)
+        except Exception:
+            return None
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _ce_tweet_text(tweet: dict[str, Any]) -> str:
+    try:
+        getter = getattr(ce, "tweet_text")
+    except Exception:
+        getter = None
+    if callable(getter):
+        try:
+            return str(getter(tweet) or "").strip()
+        except Exception:
+            pass
+    return str(tweet.get("text") or tweet.get("full_text") or "").strip()
+
+
+def _ce_topic_tags(text: str) -> list[str]:
+    try:
+        tagger = getattr(ce, "topic_tags")
+    except Exception:
+        tagger = None
+    if callable(tagger):
+        try:
+            tags = tagger(text)
+            return list(tags or ["general"])
+        except Exception:
+            pass
+    lower = text.lower()
+    tags = []
+    for tag, words in {
+        "broncos": ("broncos", "bo nix", "sean payton", "paton"),
+        "nuggets": ("nuggets", "jokic", "murray"),
+        "avs": ("avs", "avalanche", "mackinnon", "makar"),
+        "draft": ("draft", "pick ", "combine", "prospect"),
+        "media": ("media", "espn", "reporter", "narrative"),
+    }.items():
+        if any(word in lower for word in words):
+            tags.append(tag)
+    return tags or ["general"]
+
+
+def _ce_approved_rules_text(state: dict[str, Any] | None) -> str:
+    try:
+        formatter = getattr(ce, "approved_rules_text")
+    except Exception:
+        formatter = None
+    if callable(formatter):
+        try:
+            return str(formatter(state) or "")
+        except Exception:
+            pass
+    rules = (state or {}).get("approved_rules", [])
+    return "\n".join(f"- {rule.get('rule', '')}" for rule in rules if isinstance(rule, dict) and rule.get("rule"))
+
+
+def _heated_risk_hits(text: str) -> list[str]:
+    try:
+        terms = tuple(getattr(ce, "RISK_TERMS", FALLBACK_RISK_TERMS) or FALLBACK_RISK_TERMS)
+    except Exception:
+        terms = FALLBACK_RISK_TERMS
+    lower = text.lower()
+    return [term for term in terms if term in lower]
 
 
 def _now(now: datetime | None = None) -> datetime:
@@ -76,7 +192,7 @@ def _now(now: datetime | None = None) -> datetime:
 
 
 def _parse_time(value: Any, now: datetime | None = None) -> datetime:
-    parsed = ce.parse_datetime(value)
+    parsed = _ce_parse_datetime(value)
     return parsed or _now(now)
 
 
@@ -93,7 +209,7 @@ def _stable_id(text: str, source: str) -> str:
 
 
 def _metric(item: dict[str, Any], *names: str) -> int:
-    return ce.metric(item, *names)
+    return _ce_metric(item, *names)
 
 
 def _age_hours(timestamp: datetime, now: datetime | None = None) -> float:
@@ -132,8 +248,7 @@ def _risk_flags(text: str) -> list[str]:
     for term in UNSAFE_MONETIZATION_TERMS:
         if term in lower:
             flags.append(f"unsafe:{term}")
-    risk_hits = getattr(ce, "risk_hits", lambda value: [])
-    for term in risk_hits(text):
+    for term in _heated_risk_hits(text):
         flags.append(f"heated:{term}")
     if re.search(r"\b\d+(\.\d+)?\s*%\b", lower) and not ("source" in lower or "report" in lower):
         flags.append("unverified-stat")
@@ -185,7 +300,7 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
         "source_reliability": _source_reliability(src),
         "timestamp": timestamp.isoformat(timespec="seconds"),
         "age_hours": round(age, 2),
-        "topic": ", ".join(ce.topic_tags(text)),
+        "topic": ", ".join(_ce_topic_tags(text)),
         "text": text,
         "url": url,
         "author": author,
@@ -218,7 +333,7 @@ def signal_from_text(text: str, *, source: str = "news", url: str = "",
         "source_reliability": _source_reliability(src),
         "timestamp": ts.isoformat(timespec="seconds"),
         "age_hours": round(_age_hours(ts, now), 2),
-        "topic": ", ".join(ce.topic_tags(clean)),
+        "topic": ", ".join(_ce_topic_tags(clean)),
         "text": clean,
         "url": url,
         "author": "",
@@ -241,7 +356,7 @@ def build_signals(tweets: list[dict[str, Any]] | None,
     signals: list[dict[str, Any]] = []
     for tweet in tweets or []:
         if isinstance(tweet, dict):
-            text = ce.tweet_text(tweet)
+            text = _ce_tweet_text(tweet)
             if not text or text.startswith("RT "):
                 continue
             signals.append(signal_from_tweet(tweet, source="twitter", now=now))
@@ -308,7 +423,7 @@ def _recent_texts(state: dict[str, Any] | None) -> list[str]:
     texts = []
     for tweet in tweets[:120]:
         if isinstance(tweet, dict):
-            texts.append(ce.tweet_text(tweet))
+            texts.append(_ce_tweet_text(tweet))
     return [t for t in texts if t]
 
 
@@ -433,7 +548,7 @@ def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
         return "Annoyed"
     if reply_tension >= 7:
         return "Witty Edge"
-    return ce.DEFAULT_LANE
+    return _ce_default_lane()
 
 
 def _why_now(signals: list[dict[str, Any]], weighted: dict[str, float]) -> str:
@@ -491,14 +606,14 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
 def build_pulse_brief(opportunity: dict[str, Any], state: dict[str, Any] | None = None) -> str:
     action = opportunity.get("recommended_action", "tweet")
     topic = opportunity.get("topic", "live opportunity")
-    lane = opportunity.get("recommended_lane", ce.DEFAULT_LANE)
+    lane = opportunity.get("recommended_lane", _ce_default_lane())
     source_lines = []
     for source in opportunity.get("source_basis", [])[:4]:
         source_lines.append(
             f"- {source.get('source', 'source')} | {source.get('freshness_status', '')} | "
             f"{source.get('text', '')}"
         )
-    rules = ce.approved_rules_text(state)
+    rules = _ce_approved_rules_text(state)
     return f"""PULSE OPPORTUNITY:
 {topic}
 

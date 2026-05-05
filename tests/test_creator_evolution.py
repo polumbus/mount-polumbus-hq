@@ -267,6 +267,17 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(decision["status"], "no_op")
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
+    def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):
+        had_terms = hasattr(ce, "RISK_TERMS")
+        old_terms = getattr(ce, "RISK_TERMS", None)
+        if had_terms:
+            delattr(ce, "RISK_TERMS")
+        try:
+            self.assertIn("heated:trash", pulse._risk_flags("That take is trash."))
+        finally:
+            if had_terms:
+                setattr(ce, "RISK_TERMS", old_terms)
+
     def test_pulse_suppresses_duplicate_recent_angle(self):
         state = ce.refresh_state(None, [
             _tweet(1, "Broncos fans are melting down now because Sean Payton just hinted the boring draft pick might be the plan", hours_ago=10, views=3000, likes=80, replies=20, reposts=5),
