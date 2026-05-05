@@ -7310,14 +7310,22 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFA
 def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
                                  fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT) -> tuple[dict, int, int]:
     """Find one high-confidence Creator Evolution Pulse opportunity."""
-    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+    _all_tweets, _rss_headlines = [], []
+    try:
+        _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+    except Exception as exc:
+        _append_debug_event("creator_evolution_pulse", "error", "feed unavailable", {"error": str(exc)[:240]})
     _sports_ctx = ""
     try:
         _sports_ctx = get_sports_context()
     except Exception as exc:
         _append_debug_event("creator_evolution_pulse", "warn", "sports context unavailable", {"error": str(exc)[:160]})
-    _state = _creator_evolution_state()
-    _decision = pulse.find_pulse(
+    try:
+        _state = _creator_evolution_state()
+    except Exception as exc:
+        _append_debug_event("creator_evolution_pulse", "warn", "state unavailable", {"error": str(exc)[:160]})
+        _state = {}
+    _decision = pulse.safe_find_pulse(
         _all_tweets,
         _rss_headlines,
         _state,
@@ -7570,7 +7578,12 @@ def _ce_pulse_dialog():
         st.session_state.pop("ce_pulse_meta", None)
     if "ce_pulse_decision" not in st.session_state:
         with st.spinner("Running Pulse deep hunt..."):
-            _decision, _n_tweets, _n_heads = _run_creator_evolution_pulse(_lane, _fmt)
+            try:
+                _decision, _n_tweets, _n_heads = _run_creator_evolution_pulse(_lane, _fmt)
+            except Exception as exc:
+                _append_debug_event("creator_evolution_pulse", "error", "dialog recovered from Pulse failure", {"error": str(exc)[:240]})
+                _decision = pulse.pulse_error_decision(str(exc)[:240], handle=get_current_handle())
+                _n_tweets, _n_heads = 0, 0
         st.session_state["ce_pulse_decision"] = _decision
         st.session_state["ce_pulse_meta"] = (_n_tweets, _n_heads)
 
@@ -7582,8 +7595,9 @@ def _ce_pulse_dialog():
         "ready": "READY",
         "save_for_later": "SAVE",
         "no_op": "NO STRONG PULSE",
+        "pulse_error": "PULSE RECOVERED",
     }.get(_status, _status.upper())
-    _accent = "#2DD4BF" if _status == "ready" else "#C49E3C" if _status == "save_for_later" else "#5a7090"
+    _accent = "#2DD4BF" if _status == "ready" else "#C49E3C" if _status in ("save_for_later", "pulse_error") else "#5a7090"
     st.markdown(
         f"""
 <div style="border:1px solid rgba(45,212,191,0.16);background:rgba(10,18,32,0.58);border-radius:8px;padding:14px;margin-bottom:14px;">
@@ -7599,6 +7613,8 @@ def _ce_pulse_dialog():
         unsafe_allow_html=True,
     )
     if not _best:
+        if _status == "pulse_error":
+            st.warning("Pulse recovered from a live-feed parsing error instead of crashing. Use Hot Feed or refresh after the app redeploy finishes.")
         st.info("No strong Pulse right now. The system checked live signals, headlines, sports context, reply targets, and recent-topic duplication.")
         _hot_col, _refresh_col = st.columns([1, 1])
         with _hot_col:

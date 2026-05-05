@@ -299,6 +299,23 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn(decision["status"], {"ready", "save_for_later", "no_op"})
         self.assertGreaterEqual(decision["signals_checked"], 3)
 
+    def test_safe_pulse_returns_error_decision_instead_of_crashing(self):
+        class BadString:
+            def __str__(self):
+                raise AttributeError("bad provider object")
+
+        decision = pulse.safe_find_pulse({"tweets": [BadString()]}, {"articles": [BadString()]}, {}, handle="polfam", now=NOW)
+
+        self.assertIn(decision["status"], {"no_op", "pulse_error"})
+        self.assertIn("brief", decision)
+
+    def test_app_pulse_dialog_has_fail_closed_boundary(self):
+        app_text = Path("app.py").read_text()
+
+        self.assertIn("pulse.safe_find_pulse", app_text)
+        self.assertIn("pulse.pulse_error_decision", app_text)
+        self.assertIn("PULSE RECOVERED", app_text)
+
     def test_pulse_suppresses_duplicate_recent_angle(self):
         state = ce.refresh_state(None, [
             _tweet(1, "Broncos fans are melting down now because Sean Payton just hinted the boring draft pick might be the plan", hours_ago=10, views=3000, likes=80, replies=20, reposts=5),

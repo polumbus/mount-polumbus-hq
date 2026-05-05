@@ -201,7 +201,11 @@ def _parse_time(value: Any, now: datetime | None = None) -> datetime:
 
 
 def _text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    try:
+        raw = "" if value is None else str(value)
+    except Exception:
+        raw = ""
+    return re.sub(r"\s+", " ", raw).strip()
 
 
 def _tokens(text: str) -> set[str]:
@@ -629,6 +633,46 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     else:
         decision["brief"] = ""
     return decision
+
+
+def pulse_error_decision(message: str = "Pulse could not safely read the live feed.",
+                         *, handle: str = "", now: datetime | None = None) -> dict[str, Any]:
+    return {
+        "version": PULSE_VERSION,
+        "status": "pulse_error",
+        "handle": handle,
+        "threshold": DEFAULT_THRESHOLD,
+        "checked_at": _now(now).isoformat(timespec="seconds"),
+        "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "fallback_angle", "fail_closed"],
+        "signals_checked": 0,
+        "clusters_checked": 0,
+        "best": None,
+        "top_rejected": [],
+        "message": message,
+        "brief": "",
+        "error": message,
+    }
+
+
+def safe_find_pulse(tweets: Any,
+                    headlines: Any,
+                    state: dict[str, Any] | None = None,
+                    *, sports_context: str = "",
+                    handle: str = "",
+                    now: datetime | None = None,
+                    threshold: float = DEFAULT_THRESHOLD) -> dict[str, Any]:
+    try:
+        return find_pulse(
+            tweets,
+            headlines,
+            state,
+            sports_context=sports_context,
+            handle=handle,
+            now=now,
+            threshold=threshold,
+        )
+    except Exception as exc:
+        return pulse_error_decision(str(exc)[:240], handle=handle, now=now)
 
 
 def build_pulse_brief(opportunity: dict[str, Any], state: dict[str, Any] | None = None) -> str:
