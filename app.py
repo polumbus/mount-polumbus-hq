@@ -7503,14 +7503,20 @@ def _normalize_creator_evolution_state(raw: dict | None = None) -> dict:
     state = ce.initial_state()
     if isinstance(raw, dict):
         state.update(raw)
+    state.setdefault("prompt_version", ce.PROMPT_VERSION)
+    state.setdefault("scoring_version", ce.SCORING_VERSION)
     state.setdefault("tweets", [])
     state.setdefault("snapshots", [])
     state.setdefault("scores", [])
     state.setdefault("patterns", ce.summarize_scores(state.get("scores", [])))
     state.setdefault("proposals", [])
     state.setdefault("approved_rules", [])
-    state.setdefault("sync_status", ce.initial_state()["sync_status"])
-    state.setdefault("api_usage", ce.initial_state()["api_usage"])
+    sync_status = dict(ce.initial_state()["sync_status"])
+    sync_status.update(state.get("sync_status", {}) or {})
+    state["sync_status"] = sync_status
+    api_usage = dict(ce.initial_state()["api_usage"])
+    api_usage.update(state.get("api_usage", {}) or {})
+    state["api_usage"] = api_usage
     return state
 
 
@@ -7549,12 +7555,22 @@ def _load_creator_evolution_state() -> dict:
 
 def _save_creator_evolution_state(state: dict) -> dict:
     state = _normalize_creator_evolution_state(state)
+    state["sync_status"] = dict(state.get("sync_status", {}) or {})
+    state["sync_status"]["last_persisted_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if is_guest():
+        state["sync_status"]["persisted"] = "local_only"
+        state["sync_status"]["persist_error"] = ""
+        st.session_state["_creator_evolution_cache"] = state
+        st.session_state["_creator_evolution_cache_handle"] = get_current_handle()
+        save_json(ce.STATE_FILENAME, state)
+        return state
+
     st.session_state["_creator_evolution_cache"] = state
     st.session_state["_creator_evolution_cache_handle"] = get_current_handle()
     save_json(ce.STATE_FILENAME, state)
-    if is_guest():
-        return state
     try:
+        state["sync_status"]["persisted"] = "gist"
+        state["sync_status"]["persist_error"] = ""
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({
             "files": {
@@ -7563,15 +7579,20 @@ def _save_creator_evolution_state(state: dict) -> dict:
                 }
             }
         })
-        requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
-    except Exception:
-        pass
+        resp = requests.patch(f"https://api.github.com/gists/{gist_id}", data=payload, headers=_gist_headers(), timeout=8)
+        resp.raise_for_status()
+    except Exception as exc:
+        state["sync_status"]["persisted"] = "local_only"
+        state["sync_status"]["persist_error"] = str(exc)[:240]
+    st.session_state["_creator_evolution_cache"] = state
+    save_json(ce.STATE_FILENAME, state)
     return state
 
 
 def _refresh_creator_evolution_state(mode: str = "history") -> dict:
     existing = _load_creator_evolution_state()
     source = mode
+    budget = ce.sync_budget_for_mode(mode)
     try:
         if mode == "latest":
             tweets = sync_tweet_history(quick=True)
@@ -7581,7 +7602,16 @@ def _refresh_creator_evolution_state(mode: str = "history") -> dict:
             tweets = _load_tweet_history_gist()
             source = "existing_history"
         refreshed = ce.refresh_state(existing, tweets or [], handle=get_current_handle())
-        refreshed["sync_status"]["source"] = source
+        refreshed["sync_status"].update({
+            "source": source,
+            "sync_mode": budget["mode"],
+        })
+        refreshed["api_usage"].update({
+            "last_sync_mode": budget["mode"],
+            "estimated_requests": budget["estimated_requests"],
+            "budget_label": budget["label"],
+            "budget_needs_confirmation": budget["needs_confirmation"],
+        })
         return _save_creator_evolution_state(refreshed)
     except Exception as exc:
         existing["sync_status"] = dict(existing.get("sync_status", {}))
@@ -7591,6 +7621,13 @@ def _refresh_creator_evolution_state(mode: str = "history") -> dict:
             "handle": get_current_handle(),
             "detail": str(exc)[:300],
             "source": source,
+            "sync_mode": budget["mode"],
+        })
+        existing["api_usage"] = dict(existing.get("api_usage", {}) or {})
+        existing["api_usage"].update({
+            "last_sync_mode": budget["mode"],
+            "estimated_requests": budget["estimated_requests"],
+            "budget_label": budget["label"],
         })
         return _save_creator_evolution_state(existing)
 
@@ -7608,12 +7645,16 @@ def _creator_evolution_state() -> dict:
 def _creator_evolution_system_prompt(lane: str) -> str:
     handle = get_current_handle()
     lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    lane_rules = ce.lane_recipe_text(lane)
     return build_user_context() + f"""
 
 You are Creator Evolution for @{handle}.
 
 Your job is to write posts that sound like a real, sharp human with a funny,
 witty edge. The active emotional lane is {lane}.
+
+Active lane behavior:
+{lane_rules}
 
 Hard boundaries:
 - Do not use Creator Studio's Hall of Fame examples, benchmarks, calibration blocks, hooks, or cached prompt context.
@@ -7636,7 +7677,7 @@ def _ce_capture_ai_error(raw_text: str) -> bool:
     elif route or source:
         message += f" Route: {route or 'unknown'} / {source or 'unknown'}."
     st.session_state["ce_error"] = message
-    for key in ["ce_banger_data", "ce_result"]:
+    for key in ["ce_banger_data", "ce_result", "ce_quality_report"]:
         st.session_state.pop(key, None)
     return True
 
@@ -7645,6 +7686,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
     """Run Creator Evolution generation through the isolated CE prompt path."""
     for key in [
         "ce_banger_data", "ce_result", "ce_error",
+        "ce_quality_report",
         "ce_banger_opt_1", "ce_banger_opt_2", "ce_banger_opt_3",
         "_ce_verify_1", "_ce_verify_2", "_ce_verify_3",
     ]:
@@ -7693,6 +7735,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
+        st.session_state["ce_quality_report"] = ce.validate_generation_options(data, fmt, lane)
         st.session_state["ce_banger_data"] = data
         st.session_state["ce_last_action"] = {
             "type": action,
@@ -7703,6 +7746,9 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         return
     if not _ce_capture_ai_error(raw or ""):
         st.session_state["ce_result"] = _sanitize_output((raw or "").strip())
+        st.session_state["ce_quality_report"] = {
+            "result": ce.draft_quality_report(st.session_state["ce_result"], fmt, lane)
+        }
 
 
 @st.dialog("Build a Creator Evolution Tweet", width="large")
@@ -7824,6 +7870,7 @@ def _ce_output_panel_impl(action, tweet_text, fmt, lane):
     )
     if st.session_state.get("ce_banger_data"):
         bd = st.session_state["ce_banger_data"]
+        quality_reports = st.session_state.get("ce_quality_report", {}) or {}
         ai_pick = str(bd.get("pick", "1")).strip()
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         left, right = st.columns([1, 1])
@@ -7863,6 +7910,22 @@ def _ce_output_panel_impl(action, tweet_text, fmt, lane):
             if pattern:
                 st.markdown(
                     f'<div style="font-size:11px;color:#666688;letter-spacing:0.5px;margin-bottom:8px;">{html.escape(str(pattern))}</div>',
+                    unsafe_allow_html=True,
+                )
+            q_report = quality_reports.get(f"option{idx}", {})
+            if q_report:
+                q_issues = q_report.get("issues", []) or []
+                q_warnings = q_report.get("warnings", []) or []
+                if q_issues or q_warnings:
+                    q_color = "#E8441A" if q_issues else "#C49E3C"
+                    q_label = "Needs edit" if q_issues else "Watch"
+                    q_detail = " | ".join(str(x) for x in (q_issues + q_warnings)[:3])
+                else:
+                    q_color = "#2DD4BF"
+                    q_label = "Quality pass"
+                    q_detail = "Human voice, no AI/content bait flags."
+                st.markdown(
+                    f'<div style="border-left:2px solid {q_color};padding:6px 10px;margin:6px 0 8px;background:rgba(10,18,32,0.42);border-radius:6px;font-size:11px;color:#8FA6C6;"><span style="color:{q_color};font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:1px;">{q_label}</span>&nbsp; {html.escape(q_detail)}</div>',
                     unsafe_allow_html=True,
                 )
             widget_key = f"ce_banger_opt_{idx}_{hash(opt_text) % 100000}"
@@ -8433,9 +8496,12 @@ def _render_creator_evolution_learning_panel(state: dict):
     handle = status.get("handle", "") or get_current_handle() or "unknown"
     mature = int(status.get("mature_tweet_count", patterns.get("mature_count", 0)) or 0)
     original_count = int(status.get("original_tweet_count", len(state.get("tweets", []))) or 0)
-    spend = float(status.get("estimated_spend_usd", state.get("api_usage", {}).get("estimated_cost_usd", 0.0)) or 0.0)
+    api_usage = state.get("api_usage", {}) or {}
+    spend = float(status.get("estimated_spend_usd", api_usage.get("estimated_cost_usd", 0.0)) or 0.0)
+    estimated_requests = int(api_usage.get("estimated_requests", 0) or 0)
     sync_status = status.get("status", "never_synced")
     source = status.get("source", "history")
+    persisted = status.get("persisted", "unknown")
     best = patterns.get("best_current_patterns", [])[:3]
     worst = patterns.get("worst_current_patterns", [])[:3]
     approved_rules = ce.approved_rules_text(state)
@@ -8453,8 +8519,10 @@ def _render_creator_evolution_learning_panel(state: dict):
         unsafe_allow_html=True,
     )
 
-    with st.expander("Learning Details", expanded=False):
-        st.caption(f"Last sync: {last_sync_short} | Source: {source} | Originals tracked: {original_count}")
+    with st.expander("Learning Details", expanded=bool(st.session_state.get("_ce_confirm_backfill"))):
+        st.caption(f"Last sync: {last_sync_short} | Source: {source} | Originals tracked: {original_count} | API requests est: {estimated_requests} | Persist: {persisted}")
+        if status.get("persist_error"):
+            st.warning(f"Creator Evolution saved locally, but Gist persistence failed: {status.get('persist_error')}")
         sync_col, latest_col, backfill_col = st.columns([1, 1, 1])
         with sync_col:
             if st.button("Refresh History", key="ce_refresh_history", use_container_width=True):
@@ -8468,9 +8536,28 @@ def _render_creator_evolution_learning_panel(state: dict):
                 st.rerun(scope="app")
         with backfill_col:
             if st.button("Deep Backfill", key="ce_sync_backfill", use_container_width=True):
-                with st.spinner("Backfilling tweet history with twitterapi.io..."):
-                    _refresh_creator_evolution_state("backfill")
+                st.session_state["_ce_confirm_backfill"] = True
                 st.rerun(scope="app")
+
+        if st.session_state.get("_ce_confirm_backfill"):
+            backfill_budget = ce.sync_budget_for_mode("backfill")
+            st.warning(
+                f"Deep Backfill can call twitterapi.io repeatedly. Estimate: "
+                f"{backfill_budget['estimated_requests']} requests, "
+                f"{backfill_budget['estimated_tweets_read']} tweets read, "
+                f"${backfill_budget['estimated_cost_usd']:.4f} in provider-metered usage."
+            )
+            confirm_col, cancel_col = st.columns([1, 1])
+            with confirm_col:
+                if st.button("Confirm Backfill", key="ce_confirm_backfill_run", use_container_width=True, type="primary"):
+                    st.session_state.pop("_ce_confirm_backfill", None)
+                    with st.spinner("Backfilling tweet history with twitterapi.io..."):
+                        _refresh_creator_evolution_state("backfill")
+                    st.rerun(scope="app")
+            with cancel_col:
+                if st.button("Cancel Backfill", key="ce_cancel_backfill", use_container_width=True):
+                    st.session_state.pop("_ce_confirm_backfill", None)
+                    st.rerun(scope="app")
 
         lp_left, lp_right = st.columns([1, 1])
         with lp_left:
@@ -8625,14 +8712,18 @@ def _render_creator_evolution_editor():
                 st.success("Saved.")
         if st.button("ce_post_direct", key="ce_post_direct"):
             if tweet_text.strip():
-                with st.spinner("Posting..."):
-                    ok, detail = _post_tweet(tweet_text.strip())
-                if ok:
-                    st.success("Posted to X.")
-                    if str(detail).startswith("https://"):
-                        st.markdown(f"[Open posted tweet]({detail})")
+                quality = ce.draft_quality_report(tweet_text.strip(), cur_fmt, cur_lane)
+                if not quality.get("ok"):
+                    st.error("Creator Evolution blocked this post for quality/safety. Fix: " + " | ".join(quality.get("issues", [])[:3]))
                 else:
-                    st.error(f"Post failed: {detail}")
+                    with st.spinner("Posting..."):
+                        ok, detail = _post_tweet(tweet_text.strip())
+                    if ok:
+                        st.success("Posted to X.")
+                        if str(detail).startswith("https://"):
+                            st.markdown(f"[Open posted tweet]({detail})")
+                    else:
+                        st.error(f"Post failed: {detail}")
 
 
 def page_creator_evolution():

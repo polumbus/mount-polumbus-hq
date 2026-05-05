@@ -58,6 +58,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Build 3 distinct", prompt)
         self.assertIn("SOURCE MATERIAL", prompt)
         self.assertIn("BUILD MODE", prompt)
+        self.assertIn("LANE BEHAVIOR", prompt)
+        self.assertIn("Witty Edge:", prompt)
         self.assertIn("TOPIC:", prompt)
         self.assertNotIn("HALL OF FAME REFERENCE TWEETS", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
@@ -111,6 +113,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_build_dialog", app_text)
         self.assertIn("_ce_show_build_dialog", app_text)
         self.assertIn("ce_banger_data", app_text)
+        self.assertIn("ce_quality_report", app_text)
+        self.assertIn("ce.sync_budget_for_mode(\"backfill\")", app_text)
+        self.assertIn("Creator Evolution blocked this post", app_text)
         self.assertIn("ci_banger_data", app_text)
 
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
@@ -126,6 +131,48 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("here's the thing", hits)
         self.assertIn("at the end of the day", hits)
         self.assertIn("game-changer", hits)
+
+    def test_lane_recipe_changes_prompt_behavior(self):
+        prompt = ce.build_generation_prompt(
+            "Nuggets fans are trying to stay normal about this bench rotation",
+            "Punchy Tweet",
+            "Deadpan",
+            ce.initial_state(),
+        )
+
+        self.assertIn("Deadpan:", prompt)
+        self.assertIn("Straight-faced", prompt)
+        self.assertIn("No exclamation points", prompt)
+
+    def test_quality_gate_flags_ai_bait_and_deadpan_drift(self):
+        report = ce.draft_quality_report(
+            "Here's the thing: this is not just a game-changer but also a moment. Thoughts?!",
+            "Normal Tweet",
+            "Deadpan",
+        )
+
+        self.assertFalse(report["ok"])
+        self.assertTrue(report["issues"])
+        self.assertIn("here's the thing", report["ai_sounding_hits"])
+        self.assertTrue(report["engagement_bait_hits"])
+
+    def test_false_loser_keeps_high_reply_low_reach_posts_from_being_discarded(self):
+        state = ce.refresh_state(None, [
+            _tweet(1, "Low reach but every Broncos fan who saw this had something to say...", hours_ago=100, views=900, likes=12, replies=9, reposts=1),
+            _tweet(2, "A regular mature post that traveled normally", hours_ago=100, views=6000, likes=120, replies=20, reposts=10),
+            _tweet(3, "Another normal mature post with enough sample size", hours_ago=100, views=5000, likes=90, replies=15, reposts=7),
+        ], handle="polfam", now=NOW)
+
+        self.assertIn("1", state["patterns"]["false_loser_ids"])
+        self.assertTrue(any("low-reach posts" in prop["rule"] for prop in state["proposals"]))
+
+    def test_sync_budget_requires_confirmation_for_deep_backfill(self):
+        latest = ce.sync_budget_for_mode("latest")
+        backfill = ce.sync_budget_for_mode("backfill")
+
+        self.assertFalse(latest["needs_confirmation"])
+        self.assertTrue(backfill["needs_confirmation"])
+        self.assertGreater(backfill["estimated_requests"], latest["estimated_requests"])
 
 
 if __name__ == "__main__":
