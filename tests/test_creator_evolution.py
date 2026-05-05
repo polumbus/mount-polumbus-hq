@@ -119,6 +119,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_show_pulse", app_text)
         self.assertIn("ce_pulse", app_text)
         self.assertIn("ce_whats_hot", app_text)
+        self.assertIn("CE_COMPAT_DEFAULTS", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
         self.assertIn("ce.sync_budget_for_mode(\"backfill\")", app_text)

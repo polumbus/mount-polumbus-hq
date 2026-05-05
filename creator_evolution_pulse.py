@@ -132,7 +132,8 @@ def _risk_flags(text: str) -> list[str]:
     for term in UNSAFE_MONETIZATION_TERMS:
         if term in lower:
             flags.append(f"unsafe:{term}")
-    for term in ce.risk_hits(text):
+    risk_hits = getattr(ce, "risk_hits", lambda value: [])
+    for term in risk_hits(text):
         flags.append(f"heated:{term}")
     if re.search(r"\b\d+(\.\d+)?\s*%\b", lower) and not ("source" in lower or "report" in lower):
         flags.append("unverified-stat")

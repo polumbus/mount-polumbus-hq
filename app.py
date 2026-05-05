@@ -50,6 +50,21 @@ from anthropic_circuit import (
 )
 from podcast_blueprint import get_podcast_dashboard_content
 
+CE_COMPAT_DEFAULTS = {
+    "PROMPT_VERSION": "ce-prompt-v4-pulse-quality",
+    "SCORING_VERSION": "ce-score-v3-tracked-cohorts",
+    "RULE_VERSION": "ce-rules-v2-approval-rollback",
+    "BUDGET_POLICY": {
+        "provider": "twitterapi.io",
+        "daily_cap_usd": 0.75,
+        "weekly_cap_usd": 3.00,
+        "estimated_cost_per_1000_tweets": 0.15,
+    },
+}
+for _ce_attr, _ce_default in CE_COMPAT_DEFAULTS.items():
+    if not hasattr(ce, _ce_attr):
+        setattr(ce, _ce_attr, _ce_default)
+
 _PODCAST_STATE_LABELS = {
     option["id"]: option["label"]
     for option in get_podcast_dashboard_content(None)["state_options"]
