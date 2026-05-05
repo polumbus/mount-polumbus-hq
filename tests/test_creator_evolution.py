@@ -278,6 +278,27 @@ class CreatorEvolutionTests(unittest.TestCase):
             if had_terms:
                 setattr(ce, "RISK_TERMS", old_terms)
 
+    def test_pulse_tolerates_wrapped_string_and_mixed_signal_shapes(self):
+        mixed_tweets = {
+            "tweets": [
+                "Broncos fans are arguing now because the boring roster answer might be the whole point",
+                object(),
+                _tweet(13, "Nuggets fans are melting down tonight because the bench problem got weird again", hours_ago=1, views=6000, likes=120, replies=35, reposts=12),
+            ]
+        }
+        mixed_headlines = {
+            "articles": [
+                {"title": "ESPN: Broncos coach quote sparks fresh debate today", "source": "espn"},
+                object(),
+            ]
+        }
+        state = {"tweets": ["A recent plain-string state item should not crash novelty scoring"]}
+
+        decision = pulse.find_pulse(mixed_tweets, mixed_headlines, state, handle="polfam", now=NOW)
+
+        self.assertIn(decision["status"], {"ready", "save_for_later", "no_op"})
+        self.assertGreaterEqual(decision["signals_checked"], 3)
+
     def test_pulse_suppresses_duplicate_recent_angle(self):
         state = ce.refresh_state(None, [
             _tweet(1, "Broncos fans are melting down now because Sean Payton just hinted the boring draft pick might be the plan", hours_ago=10, views=3000, likes=80, replies=20, reposts=5),

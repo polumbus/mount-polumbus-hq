@@ -79,6 +79,8 @@ def _ce_default_lane() -> str:
 
 
 def _ce_metric(item: dict[str, Any], *names: str) -> int:
+    if not isinstance(item, dict):
+        return 0
     try:
         metric = getattr(ce, "metric")
     except Exception:
@@ -123,6 +125,8 @@ def _ce_parse_datetime(value: Any) -> datetime | None:
 
 
 def _ce_tweet_text(tweet: dict[str, Any]) -> str:
+    if not isinstance(tweet, dict):
+        return _text(tweet)
     try:
         getter = getattr(ce, "tweet_text")
     except Exception:
@@ -212,6 +216,22 @@ def _metric(item: dict[str, Any], *names: str) -> int:
     return _ce_metric(item, *names)
 
 
+def _iter_feed_items(value: Any, *preferred_keys: str) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        for key in preferred_keys:
+            nested = value.get(key)
+            if isinstance(nested, (list, tuple, set)):
+                return list(nested)
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    if isinstance(value, str):
+        return [value]
+    return []
+
+
 def _age_hours(timestamp: datetime, now: datetime | None = None) -> float:
     return max(0.0, (_now(now) - timestamp).total_seconds() / 3600.0)
 
@@ -286,6 +306,8 @@ def _velocity(item: dict[str, Any], age: float) -> float:
 
 def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
                       now: datetime | None = None) -> dict[str, Any]:
+    if not isinstance(tweet, dict):
+        return signal_from_text(_text(tweet), source=source, now=now)
     text = _text(tweet.get("text") or tweet.get("full_text"))
     timestamp = _parse_time(tweet.get("createdAt") or tweet.get("created_at"), now)
     age = _age_hours(timestamp, now)
@@ -354,27 +376,32 @@ def build_signals(tweets: list[dict[str, Any]] | None,
                   *, sports_context: str = "",
                   now: datetime | None = None) -> list[dict[str, Any]]:
     signals: list[dict[str, Any]] = []
-    for tweet in tweets or []:
-        if isinstance(tweet, dict):
+    for tweet in _iter_feed_items(tweets, "tweets", "statuses", "data", "results"):
+        try:
             text = _ce_tweet_text(tweet)
             if not text or text.startswith("RT "):
                 continue
             signals.append(signal_from_tweet(tweet, source="twitter", now=now))
-    for item in headlines or []:
-        if isinstance(item, dict):
-            text = _text(item.get("title") or item.get("headline") or item.get("text"))
-            url = _text(item.get("url") or item.get("link"))
-            source = _text(item.get("source") or "news").lower()
-            timestamp = item.get("publishedAt") or item.get("published_at") or item.get("createdAt")
-        else:
-            text = _text(item)
-            url = ""
-            source = "news"
-            timestamp = None
-        if text:
-            if "espn" in text.lower() or source == "espn":
-                source = "espn"
-            signals.append(signal_from_text(text, source=source, url=url, timestamp=timestamp, now=now))
+        except Exception:
+            continue
+    for item in _iter_feed_items(headlines, "headlines", "articles", "items", "data"):
+        try:
+            if isinstance(item, dict):
+                text = _text(item.get("title") or item.get("headline") or item.get("text"))
+                url = _text(item.get("url") or item.get("link"))
+                source = _text(item.get("source") or "news").lower()
+                timestamp = item.get("publishedAt") or item.get("published_at") or item.get("createdAt")
+            else:
+                text = _text(item)
+                url = ""
+                source = "news"
+                timestamp = None
+            if text:
+                if "espn" in text.lower() or source == "espn":
+                    source = "espn"
+                signals.append(signal_from_text(text, source=source, url=url, timestamp=timestamp, now=now))
+        except Exception:
+            continue
     if sports_context:
         for line in str(sports_context).splitlines():
             line = _text(line)
@@ -421,9 +448,10 @@ def cluster_signals(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _recent_texts(state: dict[str, Any] | None) -> list[str]:
     tweets = (state or {}).get("tweets", [])
     texts = []
-    for tweet in tweets[:120]:
-        if isinstance(tweet, dict):
-            texts.append(_ce_tweet_text(tweet))
+    for tweet in _iter_feed_items(tweets, "tweets", "data", "results")[:120]:
+        text = _ce_tweet_text(tweet)
+        if text:
+            texts.append(text)
     return [t for t in texts if t]
 
 
@@ -447,7 +475,7 @@ def _novelty_score(text: str, state: dict[str, Any] | None) -> tuple[float, str]
 
 def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
                   *, now: datetime | None = None) -> dict[str, Any]:
-    signals = cluster.get("signals", []) or []
+    signals = [s for s in (cluster.get("signals", []) or []) if isinstance(s, dict)]
     if not signals:
         return {}
     primary = signals[0]
