@@ -9593,61 +9593,30 @@ def page_algo_analyzer():
 
     if _aa_run:
         if content.strip():
-            with st.spinner("Analyzing against the algorithm..."):
-                prompt = f"""Analyze this content for X algorithm performance:
+            with st.spinner("Running 10/10 content audit..."):
+                subject = ten_x_audit.AuditSubject(
+                    area="Algorithm Score",
+                    description=ten_x_audit.description_for_area("Algorithm Score"),
+                    content=content,
+                    metadata=_ten_x_metadata_for_area("Algorithm Score"),
+                )
 
-"{content}"
+                def _ai_call(prompt: str) -> str:
+                    return call_claude(
+                        prompt,
+                        system="You are a strict X content and product auditor. Return only valid JSON.",
+                        max_tokens=2200,
+                    )
 
-Score each factor 1-10 and explain in one sentence:
-1. HOOK STRENGTH - Does the first line stop the scroll?
-2. ENGAGEMENT POTENTIAL - Will people reply, like, RT?
-3. CONTROVERSY FACTOR - Does it invite debate without being toxic?
-4. FORMAT OPTIMIZATION - Is the length/structure optimal for X?
-5. SHAREABILITY - Would someone share this with their audience?
-6. TIMING RELEVANCE - Is this timely content?
-7. VOICE AUTHENTICITY - Does it sound like a real person with authority?
+                result = ten_x_audit.run_audit(subject, ai_call=_ai_call)
+                st.session_state["aa_ten_x_result"] = ten_x_audit.to_dict(result)
+                _save_ten_x_result(result)
 
-Then give:
-- OVERALL SCORE (out of 100)
-- TOP IMPROVEMENT: The single change that would boost performance most
-- REWRITE: An optimized version
-
-Return as JSON:
-{{"scores": {{"Hook Strength": {{"score": 7, "note": "..."}}, ...}}, "overall": 72, "improvement": "...", "rewrite": "..."}}"""
-                raw = call_claude(prompt, max_tokens=800)
-                try:
-                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                    data = json.loads(json_match.group()) if json_match else None
-                except Exception:
-                    data = None
-
-                if data and "scores" in data:
-                    overall = data.get("overall", 0)
-                    color = "#22c55e" if overall >= 75 else "#2DD4BF" if overall >= 55 else "#ef4444"
-                    st.markdown(f"""<div style="text-align:center; padding:20px 0;">
-                        <div style="font-family:'Bebas Neue',sans-serif; font-size:80px; color:{color}; line-height:1;">{overall}</div>
-                        <div style="color:#8888aa; font-size:13px; letter-spacing:2px; text-transform:uppercase;">Algorithm Score / 100</div>
-                    </div>""", unsafe_allow_html=True)
-
-                    for metric, val in data["scores"].items():
-                        score = val.get("score", 0) if isinstance(val, dict) else val
-                        note = val.get("note", "") if isinstance(val, dict) else ""
-                        bar_color = "#22c55e" if score >= 8 else "#2DD4BF" if score >= 6 else "#ef4444"
-                        st.markdown(f"""<div style="margin-bottom:12px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span class="metric-label">{metric}</span>
-                                <span class="metric-score">{score}/10</span>
-                            </div>
-                            <div class="score-bar-wrap"><div class="score-bar-fill" style="width:{score*10}%; background:{bar_color};"></div></div>
-                            <div style="font-size:12px; color:#888899;">{note}</div>
-                        </div>""", unsafe_allow_html=True)
-
-                    if data.get("improvement"):
-                        st.markdown(f'**Top Improvement:** {data["improvement"]}')
-                    if data.get("rewrite"):
-                        st.markdown(f'<div class="output-box"><strong>Optimized Version:</strong>\n\n{data["rewrite"]}</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="output-box">{raw}</div>', unsafe_allow_html=True)
+    if st.session_state.get("aa_ten_x_result"):
+        try:
+            _render_ten_x_result(ten_x_audit.from_dict(st.session_state["aa_ten_x_result"]))
+        except Exception:
+            st.warning("Algorithm audit result could not render. Run it again.")
 
     # ── Hidden buttons are CSS-hidden; dock clicks wired by global MutationObserver ──
 
@@ -9656,30 +9625,72 @@ Return as JSON:
 # PAGE: HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════
 def _ten_x_metadata_for_area(area: str) -> dict:
+    has_outcomes = bool(load_json("ten_x_outcomes.json", []))
     return {
-        "Whole App": {"hidden_controls": True, "duplicate_paths": True},
-        "Creator Studio": {"hidden_controls": True, "duplicate_paths": False},
-        "Gameday": {"hidden_controls": False, "duplicate_paths": True},
-        "Reply Mode": {"hidden_controls": True, "duplicate_paths": False},
-        "Algorithm Score": {"hidden_controls": True, "duplicate_paths": False},
-        "Account Audit": {"hidden_controls": True, "duplicate_paths": False},
+        "Whole App": {"hidden_controls": True, "duplicate_paths": True, "has_history": True, "has_outcome_tracking": has_outcomes},
+        "Creator Studio": {
+            "hidden_controls": True,
+            "duplicate_paths": False,
+            "has_post_path": True,
+            "has_copy_path": True,
+            "has_grade_fixes": bool(st.session_state.get("ci_grades")),
+            "has_verify_path": True,
+            "has_history": bool(load_json("tweet_history.json", [])),
+            "has_outcome_tracking": has_outcomes,
+        },
+        "Gameday": {
+            "hidden_controls": False,
+            "duplicate_paths": True,
+            "has_post_path": True,
+            "has_copy_path": True,
+            "has_verify_path": True,
+            "missing_timestamp": not bool(st.session_state.get("gd_fact_packet")),
+            "has_outcome_tracking": has_outcomes,
+        },
+        "Reply Mode": {"hidden_controls": True, "duplicate_paths": False, "has_copy_path": True, "has_post_path": True, "has_outcome_tracking": has_outcomes},
+        "Algorithm Score": {"hidden_controls": False, "duplicate_paths": False, "has_grade_fixes": True, "has_history": True, "has_outcome_tracking": has_outcomes},
+        "Account Audit": {"hidden_controls": True, "duplicate_paths": False, "has_history": bool(load_json("health_check_cache.json", {})), "has_outcome_tracking": has_outcomes},
     }.get(area, {})
 
 
 def _ten_x_description_for_area(area: str) -> str:
-    descriptions = {
-        "Whole App": "All major Post Ascend workflows: Creator Studio, Fan Pulse Gameday, Reply Mode, Algorithm Score, Account Audit, Idea Bank, navigation, shared voice, and trust layer.",
-        "Creator Studio": "Build, rewrite, grades, verify, post, save, format controls, voice controls, and paste-ready grade fixes.",
-        "Gameday": "Fan Pulse live-game workflow: score freshness, feed freshness, source grounding, emotional lanes, generated drafts, copy, post, and trust controls.",
-        "Reply Mode": "Reply generation workflow: context awareness, Tyler voice, safe reply controls, and conversation quality.",
-        "Algorithm Score": "Standalone algorithm scoring workflow and whether it should become the shared 10/10 audit rubric.",
-        "Account Audit": "Account-level audit workflow: recent tweets, health score, recommendations, flagged posts, and actionability.",
-    }
-    return descriptions.get(area, descriptions["Whole App"])
+    return ten_x_audit.description_for_area(area)
+
+
+def _ten_x_metadata_by_area() -> dict[str, dict]:
+    return {area: _ten_x_metadata_for_area(area) for area in ten_x_audit.AUDIT_AREAS}
+
+
+def _ten_x_context_for_area(area: str, content: str = "") -> str:
+    parts = [content.strip()] if content.strip() else []
+    if area in {"Whole App", "Creator Studio"}:
+        for key in ("ci_result", "ci_banger_data", "ci_grades", "ci_preview"):
+            value = st.session_state.get(key)
+            if value:
+                parts.append(f"{key}: {json.dumps(value, default=str)[:1600]}")
+    if area in {"Whole App", "Gameday"}:
+        for key in ("gd_fact_packet", "gd_drafts", "gd_error"):
+            value = st.session_state.get(key)
+            if value:
+                parts.append(f"{key}: {json.dumps(value, default=str)[:1600]}")
+    if area in {"Whole App", "Account Audit"}:
+        audit_cache = load_json("health_check_cache.json", {})
+        if audit_cache:
+            parts.append(f"health_check_cache: {json.dumps(audit_cache, default=str)[:1600]}")
+    outcomes = load_json(_ten_x_outcomes_path(), [])
+    if outcomes:
+        relevant = outcomes if area == "Whole App" else [item for item in outcomes if item.get("area") == area]
+        if relevant:
+            parts.append(f"posted_outcomes: {json.dumps(relevant[:10], default=str)[:1600]}")
+    return "\n\n".join(parts)
 
 
 def _ten_x_cache_path() -> str:
     return "ten_x_audit_cache.json"
+
+
+def _ten_x_outcomes_path() -> str:
+    return "ten_x_outcomes.json"
 
 
 def _load_ten_x_result():
@@ -9693,14 +9704,27 @@ def _load_ten_x_result():
     return None, ""
 
 
-def _save_ten_x_result(result: ten_x_audit.AuditResult) -> None:
+def _load_ten_x_cache() -> dict:
+    cached = load_json(_ten_x_cache_path(), {})
+    return cached if isinstance(cached, dict) else {}
+
+
+def _save_ten_x_record(record: ten_x_audit.AuditRunRecord) -> None:
+    cached = _load_ten_x_cache()
+    history = ten_x_audit.append_history(cached.get("history", []), record)
     save_json(
         _ten_x_cache_path(),
         {
             "last_run": datetime.now().strftime("%Y-%m-%d %H:%M MST"),
-            "data": ten_x_audit.to_dict(result),
+            "data": ten_x_audit.to_dict(record.latest),
+            "children": [ten_x_audit.to_dict(child) for child in record.children],
+            "history": history,
         },
     )
+
+
+def _save_ten_x_result(result: ten_x_audit.AuditResult) -> None:
+    _save_ten_x_record(ten_x_audit.AuditRunRecord(run_id=datetime.now().strftime("%Y%m%d%H%M%S"), latest=result, children=[]))
 
 
 def _render_ten_x_result(result: ten_x_audit.AuditResult) -> None:
@@ -9770,6 +9794,64 @@ def _render_ten_x_result(result: ten_x_audit.AuditResult) -> None:
         st.text_area("Markdown", value=md, height=320, label_visibility="collapsed")
 
 
+def _render_ten_x_children(children: list[ten_x_audit.AuditResult]) -> None:
+    if not children:
+        return
+    st.markdown("### Workflow Drilldowns")
+    rows = [
+        {
+            "Workflow": child.subject.area,
+            "Score": child.overall_score,
+            "P0": sum(1 for item in child.roadmap if item.priority == "P0"),
+            "P1": sum(1 for item in child.roadmap if item.priority == "P1"),
+            "Top Blocker": child.roadmap[0].failing_category if child.roadmap else "",
+        }
+        for child in children
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _render_ten_x_history() -> None:
+    cached = _load_ten_x_cache()
+    rows = ten_x_audit.trend_rows(cached.get("history", []))
+    if not rows:
+        return
+    with st.expander("Audit History", expanded=False):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _render_ten_x_outcome_tracker() -> None:
+    outcomes = load_json(_ten_x_outcomes_path(), [])
+    with st.expander("Posted Outcome Feedback Loop", expanded=False):
+        st.caption("Use this to connect audit recommendations to actual X performance. Future audits treat this as monetization evidence.")
+        with st.form("ten_x_outcome_form", clear_on_submit=True):
+            oc1, oc2 = st.columns([1, 1])
+            with oc1:
+                area = st.selectbox("Workflow", ten_x_audit.WORKFLOW_AREAS, key="ten_x_outcome_area")
+                tweet_url = st.text_input("Tweet URL or note", key="ten_x_outcome_url")
+            with oc2:
+                replies = st.number_input("Replies", min_value=0, value=0, step=1, key="ten_x_outcome_replies")
+                impressions = st.number_input("Impressions", min_value=0, value=0, step=100, key="ten_x_outcome_impressions")
+            lesson = st.text_area("What worked / what failed?", height=80, key="ten_x_outcome_lesson")
+            submitted = st.form_submit_button("Save Outcome", use_container_width=True)
+        if submitted:
+            outcomes = [
+                {
+                    "area": area,
+                    "tweet_url": tweet_url,
+                    "replies": int(replies),
+                    "impressions": int(impressions),
+                    "lesson": lesson,
+                    "saved_at": datetime.now().isoformat(timespec="seconds"),
+                }
+            ] + [item for item in outcomes if isinstance(item, dict)]
+            save_json(_ten_x_outcomes_path(), outcomes[:100])
+            st.success("Outcome saved.")
+            st.rerun()
+        if outcomes:
+            st.dataframe(outcomes[:12], use_container_width=True, hide_index=True)
+
+
 def page_ten_x_audit():
     st.markdown('<div class="main-header">10/10 <span>AUDIT</span></div>', unsafe_allow_html=True)
     st.markdown(
@@ -9811,12 +9893,35 @@ def page_ten_x_audit():
             )
 
         with st.spinner("Running strict 10/10 audit..."):
-            result = ten_x_audit.run_audit(subject, ai_call=_ai_call if use_ai else None)
-            _save_ten_x_result(result)
+            if area == "Whole App":
+                record = ten_x_audit.run_workflow_audits(
+                    area,
+                    content=_ten_x_context_for_area(area, content),
+                    metadata_by_area=_ten_x_metadata_by_area(),
+                    ai_call=_ai_call if use_ai else None,
+                )
+            else:
+                record = ten_x_audit.run_workflow_audits(
+                    area,
+                    content=_ten_x_context_for_area(area, content),
+                    metadata_by_area=_ten_x_metadata_by_area(),
+                    ai_call=_ai_call if use_ai else None,
+                )
+            _save_ten_x_record(record)
         st.rerun()
 
     if latest:
         _render_ten_x_result(latest)
+        cached = _load_ten_x_cache()
+        children = []
+        for item in cached.get("children", []):
+            try:
+                children.append(ten_x_audit.from_dict(item))
+            except Exception:
+                pass
+        _render_ten_x_children(children)
+        _render_ten_x_history()
+        _render_ten_x_outcome_tracker()
     else:
         st.markdown(
             """<div class="tweet-card">
@@ -9825,6 +9930,7 @@ def page_ten_x_audit():
             </div>""",
             unsafe_allow_html=True,
         )
+        _render_ten_x_outcome_tracker()
 
 
 def page_health_check():

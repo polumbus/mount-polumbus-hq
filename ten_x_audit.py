@@ -59,6 +59,23 @@ AUDIT_AREAS: tuple[str, ...] = (
     "Account Audit",
 )
 
+WORKFLOW_AREAS: tuple[str, ...] = (
+    "Creator Studio",
+    "Gameday",
+    "Reply Mode",
+    "Algorithm Score",
+    "Account Audit",
+)
+
+WORKFLOW_DESCRIPTIONS: dict[str, str] = {
+    "Whole App": "All major Post Ascend workflows: Creator Studio, Fan Pulse Gameday, Reply Mode, Algorithm Score, Account Audit, Idea Bank, navigation, shared voice, and trust layer.",
+    "Creator Studio": "Build, rewrite, grades, verify, post, save, format controls, voice controls, and paste-ready grade fixes.",
+    "Gameday": "Fan Pulse live-game workflow: score freshness, feed freshness, source grounding, emotional lanes, generated drafts, copy, post, and trust controls.",
+    "Reply Mode": "Reply generation workflow: context awareness, Tyler voice, safe reply controls, and conversation quality.",
+    "Algorithm Score": "Standalone algorithm scoring workflow upgraded to the shared 10/10 audit rubric.",
+    "Account Audit": "Account-level audit workflow: recent tweets, health score, recommendations, flagged posts, and actionability.",
+}
+
 OWNER_AREAS: tuple[str, ...] = (
     "Creator Studio",
     "Gameday",
@@ -116,6 +133,17 @@ class AuditResult:
     roadmap: list[RoadmapItem]
     generated_at: str
     summary: str
+
+
+@dataclass
+class AuditRunRecord:
+    run_id: str
+    latest: AuditResult
+    children: list[AuditResult]
+
+
+def description_for_area(area: str) -> str:
+    return WORKFLOW_DESCRIPTIONS.get(area, WORKFLOW_DESCRIPTIONS["Whole App"])
 
 
 def normalize_score(score: Any) -> int:
@@ -207,6 +235,40 @@ def build_deterministic_audit(subject: AuditSubject) -> AuditResult:
     )
 
 
+def build_whole_app_audit(children: list[AuditResult], content: str = "") -> AuditResult:
+    if not children:
+        return build_deterministic_audit(AuditSubject("Whole App", description_for_area("Whole App"), content))
+    category_results: list[AuditCategoryResult] = []
+    for cat in AUDIT_CATEGORIES:
+        same = [item for child in children for item in child.categories if item.name == cat["name"]]
+        weakest = min(same, key=lambda item: item.score)
+        avg = int(round(sum(item.score for item in same) / max(len(same), 1)))
+        category_results.append(
+            AuditCategoryResult(
+                name=cat["name"],
+                score=min(avg, weakest.score + 1),
+                reason=f"Whole-app rollup. Weakest workflow: {weakest.owner_area} at {weakest.score}/10.",
+                evidence=f"Aggregated {len(children)} workflow audits.",
+                blocking_issue=weakest.blocking_issue,
+                ten_out_of_ten_standard=cat["standard"],
+                fix_plan=weakest.fix_plan,
+                priority=weakest.priority,
+                owner_area=weakest.owner_area,
+            )
+        )
+    overall = int(round(sum(child.overall_score for child in children) / len(children)))
+    overall = apply_overall_caps(overall, category_results)
+    roadmap = build_roadmap(category_results)
+    return AuditResult(
+        subject=AuditSubject("Whole App", description_for_area("Whole App"), content, {"child_count": len(children)}),
+        overall_score=overall,
+        categories=category_results,
+        roadmap=roadmap,
+        generated_at=datetime.now().isoformat(timespec="seconds"),
+        summary=f"Whole App scores {overall}/10 across {len(children)} audited workflows. Top blockers: {', '.join(item.failing_category for item in roadmap[:3]) or 'none'}.",
+    )
+
+
 def merge_ai_audit(base: AuditResult, raw: str) -> AuditResult:
     data = parse_ai_audit(raw)
     by_name = {item.name: item for item in base.categories}
@@ -255,6 +317,36 @@ def run_audit(subject: AuditSubject, ai_call: Callable[[str], str] | None = None
     except Exception:
         pass
     return base
+
+
+def run_workflow_audits(
+    area: str,
+    *,
+    content: str = "",
+    metadata_by_area: dict[str, dict[str, Any]] | None = None,
+    ai_call: Callable[[str], str] | None = None,
+) -> AuditRunRecord:
+    metadata_by_area = metadata_by_area or {}
+    if area == "Whole App":
+        children = [
+            run_audit(
+                AuditSubject(workflow, description_for_area(workflow), content, metadata_by_area.get(workflow, {})),
+                ai_call=ai_call,
+            )
+            for workflow in WORKFLOW_AREAS
+        ]
+        latest = build_whole_app_audit(children, content)
+    else:
+        children = []
+        latest = run_audit(
+            AuditSubject(area, description_for_area(area), content, metadata_by_area.get(area, {})),
+            ai_call=ai_call,
+        )
+    return AuditRunRecord(
+        run_id=datetime.now().strftime("%Y%m%d%H%M%S"),
+        latest=latest,
+        children=children,
+    )
 
 
 def build_ai_prompt(subject: AuditSubject, base: AuditResult) -> str:
@@ -308,6 +400,13 @@ def _deterministic_checks(area: str, content: str, metadata: dict[str, Any]) -> 
         "hidden_controls": bool(metadata.get("hidden_controls")),
         "duplicate_paths": bool(metadata.get("duplicate_paths")),
         "missing_timestamp": bool(metadata.get("missing_timestamp")),
+        "has_post_path": bool(metadata.get("has_post_path")),
+        "has_copy_path": bool(metadata.get("has_copy_path")),
+        "has_grade_fixes": bool(metadata.get("has_grade_fixes")),
+        "has_verify_path": bool(metadata.get("has_verify_path")),
+        "has_history": bool(metadata.get("has_history")),
+        "has_outcome_tracking": bool(metadata.get("has_outcome_tracking")),
+        "recent_score": metadata.get("recent_score", 0),
     }
 
 
@@ -337,6 +436,8 @@ def _category_from_checks(cat: dict[str, str], area: str, checks: dict[str, Any]
             score = 6
             blocking = "The workflow does not clearly show what facts or source the recommendation used."
             fix = "Show a 'Grounded in' source packet and require copy/post/regenerate controls beside every recommendation."
+        if checks["has_verify_path"] and checks["has_copy_path"]:
+            score = max(score, 8)
         reason = "Trust depends on visible source, editability, rejection, regeneration, and safe posting."
     elif name == "Ease Of Use":
         score = 7
@@ -344,6 +445,8 @@ def _category_from_checks(cat: dict[str, str], area: str, checks: dict[str, Any]
             score = 5
             blocking = "Hidden or indirect controls make the primary action harder to discover."
             fix = "Replace hidden dock-only triggers with visible primary buttons and one clear next action."
+        if checks["has_post_path"] and checks["has_copy_path"]:
+            score = max(score, 8)
         reason = "The grade reflects friction between intent and the next available action."
     elif name == "Simplicity":
         score = 7
@@ -371,6 +474,8 @@ def _category_from_checks(cat: dict[str, str], area: str, checks: dict[str, Any]
         reason = "Compelling writing needs clarity, specificity, and immediate emotional stakes."
     elif name == "Real-World Usefulness":
         score = 7
+        if checks["has_history"] and checks["has_grade_fixes"]:
+            score = 8
         blocking = "The workflow still needs proof it works under real posting pressure."
         fix = "Add a manual acceptance checklist: run the feature on a real moment and require 4 of 5 outputs to be postable without edits."
         reason = "Usefulness is measured by whether Tyler would actually use it during the job."
@@ -381,6 +486,8 @@ def _category_from_checks(cat: dict[str, str], area: str, checks: dict[str, Any]
         reason = "Potential is about reach, replies, followers, monetizable impressions, and content leverage."
     elif name == "Monetization Leverage":
         score = 6
+        if checks["has_outcome_tracking"]:
+            score = 8
         blocking = "The workflow does not yet close the loop from suggestion to posted performance."
         fix = "Add post outcome tracking, suggested follow-up replies, and reuse prompts for high-performing posts."
         reason = "Monetization requires repeatable posting volume, replies, dwell time, and feedback loops."
@@ -469,6 +576,46 @@ def from_dict(data: dict[str, Any]) -> AuditResult:
         generated_at=str(data.get("generated_at", "")),
         summary=str(data.get("summary", "")),
     )
+
+
+def run_record_to_dict(record: AuditRunRecord) -> dict[str, Any]:
+    return {
+        "run_id": record.run_id,
+        "latest": to_dict(record.latest),
+        "children": [to_dict(child) for child in record.children],
+    }
+
+
+def run_record_from_dict(data: dict[str, Any]) -> AuditRunRecord:
+    return AuditRunRecord(
+        run_id=str(data.get("run_id", "")),
+        latest=from_dict(data.get("latest", {})),
+        children=[from_dict(item) for item in data.get("children", [])],
+    )
+
+
+def append_history(history: list[dict[str, Any]], record: AuditRunRecord, *, limit: int = 20) -> list[dict[str, Any]]:
+    updated = [run_record_to_dict(record)] + [item for item in history if isinstance(item, dict)]
+    return updated[:limit]
+
+
+def trend_rows(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for item in history:
+        try:
+            record = run_record_from_dict(item)
+        except Exception:
+            continue
+        rows.append(
+            {
+                "Run": record.run_id,
+                "Area": record.latest.subject.area,
+                "Score": record.latest.overall_score,
+                "P0": sum(1 for road in record.latest.roadmap if road.priority == "P0"),
+                "P1": sum(1 for road in record.latest.roadmap if road.priority == "P1"),
+            }
+        )
+    return rows
 
 
 def markdown_summary(result: AuditResult) -> str:

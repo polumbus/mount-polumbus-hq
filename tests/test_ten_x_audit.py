@@ -6,6 +6,9 @@ from ten_x_audit import (
     normalize_score,
     parse_ai_audit,
     run_audit,
+    run_workflow_audits,
+    append_history,
+    trend_rows,
     validate_category_result,
 )
 
@@ -127,3 +130,40 @@ def test_ai_merge_preserves_strict_shape():
     result = run_audit(AuditSubject(area="Creator Studio", description="Draft workflow"), ai_call=lambda _prompt: raw)
     assert result.summary == "Creator Studio has trust and usability gaps."
     assert next(item for item in result.categories if item.name == "Maximizing Potential").score == 8
+
+
+def test_whole_app_runs_child_workflow_audits():
+    record = run_workflow_audits(
+        "Whole App",
+        content="Halftime take with 27 points and no source.",
+        metadata_by_area={"Gameday": {"missing_timestamp": True}},
+        ai_call=None,
+    )
+    assert record.latest.subject.area == "Whole App"
+    assert len(record.children) >= 5
+    assert record.latest.roadmap
+    assert any(child.subject.area == "Gameday" for child in record.children)
+
+
+def test_history_and_trend_rows():
+    record = run_workflow_audits("Creator Studio", content="Generic key takeaway.", ai_call=None)
+    history = append_history([], record)
+    rows = trend_rows(history)
+    assert len(history) == 1
+    assert rows[0]["Area"] == "Creator Studio"
+    assert rows[0]["Score"] == record.latest.overall_score
+
+
+def test_outcome_tracking_raises_monetization_baseline():
+    without = build_deterministic_audit(AuditSubject(area="Creator Studio", description="Draft workflow", content="We need replies..."))
+    with_outcomes = build_deterministic_audit(
+        AuditSubject(
+            area="Creator Studio",
+            description="Draft workflow",
+            content="We need replies...",
+            metadata={"has_outcome_tracking": True},
+        )
+    )
+    no_score = next(item.score for item in without.categories if item.name == "Monetization Leverage")
+    yes_score = next(item.score for item in with_outcomes.categories if item.name == "Monetization Leverage")
+    assert yes_score > no_score
