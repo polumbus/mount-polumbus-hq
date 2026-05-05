@@ -16,9 +16,12 @@ from typing import Any
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v3-lane-quality"
-SCORING_VERSION = "ce-score-v2-cohort-quality"
+PROMPT_VERSION = "ce-prompt-v4-pulse-quality"
+SCORING_VERSION = "ce-score-v3-tracked-cohorts"
+RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
+DEFAULT_DAILY_API_BUDGET_USD = 0.75
+DEFAULT_WEEKLY_API_BUDGET_USD = 3.00
 DEFAULT_LANE = "Witty Edge"
 EMOTION_LANES = (
     "Witty Edge",
@@ -99,6 +102,13 @@ SYNC_BUDGETS = {
     },
 }
 
+BUDGET_POLICY = {
+    "provider": "twitterapi.io",
+    "daily_cap_usd": DEFAULT_DAILY_API_BUDGET_USD,
+    "weekly_cap_usd": DEFAULT_WEEKLY_API_BUDGET_USD,
+    "estimated_cost_per_1000_tweets": API_ESTIMATED_COST_PER_1000_TWEETS,
+}
+
 RISK_TERMS = (
     "idiot",
     "moron",
@@ -170,7 +180,43 @@ def sync_budget_for_mode(mode: str) -> dict[str, Any]:
     key = mode if mode in SYNC_BUDGETS else "history"
     budget = dict(SYNC_BUDGETS[key])
     budget["mode"] = key
+    budget["provider"] = BUDGET_POLICY["provider"]
+    budget["daily_cap_usd"] = BUDGET_POLICY["daily_cap_usd"]
+    budget["weekly_cap_usd"] = BUDGET_POLICY["weekly_cap_usd"]
+    budget["blocked_by_budget"] = budget["estimated_cost_usd"] > BUDGET_POLICY["daily_cap_usd"]
     return budget
+
+
+def api_cost_estimate(*, requests: int = 0, tweets_read: int = 0,
+                      policy: dict[str, Any] | None = None) -> dict[str, Any]:
+    policy = dict(BUDGET_POLICY if policy is None else policy)
+    cost_per_1000 = float(policy.get("estimated_cost_per_1000_tweets", API_ESTIMATED_COST_PER_1000_TWEETS) or 0)
+    estimated_cost = round(max(tweets_read, 0) / 1000.0 * cost_per_1000, 4)
+    return {
+        "provider": policy.get("provider", "twitterapi.io"),
+        "estimated_requests": max(int(requests or 0), 0),
+        "estimated_tweets_read": max(int(tweets_read or 0), 0),
+        "estimated_cost_usd": estimated_cost,
+        "daily_cap_usd": float(policy.get("daily_cap_usd", DEFAULT_DAILY_API_BUDGET_USD) or 0),
+        "weekly_cap_usd": float(policy.get("weekly_cap_usd", DEFAULT_WEEKLY_API_BUDGET_USD) or 0),
+        "blocked_by_daily_cap": estimated_cost > float(policy.get("daily_cap_usd", DEFAULT_DAILY_API_BUDGET_USD) or 0),
+    }
+
+
+def budget_preflight_for_mode(mode: str, policy: dict[str, Any] | None = None) -> dict[str, Any]:
+    budget = sync_budget_for_mode(mode)
+    estimate = api_cost_estimate(
+        requests=budget.get("estimated_requests", 0),
+        tweets_read=budget.get("estimated_tweets_read", 0),
+        policy=policy,
+    )
+    estimate.update({
+        "mode": budget["mode"],
+        "label": budget["label"],
+        "needs_confirmation": budget["needs_confirmation"],
+        "blocked_by_budget": estimate["blocked_by_daily_cap"],
+    })
+    return estimate
 
 
 def build_hot_signal_brief(topic: str, seed: str, source: str, why: str, lane: str, fmt: str) -> str:
@@ -709,15 +755,21 @@ def initial_state() -> dict[str, Any]:
         "version": 1,
         "prompt_version": PROMPT_VERSION,
         "scoring_version": SCORING_VERSION,
+        "rule_version": RULE_VERSION,
         "tweets": [],
+        "tracked_tweets": [],
         "snapshots": [],
         "scores": [],
         "patterns": summarize_scores([]),
         "proposals": [],
         "approved_rules": [],
+        "rule_versions": [],
+        "generated_lineage": [],
+        "budget_policy": dict(BUDGET_POLICY),
         "sync_status": {
             "status": "never_synced",
             "last_sync_at": "",
+            "last_failed_sync_at": "",
             "handle": "",
             "original_tweet_count": 0,
             "mature_tweet_count": 0,
@@ -725,12 +777,15 @@ def initial_state() -> dict[str, Any]:
             "persisted": "unknown",
             "last_persisted_at": "",
             "persist_error": "",
+            "partial_ingestion": False,
+            "stale_snapshot_count": 0,
         },
         "api_usage": {
             "provider": "twitterapi.io",
             "estimated_tweets_read": 0,
             "estimated_requests": 0,
             "estimated_cost_usd": 0.0,
+            "ledger": [],
         },
     }
 
@@ -749,27 +804,99 @@ def slim_tweet(tweet: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def tweet_url(tweet: dict[str, Any]) -> str:
+    direct = str(tweet.get("url") or tweet.get("twitterUrl") or "").strip()
+    if direct:
+        return direct
+    author = str(tweet.get("author") or tweet.get("userName") or tweet.get("username") or tweet.get("screen_name") or "").strip()
+    tid = str(tweet.get("id") or tweet.get("tweet_id") or "").strip()
+    if author and tid:
+        return f"https://x.com/{author.lstrip('@')}/status/{tid}"
+    return ""
+
+
+def build_tracked_tweet(tweet: dict[str, Any], *, source: str = "manual_or_imported",
+                        now: datetime | None = None) -> dict[str, Any]:
+    text = tweet_text(tweet)
+    created = parse_datetime(tweet.get("createdAt") or tweet.get("created_at"))
+    hours = age_hours(tweet, now)
+    lower = text.lower()
+    return {
+        "id": str(tweet.get("id") or tweet.get("tweet_id") or ""),
+        "text": text,
+        "url": tweet_url(tweet),
+        "source": str(tweet.get("source") or source),
+        "posted_at": created.isoformat(timespec="seconds") if created else "",
+        "format": classify_format(text),
+        "lane": str(tweet.get("lane") or tweet.get("voice_lane") or ""),
+        "topic": topic_tags(text),
+        "has_media": bool(tweet.get("media") or tweet.get("photos") or tweet.get("videos")),
+        "has_link": "http" in lower,
+        "is_reply": text.startswith("@") or bool(tweet.get("inReplyToId") or tweet.get("in_reply_to_status_id")),
+        "is_quote": bool(tweet.get("quotedTweet") or tweet.get("quoted_status") or tweet.get("isQuote")),
+        "is_thread": bool(tweet.get("thread_id") or tweet.get("conversationId")),
+        "metrics": {
+            "views": metric(tweet, "viewCount", "view_count", "views"),
+            "likes": metric(tweet, "likeCount", "like_count", "likes"),
+            "reposts": metric(tweet, "retweetCount", "retweet_count", "retweets", "rts"),
+            "replies": metric(tweet, "replyCount", "reply_count", "replies"),
+            "quotes": metric(tweet, "quoteCount", "quote_count", "quotes"),
+            "bookmarks": metric(tweet, "bookmarkCount", "bookmark_count", "bookmarks"),
+        },
+        "lifecycle": lifecycle_for_age(hours),
+        "scoring_version": SCORING_VERSION,
+        "prompt_version": PROMPT_VERSION,
+        "rule_version": RULE_VERSION,
+    }
+
+
+def _latest_snapshot_by_tweet(snapshots: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for snap in snapshots:
+        tid = str(snap.get("tweet_id") or "")
+        if tid:
+            latest[tid] = snap
+    return latest
+
+
+def metric_delta(previous: dict[str, Any] | None, current: dict[str, int]) -> dict[str, int]:
+    previous_metrics = (previous or {}).get("metrics", {}) or {}
+    delta = {}
+    for key, value in current.items():
+        try:
+            delta[key] = int(value or 0) - int(previous_metrics.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            delta[key] = 0
+    return delta
+
+
 def refresh_state(existing: dict[str, Any] | None, tweets: list[dict[str, Any]], *,
                   handle: str = "", now: datetime | None = None) -> dict[str, Any]:
     state = dict(initial_state())
     if isinstance(existing, dict):
         state.update(existing)
     current_time = iso_now(now)
-    originals = [slim_tweet(t) for t in tweets if isinstance(t, dict) and is_original_post(t)]
+    original_raw = [t for t in tweets if isinstance(t, dict) and is_original_post(t)]
+    originals = [slim_tweet(t) for t in original_raw]
+    tracked_tweets = [build_tracked_tweet(t, now=now) for t in original_raw]
     scores = [score_tweet(t, now) for t in originals]
     snapshots = list(state.get("snapshots", []))
+    previous_by_tweet = _latest_snapshot_by_tweet(snapshots)
     for tweet in originals:
+        metrics = {
+            "views": tweet["viewCount"],
+            "likes": tweet["likeCount"],
+            "reposts": tweet["retweetCount"],
+            "replies": tweet["replyCount"],
+            "quotes": tweet["quoteCount"],
+            "bookmarks": tweet["bookmarkCount"],
+        }
         snapshots.append({
             "tweet_id": tweet["id"],
             "captured_at": current_time,
-            "metrics": {
-                "views": tweet["viewCount"],
-                "likes": tweet["likeCount"],
-                "reposts": tweet["retweetCount"],
-                "replies": tweet["replyCount"],
-                "quotes": tweet["quoteCount"],
-                "bookmarks": tweet["bookmarkCount"],
-            },
+            "metrics": metrics,
+            "metric_delta": metric_delta(previous_by_tweet.get(tweet["id"]), metrics),
+            "scoring_version": SCORING_VERSION,
         })
     snapshots = snapshots[-2000:]
     patterns = summarize_scores(scores)
@@ -780,7 +907,9 @@ def refresh_state(existing: dict[str, Any] | None, tweets: list[dict[str, Any]],
         "version": 1,
         "prompt_version": PROMPT_VERSION,
         "scoring_version": SCORING_VERSION,
+        "rule_version": RULE_VERSION,
         "tweets": originals[:500],
+        "tracked_tweets": tracked_tweets[:500],
         "snapshots": snapshots,
         "scores": scores,
         "patterns": patterns,
@@ -801,31 +930,71 @@ def refresh_state(existing: dict[str, Any] | None, tweets: list[dict[str, Any]],
             "estimated_tweets_read": api_reads,
             "estimated_requests": int(prev_status.get("estimated_requests", 0) or 0),
             "estimated_cost_usd": estimated_cost,
+            "ledger": list((state.get("api_usage", {}) or {}).get("ledger", []))[-200:],
         },
     })
     state["approved_rules"] = list(state.get("approved_rules", []))
+    state["rule_versions"] = list(state.get("rule_versions", []))
+    state["budget_policy"] = dict(state.get("budget_policy", BUDGET_POLICY) or BUDGET_POLICY)
     return state
 
 
 def approve_proposal(state: dict[str, Any], proposal_id: str, now: datetime | None = None) -> dict[str, Any]:
     state = dict(state or initial_state())
     approved = list(state.get("approved_rules", []))
+    rule_versions = list(state.get("rule_versions", []))
     proposals = []
     for proposal in state.get("proposals", []):
         proposal = dict(proposal)
         if proposal.get("id") == proposal_id:
             proposal["status"] = "approved"
             proposal["decided_at"] = iso_now(now)
+            revision = len([r for r in rule_versions if r.get("status") == "active"]) + 1
             if not any(rule.get("proposal_id") == proposal_id for rule in approved):
-                approved.append({
+                approved_rule = {
                     "proposal_id": proposal_id,
                     "rule": proposal.get("rule", ""),
                     "approved_at": proposal["decided_at"],
                     "evidence_tweet_ids": proposal.get("evidence_tweet_ids", []),
+                    "rule_version": RULE_VERSION,
+                    "revision": revision,
+                    "status": "active",
+                }
+                approved.append(approved_rule)
+                rule_versions.append({
+                    **approved_rule,
+                    "reason": proposal.get("reason", ""),
+                    "sample_size": proposal.get("sample_size", 0),
+                    "before_after": proposal.get("before_after", {}),
+                    "evidence_snapshot": proposal.get("evidence_tweet_ids", []),
                 })
         proposals.append(proposal)
     state["proposals"] = proposals
     state["approved_rules"] = approved
+    state["rule_versions"] = rule_versions
+    return state
+
+
+def rollback_rule(state: dict[str, Any], proposal_id: str, now: datetime | None = None) -> dict[str, Any]:
+    state = dict(state or initial_state())
+    decided_at = iso_now(now)
+    approved = []
+    for rule in state.get("approved_rules", []):
+        rule = dict(rule)
+        if rule.get("proposal_id") == proposal_id:
+            rule["status"] = "rolled_back"
+            rule["rolled_back_at"] = decided_at
+        else:
+            approved.append(rule)
+    versions = []
+    for version in state.get("rule_versions", []):
+        version = dict(version)
+        if version.get("proposal_id") == proposal_id and version.get("status") == "active":
+            version["status"] = "rolled_back"
+            version["rolled_back_at"] = decided_at
+        versions.append(version)
+    state["approved_rules"] = approved
+    state["rule_versions"] = versions
     return state
 
 

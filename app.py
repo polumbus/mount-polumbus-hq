@@ -21,6 +21,7 @@ import podcast_store
 import podcast_sync
 import podcast_workflow
 import creator_evolution as ce
+import creator_evolution_pulse as pulse
 import ten_x_audit
 from apis import (get_sports_context, pplx_fact_check, pplx_research, pplx_available,
                   get_espn_headlines_for_inspo, get_sleeper_trending_for_inspo, espn_scores, espn_team,
@@ -7291,6 +7292,29 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFA
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
+                                 fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT) -> tuple[dict, int, int]:
+    """Find one high-confidence Creator Evolution Pulse opportunity."""
+    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+    _sports_ctx = ""
+    try:
+        _sports_ctx = get_sports_context()
+    except Exception as exc:
+        _append_debug_event("creator_evolution_pulse", "warn", "sports context unavailable", {"error": str(exc)[:160]})
+    _state = _creator_evolution_state()
+    _decision = pulse.find_pulse(
+        _all_tweets,
+        _rss_headlines,
+        _state,
+        sports_context=_sports_ctx,
+        handle=get_current_handle(),
+    )
+    _best = _decision.get("best") or {}
+    _decision["selected_lane"] = lane if lane in ce.EMOTION_LANES else _best.get("recommended_lane", ce.DEFAULT_LANE)
+    _decision["selected_format"] = _normalize_tweet_format(fmt)
+    return _decision, len(_all_tweets), len(_rss_headlines)
+
+
 @st.dialog("Build a Tweet", width="large")
 def _ci_build_dialog():
     """Mini-form to guide users into providing the right raw material for BUILD."""
@@ -7519,6 +7543,105 @@ def _ci_inspiration_dialog():
         pass
 
 
+@st.dialog("Creator Evolution Pulse", width="large")
+def _ce_pulse_dialog():
+    """One-best now-or-no-op decision layer for Creator Evolution."""
+    _lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
+    if _lane not in ce.EMOTION_LANES:
+        _lane = ce.DEFAULT_LANE
+    _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
+    if st.session_state.pop("_ce_pulse_force_refresh", False):
+        st.session_state.pop("ce_pulse_decision", None)
+        st.session_state.pop("ce_pulse_meta", None)
+    if "ce_pulse_decision" not in st.session_state:
+        with st.spinner("Running Pulse deep hunt..."):
+            _decision, _n_tweets, _n_heads = _run_creator_evolution_pulse(_lane, _fmt)
+        st.session_state["ce_pulse_decision"] = _decision
+        st.session_state["ce_pulse_meta"] = (_n_tweets, _n_heads)
+
+    _decision = st.session_state.get("ce_pulse_decision") or {}
+    _n_tweets, _n_heads = st.session_state.get("ce_pulse_meta", (0, 0))
+    _best = _decision.get("best") or {}
+    _status = _decision.get("status", "no_op")
+    _status_label = {
+        "ready": "READY",
+        "save_for_later": "SAVE",
+        "no_op": "NO STRONG PULSE",
+    }.get(_status, _status.upper())
+    _accent = "#2DD4BF" if _status == "ready" else "#C49E3C" if _status == "save_for_later" else "#5a7090"
+    st.markdown(
+        f"""
+<div style="border:1px solid rgba(45,212,191,0.16);background:rgba(10,18,32,0.58);border-radius:8px;padding:14px;margin-bottom:14px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:15px;font-weight:800;color:#E2E8F0;">Pulse</div>
+      <div style="font-size:10px;color:#5a7090;margin-top:3px;">{_n_tweets} X signals · {_n_heads} headlines · {html.escape(_fmt)}</div>
+    </div>
+    <div style="font-size:10px;font-weight:800;letter-spacing:1.4px;color:{_accent};border:1px solid {_accent};border-radius:4px;padding:4px 8px;">{_status_label}</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    if not _best:
+        st.info("No strong Pulse right now. The system checked live signals, headlines, sports context, reply targets, and recent-topic duplication.")
+        _hot_col, _refresh_col = st.columns([1, 1])
+        with _hot_col:
+            if st.button("Hot Feed", key="ce_pulse_empty_hot_feed", use_container_width=True):
+                st.session_state["_ce_show_inspiration"] = True
+                st.rerun(scope="app")
+        with _refresh_col:
+            if st.button("Refresh", key="ce_pulse_empty_refresh", use_container_width=True):
+                st.session_state["_ce_pulse_force_refresh"] = True
+                st.rerun(scope="app")
+    else:
+        _action = _best.get("recommended_action", "tweet")
+        _lane_pick = _best.get("recommended_lane") or _lane
+        st.markdown(
+            f"""
+<div style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:10px;">
+  <div style="font-size:9px;font-weight:800;letter-spacing:1.3px;color:#5a7090;text-transform:uppercase;margin-bottom:6px;">Recommended {_action}</div>
+  <div style="font-size:15px;color:#E2E8F0;line-height:1.55;margin-bottom:8px;">{html.escape(_best.get("summary_text", ""))}</div>
+  <div style="font-size:11px;color:#8FA6C6;line-height:1.5;">Why now: {html.escape(_best.get("why_now", ""))}</div>
+  <div style="font-size:10px;color:#5a7090;margin-top:8px;">Score {float(_best.get("score", 0) or 0):.1f} · Confidence {float(_best.get("confidence", 0) or 0):.1f} · Lane {html.escape(_lane_pick)}</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        if _best.get("hard_blocks"):
+            st.warning("Blocked: " + ", ".join(str(x) for x in _best.get("hard_blocks", [])[:5]))
+        if _best.get("risk_flags"):
+            st.caption("Risk flags: " + ", ".join(str(x) for x in _best.get("risk_flags", [])[:5]))
+        with st.expander("Source Basis", expanded=False):
+            for _src in (_best.get("source_basis") or [])[:5]:
+                st.caption(f"{_src.get('source', 'source')} | {_src.get('freshness_status', '')} | {_src.get('text', '')}")
+        _build_col, _hot_col, _refresh_col = st.columns([2, 1, 1])
+        with _build_col:
+            _build_disabled = _status != "ready" or bool(_best.get("hard_blocks"))
+            if st.button("Build Pulse", key="ce_pulse_build", use_container_width=True, type="primary", disabled=_build_disabled):
+                _brief = _decision.get("brief", "")
+                _lane_to_use = _lane_pick if _lane_pick in ce.EMOTION_LANES else _lane
+                st.session_state["_ce_text_stage"] = _brief
+                st.session_state["ce_format"] = _fmt
+                st.session_state["ce_lane"] = _lane_to_use
+                st.session_state["_ce_pending"] = ("build", _brief, _fmt, _lane_to_use)
+                st.rerun(scope="app")
+        with _hot_col:
+            if st.button("Hot Feed", key="ce_pulse_hot_feed", use_container_width=True):
+                st.session_state["_ce_show_inspiration"] = True
+                st.rerun(scope="app")
+        with _refresh_col:
+            if st.button("Refresh", key="ce_pulse_refresh", use_container_width=True):
+                st.session_state["_ce_pulse_force_refresh"] = True
+                st.rerun(scope="app")
+
+    if _decision.get("top_rejected"):
+        with st.expander("Rejected/Lower Confidence Signals", expanded=False):
+            for _item in _decision.get("top_rejected", [])[:4]:
+                _blocks = ", ".join(str(x) for x in _item.get("hard_blocks", [])[:4]) or "below threshold"
+                st.caption(f"{float(_item.get('score', 0) or 0):.1f} | {_blocks} | {_item.get('summary_text', '')[:180]}")
+
+
 @st.dialog("What's Hot For Creator Evolution", width="large")
 def _ce_inspiration_dialog():
     """Creator Evolution hot signals: shared discovery, CE-only generation path."""
@@ -7645,12 +7768,17 @@ def _normalize_creator_evolution_state(raw: dict | None = None) -> dict:
         state.update(raw)
     state.setdefault("prompt_version", ce.PROMPT_VERSION)
     state.setdefault("scoring_version", ce.SCORING_VERSION)
+    state.setdefault("rule_version", ce.RULE_VERSION)
     state.setdefault("tweets", [])
+    state.setdefault("tracked_tweets", [])
     state.setdefault("snapshots", [])
     state.setdefault("scores", [])
     state.setdefault("patterns", ce.summarize_scores(state.get("scores", [])))
     state.setdefault("proposals", [])
     state.setdefault("approved_rules", [])
+    state.setdefault("rule_versions", [])
+    state.setdefault("generated_lineage", [])
+    state.setdefault("budget_policy", dict(ce.BUDGET_POLICY))
     sync_status = dict(ce.initial_state()["sync_status"])
     sync_status.update(state.get("sync_status", {}) or {})
     state["sync_status"] = sync_status
@@ -7732,7 +7860,26 @@ def _save_creator_evolution_state(state: dict) -> dict:
 def _refresh_creator_evolution_state(mode: str = "history") -> dict:
     existing = _load_creator_evolution_state()
     source = mode
-    budget = ce.sync_budget_for_mode(mode)
+    budget = ce.budget_preflight_for_mode(mode, existing.get("budget_policy"))
+    if budget.get("blocked_by_budget"):
+        existing["sync_status"] = dict(existing.get("sync_status", {}))
+        existing["sync_status"].update({
+            "status": "blocked_by_budget",
+            "last_failed_sync_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "handle": get_current_handle(),
+            "detail": f"{budget['label']} exceeds daily API budget.",
+            "source": source,
+            "sync_mode": budget["mode"],
+        })
+        existing["api_usage"] = dict(existing.get("api_usage", {}) or {})
+        existing["api_usage"].update({
+            "last_sync_mode": budget["mode"],
+            "estimated_requests": budget["estimated_requests"],
+            "budget_label": budget["label"],
+            "blocked_by_budget": True,
+            "estimated_cost_usd": budget["estimated_cost_usd"],
+        })
+        return _save_creator_evolution_state(existing)
     try:
         if mode == "latest":
             tweets = sync_tweet_history(quick=True)
@@ -7751,13 +7898,24 @@ def _refresh_creator_evolution_state(mode: str = "history") -> dict:
             "estimated_requests": budget["estimated_requests"],
             "budget_label": budget["label"],
             "budget_needs_confirmation": budget["needs_confirmation"],
+            "blocked_by_budget": False,
+            "ledger": (refreshed.get("api_usage", {}) or {}).get("ledger", []) + [{
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "mode": budget["mode"],
+                "provider": budget.get("provider", "twitterapi.io"),
+                "estimated_requests": budget["estimated_requests"],
+                "estimated_tweets_read": budget["estimated_tweets_read"],
+                "estimated_cost_usd": budget["estimated_cost_usd"],
+                "status": "ok",
+            }],
         })
+        refreshed["api_usage"]["ledger"] = refreshed["api_usage"]["ledger"][-200:]
         return _save_creator_evolution_state(refreshed)
     except Exception as exc:
         existing["sync_status"] = dict(existing.get("sync_status", {}))
         existing["sync_status"].update({
             "status": "error",
-            "last_sync_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "last_failed_sync_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "handle": get_current_handle(),
             "detail": str(exc)[:300],
             "source": source,
@@ -7768,7 +7926,18 @@ def _refresh_creator_evolution_state(mode: str = "history") -> dict:
             "last_sync_mode": budget["mode"],
             "estimated_requests": budget["estimated_requests"],
             "budget_label": budget["label"],
+            "ledger": (existing.get("api_usage", {}) or {}).get("ledger", []) + [{
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "mode": budget["mode"],
+                "provider": budget.get("provider", "twitterapi.io"),
+                "estimated_requests": budget["estimated_requests"],
+                "estimated_tweets_read": budget["estimated_tweets_read"],
+                "estimated_cost_usd": budget["estimated_cost_usd"],
+                "status": "error",
+                "detail": str(exc)[:160],
+            }],
         })
+        existing["api_usage"]["ledger"] = existing["api_usage"]["ledger"][-200:]
         return _save_creator_evolution_state(existing)
 
 
@@ -7875,7 +8044,27 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
-        st.session_state["ce_quality_report"] = ce.validate_generation_options(data, fmt, lane)
+        quality_report = ce.validate_generation_options(data, fmt, lane)
+        passing = []
+        for idx in [1, 2, 3]:
+            option_key = f"option{idx}"
+            report = quality_report.get(option_key, {})
+            if data.get(option_key) and report.get("ok"):
+                passing.append(str(idx))
+            else:
+                data.pop(option_key, None)
+                data.pop(f"{option_key}_pattern", None)
+        if not passing:
+            st.session_state["ce_error"] = (
+                "Creator Evolution rejected every generated draft for quality/safety. "
+                "Try a more specific source or lower-risk angle."
+            )
+            st.session_state["ce_quality_report"] = quality_report
+            return
+        if str(data.get("pick", "")).strip() not in passing:
+            data["pick"] = passing[0]
+            data["pick_reason"] = "Selected the highest available draft that passed Creator Evolution's quality gate."
+        st.session_state["ce_quality_report"] = quality_report
         st.session_state["ce_banger_data"] = data
         st.session_state["ce_last_action"] = {
             "type": action,
@@ -7883,6 +8072,29 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             "fmt": fmt,
             "lane": lane,
         }
+        lineage_state = dict(state)
+        lineage = list(lineage_state.get("generated_lineage", []))
+        lineage.append({
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "action": action,
+            "seed_hash": hashlib.sha1(str(tweet_text or "").encode("utf-8")).hexdigest()[:12],
+            "format": fmt,
+            "lane": lane,
+            "prompt_version": ce.PROMPT_VERSION,
+            "scoring_version": ce.SCORING_VERSION,
+            "rule_version": ce.RULE_VERSION,
+            "options": [
+                {
+                    "slot": idx,
+                    "text": data.get(f"option{idx}", ""),
+                    "quality_score": quality_report.get(f"option{idx}", {}).get("score"),
+                }
+                for idx in [1, 2, 3] if data.get(f"option{idx}")
+            ],
+            "pick": data.get("pick", ""),
+        })
+        lineage_state["generated_lineage"] = lineage[-200:]
+        _save_creator_evolution_state(lineage_state)
         return
     if not _ce_capture_ai_error(raw or ""):
         st.session_state["ce_result"] = _sanitize_output((raw or "").strip())
@@ -8636,6 +8848,7 @@ def _render_creator_evolution_learning_panel(state: dict):
     handle = status.get("handle", "") or get_current_handle() or "unknown"
     mature = int(status.get("mature_tweet_count", patterns.get("mature_count", 0)) or 0)
     original_count = int(status.get("original_tweet_count", len(state.get("tweets", []))) or 0)
+    tracked_count = len(state.get("tracked_tweets", []) or [])
     api_usage = state.get("api_usage", {}) or {}
     spend = float(status.get("estimated_spend_usd", api_usage.get("estimated_cost_usd", 0.0)) or 0.0)
     estimated_requests = int(api_usage.get("estimated_requests", 0) or 0)
@@ -8660,7 +8873,9 @@ def _render_creator_evolution_learning_panel(state: dict):
     )
 
     with st.expander("Learning Details", expanded=bool(st.session_state.get("_ce_confirm_backfill"))):
-        st.caption(f"Last sync: {last_sync_short} | Source: {source} | Originals tracked: {original_count} | API requests est: {estimated_requests} | Persist: {persisted}")
+        st.caption(f"Last sync: {last_sync_short} | Source: {source} | Originals: {original_count} | Tracked: {tracked_count} | API requests est: {estimated_requests} | Persist: {persisted}")
+        if sync_status in ("error", "blocked_by_budget"):
+            st.warning(status.get("detail", "Creator Evolution sync needs attention."))
         if status.get("persist_error"):
             st.warning(f"Creator Evolution saved locally, but Gist persistence failed: {status.get('persist_error')}")
         sync_col, latest_col, backfill_col = st.columns([1, 1, 1])
@@ -8719,6 +8934,12 @@ def _render_creator_evolution_learning_panel(state: dict):
         if approved_rules:
             st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.4px;color:#C49E3C;text-transform:uppercase;margin-bottom:6px;">Approved Rules</div>', unsafe_allow_html=True)
             st.code(approved_rules, language="text")
+            for version in [v for v in state.get("rule_versions", []) if v.get("status") == "active"][-5:]:
+                _rv_id = version.get("proposal_id", "")
+                _rv_label = f"Rollback r{version.get('revision', '')}: {version.get('rule', '')[:72]}"
+                if st.button(_rv_label, key=f"ce_rollback_{_rv_id}", use_container_width=True):
+                    _save_creator_evolution_state(ce.rollback_rule(state, _rv_id))
+                    st.rerun(scope="app")
         if not pending:
             st.caption("No pending rule changes. Creator Evolution will not change its generation rules until you approve a proposal.")
         for prop in pending[:8]:
@@ -8823,6 +9044,10 @@ def _render_creator_evolution_editor():
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#5a7090" stroke-width="2" stroke-linecap="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">BUILD</span><span class="pa-tip">Expand A Topic, Idea, Or Bullet Points</span>
           </div>
+          <div class="cs-idock-btn" data-dock="ce_pulse" title="Find the best thing to post right now" style="width:52px;height:52px;border-radius:14px;border:1px solid rgba(45,212,191,0.32);background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l2-6 4 12 2-6h6" stroke="#2DD4BF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#2DD4BF;white-space:nowrap;letter-spacing:0.04em;font-weight:700;">PULSE</span><span class="pa-tip">Find A Timely Tweet, Reply, Save, Or Do-Nothing Decision</span>
+          </div>
           <div class="cs-idock-btn" data-dock="ce_whats_hot" title="Find hot topics and build with Creator Evolution" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 14c0-4 4-5 4-10 4 3 6 7 4 11 1-1 2-2 2-4 2 3 2 8-3 10-5 2-10-1-10-6 0-3 2-5 4-7-1 3-1 5-1 6z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">HOT</span><span class="pa-tip">Use Trending Signals With Creator Evolution Voice Rules</span>
@@ -8841,6 +9066,9 @@ def _render_creator_evolution_editor():
             _queue_ce_action("evolve")
         if st.button("ce_build", key="ce_build"):
             st.session_state["_ce_show_build_dialog"] = True
+            st.rerun(scope="app")
+        if st.button("ce_pulse", key="ce_pulse"):
+            st.session_state["_ce_show_pulse"] = True
             st.rerun(scope="app")
         if st.button("ce_whats_hot", key="ce_whats_hot"):
             st.session_state["_ce_show_inspiration"] = True
@@ -8878,12 +9106,12 @@ def page_creator_evolution():
     st.markdown('<div class="tool-desc">A separate learning studio powered by live tweet performance, not Hall of Fame imitation.</div>', unsafe_allow_html=True)
     st.markdown(
         """
-<style>
-[class*="st-key-ce_evolve"], [class*="st-key-ce_build"],
-[class*="st-key-ce_whats_hot"], [class*="st-key-ce_save"],
-[class*="st-key-ce_post_direct"] {
-  position:absolute!important;width:1px!important;height:1px!important;
-  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
+	<style>
+	[class*="st-key-ce_evolve"], [class*="st-key-ce_build"],
+	[class*="st-key-ce_pulse"], [class*="st-key-ce_whats_hot"], [class*="st-key-ce_save"],
+	[class*="st-key-ce_post_direct"] {
+	  position:absolute!important;width:1px!important;height:1px!important;
+	  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
   padding:0!important;margin:0!important;border:0!important;
 }
 </style>
@@ -8905,6 +9133,9 @@ def page_creator_evolution():
 
     if st.session_state.get("_ce_show_build_dialog"):
         _ce_build_dialog()
+
+    if st.session_state.pop("_ce_show_pulse", False):
+        _ce_pulse_dialog()
 
     if st.session_state.pop("_ce_show_inspiration", False):
         _ce_inspiration_dialog()

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import creator_evolution as ce
+import creator_evolution_pulse as pulse
 
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)
@@ -114,10 +115,16 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_show_build_dialog", app_text)
         self.assertIn("_ce_inspiration_dialog", app_text)
         self.assertIn("_ce_show_inspiration", app_text)
+        self.assertIn("_ce_pulse_dialog", app_text)
+        self.assertIn("_ce_show_pulse", app_text)
+        self.assertIn("ce_pulse", app_text)
         self.assertIn("ce_whats_hot", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
         self.assertIn("ce.sync_budget_for_mode(\"backfill\")", app_text)
+        self.assertIn("ce.budget_preflight_for_mode", app_text)
+        self.assertIn("generated_lineage", app_text)
+        self.assertIn("Creator Evolution rejected every generated draft", app_text)
         self.assertIn("Creator Evolution blocked this post", app_text)
         self.assertIn("ci_banger_data", app_text)
 
@@ -198,6 +205,79 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Do not use Creator Studio voice modes", brief)
         self.assertNotIn("HALL OF FAME REFERENCE TWEETS", brief)
         self.assertNotIn("TYLER'S HALL OF FAME DATA", brief)
+
+    def test_refresh_state_tracks_lineage_and_metric_deltas(self):
+        first = ce.refresh_state(None, [
+            _tweet(1, "The Broncos pressure is getting weird enough that fans are arguing about the boring answer...", hours_ago=90, views=1000, likes=20, replies=4, reposts=2),
+        ], handle="polfam", now=NOW)
+        second = ce.refresh_state(first, [
+            _tweet(1, "The Broncos pressure is getting weird enough that fans are arguing about the boring answer...", hours_ago=91, views=1300, likes=26, replies=7, reposts=3),
+        ], handle="polfam", now=NOW)
+
+        self.assertEqual(second["tracked_tweets"][0]["id"], "1")
+        self.assertIn("metric_delta", second["snapshots"][-1])
+        self.assertEqual(second["snapshots"][-1]["metric_delta"]["views"], 300)
+        self.assertEqual(second["tracked_tweets"][0]["rule_version"], ce.RULE_VERSION)
+
+    def test_budget_preflight_blocks_when_policy_cap_is_too_low(self):
+        estimate = ce.budget_preflight_for_mode("backfill", {
+            "provider": "twitterapi.io",
+            "daily_cap_usd": 0.01,
+            "weekly_cap_usd": 1.0,
+            "estimated_cost_per_1000_tweets": ce.API_ESTIMATED_COST_PER_1000_TWEETS,
+        })
+
+        self.assertTrue(estimate["blocked_by_budget"])
+        self.assertTrue(estimate["needs_confirmation"])
+
+    def test_rule_rollback_removes_approved_rule_from_active_context(self):
+        state = ce.refresh_state(None, [
+            _tweet(1, "The best Broncos posts lately all leave the uncomfortable part hanging...", hours_ago=90, views=9000, likes=180, replies=30, reposts=18),
+            _tweet(2, "Text-only Nuggets tension is doing more than another link ever would...", hours_ago=96, views=4200, likes=70, replies=12, reposts=8),
+            _tweet(3, "The funny part is the plan makes sense right until you say it out loud...", hours_ago=110, views=7000, likes=110, replies=22, reposts=13),
+        ], handle="polfam", now=NOW)
+        prop_id = next(p["id"] for p in state["proposals"] if p["status"] == "pending")
+        approved = ce.approve_proposal(state, prop_id, now=NOW)
+        rolled_back = ce.rollback_rule(approved, prop_id, now=NOW)
+
+        self.assertNotIn(approved["approved_rules"][0]["rule"], ce.approved_rules_text(rolled_back))
+        self.assertTrue(any(v["status"] == "rolled_back" for v in rolled_back["rule_versions"]))
+
+    def test_pulse_finds_timely_sports_opportunity(self):
+        tweets = [
+            _tweet(10, "Broncos fans are melting down now because Sean Payton just hinted the boring draft pick might be the plan", hours_ago=1, views=9000, likes=200, replies=80, reposts=35),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn(decision["best"]["recommended_action"], {"tweet", "reply"})
+        self.assertGreaterEqual(decision["best"]["score"], pulse.DEFAULT_THRESHOLD)
+        self.assertIn("PULSE OPPORTUNITY", decision["brief"])
+        self.assertNotIn("Hall of Fame examples", decision["brief"])
+
+    def test_pulse_returns_no_op_for_stale_or_weak_signal(self):
+        tweets = [
+            _tweet(11, "General reminder that sports are interesting", hours_ago=30, views=200, likes=2, replies=0, reposts=0),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "no_op")
+        self.assertIn("stale_source", decision["best"]["hard_blocks"])
+
+    def test_pulse_suppresses_duplicate_recent_angle(self):
+        state = ce.refresh_state(None, [
+            _tweet(1, "Broncos fans are melting down now because Sean Payton just hinted the boring draft pick might be the plan", hours_ago=10, views=3000, likes=80, replies=20, reposts=5),
+        ], handle="polfam", now=NOW)
+        tweets = [
+            _tweet(12, "Broncos fans are melting down now because Sean Payton hinted the boring draft pick might be the plan", hours_ago=1, views=12000, likes=220, replies=90, reposts=40),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], state, handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "no_op")
+        self.assertIn("duplicate_recent_angle", decision["best"]["hard_blocks"])
 
 
 if __name__ == "__main__":
