@@ -6980,6 +6980,7 @@ def _fetch_inspiration_feed():
             _rss_feeds.append(f"https://news.google.com/rss/search?q={_tp.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en")
     else:
         _rss_feeds = [
+            "https://news.google.com/rss/search?q=Colorado+Avalanche+OR+Avs+NHL+breaking+news&hl=en-US&gl=US&ceid=US:en",
             "https://www.espn.com/espn/rss/news",
             "https://www.espn.com/espn/rss/nfl/news",
             "https://www.espn.com/espn/rss/nba/news",

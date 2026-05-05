@@ -267,6 +267,41 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(decision["status"], "no_op")
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
+    def test_pulse_finds_avalanche_pregame_from_sports_context(self):
+        sports_context = (
+            "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
+            "(Scheduled, puck drop tonight in 30 minutes on ESPN)"
+        )
+
+        decision = pulse.find_pulse([], [], ce.initial_state(), sports_context=sports_context, handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertGreaterEqual(decision["best"]["score"], pulse.DEFAULT_THRESHOLD)
+        self.assertEqual(decision["best"]["hard_blocks"], [])
+        self.assertIn("sports_context", decision["best"]["sources"])
+        self.assertIn("newest signal 0.0h old", decision["best"]["why_now"])
+        self.assertIn("AVALANCHE GAME", decision["brief"])
+
+        news_decision = pulse.find_pulse(
+            [],
+            [],
+            ce.initial_state(),
+            sports_context="AVALANCHE NEWS: Colorado Avalanche coach quote sparks debate today",
+            handle="polfam",
+            now=NOW,
+        )
+        self.assertEqual(news_decision["status"], "ready")
+
+    def test_live_sports_context_prioritizes_avalanche_games_and_news(self):
+        apis_text = Path("apis.py").read_text()
+        app_text = Path("app.py").read_text()
+
+        self.assertIn('espn_scores("nhl"', apis_text)
+        self.assertIn("AVALANCHE GAME", apis_text)
+        self.assertIn("AVALANCHE NEWS", apis_text)
+        self.assertIn('espn_team("nhl", "COL")', apis_text)
+        self.assertIn("Colorado+Avalanche+OR+Avs+NHL+breaking+news", app_text)
+
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):
         had_terms = hasattr(ce, "RISK_TERMS")
         old_terms = getattr(ce, "RISK_TERMS", None)

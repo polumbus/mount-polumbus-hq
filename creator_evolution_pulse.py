@@ -50,6 +50,14 @@ SPORTS_TERMS = (
     "refs", "call", "contract", "roster", "starter", "bench", "loss",
     "win", "final", "halftime", "quarter", "series", "practice",
 )
+AVALANCHE_PULSE_TERMS = (
+    "colorado avalanche", "avalanche", "avs",
+)
+PREGAME_OR_BREAKING_TERMS = (
+    "game", "pregame", "puck drop", "starts", "scheduled", "tonight",
+    "playoff", "series", "lineup", "scratch", "injury", "report",
+    "breaking", "news", "quote", "coach", "goalie", "starter",
+)
 TENSION_TERMS = (
     "drama", "argue", "debate", "meltdown", "panic", "angry", "fired",
     "controversy", "bad take", "quote", "called out", "refs", "blame",
@@ -60,6 +68,7 @@ TENSION_TERMS = (
 LIVE_TERMS = (
     "now", "today", "tonight", "live", "breaking", "just", "final",
     "halftime", "quarter", "injury", "trade", "report", "rumor",
+    "pregame", "puck drop", "starts", "scheduled",
 )
 UNSAFE_MONETIZATION_TERMS = (
     "slur", "kill", "die", "crime", "arrested", "lawsuit", "gambling lock",
@@ -240,6 +249,13 @@ def _age_hours(timestamp: datetime, now: datetime | None = None) -> float:
     return max(0.0, (_now(now) - timestamp).total_seconds() / 3600.0)
 
 
+def _signal_age_hours(signal: dict[str, Any]) -> float:
+    try:
+        return max(0.0, float(signal.get("age_hours")))
+    except Exception:
+        return 999.0
+
+
 def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
     lower = text.lower()
     return any(term in lower for term in terms)
@@ -258,12 +274,21 @@ def _audience_fit(text: str) -> float:
 
 def _reply_tension(text: str) -> float:
     lower = text.lower()
+    if _is_avalanche_pregame_or_news(lower):
+        return 5.4
     hits = sum(1 for term in TENSION_TERMS if term in lower)
     if hits:
         return min(10.0, 5.0 + hits * 1.1)
     if text.endswith("?"):
         return 4.0
     return 2.5
+
+
+def _is_avalanche_pregame_or_news(text: str) -> bool:
+    lower = text.lower()
+    return any(term in lower for term in AVALANCHE_PULSE_TERMS) and any(
+        term in lower for term in PREGAME_OR_BREAKING_TERMS
+    )
 
 
 def _risk_flags(text: str) -> list[str]:
@@ -485,7 +510,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     primary = signals[0]
     text = " ".join(s.get("text", "") for s in signals[:4])
     fresh_count = sum(1 for s in signals if s.get("freshness_status") in ("fresh", "usable"))
-    best_age = min(float(s.get("age_hours") or 999) for s in signals)
+    best_age = min(_signal_age_hours(s) for s in signals)
     max_velocity = max(float(s.get("velocity") or 0) for s in signals)
     audience_fit = max(float(s.get("audience_fit") or 0) for s in signals)
     reply_tension = max(float(s.get("reply_tension") or 0) for s in signals)
@@ -585,7 +610,7 @@ def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
 
 def _why_now(signals: list[dict[str, Any]], weighted: dict[str, float]) -> str:
     source_count = len({s.get("source") for s in signals})
-    newest = min(float(s.get("age_hours") or 999) for s in signals)
+    newest = min(_signal_age_hours(s) for s in signals)
     parts = [f"{source_count} source type{'s' if source_count != 1 else ''}", f"newest signal {newest:.1f}h old"]
     if weighted.get("velocity", 0) >= 8:
         parts.append("engagement is moving")

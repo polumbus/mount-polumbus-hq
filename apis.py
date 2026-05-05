@@ -66,6 +66,32 @@ def espn_scores(sport: str, limit: int = 20) -> list:
     return games
 
 
+def _is_team_game(game: dict, team_abbr: str, team_name: str = "") -> bool:
+    team_abbr = team_abbr.upper()
+    team_name = team_name.lower()
+    for side in ("home", "away"):
+        team = game.get(side, {}) or {}
+        if str(team.get("abbr", "")).upper() == team_abbr:
+            return True
+        if team_name and team_name in str(team.get("name", "")).lower():
+            return True
+    return False
+
+
+def _format_game_line(game: dict, *, full_names: bool = False) -> str:
+    home = game.get("home", {}) or {}
+    away = game.get("away", {}) or {}
+    home_name = home.get("name") if full_names else home.get("abbr")
+    away_name = away.get("name") if full_names else away.get("abbr")
+    matchup = f"{away_name or 'Away'} @ {home_name or 'Home'}"
+    if game.get("completed"):
+        return f"{away_name or 'Away'} {away.get('score', '0')}-{home.get('score', '0')} {home_name or 'Home'} (F)"
+    status = game.get("status_detail") or game.get("status") or ""
+    if game.get("period") and game.get("clock"):
+        status = f"{status}, {game.get('clock')}"
+    return f"{matchup} ({status})" if status else matchup
+
+
 def espn_news(sport: str, limit: int = 10) -> list:
     """Get latest headlines."""
     s, l = _ESPN_SPORTS.get(sport.lower(), ("football", "nfl"))
@@ -467,12 +493,21 @@ def get_sports_context(force: bool = False) -> str:
         if nba:
             game_strs = []
             for g in nba[:12]:
-                h, a = g["home"], g["away"]
-                if g["completed"]:
-                    game_strs.append(f"{a['abbr']} {a['score']}-{h['score']} {h['abbr']} (F)")
-                else:
-                    game_strs.append(f"{a['abbr']} @ {h['abbr']}")
+                game_strs.append(_format_game_line(g))
             lines.append(f"NBA: {', '.join(game_strs)}")
+    except Exception:
+        pass
+
+    # NHL / Avalanche games
+    try:
+        nhl = espn_scores("nhl", limit=20)
+        avs_games = [g for g in nhl if _is_team_game(g, "COL", "Colorado Avalanche")]
+        if avs_games:
+            game_strs = [_format_game_line(g, full_names=True) for g in avs_games[:3]]
+            lines.append(f"AVALANCHE GAME: {' | '.join(game_strs)}")
+        elif nhl:
+            game_strs = [_format_game_line(g) for g in nhl[:8]]
+            lines.append(f"NHL: {', '.join(game_strs)}")
     except Exception:
         pass
 
@@ -480,7 +515,7 @@ def get_sports_context(force: bool = False) -> str:
     try:
         ncaa = espn_scores("ncaam", limit=10)
         if ncaa:
-            game_strs = [f"{g['away']['abbr']} @ {g['home']['abbr']}" for g in ncaa[:6]]
+            game_strs = [_format_game_line(g) for g in ncaa[:6]]
             lines.append(f"NCAA: {', '.join(game_strs)}")
     except Exception:
         pass
@@ -503,10 +538,27 @@ def get_sports_context(force: bool = False) -> str:
     except Exception:
         pass
 
+    # Colorado Avalanche breaking/news context
+    try:
+        nhl_news = espn_news("nhl", limit=15)
+        avs_news = [
+            n for n in nhl_news
+            if re.search(r"\b(avalanche|avs|colorado)\b", f"{n.get('headline', '')} {n.get('description', '')}", re.I)
+        ]
+        if avs_news:
+            headlines = [n["headline"][:90] for n in avs_news[:4]]
+            lines.append(f"AVALANCHE NEWS: {' | '.join(headlines)}")
+        elif nhl_news:
+            headlines = [n["headline"][:80] for n in nhl_news[:3]]
+            lines.append(f"NHL NEWS: {' | '.join(headlines)}")
+    except Exception:
+        pass
+
     # Broncos info
     try:
         broncos = espn_team("nfl", "DEN")
         nuggets = espn_team("nba", "DEN")
+        avalanche = espn_team("nhl", "COL")
         team_info = []
         if broncos.get("name"):
             team_info.append(f"Broncos ({broncos.get('record', 'N/A')})")
@@ -514,6 +566,10 @@ def get_sports_context(force: bool = False) -> str:
                 team_info.append(f"Next: {broncos['next_event']}")
         if nuggets.get("name"):
             team_info.append(f"Nuggets ({nuggets.get('record', 'N/A')})")
+        if avalanche.get("name"):
+            team_info.append(f"Avalanche ({avalanche.get('record', 'N/A')})")
+            if avalanche.get("next_event"):
+                team_info.append(f"Avs Next: {avalanche['next_event']}")
         if team_info:
             lines.append(f"DENVER: {' | '.join(team_info)}")
     except Exception:
