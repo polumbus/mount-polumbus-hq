@@ -25,6 +25,8 @@ BLOCKING_HARD_BLOCKS = {
     "low_fact_confidence",
     "monetization_risk",
     "duplicate_recent_angle",
+    "reply_fragment_context",
+    "unresolved_pronoun_context",
 }
 SOURCE_RELIABILITY = {
     "trusted_list": 7.2,
@@ -98,6 +100,10 @@ BETTING_SIGNAL_TERMS = (
 FALLBACK_RISK_TERMS = (
     "idiot", "moron", "clown", "trash", "garbage", "hate", "stupid",
     "fraud", "loser", "shut up", "dumb",
+)
+UNRESOLVED_PRONOUN_TERMS = (
+    "he", "him", "his", "himself", "that guy", "this guy", "that dude",
+    "this dude", "that kid", "this kid", "dude", "kid",
 )
 
 
@@ -419,6 +425,24 @@ def _risk_flags(text: str) -> list[str]:
     return list(dict.fromkeys(flags))
 
 
+def _context_flags(text: str) -> list[str]:
+    clean = _text(text)
+    lower = clean.lower()
+    flags = []
+    if re.match(r"^@\w+", clean):
+        flags.append("reply_fragment_context")
+        if any(re.search(rf"\b{re.escape(term)}\b", lower) for term in UNRESOLVED_PRONOUN_TERMS):
+            flags.append("unresolved_pronoun_context")
+    elif any(re.search(rf"\b{re.escape(term)}\b", lower) for term in UNRESOLVED_PRONOUN_TERMS):
+        has_named_context = bool(
+            re.search(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b", clean)
+            or re.search(r"\b(?:Broncos|Nuggets|Avalanche|Avs|Rockies|Buffs|CU|Coach Prime|Deion|Jokic|Murray|MacKinnon|Makar|Bo Nix|Sean Payton)\b", clean)
+        )
+        if not has_named_context:
+            flags.append("unresolved_pronoun_context")
+    return list(dict.fromkeys(flags))
+
+
 def _source_reliability(source: str) -> float:
     return SOURCE_RELIABILITY.get((source or "").lower(), SOURCE_RELIABILITY["news"])
 
@@ -459,6 +483,7 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
     if not isinstance(tweet, dict):
         return signal_from_text(_text(tweet), source=source, now=now)
     text = _text(tweet.get("text") or tweet.get("full_text"))
+    context_flags = _context_flags(text)
     timestamp = _parse_time(tweet.get("createdAt") or tweet.get("created_at"), now)
     age = _age_hours(timestamp, now)
     src = source or "twitter"
@@ -490,6 +515,7 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
         "audience_fit": _audience_fit(text),
         "reply_tension": _reply_tension(text),
         "risk_flags": _risk_flags(text),
+        "context_flags": context_flags,
         "freshness_status": _freshness_status(src, timestamp, text, now),
         "is_reply_target": bool(author and not text.startswith("@")),
     }
@@ -498,6 +524,7 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
 def signal_from_text(text: str, *, source: str = "news", url: str = "",
                      now: datetime | None = None, timestamp: Any = None) -> dict[str, Any]:
     clean = _text(text)
+    context_flags = _context_flags(clean)
     ts = _parse_time(timestamp, now)
     src = source or "news"
     return {
@@ -518,6 +545,7 @@ def signal_from_text(text: str, *, source: str = "news", url: str = "",
         "audience_fit": _audience_fit(clean),
         "reply_tension": _reply_tension(clean),
         "risk_flags": _risk_flags(clean),
+        "context_flags": context_flags,
         "freshness_status": _freshness_status(src, ts, clean, now),
         "is_reply_target": False,
     }
@@ -590,7 +618,14 @@ def cluster_signals(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped.setdefault(_cluster_key(signal), []).append(signal)
     clusters = []
     for key, items in grouped.items():
-        sorted_items = sorted(items, key=lambda s: (s.get("freshness_status") == "stale", -float(s.get("velocity") or 0)))
+        sorted_items = sorted(
+            items,
+            key=lambda s: (
+                bool(set(s.get("context_flags", []) or []) & {"reply_fragment_context", "unresolved_pronoun_context"}),
+                s.get("freshness_status") == "stale",
+                -float(s.get("velocity") or 0),
+            ),
+        )
         text = " ".join(item.get("text", "") for item in sorted_items[:4])
         clusters.append({
             "id": _stable_id(key + text[:160], "cluster"),
@@ -652,6 +687,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     novelty, novelty_flag = _novelty_score(text, state)
     safety = 10.0
     risk_flags = []
+    context_flags = []
     for signal in signals:
         for flag in signal.get("risk_flags", []) or []:
             if flag.startswith("unsafe:"):
@@ -661,6 +697,8 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
             else:
                 safety -= 1.2
             risk_flags.append(flag)
+        for flag in signal.get("context_flags", []) or []:
+            context_flags.append(flag)
     safety = max(0.0, safety)
     timeliness = min(20.0, max(0.0, 20.0 - best_age * 1.7))
     if fresh_count >= 2:
@@ -702,6 +740,18 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         hard_blocks.append("monetization_risk")
     if novelty_flag == "duplicate_recent_angle":
         hard_blocks.append("duplicate_recent_angle")
+    primary_context_flags = set(primary.get("context_flags", []) or [])
+    self_contained_sources = [
+        s for s in signals
+        if not (set(s.get("context_flags", []) or []) & {"reply_fragment_context", "unresolved_pronoun_context"})
+    ]
+    if not self_contained_sources:
+        if "reply_fragment_context" in context_flags:
+            hard_blocks.append("reply_fragment_context")
+        if "unresolved_pronoun_context" in context_flags:
+            hard_blocks.append("unresolved_pronoun_context")
+    elif primary_context_flags & {"reply_fragment_context", "unresolved_pronoun_context"}:
+        soft_flags.append("context_from_secondary_source")
     action = "tweet"
     if score < DEFAULT_THRESHOLD and score >= SAVE_THRESHOLD:
         action = "save"
@@ -721,6 +771,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
                 "freshness_status": s.get("freshness_status", ""),
                 "age_hours": s.get("age_hours", 0),
                 "timestamp_missing": bool(s.get("timestamp_missing")),
+                "context_flags": list(s.get("context_flags", []) or []),
             }
             for s in signals[:4]
         ],
@@ -730,6 +781,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "hard_blocks": hard_blocks,
         "soft_flags": soft_flags,
         "risk_flags": list(dict.fromkeys(risk_flags)),
+        "context_flags": list(dict.fromkeys(context_flags)),
         "recommended_action": action,
         "recommended_lane": _recommended_lane(text, reply_tension, safety),
         "freshness_score": round(timeliness, 2),

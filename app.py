@@ -8749,6 +8749,8 @@ def _ce_pulse_dialog():
     _n_tweets, _n_heads = st.session_state.get("ce_pulse_meta", (0, 0))
     _best = _decision.get("best") or {}
     _status = _decision.get("status", "no_op")
+    if _status == "no_op":
+        _best = {}
     _status_label = {
         "ready": "READY",
         "best_available": "BEST AVAILABLE",

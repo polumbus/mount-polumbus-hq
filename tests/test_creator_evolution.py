@@ -463,6 +463,45 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotEqual(decision["status"], "ready")
         self.assertIn("thin_room_signal", decision["best"]["soft_flags"])
 
+    def test_pulse_blocks_contextless_reply_fragments_with_unresolved_he(self):
+        tweets = [
+            _tweet(
+                18,
+                "@dalvinthetruth 100%. When he got to CU he was a nobody, he was like a 1 star or something. CU was like his only offer and coach Prime made him into an elite OT...",
+                hours_ago=0.5,
+                views=50000,
+                likes=1200,
+                replies=300,
+                reposts=140,
+                quotes=45,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "no_op")
+        self.assertIn("reply_fragment_context", decision["best"]["hard_blocks"])
+        self.assertIn("unresolved_pronoun_context", decision["best"]["hard_blocks"])
+
+    def test_pulse_allows_self_contained_named_timeline_context(self):
+        tweets = [
+            _tweet(
+                19,
+                "Jordan Seaton becoming a real CU development story is exactly the kind of Coach Prime argument people pretend does not count",
+                hours_ago=0.5,
+                views=50000,
+                likes=1200,
+                replies=300,
+                reposts=140,
+                quotes=45,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertEqual(decision["best"]["hard_blocks"], [])
+
     def test_cavs_does_not_get_tagged_as_avs(self):
         self.assertNotIn("avs", pulse._ce_topic_tags("Allen going out will help Cavs offense tonight"))
 
@@ -562,6 +601,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_lane_options = list(_ce_emotion_lanes())", pulse_dialog)
         self.assertIn('st.session_state["ce_lane"] = _lane', pulse_dialog)
         self.assertNotIn('key="ce_pulse_lane"', pulse_dialog)
+        self.assertIn('if _status == "no_op":', pulse_dialog)
+        self.assertIn("_best = {}", pulse_dialog)
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
