@@ -7317,6 +7317,7 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFA
     _raw_ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
     _lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
     _fmt = _normalize_tweet_format(fmt)
+    _ce_install_lane_recipe_text_compat()
     _ideas = []
     for _idea in _raw_ideas:
         _topic = (_idea.get("topic") or "Trending angle").strip()
@@ -7474,6 +7475,23 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "char_count": char_count,
         "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
     }
+
+
+def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
+    """Validate options without trusting stale Creator Evolution module internals."""
+    validator = getattr(ce, "validate_generation_options", None)
+    if callable(validator):
+        try:
+            report = validator(data, fmt, lane)
+            if isinstance(report, dict):
+                return report
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "generation validator recovered", {"error": str(exc)[:160]})
+    reports: dict = {}
+    for option_key in ("option1", "option2", "option3"):
+        if data.get(option_key):
+            reports[option_key] = _ce_draft_quality_report(str(data[option_key]), fmt, lane)
+    return reports
 
 
 def _ce_pulse_meta_language(text: str) -> bool:
@@ -7856,6 +7874,7 @@ def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) ->
     fmt = _normalize_tweet_format(fmt)
     source = _ce_pulse_source_material(decision)
     state = _creator_evolution_state()
+    _ce_install_lane_recipe_text_compat()
     prompt = ce.build_generation_prompt(source, fmt, lane, state, action="build")
     prompt += f"""
 
@@ -8703,10 +8722,51 @@ def _creator_evolution_state() -> dict:
     return state
 
 
+def _ce_lane_recipe_text(lane: str) -> str:
+    """Return Creator Evolution lane rules even when Cloud has a stale helper module."""
+    lane = lane if lane in getattr(ce, "EMOTION_LANES", ()) else getattr(ce, "DEFAULT_LANE", "Witty Edge")
+    formatter = getattr(ce, "lane_recipe_text", None)
+    if callable(formatter) and formatter is not _ce_lane_recipe_text:
+        try:
+            text = str(formatter(lane) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "lane recipe helper recovered", {"error": str(exc)[:160]})
+
+    recipes = getattr(ce, "LANE_RECIPES", {}) or {}
+    recipe = recipes.get(lane) or recipes.get(getattr(ce, "DEFAULT_LANE", "Witty Edge")) or {
+        "target": "Funny, pointed, conversational, and human.",
+        "do": "Use a specific sports detail and a sharp human reaction.",
+        "avoid": "Content-strategy phrasing, generic templates, fake questions, and invented facts.",
+        "ending": "A declarative open loop or punchline that leaves the tension alive.",
+    }
+    return "\n".join([
+        f"{lane}:",
+        f"- Target: {recipe.get('target', '')}",
+        f"- Do: {recipe.get('do', '')}",
+        f"- Avoid: {recipe.get('avoid', '')}",
+        f"- Ending: {recipe.get('ending', '')}",
+    ])
+
+
+def _ce_install_lane_recipe_text_compat() -> None:
+    formatter = getattr(ce, "lane_recipe_text", None)
+    if callable(formatter):
+        try:
+            text = str(formatter(getattr(ce, "DEFAULT_LANE", "Witty Edge")) or "").strip()
+            if text:
+                return
+        except Exception:
+            pass
+    setattr(ce, "lane_recipe_text", _ce_lane_recipe_text)
+
+
 def _creator_evolution_system_prompt(lane: str) -> str:
     handle = get_current_handle()
     lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
-    lane_rules = ce.lane_recipe_text(lane)
+    _ce_install_lane_recipe_text_compat()
+    lane_rules = _ce_lane_recipe_text(lane)
     return build_user_context() + f"""
 
 You are Creator Evolution for @{handle}.
@@ -8780,6 +8840,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                     except Exception:
                         pass
 
+    _ce_install_lane_recipe_text_compat()
     prompt = ce.build_generation_prompt(
         tweet_text,
         fmt,
@@ -8796,7 +8857,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
-        quality_report = ce.validate_generation_options(data, fmt, lane)
+        quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = []
         for idx in [1, 2, 3]:
             option_key = f"option{idx}"
