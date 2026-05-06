@@ -318,6 +318,18 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("AVALANCHE GAME", decision["best"]["summary_text"])
         self.assertTrue(any("draft" in item.get("topic", "") for item in decision["top_rejected"]))
 
+    def test_pulse_ignores_betting_lines_as_opportunities(self):
+        sports_context = (
+            "BETTING LINES (BetRivers):\n"
+            "Moneyline: Colorado Avalanche -205 / Minnesota Wild +165\n"
+            "Spread: Colorado Avalanche -1.5\n"
+            "Over/Under: 6.5"
+        )
+
+        signals = pulse.build_signals([], [], sports_context=sports_context, now=NOW)
+
+        self.assertEqual(signals, [])
+
     def test_cavs_does_not_get_tagged_as_avs(self):
         self.assertNotIn("avs", pulse._ce_topic_tags("Allen going out will help Cavs offense tonight"))
 
@@ -337,6 +349,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('decision.get("status") in ("pulse_error", "no_op")', app_text)
         self.assertIn("total_seconds() > 120", app_text)
         self.assertIn("Recovered detail:", app_text)
+        self.assertIn("def _run_ce_pulse_drafts", app_text)
+        self.assertIn("def _ce_pulse_finalize_drafts", app_text)
+        self.assertIn("_ce_pulse_source_material", app_text)
+        self.assertIn("Refresh Tweets", app_text)
+        self.assertIn("Use Tweet", app_text)
+        self.assertIn("No gambling language", app_text)
+        self.assertIn("ce.build_generation_prompt", app_text)
+        pulse_dialog = app_text.split('def _ce_pulse_dialog', 1)[1].split('@st.dialog("What', 1)[0]
+        self.assertNotIn("_run_ci_ai", pulse_dialog)
 
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):
         had_terms = hasattr(ce, "RISK_TERMS")

@@ -74,6 +74,11 @@ UNSAFE_MONETIZATION_TERMS = (
     "slur", "kill", "die", "crime", "arrested", "lawsuit", "gambling lock",
     "guaranteed bet", "free money", "medical", "diagnosis",
 )
+BETTING_SIGNAL_TERMS = (
+    "betting lines", "moneyline", "money line", "spread:", "spread ",
+    "over/under", "over under", "parlay", "odds", "sportsbook",
+    "draftkings", "fanduel", "bet365", "betrivers",
+)
 FALLBACK_RISK_TERMS = (
     "idiot", "moron", "clown", "trash", "garbage", "hate", "stupid",
     "fraud", "loser", "shut up", "dumb",
@@ -303,6 +308,11 @@ def _is_avalanche_pregame_or_news(text: str) -> bool:
     )
 
 
+def _is_betting_signal_text(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(term in lower for term in BETTING_SIGNAL_TERMS)
+
+
 def _opportunity_text(item: dict[str, Any]) -> str:
     parts = [str(item.get("summary_text") or "")]
     for source in item.get("source_basis", []) or []:
@@ -458,6 +468,8 @@ def build_signals(tweets: list[dict[str, Any]] | None,
     if sports_context:
         for line in str(sports_context).splitlines():
             line = _text(line)
+            if _is_betting_signal_text(line):
+                continue
             if len(line) >= 24 and _contains_any(line, SPORTS_TERMS + PRIMARY_AUDIENCE_TERMS):
                 signals.append(signal_from_text(line, source="sports_context", now=now))
     seen = set()

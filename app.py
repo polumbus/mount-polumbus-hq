@@ -7378,6 +7378,17 @@ def _ce_pulse_version() -> str:
         return "ce-pulse-app-fallback"
 
 
+def _ce_text_has_betting_angle(text: str) -> bool:
+    lower = str(text or "").lower()
+    if any(term in lower for term in ("moneyline", "money line", "over/under", "over under", "parlay", "sportsbook", "draftkings", "fanduel", "betrivers")):
+        return True
+    if re.search(r"\b(bet|bets|betting|odds)\b", lower):
+        return True
+    if re.search(r"\bspread\b", lower):
+        return True
+    return False
+
+
 def _ce_pulse_cached_decision_valid(decision: dict | None, current_version: str) -> bool:
     """Keep ready Pulse results briefly, but never let no-op/error results stick."""
     if not isinstance(decision, dict):
@@ -7404,6 +7415,8 @@ def _ce_extract_avalanche_context(sports_context: str) -> str:
         line = re.sub(r"\s+", " ", str(raw_line or "")).strip()
         lower = line.lower()
         if not line:
+            continue
+        if _ce_text_has_betting_angle(line):
             continue
         if ("avalanche" in lower or re.search(r"\bavs\b", lower)) and any(
             term in lower for term in ("game", "news", "breaking", "puck drop", "tonight", "scheduled", "goalie", "starter", "injury", "coach", "line")
@@ -7490,6 +7503,122 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
         "selected_lane": best["recommended_lane"],
         "selected_format": fmt,
     }
+
+
+def _ce_pulse_source_material(decision: dict) -> str:
+    best = decision.get("best") or {}
+    basis_lines = []
+    for item in best.get("source_basis", []) or []:
+        if not isinstance(item, dict):
+            continue
+        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        if not text or _ce_text_has_betting_angle(text):
+            continue
+        basis_lines.append(f"- {item.get('source', 'source')} | {item.get('freshness_status', 'fresh')} | {text}")
+    summary = re.sub(r"\s+", " ", str(best.get("summary_text") or "")).strip()
+    if summary and not _ce_text_has_betting_angle(summary):
+        seed_summary = summary
+    elif basis_lines:
+        seed_summary = basis_lines[0].split("|", 2)[-1].strip()
+    else:
+        seed_summary = "A live Denver sports moment is active, but betting lines must be ignored."
+    return (
+        f"TOPIC: {best.get('topic', 'timely sports moment')}\n"
+        f"PULSE SIGNAL: {seed_summary}\n"
+        f"WHY NOW: {best.get('why_now', 'Fresh live context is active.')}\n"
+        "SOURCE BASIS:\n"
+        f"{chr(10).join(basis_lines[:5]) if basis_lines else '- sports_context | fresh | Use the non-gambling game/news context only.'}\n\n"
+        "PULSE DRAFT RULES:\n"
+        "- Return post-ready tweets immediately, not a strategy brief.\n"
+        "- Show real personality: witty, specific, slightly sharp, and human.\n"
+        "- Do not make the tweet about gambling, moneyline, spread, odds, over/under, betting, or picks.\n"
+        "- If betting data exists anywhere in source context, treat it as background only and do not mention it.\n"
+        "- The angle should be reply-worthy fan tension, not a schedule report.\n"
+        "- No invented stats, injuries, roster facts, or current-event claims beyond the source basis."
+    )
+
+
+def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list[tuple[str, str]]:
+    best = decision.get("best") or {}
+    text = " ".join([
+        str(best.get("summary_text") or ""),
+        " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
+    ]).lower()
+    if "avalanche" in text or re.search(r"\bavs\b", text):
+        options = [
+            ("Avs game nights are funny because everyone pretends they’re calm until one weird bounce turns the whole timeline into a courtroom.", "Witty fan tension without relying on odds."),
+            ("The Avs are about to make an entire timeline argue with its own blood pressure again. Very normal sport.", "Human, specific, and built for replies."),
+            ("This Avs night has real 'the first five minutes decide everyone's emotional health' energy.", "Open loop with personality, not a schedule report."),
+        ]
+    else:
+        topic = str(best.get("topic") or "Denver sports").strip().title()
+        options = [
+            (f"{topic} discourse is funniest right before everyone realizes they are not emotionally prepared for the normal version of events.", "Witty tension from the live signal."),
+            (f"This is one of those {topic} moments where the take is going to age either beautifully or like milk in direct sunlight.", "Reply-worthy contradiction without fake bait."),
+            (f"The best part of {topic} nights is everyone pretending they have perspective for about nine minutes.", "Human voice, not content strategy."),
+        ]
+    return [(text, pattern) for text, pattern in options if not _ce_text_has_betting_angle(text)][:3]
+
+
+def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -> tuple[dict, dict]:
+    final: dict = {}
+    quality: dict = {}
+    slot = 1
+    for idx in [1, 2, 3]:
+        raw = str((data or {}).get(f"option{idx}") or "").strip()
+        if not raw:
+            continue
+        draft = _sanitize_output(raw).strip()
+        if not draft or _ce_text_has_betting_angle(draft):
+            continue
+        report = ce.draft_quality_report(draft, fmt, lane)
+        if not report.get("ok"):
+            continue
+        final[f"option{slot}"] = draft
+        final[f"option{slot}_pattern"] = str((data or {}).get(f"option{idx}_pattern") or "Creator Evolution voice + Pulse timing.").strip()
+        quality[f"option{slot}"] = report
+        slot += 1
+        if slot > 3:
+            break
+    for fallback_text, fallback_pattern in _ce_pulse_local_fallback_drafts(decision, lane, fmt):
+        if slot > 3:
+            break
+        if any(fallback_text == final.get(f"option{i}") for i in range(1, slot)):
+            continue
+        report = ce.draft_quality_report(fallback_text, fmt, lane)
+        if not report.get("ok"):
+            continue
+        final[f"option{slot}"] = fallback_text
+        final[f"option{slot}_pattern"] = fallback_pattern
+        quality[f"option{slot}"] = report
+        slot += 1
+    final["pick"] = "1"
+    final["pick_reason"] = "Picked the strongest Creator Evolution Pulse draft that passed the no-gambling and human-voice gates."
+    return final, quality
+
+
+def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) -> tuple[dict, dict, str]:
+    lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    fmt = _normalize_tweet_format(fmt)
+    source = _ce_pulse_source_material(decision)
+    state = _creator_evolution_state()
+    prompt = ce.build_generation_prompt(source, fmt, lane, state, action="build")
+    prompt += f"""
+
+CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
+- Generate 3 options; the UI will show at least 2.
+- Regeneration nonce: {nonce}. If nonce is not 0, change the openings and angles materially.
+- No gambling language. Do not mention moneyline, odds, spread, over/under, betting, picks, locks, sportsbooks, or implied bets.
+- These must sound like @{get_current_handle()} posting from a phone, not an analyst, not a strategy deck, not a sportsbook account.
+"""
+    raw = ""
+    try:
+        raw = call_claude(prompt, system=_creator_evolution_system_prompt(lane), max_tokens=900)
+    except Exception as exc:
+        raw = f"AI unavailable for Pulse drafts: {exc}"
+    data = _parse_banger_json(raw or "") or {}
+    final, quality = _ce_pulse_finalize_drafts(data, decision, fmt, lane)
+    return final, quality, raw
 
 
 def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_context: str = "") -> dict:
@@ -7811,10 +7940,14 @@ def _ce_pulse_dialog():
     if st.session_state.pop("_ce_pulse_force_refresh", False):
         st.session_state.pop("ce_pulse_decision", None)
         st.session_state.pop("ce_pulse_meta", None)
+        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
+            st.session_state.pop(_draft_key, None)
     _cached_decision = st.session_state.get("ce_pulse_decision")
     if _cached_decision is not None and not _ce_pulse_cached_decision_valid(_cached_decision, _current_pulse_version):
         st.session_state.pop("ce_pulse_decision", None)
         st.session_state.pop("ce_pulse_meta", None)
+        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
+            st.session_state.pop(_draft_key, None)
     if "ce_pulse_decision" not in st.session_state:
         with st.spinner("Running Pulse deep hunt..."):
             try:
@@ -7887,24 +8020,93 @@ def _ce_pulse_dialog():
         with st.expander("Source Basis", expanded=False):
             for _src in (_best.get("source_basis") or [])[:5]:
                 st.caption(f"{_src.get('source', 'source')} | {_src.get('freshness_status', '')} | {_src.get('text', '')}")
+        _draft_nonce = int(st.session_state.get("_ce_pulse_draft_nonce", 0) or 0)
+        _draft_key = hashlib.sha1(json.dumps({
+            "version": _decision.get("version", ""),
+            "best_id": _best.get("id", ""),
+            "summary": _best.get("summary_text", ""),
+            "lane": _lane_pick,
+            "fmt": _fmt,
+            "nonce": _draft_nonce,
+        }, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        if st.session_state.get("ce_pulse_drafts_key") != _draft_key:
+            with st.spinner("Writing Creator Evolution Pulse tweets..."):
+                _drafts, _draft_quality, _draft_raw = _run_ce_pulse_drafts(_decision, _lane_pick, _fmt, _draft_nonce)
+            st.session_state["ce_pulse_drafts_key"] = _draft_key
+            st.session_state["ce_pulse_drafts"] = _drafts
+            st.session_state["ce_pulse_draft_quality"] = _draft_quality
+            st.session_state["ce_pulse_draft_raw"] = str(_draft_raw or "")[:500]
+
+        _pulse_drafts = st.session_state.get("ce_pulse_drafts") or {}
+        _pulse_quality = st.session_state.get("ce_pulse_draft_quality") or {}
+        _draft_items = [
+            (idx, _pulse_drafts.get(f"option{idx}", ""), _pulse_drafts.get(f"option{idx}_pattern", ""))
+            for idx in [1, 2, 3]
+            if _pulse_drafts.get(f"option{idx}")
+        ]
+        st.markdown(
+            '<div style="font-size:11px;font-weight:800;letter-spacing:1.3px;color:#2DD4BF;text-transform:uppercase;margin:14px 0 8px;">Creator Evolution Tweets</div>',
+            unsafe_allow_html=True,
+        )
+        if len(_draft_items) < 2:
+            st.warning("Pulse could not produce two clean Creator Evolution drafts yet. Use Refresh Tweets.")
+            if st.session_state.get("ce_pulse_draft_raw"):
+                st.caption("Draft recovery detail: " + st.session_state.get("ce_pulse_draft_raw", "")[:220])
+        for _idx, _draft_text, _pattern in _draft_items[:3]:
+            _report = _pulse_quality.get(f"option{_idx}", {}) or {}
+            _char_count = _report.get("char_count", len(str(_draft_text)))
+            st.markdown(
+                f"""
+<div style="border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.035);border-radius:8px;padding:13px;margin-bottom:9px;">
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;">
+    <div style="font-size:9px;font-weight:800;letter-spacing:1.2px;color:#5a7090;text-transform:uppercase;">Tweet {_idx}</div>
+    <div style="font-size:9px;color:#5a7090;">{int(_char_count)} chars</div>
+  </div>
+  <div style="font-size:15px;color:#E2E8F0;line-height:1.55;white-space:pre-wrap;">{html.escape(str(_draft_text))}</div>
+  <div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:8px;">{html.escape(str(_pattern))}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+            _use_col, _save_col = st.columns([1, 1])
+            with _use_col:
+                if st.button(f"Use Tweet {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _idx == 1 else "secondary"):
+                    st.session_state["_ce_text_stage"] = str(_draft_text)
+                    st.session_state["ce_format"] = _fmt
+                    st.session_state["ce_lane"] = _lane_pick if _lane_pick in ce.EMOTION_LANES else _lane
+                    st.rerun(scope="app")
+            with _save_col:
+                if st.button(f"Save Tweet {_idx}", key=f"ce_pulse_save_draft_{_idx}", use_container_width=True):
+                    ideas = load_json("saved_ideas.json", [])
+                    ideas.append({
+                        "text": str(_draft_text),
+                        "format": _fmt,
+                        "category": "Creator Evolution",
+                        "source": "Creator Evolution Pulse",
+                        "saved_at": datetime.now().isoformat(),
+                    })
+                    save_json("saved_ideas.json", ideas)
+                    st.success("Saved.")
         _build_col, _hot_col, _refresh_col = st.columns([2, 1, 1])
         with _build_col:
-            _build_disabled = _status != "ready" or bool(_best.get("hard_blocks"))
-            if st.button("Build Pulse", key="ce_pulse_build", use_container_width=True, type="primary", disabled=_build_disabled):
-                _brief = _decision.get("brief", "")
-                _lane_to_use = _lane_pick if _lane_pick in ce.EMOTION_LANES else _lane
-                st.session_state["_ce_text_stage"] = _brief
-                st.session_state["ce_format"] = _fmt
-                st.session_state["ce_lane"] = _lane_to_use
-                st.session_state["_ce_pending"] = ("build", _brief, _fmt, _lane_to_use)
+            if st.button("Refresh Tweets", key="ce_pulse_refresh_drafts", use_container_width=True, type="primary"):
+                st.session_state["_ce_pulse_draft_nonce"] = int(st.session_state.get("_ce_pulse_draft_nonce", 0) or 0) + 1
+                st.session_state.pop("ce_pulse_drafts_key", None)
+                st.session_state.pop("ce_pulse_drafts", None)
+                st.session_state.pop("ce_pulse_draft_quality", None)
+                st.session_state.pop("ce_pulse_draft_raw", None)
                 st.rerun(scope="app")
         with _hot_col:
             if st.button("Hot Feed", key="ce_pulse_hot_feed", use_container_width=True):
                 st.session_state["_ce_show_inspiration"] = True
                 st.rerun(scope="app")
         with _refresh_col:
-            if st.button("Refresh", key="ce_pulse_refresh", use_container_width=True):
+            if st.button("Refresh Signal", key="ce_pulse_refresh", use_container_width=True):
                 st.session_state["_ce_pulse_force_refresh"] = True
+                st.session_state.pop("ce_pulse_drafts_key", None)
+                st.session_state.pop("ce_pulse_drafts", None)
+                st.session_state.pop("ce_pulse_draft_quality", None)
+                st.session_state.pop("ce_pulse_draft_raw", None)
                 st.rerun(scope="app")
 
     if _decision.get("top_rejected"):
