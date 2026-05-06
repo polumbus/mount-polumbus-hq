@@ -357,6 +357,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("No gambling language", app_text)
         self.assertIn("ce.build_generation_prompt", app_text)
         pulse_dialog = app_text.split('def _ce_pulse_dialog', 1)[1].split('@st.dialog("What', 1)[0]
+        self.assertIn('st.selectbox(\n        "Voice"', pulse_dialog)
+        self.assertIn("ce_pulse_lane", pulse_dialog)
+        self.assertIn("_lane_options = list(ce.EMOTION_LANES)", pulse_dialog)
+        self.assertIn('st.session_state["ce_lane"] = _lane', pulse_dialog)
         self.assertNotIn("_run_ci_ai", pulse_dialog)
 
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):

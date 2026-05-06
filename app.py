@@ -7932,10 +7932,24 @@ def _ci_inspiration_dialog():
 @st.dialog("Creator Evolution Pulse", width="large")
 def _ce_pulse_dialog():
     """One-best now-or-no-op decision layer for Creator Evolution."""
-    _lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
-    if _lane not in ce.EMOTION_LANES:
+    _lane_options = list(ce.EMOTION_LANES)
+    _lane = st.session_state.get("ce_pulse_lane") or st.session_state.get("ce_lane", ce.DEFAULT_LANE)
+    if _lane not in _lane_options:
         _lane = ce.DEFAULT_LANE
+    if st.session_state.get("ce_pulse_lane") not in _lane_options:
+        st.session_state["ce_pulse_lane"] = _lane
     _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
+    _lane = st.selectbox(
+        "Voice",
+        _lane_options,
+        index=_lane_options.index(_lane),
+        key="ce_pulse_lane",
+        help="Uses the same Creator Evolution voice options as the main composer.",
+    )
+    if st.session_state.get("ce_lane") != _lane:
+        st.session_state["ce_lane"] = _lane
+        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
+            st.session_state.pop(_draft_key, None)
     _current_pulse_version = _ce_pulse_version()
     if st.session_state.pop("_ce_pulse_force_refresh", False):
         st.session_state.pop("ce_pulse_decision", None)
@@ -8001,7 +8015,7 @@ def _ce_pulse_dialog():
                 st.rerun(scope="app")
     else:
         _action = _best.get("recommended_action", "tweet")
-        _lane_pick = _best.get("recommended_lane") or _lane
+        _lane_pick = _lane if _lane in ce.EMOTION_LANES else (_best.get("recommended_lane") or ce.DEFAULT_LANE)
         st.markdown(
             f"""
 <div style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:10px;">
