@@ -17,7 +17,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v3-best-now"
+PULSE_VERSION = "ce-pulse-v4-live-freshness"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -309,9 +309,28 @@ def _reply_tension(text: str) -> float:
 
 def _is_avalanche_pregame_or_news(text: str) -> bool:
     lower = text.lower()
+    if _is_completed_game_context(lower):
+        return False
     return any(term in lower for term in AVALANCHE_PULSE_TERMS) and any(
         term in lower for term in PREGAME_OR_BREAKING_TERMS
     )
+
+
+def _is_completed_game_context(text: str) -> bool:
+    """True for scoreboard-style finals, not news about a Cup Final."""
+    clean = _text(text)
+    lower = clean.lower()
+    if not clean:
+        return False
+    if lower.startswith("avalanche news:") or lower.startswith("nhl news:"):
+        return False
+    has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
+    has_game_label = "game:" in lower or " game" in lower or has_matchup_shape
+    has_final_status = bool(
+        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot)\)", clean, re.I)
+        or re.search(r"\b(final score|game final|went final|completed)\b", lower)
+    )
+    return bool(has_game_label and has_final_status)
 
 
 def _is_betting_signal_text(text: str) -> bool:
@@ -475,6 +494,8 @@ def build_signals(tweets: list[dict[str, Any]] | None,
         for line in str(sports_context).splitlines():
             line = _text(line)
             if _is_betting_signal_text(line):
+                continue
+            if _is_completed_game_context(line):
                 continue
             if len(line) >= 24 and _contains_any(line, SPORTS_TERMS + PRIMARY_AUDIENCE_TERMS):
                 signals.append(signal_from_text(line, source="sports_context", now=now))

@@ -7809,6 +7809,23 @@ def _ce_text_has_betting_angle(text: str) -> bool:
     return False
 
 
+def _ce_is_completed_game_context(text: str) -> bool:
+    """Reject scoreboard-style finals as live Pulse context."""
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    if not clean:
+        return False
+    if lower.startswith("avalanche news:") or lower.startswith("nhl news:"):
+        return False
+    has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
+    has_game_label = "game:" in lower or " game" in lower or has_matchup_shape
+    has_final_status = bool(
+        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot)\)", clean, re.I)
+        or re.search(r"\b(final score|game final|went final|completed)\b", lower)
+    )
+    return bool(has_game_label and has_final_status)
+
+
 def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
     clean = str(text or "").strip()
@@ -7954,6 +7971,8 @@ def _ce_extract_avalanche_context(sports_context: str) -> str:
             continue
         if _ce_text_has_betting_angle(line):
             continue
+        if _ce_is_completed_game_context(line):
+            continue
         if ("avalanche" in lower or re.search(r"\bavs\b", lower)) and any(
             term in lower
             for term in (
@@ -7967,6 +7986,21 @@ def _ce_extract_avalanche_context(sports_context: str) -> str:
         return ""
     avs_lines.sort(key=lambda line: (not line.upper().startswith("AVALANCHE GAME"), not line.upper().startswith("AVALANCHE NEWS"), len(line)))
     return avs_lines[0]
+
+
+def _ce_avalanche_why_now(avs_line: str) -> str:
+    if _ce_is_completed_game_context(avs_line):
+        return "Completed Avalanche game result is postgame context, not live game context."
+    lower = str(avs_line or "").lower()
+    state = _ce_avs_live_state(avs_line)
+    if state.get("score"):
+        detail = state.get("detail") or "live game state"
+        return f"Avalanche game is live with current score context ({detail})."
+    if any(term in lower for term in ("scheduled", "puck drop", "tonight", "starts", "pregame")):
+        return "Avalanche game is in the pregame window from freshly checked sports context."
+    if "news" in lower or any(term in lower for term in ("breaking", "quote", "coach", "injury", "starter", "lineup")):
+        return "Avalanche news is active in freshly checked sports context."
+    return "Avalanche context is active in freshly checked sports context."
 
 
 def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, reason: str = "") -> dict | None:
@@ -8010,7 +8044,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
         "recommended_lane": _ce_normalize_lane(lane),
         "freshness_score": 20.0,
         "confidence": 87.3,
-        "why_now": "Avalanche game/news is active in live sports context; newest signal 0.0h old",
+        "why_now": _ce_avalanche_why_now(avs_line),
     }
     brief = (
         "PULSE OPPORTUNITY:\n"
@@ -8353,12 +8387,16 @@ def _run_creator_evolution_pulse(lane: str | None = None,
     lane = _ce_normalize_lane(lane)
     _all_tweets, _rss_headlines = [], []
     try:
+        _fetch_inspiration_feed.clear()
+    except Exception:
+        pass
+    try:
         _all_tweets, _rss_headlines = _fetch_inspiration_feed()
     except Exception as exc:
         _ce_pulse_debug_event("error", "feed unavailable", {"error": str(exc)[:240]})
     _sports_ctx = ""
     try:
-        _sports_ctx = get_sports_context()
+        _sports_ctx = get_sports_context(force=True)
     except Exception as exc:
         _ce_pulse_debug_event("warn", "sports context unavailable", {"error": str(exc)[:160]})
     try:
@@ -8655,20 +8693,13 @@ def _ce_pulse_dialog():
         st.session_state["ce_pulse_lane"] = _lane
     if st.session_state.get("ce_lane") != _lane:
         st.session_state["ce_lane"] = _lane
-        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
-            st.session_state.pop(_draft_key, None)
+        _ce_clear_pulse_state()
     _current_pulse_version = _ce_pulse_version()
     if st.session_state.pop("_ce_pulse_force_refresh", False):
-        st.session_state.pop("ce_pulse_decision", None)
-        st.session_state.pop("ce_pulse_meta", None)
-        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
-            st.session_state.pop(_draft_key, None)
+        _ce_clear_pulse_state()
     _cached_decision = st.session_state.get("ce_pulse_decision")
     if _cached_decision is not None and not _ce_pulse_cached_decision_valid(_cached_decision, _current_pulse_version):
-        st.session_state.pop("ce_pulse_decision", None)
-        st.session_state.pop("ce_pulse_meta", None)
-        for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
-            st.session_state.pop(_draft_key, None)
+        _ce_clear_pulse_state()
     if "ce_pulse_decision" not in st.session_state:
         with st.spinner("Running Pulse deep hunt..."):
             try:
@@ -10216,6 +10247,21 @@ def _ce_reset_main_action_state(keep: str | None = None) -> None:
             st.session_state.pop(key, None)
 
 
+def _ce_clear_pulse_state(clear_nonce: bool = False) -> None:
+    """Force the next Pulse open to read live sources instead of session leftovers."""
+    for key in (
+        "ce_pulse_decision",
+        "ce_pulse_meta",
+        "ce_pulse_drafts_key",
+        "ce_pulse_drafts",
+        "ce_pulse_draft_quality",
+        "ce_pulse_draft_raw",
+    ):
+        st.session_state.pop(key, None)
+    if clear_nonce:
+        st.session_state["_ce_pulse_draft_nonce"] = 0
+
+
 @st.fragment
 def _render_creator_evolution_editor():
     spacer_l, center, spacer_r = st.columns([0.5, 4, 0.5])
@@ -10315,6 +10361,8 @@ def _render_creator_evolution_editor():
             st.rerun(scope="app")
         if st.button("ce_pulse", key="ce_pulse"):
             _ce_reset_main_action_state(keep="_ce_show_pulse")
+            _ce_clear_pulse_state(clear_nonce=True)
+            st.session_state["_ce_pulse_force_refresh"] = True
             st.session_state["_ce_show_pulse"] = True
             st.rerun(scope="app")
         if st.button("ce_whats_hot", key="ce_whats_hot"):

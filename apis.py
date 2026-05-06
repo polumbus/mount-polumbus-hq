@@ -8,7 +8,7 @@ import json
 import re
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -77,6 +77,41 @@ def _is_team_game(game: dict, team_abbr: str, team_name: str = "") -> bool:
         if team_name and team_name in str(team.get("name", "")).lower():
             return True
     return False
+
+
+def _parse_game_datetime(value: str) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _completed_game_age_hours(game: dict, *, now: Optional[datetime] = None) -> Optional[float]:
+    started = _parse_game_datetime(str((game or {}).get("date") or ""))
+    if not started:
+        return None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+    return max(0.0, (current - started).total_seconds() / 3600.0)
+
+
+def _include_game_in_live_context(game: dict, *, now: Optional[datetime] = None, max_completed_age_hours: float = 4.0) -> bool:
+    if not isinstance(game, dict):
+        return False
+    if game.get("completed"):
+        age = _completed_game_age_hours(game, now=now)
+        return age is not None and age <= max_completed_age_hours
+    return True
 
 
 def _format_game_line(game: dict, *, full_names: bool = False) -> str:
@@ -504,9 +539,10 @@ def get_sports_context(force: bool = False) -> str:
         nba = espn_scores("nba", limit=15)
         if nba:
             game_strs = []
-            for g in nba[:12]:
+            for g in [game for game in nba if _include_game_in_live_context(game)][:12]:
                 game_strs.append(_format_game_line(g))
-            lines.append(f"NBA: {', '.join(game_strs)}")
+            if game_strs:
+                lines.append(f"NBA: {', '.join(game_strs)}")
     except Exception:
         pass
 
@@ -514,11 +550,13 @@ def get_sports_context(force: bool = False) -> str:
     try:
         nhl = espn_scores("nhl", limit=20)
         avs_games = [g for g in nhl if _is_team_game(g, "COL", "Colorado Avalanche")]
+        avs_games = [g for g in avs_games if _include_game_in_live_context(g)]
+        context_nhl = [g for g in nhl if _include_game_in_live_context(g)]
         if avs_games:
             game_strs = [_format_game_line(g, full_names=True) for g in avs_games[:3]]
             lines.append(f"AVALANCHE GAME: {' | '.join(game_strs)}")
-        elif nhl:
-            game_strs = [_format_game_line(g) for g in nhl[:8]]
+        elif context_nhl:
+            game_strs = [_format_game_line(g) for g in context_nhl[:8]]
             lines.append(f"NHL: {', '.join(game_strs)}")
     except Exception:
         pass
@@ -527,8 +565,9 @@ def get_sports_context(force: bool = False) -> str:
     try:
         ncaa = espn_scores("ncaam", limit=10)
         if ncaa:
-            game_strs = [_format_game_line(g) for g in ncaa[:6]]
-            lines.append(f"NCAA: {', '.join(game_strs)}")
+            game_strs = [_format_game_line(g) for g in [game for game in ncaa if _include_game_in_live_context(game)][:6]]
+            if game_strs:
+                lines.append(f"NCAA: {', '.join(game_strs)}")
     except Exception:
         pass
 

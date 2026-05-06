@@ -270,7 +270,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v3-best-now")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v4-live-freshness")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -296,6 +296,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
         self.assertEqual(news_decision["status"], "ready")
 
+    def test_pulse_ignores_final_avalanche_game_from_sports_context(self):
+        sports_context = (
+            "TODAY (Wed May 06, 2026):\n"
+            "AVALANCHE GAME: Minnesota Wild 2-5 Colorado Avalanche (F)"
+        )
+
+        signals = pulse.build_signals([], [], sports_context=sports_context, now=NOW)
+        decision = pulse.find_pulse([], [], ce.initial_state(), sports_context=sports_context, handle="polfam", now=NOW)
+
+        self.assertEqual(signals, [])
+        self.assertEqual(decision["status"], "no_op")
+        self.assertIsNone(decision["best"])
+
     def test_sports_context_formats_live_avalanche_score_clock_and_period(self):
         game = {
             "state": "in",
@@ -312,6 +325,25 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Minnesota Wild 1 @ Colorado Avalanche 3", line)
         self.assertIn("2nd Period", line)
         self.assertIn("2:00", line)
+
+    def test_old_completed_games_are_filtered_from_live_sports_context(self):
+        old_final = {
+            "date": (NOW - timedelta(hours=24)).isoformat(),
+            "completed": True,
+        }
+        recent_final = {
+            "date": (NOW - timedelta(hours=2)).isoformat(),
+            "completed": True,
+        }
+        live_game = {
+            "date": NOW.isoformat(),
+            "state": "in",
+            "completed": False,
+        }
+
+        self.assertFalse(apis._include_game_in_live_context(old_final, now=NOW))
+        self.assertTrue(apis._include_game_in_live_context(recent_final, now=NOW))
+        self.assertTrue(apis._include_game_in_live_context(live_game, now=NOW))
 
     def test_pulse_prioritizes_ready_avalanche_moment_over_generic_noise(self):
         tweets = [
@@ -380,8 +412,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Colorado+Avalanche+OR+Avs+NHL+breaking+news", app_text)
         self.assertIn("def _ce_avalanche_pulse_decision", app_text)
         self.assertIn("def _ce_extract_avalanche_context", app_text)
+        self.assertIn("def _ce_is_completed_game_context", app_text)
+        self.assertIn("def _ce_avalanche_why_now", app_text)
         self.assertIn("def _ce_pulse_cached_decision_valid", app_text)
-        self.assertIn('st.session_state.pop("ce_pulse_decision", None)', app_text)
+        self.assertIn("def _ce_clear_pulse_state", app_text)
+        self.assertIn("ce_pulse_decision", app_text)
+        self.assertIn("st.session_state.pop(key, None)", app_text)
+        self.assertIn("get_sports_context(force=True)", app_text)
+        self.assertIn("_fetch_inspiration_feed.clear()", app_text)
+        self.assertIn("_ce_clear_pulse_state(clear_nonce=True)", app_text)
         self.assertIn('decision.get("status") in ("pulse_error", "no_op")', app_text)
         self.assertIn("total_seconds() > 120", app_text)
         self.assertIn("Recovered detail:", app_text)
@@ -459,7 +498,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('st.session_state["ce_lane"] = _lane', pulse_dialog)
         self.assertNotIn('key="ce_pulse_lane"', pulse_dialog)
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
-        self.assertIn("best tweet available right now", Path("creator_evolution_pulse.py").read_text())
+        pulse_text = Path("creator_evolution_pulse.py").read_text()
+        self.assertIn("best tweet available right now", pulse_text)
+        self.assertIn("ce-pulse-v4-live-freshness", pulse_text)
+        self.assertIn("def _is_completed_game_context", pulse_text)
+        self.assertIn("if _is_completed_game_context(line):", pulse_text)
+        self.assertIn("if _ce_is_completed_game_context(line):", app_text)
+        self.assertNotIn("Avalanche game/news is active in live sports context; newest signal 0.0h old", app_text)
         self.assertNotIn("_run_ci_ai", pulse_dialog)
 
     def test_creator_evolution_dock_actions_reset_stale_dialog_state(self):
@@ -475,6 +520,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_pending\")", ce_editor)
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_build_dialog\")", ce_editor)
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_pulse\")", ce_editor)
+        self.assertIn("_ce_clear_pulse_state(clear_nonce=True)", ce_editor)
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_inspiration\")", ce_editor)
         self.assertNotIn("var prefixed='dock_'+raw", app_text)
         self.assertNotIn("var prefixed='bot_'+raw", app_text)
