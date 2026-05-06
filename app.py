@@ -8221,14 +8221,19 @@ def _ce_pulse_dialog():
         _lane = ce.DEFAULT_LANE
     if st.session_state.get("ce_pulse_lane") not in _lane_options:
         st.session_state["ce_pulse_lane"] = _lane
+    _lane_widget_key = "ce_lane_pulse_select"
+    if st.session_state.get(_lane_widget_key) not in _lane_options:
+        st.session_state[_lane_widget_key] = _lane
     _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
     _lane = st.selectbox(
-        "Voice",
+        "Pulse Voice",
         _lane_options,
         index=_lane_options.index(_lane),
-        key="ce_pulse_lane",
+        key=_lane_widget_key,
         help="Uses the same Creator Evolution voice options as the main composer.",
     )
+    if st.session_state.get("ce_pulse_lane") != _lane:
+        st.session_state["ce_pulse_lane"] = _lane
     if st.session_state.get("ce_lane") != _lane:
         st.session_state["ce_lane"] = _lane
         for _draft_key in ("ce_pulse_drafts_key", "ce_pulse_drafts", "ce_pulse_draft_quality", "ce_pulse_draft_raw"):
