@@ -7391,6 +7391,22 @@ def _ce_text_has_betting_angle(text: str) -> bool:
 
 def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
+    clean = str(text or "").strip()
+    lower = clean.lower()
+    char_count = len(clean)
+    if _ce_pulse_meta_language(clean):
+        return {
+            "ok": False,
+            "score": 0,
+            "issues": ["Contains internal Pulse/source-diagnostic language."],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "char_count": char_count,
+            "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
+        }
     reporter = getattr(ce, "draft_quality_report", None)
     if callable(reporter):
         try:
@@ -7400,11 +7416,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         except Exception as exc:
             _ce_pulse_debug_event("warn", "draft quality helper recovered", {"error": str(exc)[:160]})
 
-    clean = str(text or "").strip()
-    lower = clean.lower()
     issues: list[str] = []
     warnings: list[str] = []
-    char_count = len(clean)
 
     if not clean:
         issues.append("Empty draft.")
@@ -7414,7 +7427,6 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         warnings.append("Punchy lane is running long; the joke or take may lose force.")
     if _ce_text_has_betting_angle(clean):
         issues.append("Contains betting language.")
-
     ai_terms = (
         "here's the thing", "let's dive in", "game-changer", "thought leader",
         "content strategy", "in today's world", "unlock", "maximize engagement",
@@ -7462,6 +7474,18 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "char_count": char_count,
         "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
     }
+
+
+def _ce_pulse_meta_language(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(
+        term in lower
+        for term in (
+            "pulse cannot", "pulse can not", "if pulse", "source context", "source basis",
+            "score context", "when score context is missing", "context is missing",
+            "fake-timely", "schedule report", "only useful tweet", "calendar",
+        )
+    )
 
 
 def _ce_pulse_cached_decision_valid(decision: dict | None, current_version: str) -> bool:
@@ -7670,6 +7694,43 @@ def _ce_avs_live_state(text: str) -> dict:
     }
 
 
+def _ce_avs_context_state(text: str) -> dict:
+    """Extract non-score live Avs context so fallback tweets do not become diagnostics."""
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    if not ("avalanche" in lower or re.search(r"\bavs\b|\bcol\b", lower)):
+        return {}
+    scored = _ce_avs_live_state(clean)
+    if scored:
+        return scored
+    detail_match = re.search(r"\(([^)]*)\)", clean)
+    detail = detail_match.group(1).strip() if detail_match else ""
+    period_match = re.search(r"\b(\d+(?:st|nd|rd|th)\s+Period)\b", detail, re.I)
+    period = period_match.group(1) if period_match else ""
+    clock_match = re.search(r"\b(\d{1,2}:\d{2})\b", detail)
+    clock = clock_match.group(1) if clock_match else ""
+    opponent = ""
+    away_home = re.search(r":?\s*([^:|()@]+?)\s+@\s+([^|()]+?)(?:\s+\(|$)", clean, re.I)
+    if away_home:
+        away = away_home.group(1).strip()
+        home = away_home.group(2).strip()
+        if re.search(r"\b(colorado avalanche|avalanche|avs|col)\b", home, re.I):
+            opponent = away
+        elif re.search(r"\b(colorado avalanche|avalanche|avs|col)\b", away, re.I):
+            opponent = home
+    if not opponent and "wild" in lower:
+        opponent = "Minnesota"
+    return {
+        "score": "",
+        "avs_score": 0,
+        "opp_score": 0,
+        "opponent": opponent or "the other bench",
+        "period": period,
+        "clock": clock,
+        "detail": detail,
+    }
+
+
 def _ce_avs_live_fallback_options(state: dict) -> list[tuple[str, str]]:
     score = state.get("score", "")
     period = state.get("period") or "this period"
@@ -7702,6 +7763,23 @@ def _ce_avs_live_fallback_options(state: dict) -> list[tuple[str, str]]:
     ]
 
 
+def _ce_avs_no_score_fallback_options(state: dict) -> list[tuple[str, str]]:
+    opponent = str(state.get("opponent") or "Minnesota").strip()
+    period = state.get("period") or ""
+    clock = state.get("clock") or ""
+    if clock and period:
+        game_phrase = f"Avs-{opponent} with {clock} left in the {period}"
+    elif period:
+        game_phrase = f"Avs-{opponent} in the {period}"
+    else:
+        game_phrase = f"Avs-{opponent} playoff hockey"
+    return [
+        (f"{game_phrase} has hit the part where every clean exit feels like a personal favor.", "Uses available matchup and game-state timing without inventing a score."),
+        (f"{game_phrase} is just everyone pretending one weird bounce would not immediately change their entire personality.", "Live fan tension without internal diagnostics."),
+        (f"{game_phrase} has that very specific 'please stop making normal plays feel illegal' energy.", "Specific human reaction when score data is incomplete."),
+    ]
+
+
 def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list[tuple[str, str]]:
     best = decision.get("best") or {}
     source_text = " ".join([
@@ -7710,15 +7788,11 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
     ])
     text = source_text.lower()
     if "avalanche" in text or re.search(r"\bavs\b", text):
-        live_state = _ce_avs_live_state(source_text)
-        if live_state:
-            options = _ce_avs_live_fallback_options(live_state)
+        avs_state = _ce_avs_context_state(source_text)
+        if avs_state.get("score"):
+            options = _ce_avs_live_fallback_options(avs_state)
         else:
-            options = [
-                ("The Avs game is live and the only useful tweet is the one that reacts to the actual score, not the calendar.", "Blocks generic game-night filler when score context is missing."),
-                ("If Pulse cannot see the score, it should not pretend the angle is just 'Avs vibes.' That is how you get fake-timely sludge.", "Honest fallback when live game state is incomplete."),
-                ("Avs live context needs the scoreboard, the period, and the emotional damage. Anything less is just a schedule report.", "Forces the next refresh toward real game state."),
-            ]
+            options = _ce_avs_no_score_fallback_options(avs_state)
     else:
         topic = str(best.get("topic") or "Denver sports").strip().title()
         options = [
@@ -7745,7 +7819,7 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         if not raw:
             continue
         draft = _sanitize_output(raw).strip()
-        if not draft or _ce_text_has_betting_angle(draft):
+        if not draft or _ce_text_has_betting_angle(draft) or _ce_pulse_meta_language(draft):
             continue
         if required_score and required_score not in draft:
             continue
@@ -7762,6 +7836,8 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         if slot > 3:
             break
         if any(fallback_text == final.get(f"option{i}") for i in range(1, slot)):
+            continue
+        if _ce_pulse_meta_language(fallback_text):
             continue
         report = _ce_draft_quality_report(fallback_text, fmt, lane)
         if not report.get("ok"):
