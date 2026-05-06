@@ -55,6 +55,7 @@ def espn_scores(sport: str, limit: int = 20) -> list:
         games.append({
             "name": event.get("name", ""),
             "date": event.get("date", ""),
+            "state": status_type.get("state", ""),
             "status": status_type.get("description", ""),
             "status_detail": status_type.get("detail", ""),
             "period": status.get("period", 0),
@@ -83,11 +84,22 @@ def _format_game_line(game: dict, *, full_names: bool = False) -> str:
     away = game.get("away", {}) or {}
     home_name = home.get("name") if full_names else home.get("abbr")
     away_name = away.get("name") if full_names else away.get("abbr")
-    matchup = f"{away_name or 'Away'} @ {home_name or 'Home'}"
+    away_score = str(away.get("score", "")).strip()
+    home_score = str(home.get("score", "")).strip()
+    state = str(game.get("state") or "").lower()
+    status = game.get("status_detail") or game.get("status") or ""
+    clock = str(game.get("clock") or "").strip()
+    is_live = state == "in" or bool(game.get("period")) or any(
+        term in str(status).lower()
+        for term in ("period", "quarter", "half", "intermission", "in progress", "end of")
+    )
+    if is_live and away_score and home_score:
+        matchup = f"{away_name or 'Away'} {away_score} @ {home_name or 'Home'} {home_score}"
+    else:
+        matchup = f"{away_name or 'Away'} @ {home_name or 'Home'}"
     if game.get("completed"):
         return f"{away_name or 'Away'} {away.get('score', '0')}-{home.get('score', '0')} {home_name or 'Home'} (F)"
-    status = game.get("status_detail") or game.get("status") or ""
-    if game.get("period") and game.get("clock"):
+    if game.get("period") and clock and clock not in str(status):
         status = f"{status}, {game.get('clock')}"
     return f"{matchup} ({status})" if status else matchup
 

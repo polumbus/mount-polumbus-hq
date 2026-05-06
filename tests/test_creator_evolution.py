@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import apis
 import creator_evolution as ce
 import creator_evolution_pulse as pulse
 
@@ -294,6 +295,23 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
         self.assertEqual(news_decision["status"], "ready")
 
+    def test_sports_context_formats_live_avalanche_score_clock_and_period(self):
+        game = {
+            "state": "in",
+            "period": 2,
+            "clock": "2:00",
+            "status_detail": "2:00 - 2nd Period",
+            "completed": False,
+            "away": {"name": "Minnesota Wild", "abbr": "MIN", "score": "1"},
+            "home": {"name": "Colorado Avalanche", "abbr": "COL", "score": "3"},
+        }
+
+        line = apis._format_game_line(game, full_names=True)
+
+        self.assertIn("Minnesota Wild 1 @ Colorado Avalanche 3", line)
+        self.assertIn("2nd Period", line)
+        self.assertIn("2:00", line)
+
     def test_pulse_prioritizes_ready_avalanche_moment_over_generic_noise(self):
         tweets = [
             _tweet(
@@ -376,6 +394,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Use Tweet", app_text)
         self.assertIn("No gambling language", app_text)
         self.assertIn("ce.build_generation_prompt", app_text)
+        self.assertIn("def _ce_avs_live_state", app_text)
+        self.assertIn("def _ce_avs_live_fallback_options", app_text)
+        self.assertIn("write about that exact game state", app_text)
+        self.assertIn("Avs up {score}", app_text)
+        self.assertIn("_best_is_live_avs_game", app_text)
+        self.assertIn("or not _best_is_live_avs_game", app_text)
+        self.assertIn("required_score and required_score not in draft", app_text)
+        self.assertNotIn("Avs game nights are funny", app_text)
+        self.assertNotIn("the first five minutes decide everyone's emotional health", app_text)
         pulse_dialog = app_text.split('def _ce_pulse_dialog', 1)[1].split('@st.dialog("What', 1)[0]
         self.assertIn('st.selectbox(\n        "Voice"', pulse_dialog)
         self.assertIn("ce_pulse_lane", pulse_dialog)

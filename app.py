@@ -7611,6 +7611,8 @@ def _ce_pulse_source_material(decision: dict) -> str:
         "PULSE DRAFT RULES:\n"
         "- Return post-ready tweets immediately, not a strategy brief.\n"
         "- Show real personality: witty, specific, slightly sharp, and human.\n"
+        "- If source basis includes a live score, clock, or period, write about that exact game state.\n"
+        "- Never write generic game-night psychology when live score/clock context exists.\n"
         "- Do not make the tweet about gambling, moneyline, spread, odds, over/under, betting, or picks.\n"
         "- If betting data exists anywhere in source context, treat it as background only and do not mention it.\n"
         "- The angle should be reply-worthy fan tension, not a schedule report.\n"
@@ -7618,18 +7620,105 @@ def _ce_pulse_source_material(decision: dict) -> str:
     )
 
 
+def _ce_avs_live_state(text: str) -> dict:
+    """Extract the scoreboard state from an Avalanche sports-context line."""
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    if not ("avalanche" in lower or re.search(r"\bavs\b|\bcol\b", lower)):
+        return {}
+    score_match = re.search(
+        r"(?P<away>[^|()@]+?)\s+(?P<away_score>\d+)\s+@\s+(?P<home>[^|()]+?)\s+(?P<home_score>\d+)(?:\s|\(|$)",
+        clean,
+        re.I,
+    )
+    if not score_match:
+        score_match = re.search(
+            r"(?P<away>[^|()@]+?)\s+(?P<away_score>\d+)-(?P<home_score>\d+)\s+(?P<home>Colorado Avalanche|Avalanche|Avs|COL)\b",
+            clean,
+            re.I,
+        )
+    if not score_match:
+        return {}
+    away = score_match.group("away").strip()
+    home = score_match.group("home").strip()
+    try:
+        away_score = int(score_match.group("away_score"))
+        home_score = int(score_match.group("home_score"))
+    except Exception:
+        return {}
+    avs_home = bool(re.search(r"\b(colorado avalanche|avalanche|avs|col)\b", home, re.I))
+    avs_away = bool(re.search(r"\b(colorado avalanche|avalanche|avs|col)\b", away, re.I))
+    if not (avs_home or avs_away):
+        return {}
+    avs_score = home_score if avs_home else away_score
+    opp_score = away_score if avs_home else home_score
+    opp_name = away if avs_home else home
+    detail_match = re.search(r"\(([^)]*)\)", clean)
+    detail = detail_match.group(1).strip() if detail_match else ""
+    period_match = re.search(r"\b(\d+(?:st|nd|rd|th)\s+Period)\b", detail, re.I)
+    period = period_match.group(1) if period_match else ""
+    clock_match = re.search(r"\b(\d{1,2}:\d{2})\b", detail)
+    clock = clock_match.group(1) if clock_match else ""
+    return {
+        "score": f"{avs_score}-{opp_score}",
+        "avs_score": avs_score,
+        "opp_score": opp_score,
+        "opponent": opp_name,
+        "period": period,
+        "clock": clock,
+        "detail": detail,
+    }
+
+
+def _ce_avs_live_fallback_options(state: dict) -> list[tuple[str, str]]:
+    score = state.get("score", "")
+    period = state.get("period") or "this period"
+    clock = state.get("clock", "")
+    detail = str(state.get("detail") or "").lower()
+    if "end of" in detail and period != "this period":
+        clock_phrase = f" at the end of the {period}"
+    elif clock and period != "this period":
+        clock_phrase = f" with {clock} left in the {period}"
+    else:
+        clock_phrase = f" in the {period}"
+    avs_score = int(state.get("avs_score", 0) or 0)
+    opp_score = int(state.get("opp_score", 0) or 0)
+    if avs_score > opp_score:
+        return [
+            (f"Avs up {score}{clock_phrase} is exactly when my brain starts arguing with the scoreboard.", "Uses the actual live lead, clock, and fan tension."),
+            (f"A {score} Avs lead{clock_phrase} should feel comfortable. Naturally it feels like a trap door with skates.", "Specific live-game anxiety instead of generic game-night filler."),
+            (f"The Avs being up {score}{clock_phrase} and still making this feel emotionally negotiable is very on brand.", "Live scoreboard context with a human read."),
+        ]
+    if avs_score < opp_score:
+        return [
+            (f"Avs down {opp_score}-{avs_score}{clock_phrase} has that annoying 'one bounce changes the whole building' feeling.", "Uses the actual deficit without inventing details."),
+            (f"Down {opp_score}-{avs_score}{clock_phrase} is where the Avs need the next shift to stop feeling like a group therapy exercise.", "Live-game urgency with personality."),
+            (f"This {opp_score}-{avs_score} Avs deficit{clock_phrase} is not panic time yet. It is absolutely side-eye time.", "Specific, timely, and reply-ready."),
+        ]
+    return [
+        (f"Avs tied {score}{clock_phrase} is the exact score where everyone pretends they are calm and absolutely nobody is.", "Uses the actual tie state."),
+        (f"This {score} Avs game{clock_phrase} has entered the part where one weird bounce becomes a personality test.", "Live-game tension without generic filler."),
+        (f"Tied {score}{clock_phrase} and the whole thing already feels like it is negotiating with my blood pressure.", "Specific fan reaction to the live state."),
+    ]
+
+
 def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list[tuple[str, str]]:
     best = decision.get("best") or {}
-    text = " ".join([
+    source_text = " ".join([
         str(best.get("summary_text") or ""),
         " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
-    ]).lower()
+    ])
+    text = source_text.lower()
     if "avalanche" in text or re.search(r"\bavs\b", text):
-        options = [
-            ("Avs game nights are funny because everyone pretends they’re calm until one weird bounce turns the whole timeline into a courtroom.", "Witty fan tension without relying on odds."),
-            ("The Avs are about to make an entire timeline argue with its own blood pressure again. Very normal sport.", "Human, specific, and built for replies."),
-            ("This Avs night has real 'the first five minutes decide everyone's emotional health' energy.", "Open loop with personality, not a schedule report."),
-        ]
+        live_state = _ce_avs_live_state(source_text)
+        if live_state:
+            options = _ce_avs_live_fallback_options(live_state)
+        else:
+            options = [
+                ("The Avs game is live and the only useful tweet is the one that reacts to the actual score, not the calendar.", "Blocks generic game-night filler when score context is missing."),
+                ("If Pulse cannot see the score, it should not pretend the angle is just 'Avs vibes.' That is how you get fake-timely sludge.", "Honest fallback when live game state is incomplete."),
+                ("Avs live context needs the scoreboard, the period, and the emotional damage. Anything less is just a schedule report.", "Forces the next refresh toward real game state."),
+            ]
     else:
         topic = str(best.get("topic") or "Denver sports").strip().title()
         options = [
@@ -7644,12 +7733,21 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
     final: dict = {}
     quality: dict = {}
     slot = 1
+    best = decision.get("best") or {}
+    source_text = " ".join([
+        str(best.get("summary_text") or ""),
+        " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
+    ])
+    live_state = _ce_avs_live_state(source_text)
+    required_score = str(live_state.get("score") or "")
     for idx in [1, 2, 3]:
         raw = str((data or {}).get(f"option{idx}") or "").strip()
         if not raw:
             continue
         draft = _sanitize_output(raw).strip()
         if not draft or _ce_text_has_betting_angle(draft):
+            continue
+        if required_score and required_score not in draft:
             continue
         report = _ce_draft_quality_report(draft, fmt, lane)
         if not report.get("ok"):
@@ -7768,10 +7866,20 @@ def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
         fmt=_normalize_tweet_format(fmt),
         reason="Avalanche game/news is active in live sports context.",
     )
+    _best_text = " ".join([
+        str((_decision.get("best") or {}).get("summary_text") or ""),
+        " ".join(
+            f"{(src or {}).get('source', '')} {(src or {}).get('text', '')}"
+            for src in ((_decision.get("best") or {}).get("source_basis") or [])
+            if isinstance(src, dict)
+        ),
+    ]).upper()
+    _best_is_live_avs_game = "AVALANCHE GAME" in _best_text and "SPORTS_CONTEXT" in _best_text
     if _avs_decision and (
         _decision.get("status") in ("pulse_error", "no_op")
         or not isinstance(_decision.get("best"), dict)
         or (_decision.get("best") or {}).get("topic") != "avs"
+        or not _best_is_live_avs_game
     ):
         _ce_pulse_debug_event("ok", "Avalanche Pulse fallback selected", {"previous_status": _decision.get("status", "")})
         _decision = _avs_decision
