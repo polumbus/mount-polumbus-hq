@@ -3422,6 +3422,19 @@ _stc.html("""<script>
   /* ── Global: MutationObserver that wires docks/bottoms + tags pill rows ── */
   /* Hidden buttons are now hidden by CSS (clip:rect) in the global stylesheet — no JS hiding needed */
   /* Runs on EVERY DOM change so it works on reruns (not just full page loads) */
+  function clickStreamlitButtonByText(raw,prefix){
+    var liveBtns=doc.querySelectorAll('button');
+    var prefixed=prefix+raw;
+    for(var i=0;i<liveBtns.length;i++){
+      var t=liveBtns[i].textContent.trim();
+      if(t===raw||t===prefixed){
+        liveBtns[i].removeAttribute('disabled');
+        liveBtns[i].click();
+        return true;
+      }
+    }
+    return false;
+  }
   function processDOM(){
     forceLocalGamedayLinks(doc);
     var btns=doc.querySelectorAll('button');
@@ -3445,24 +3458,14 @@ _stc.html("""<script>
     doc.querySelectorAll('.cs-idock-btn').forEach(function(d){
       if(d._wired) return; d._wired=true;
       d.addEventListener('click',function(){
-        var raw=d.dataset.dock;
-        var prefixed='dock_'+raw;
-        for(var i=0;i<btns.length;i++){
-          var t=btns[i].textContent.trim();
-          if(t===raw||t===prefixed){btns[i].removeAttribute('disabled');btns[i].click();return;}
-        }
+        clickStreamlitButtonByText(d.dataset.dock,'dock_');
       });
     });
     /* Wire all bottom bar buttons — try both with and without prefix */
     doc.querySelectorAll('.cs-bot').forEach(function(b){
       if(b._wired) return; b._wired=true;
       b.addEventListener('click',function(){
-        var raw=b.dataset.bot;
-        var prefixed='bot_'+raw;
-        for(var i=0;i<btns.length;i++){
-          var t=btns[i].textContent.trim();
-          if(t===raw||t===prefixed){btns[i].removeAttribute('disabled');btns[i].click();return;}
-        }
+        clickStreamlitButtonByText(b.dataset.bot,'bot_');
       });
     });
     /* Hide buttons that are wired to cs-bot spans (gd_, sig_beat_, sig_nat_, sig_tab_, sig_next) */
@@ -10199,6 +10202,20 @@ def _render_creator_evolution_learning_panel(state: dict):
                     st.rerun(scope="app")
 
 
+def _ce_reset_main_action_state(keep: str | None = None) -> None:
+    """Make Creator Evolution dock actions independent across reruns."""
+    action_flags = {
+        "_ce_show_build_dialog",
+        "_ce_show_pulse",
+        "_ce_show_inspiration",
+        "_ce_pending",
+        "_ce_reopen_dialog",
+    }
+    for key in action_flags:
+        if key != keep:
+            st.session_state.pop(key, None)
+
+
 @st.fragment
 def _render_creator_evolution_editor():
     spacer_l, center, spacer_r = st.columns([0.5, 4, 0.5])
@@ -10253,6 +10270,7 @@ def _render_creator_evolution_editor():
             seed = st.session_state.get("ce_text", "").strip()
             if not seed:
                 return
+            _ce_reset_main_action_state(keep="_ce_pending")
             st.session_state["_ce_pending"] = (
                 action,
                 seed,
@@ -10292,12 +10310,15 @@ def _render_creator_evolution_editor():
         if st.button("ce_evolve", key="ce_evolve"):
             _queue_ce_action("evolve")
         if st.button("ce_build", key="ce_build"):
+            _ce_reset_main_action_state(keep="_ce_show_build_dialog")
             st.session_state["_ce_show_build_dialog"] = True
             st.rerun(scope="app")
         if st.button("ce_pulse", key="ce_pulse"):
+            _ce_reset_main_action_state(keep="_ce_show_pulse")
             st.session_state["_ce_show_pulse"] = True
             st.rerun(scope="app")
         if st.button("ce_whats_hot", key="ce_whats_hot"):
+            _ce_reset_main_action_state(keep="_ce_show_inspiration")
             st.session_state["_ce_show_inspiration"] = True
             st.rerun(scope="app")
         if st.button("ce_save", key="ce_save"):

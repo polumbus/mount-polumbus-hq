@@ -462,6 +462,23 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("best tweet available right now", Path("creator_evolution_pulse.py").read_text())
         self.assertNotIn("_run_ci_ai", pulse_dialog)
 
+    def test_creator_evolution_dock_actions_reset_stale_dialog_state(self):
+        app_text = Path("app.py").read_text()
+        ce_editor = app_text.split("def _ce_reset_main_action_state", 1)[1].split("def page_creator_evolution", 1)[0]
+        global_js = app_text.split("function clickStreamlitButtonByText", 1)[1].split("function processDOM", 1)[0]
+
+        self.assertIn("function clickStreamlitButtonByText", app_text)
+        self.assertIn("var liveBtns=doc.querySelectorAll('button');", global_js)
+        self.assertIn("clickStreamlitButtonByText(d.dataset.dock,'dock_');", app_text)
+        self.assertIn("clickStreamlitButtonByText(b.dataset.bot,'bot_');", app_text)
+        self.assertIn("def _ce_reset_main_action_state", app_text)
+        self.assertIn("_ce_reset_main_action_state(keep=\"_ce_pending\")", ce_editor)
+        self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_build_dialog\")", ce_editor)
+        self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_pulse\")", ce_editor)
+        self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_inspiration\")", ce_editor)
+        self.assertNotIn("var prefixed='dock_'+raw", app_text)
+        self.assertNotIn("var prefixed='bot_'+raw", app_text)
+
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):
         had_terms = hasattr(ce, "RISK_TERMS")
         old_terms = getattr(ce, "RISK_TERMS", None)
