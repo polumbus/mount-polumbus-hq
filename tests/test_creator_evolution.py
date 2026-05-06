@@ -268,6 +268,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v2-avalanche-priority")
+
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
             "(Scheduled, puck drop tonight in 30 minutes on ESPN)"
@@ -328,6 +330,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("AVALANCHE NEWS", apis_text)
         self.assertIn('espn_team("nhl", "COL")', apis_text)
         self.assertIn("Colorado+Avalanche+OR+Avs+NHL+breaking+news", app_text)
+        self.assertIn("def _ce_avalanche_pulse_decision", app_text)
+        self.assertIn("def _ce_extract_avalanche_context", app_text)
+        self.assertIn("def _ce_pulse_cached_decision_valid", app_text)
+        self.assertIn('st.session_state.pop("ce_pulse_decision", None)', app_text)
+        self.assertIn('decision.get("status") in ("pulse_error", "no_op")', app_text)
+        self.assertIn("total_seconds() > 120", app_text)
+        self.assertIn("Recovered detail:", app_text)
 
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):
         had_terms = hasattr(ce, "RISK_TERMS")

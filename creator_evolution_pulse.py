@@ -17,7 +17,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v1-opportunity-gate"
+PULSE_VERSION = "ce-pulse-v2-avalanche-priority"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 SOURCE_RELIABILITY = {
