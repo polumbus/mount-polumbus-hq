@@ -123,15 +123,16 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("CE_COMPAT_DEFAULTS", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
-        self.assertIn("ce.sync_budget_for_mode(\"backfill\")", app_text)
-        self.assertIn("ce.budget_preflight_for_mode", app_text)
+        self.assertIn("_ce_sync_budget_for_mode(\"backfill\")", app_text)
+        self.assertIn("_ce_budget_preflight_for_mode", app_text)
         self.assertIn("generated_lineage", app_text)
         self.assertIn("Creator Evolution rejected every generated draft", app_text)
         self.assertIn("Creator Evolution blocked this post", app_text)
         self.assertIn("ci_banger_data", app_text)
 
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
-        self.assertIn("ce.build_generation_prompt", ce_runner)
+        self.assertIn("_ce_build_generation_prompt", ce_runner)
+        self.assertNotIn("ce.build_generation_prompt(", ce_runner)
         self.assertNotIn("_generate_build_data", ce_runner)
         self.assertNotIn("_hall_of_fame_reference_block", ce_runner)
         self.assertNotIn("analyze_personal_patterns", ce_runner)
@@ -396,11 +397,42 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("ce.lane_recipe_text(", app_text)
         self.assertIn("def _ce_validate_generation_options", app_text)
         self.assertNotIn("ce.validate_generation_options(", app_text)
+        self.assertIn("def _ce_initial_state", app_text)
+        self.assertIn("def _ce_refresh_state", app_text)
+        self.assertIn("def _ce_approve_proposal", app_text)
+        fragile_ce_calls = [
+            "ce.initial_state(",
+            "ce.summarize_scores(",
+            "ce.budget_preflight_for_mode(",
+            "ce.refresh_state(",
+            "ce.approved_rules_text(",
+            "ce.sync_budget_for_mode(",
+            "ce.rollback_rule(",
+            "ce.approve_proposal(",
+            "ce.reject_proposal(",
+            "ce.build_generation_prompt(",
+            "ce.build_hot_signal_brief(",
+        ]
+        for call in fragile_ce_calls:
+            self.assertNotIn(call, app_text)
+        fragile_ce_attrs = [
+            "ce.DEFAULT_LANE",
+            "ce.EMOTION_LANES",
+            "ce.PROMPT_VERSION",
+            "ce.SCORING_VERSION",
+            "ce.RULE_VERSION",
+            "ce.BUDGET_POLICY",
+            "ce.STATE_FILENAME",
+            "ce.GIST_FILENAME",
+        ]
+        for attr in fragile_ce_attrs:
+            self.assertNotIn(attr, app_text)
         self.assertIn("_ce_pulse_source_material", app_text)
         self.assertIn("Refresh Tweets", app_text)
         self.assertIn("Use Tweet", app_text)
         self.assertIn("No gambling language", app_text)
-        self.assertIn("ce.build_generation_prompt", app_text)
+        self.assertIn("def _ce_build_generation_prompt", app_text)
+        self.assertIn("def _ce_build_hot_signal_brief", app_text)
         self.assertIn("def _ce_avs_live_state", app_text)
         self.assertIn("def _ce_avs_live_fallback_options", app_text)
         self.assertIn("def _ce_avs_no_score_fallback_options", app_text)
@@ -423,7 +455,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('key=_lane_widget_key', pulse_dialog)
         self.assertIn('"ce_lane_pulse_select"', pulse_dialog)
         self.assertIn("ce_pulse_lane", pulse_dialog)
-        self.assertIn("_lane_options = list(ce.EMOTION_LANES)", pulse_dialog)
+        self.assertIn("_lane_options = list(_ce_emotion_lanes())", pulse_dialog)
         self.assertIn('st.session_state["ce_lane"] = _lane', pulse_dialog)
         self.assertNotIn('key="ce_pulse_lane"', pulse_dialog)
         self.assertIn("NO SAFE SOURCE", pulse_dialog)

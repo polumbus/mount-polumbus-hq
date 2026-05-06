@@ -79,9 +79,21 @@ from anthropic_circuit import (
 from podcast_blueprint import get_podcast_dashboard_content
 
 CE_COMPAT_DEFAULTS = {
+    "STATE_FILENAME": "creator_evolution_state.json",
+    "GIST_FILENAME": "hq_creator_evolution.json",
     "PROMPT_VERSION": "ce-prompt-v4-pulse-quality",
     "SCORING_VERSION": "ce-score-v3-tracked-cohorts",
     "RULE_VERSION": "ce-rules-v2-approval-rollback",
+    "DEFAULT_LANE": "Witty Edge",
+    "EMOTION_LANES": (
+        "Witty Edge",
+        "Amused",
+        "Annoyed",
+        "Fired-Up",
+        "Skeptical",
+        "Celebratory",
+        "Deadpan",
+    ),
     "BUDGET_POLICY": {
         "provider": "twitterapi.io",
         "daily_cap_usd": 0.75,
@@ -7310,21 +7322,20 @@ def _run_inspiration_claude(_cache_key: str = ""):
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str = ce.DEFAULT_LANE,
+def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = None,
                                        fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
     """Fetch What's Hot signals for Creator Evolution without using Creator Studio generation."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
     _raw_ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
-    _lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    _lane = _ce_normalize_lane(lane)
     _fmt = _normalize_tweet_format(fmt)
-    _ce_install_lane_recipe_text_compat()
     _ideas = []
     for _idea in _raw_ideas:
         _topic = (_idea.get("topic") or "Trending angle").strip()
         _seed = (_idea.get("seed") or _idea.get("hook") or _topic).strip()
         _why = (_idea.get("why") or "Active conversation signal").strip()
         _source = (_idea.get("source") or "hot feed").strip()
-        _brief = ce.build_hot_signal_brief(_topic, _seed, _source, _why, _lane, _fmt)
+        _brief = _ce_build_hot_signal_brief(_topic, _seed, _source, _why, _lane, _fmt)
         _ideas.append({
             "topic": _topic,
             "source": _source,
@@ -7372,6 +7383,411 @@ def _ce_pulse_debug_event(status: str, detail: str, meta: dict | None = None) ->
         pass
 
 
+def _ce_default_lane() -> str:
+    return str(getattr(ce, "DEFAULT_LANE", CE_COMPAT_DEFAULTS["DEFAULT_LANE"]) or CE_COMPAT_DEFAULTS["DEFAULT_LANE"])
+
+
+def _ce_emotion_lanes() -> tuple[str, ...]:
+    lanes = getattr(ce, "EMOTION_LANES", CE_COMPAT_DEFAULTS["EMOTION_LANES"])
+    if not isinstance(lanes, (list, tuple)) or not lanes:
+        lanes = CE_COMPAT_DEFAULTS["EMOTION_LANES"]
+    clean = tuple(str(lane).strip() for lane in lanes if str(lane).strip())
+    return clean or tuple(CE_COMPAT_DEFAULTS["EMOTION_LANES"])
+
+
+def _ce_normalize_lane(lane: str | None) -> str:
+    lanes = _ce_emotion_lanes()
+    lane = str(lane or "").strip()
+    return lane if lane in lanes else _ce_default_lane()
+
+
+def _ce_prompt_version() -> str:
+    return str(getattr(ce, "PROMPT_VERSION", CE_COMPAT_DEFAULTS["PROMPT_VERSION"]) or CE_COMPAT_DEFAULTS["PROMPT_VERSION"])
+
+
+def _ce_scoring_version() -> str:
+    return str(getattr(ce, "SCORING_VERSION", CE_COMPAT_DEFAULTS["SCORING_VERSION"]) or CE_COMPAT_DEFAULTS["SCORING_VERSION"])
+
+
+def _ce_rule_version() -> str:
+    return str(getattr(ce, "RULE_VERSION", CE_COMPAT_DEFAULTS["RULE_VERSION"]) or CE_COMPAT_DEFAULTS["RULE_VERSION"])
+
+
+def _ce_state_filename() -> str:
+    return str(getattr(ce, "STATE_FILENAME", CE_COMPAT_DEFAULTS["STATE_FILENAME"]) or CE_COMPAT_DEFAULTS["STATE_FILENAME"])
+
+
+def _ce_gist_filename() -> str:
+    return str(getattr(ce, "GIST_FILENAME", CE_COMPAT_DEFAULTS["GIST_FILENAME"]) or CE_COMPAT_DEFAULTS["GIST_FILENAME"])
+
+
+def _ce_budget_policy() -> dict:
+    policy = getattr(ce, "BUDGET_POLICY", None)
+    if not isinstance(policy, dict):
+        policy = CE_COMPAT_DEFAULTS["BUDGET_POLICY"]
+    base = dict(CE_COMPAT_DEFAULTS["BUDGET_POLICY"])
+    base.update(policy)
+    return base
+
+
+def _ce_minimal_state() -> dict:
+    return {
+        "prompt_version": _ce_prompt_version(),
+        "scoring_version": _ce_scoring_version(),
+        "rule_version": _ce_rule_version(),
+        "tweets": [],
+        "tracked_tweets": [],
+        "snapshots": [],
+        "scores": [],
+        "patterns": {
+            "best_current_patterns": [],
+            "worst_current_patterns": [],
+            "mature_count": 0,
+            "provisional_count": 0,
+            "false_loser_ids": [],
+        },
+        "proposals": [],
+        "approved_rules": [],
+        "rule_versions": [],
+        "generated_lineage": [],
+        "budget_policy": _ce_budget_policy(),
+        "sync_status": {
+            "status": "never_synced",
+            "handle": "",
+            "source": "history",
+            "sync_mode": "history",
+            "original_tweet_count": 0,
+            "mature_tweet_count": 0,
+            "estimated_spend_usd": 0.0,
+        },
+        "api_usage": {
+            "provider": "twitterapi.io",
+            "estimated_requests": 0,
+            "estimated_cost_usd": 0.0,
+            "ledger": [],
+        },
+    }
+
+
+def _ce_initial_state() -> dict:
+    state = _ce_minimal_state()
+    initializer = getattr(ce, "initial_state", None)
+    if callable(initializer):
+        try:
+            module_state = initializer()
+            if isinstance(module_state, dict):
+                state.update(module_state)
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "initial state helper recovered", {"error": str(exc)[:160]})
+    state.setdefault("sync_status", {})
+    state.setdefault("api_usage", {})
+    return state
+
+
+def _ce_summarize_scores(scores) -> dict:
+    summarizer = getattr(ce, "summarize_scores", None)
+    if callable(summarizer):
+        try:
+            summary = summarizer(scores or [])
+            if isinstance(summary, dict):
+                return summary
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "score summary helper recovered", {"error": str(exc)[:160]})
+    rows = [row for row in (scores or []) if isinstance(row, dict)]
+    mature_count = sum(1 for row in rows if str(row.get("maturity", "")).lower() == "mature")
+    provisional_count = sum(1 for row in rows if str(row.get("maturity", "")).lower() == "provisional")
+    return {
+        "best_current_patterns": [],
+        "worst_current_patterns": [],
+        "mature_count": mature_count,
+        "provisional_count": provisional_count,
+        "false_loser_ids": [],
+    }
+
+
+def _ce_sync_budget_for_mode(mode: str) -> dict:
+    budgeter = getattr(ce, "sync_budget_for_mode", None)
+    if callable(budgeter):
+        try:
+            budget = budgeter(mode)
+            if isinstance(budget, dict):
+                return budget
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "sync budget helper recovered", {"error": str(exc)[:160]})
+    mode = mode if mode in ("history", "latest", "backfill") else "history"
+    reads = {"history": 0, "latest": 80, "backfill": 3200}[mode]
+    requests_est = {"history": 0, "latest": 4, "backfill": 120}[mode]
+    cost_per_1000 = float(_ce_budget_policy().get("estimated_cost_per_1000_tweets", 0.15) or 0.15)
+    return {
+        "mode": mode,
+        "label": {"history": "saved history refresh", "latest": "latest tweet sync", "backfill": "deep tweet backfill"}[mode],
+        "provider": "twitterapi.io",
+        "estimated_requests": requests_est,
+        "estimated_tweets_read": reads,
+        "estimated_cost_usd": round(reads / 1000 * cost_per_1000, 4),
+        "needs_confirmation": mode == "backfill",
+    }
+
+
+def _ce_budget_preflight_for_mode(mode: str, policy: dict | None = None) -> dict:
+    preflight = getattr(ce, "budget_preflight_for_mode", None)
+    if callable(preflight):
+        try:
+            budget = preflight(mode, policy)
+            if isinstance(budget, dict):
+                return budget
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "budget preflight helper recovered", {"error": str(exc)[:160]})
+    budget = _ce_sync_budget_for_mode(mode)
+    merged_policy = _ce_budget_policy()
+    if isinstance(policy, dict):
+        merged_policy.update(policy)
+    daily_cap = float(merged_policy.get("daily_cap_usd", 0.0) or 0.0)
+    budget["blocked_by_budget"] = bool(daily_cap and float(budget.get("estimated_cost_usd", 0.0) or 0.0) > daily_cap)
+    return budget
+
+
+def _ce_iter_original_tweets(tweets) -> list[dict]:
+    source = tweets
+    if isinstance(source, dict):
+        for key in ("tweets", "data", "results", "items"):
+            if isinstance(source.get(key), list):
+                source = source[key]
+                break
+    if not isinstance(source, list):
+        return []
+    originals = []
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or item.get("full_text") or item.get("content") or "").strip()
+        if not text or text.startswith("RT ") or text.startswith("@"):
+            continue
+        originals.append(item)
+    return originals
+
+
+def _ce_refresh_state(existing: dict | None, tweets, handle: str = "") -> dict:
+    refresher = getattr(ce, "refresh_state", None)
+    if callable(refresher):
+        try:
+            refreshed = refresher(existing, tweets or [], handle=handle)
+            if isinstance(refreshed, dict):
+                return refreshed
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "refresh state helper recovered", {"error": str(exc)[:160]})
+    state = _normalize_creator_evolution_state(existing)
+    originals = _ce_iter_original_tweets(tweets or [])
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    state["tweets"] = originals
+    state["tracked_tweets"] = [
+        {
+            "id": str(item.get("id") or item.get("tweet_id") or hashlib.sha1(str(item).encode("utf-8")).hexdigest()[:12]),
+            "text": str(item.get("text") or item.get("full_text") or ""),
+            "rule_version": _ce_rule_version(),
+        }
+        for item in originals
+    ]
+    state["patterns"] = _ce_summarize_scores(state.get("scores", []))
+    state["sync_status"] = dict(state.get("sync_status", {}) or {})
+    state["sync_status"].update({
+        "status": "ok",
+        "last_sync_at": now_iso,
+        "handle": handle,
+        "original_tweet_count": len(originals),
+        "mature_tweet_count": int((state.get("patterns", {}) or {}).get("mature_count", 0) or 0),
+    })
+    state["api_usage"] = dict(state.get("api_usage", {}) or {})
+    state["api_usage"].setdefault("provider", "twitterapi.io")
+    state["api_usage"].setdefault("ledger", [])
+    return state
+
+
+def _ce_approved_rules_text(state: dict) -> str:
+    formatter = getattr(ce, "approved_rules_text", None)
+    if callable(formatter):
+        try:
+            text = str(formatter(state) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "approved rules helper recovered", {"error": str(exc)[:160]})
+    rules = []
+    for item in (state or {}).get("approved_rules", []) or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("status") in ("rolled_back", "rejected"):
+            continue
+        rule = str(item.get("rule") or "").strip()
+        if rule:
+            rules.append(f"- {rule}")
+    return "\n".join(rules)
+
+
+def _ce_approve_proposal(state: dict, proposal_id: str) -> dict:
+    approver = getattr(ce, "approve_proposal", None)
+    if callable(approver):
+        try:
+            approved = approver(state, proposal_id)
+            if isinstance(approved, dict):
+                return approved
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "approve proposal helper recovered", {"error": str(exc)[:160]})
+    updated = _normalize_creator_evolution_state(state)
+    proposals = list(updated.get("proposals", []) or [])
+    approved_rules = list(updated.get("approved_rules", []) or [])
+    rule_versions = list(updated.get("rule_versions", []) or [])
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for prop in proposals:
+        if not isinstance(prop, dict) or str(prop.get("id")) != str(proposal_id):
+            continue
+        prop["status"] = "approved"
+        prop["approved_at"] = now_iso
+        approved_rules.append({
+            "proposal_id": proposal_id,
+            "rule": prop.get("rule", ""),
+            "approved_at": now_iso,
+            "status": "active",
+        })
+        rule_versions.append({
+            "proposal_id": proposal_id,
+            "rule": prop.get("rule", ""),
+            "revision": len(rule_versions) + 1,
+            "status": "active",
+            "approved_at": now_iso,
+        })
+        break
+    updated["proposals"] = proposals
+    updated["approved_rules"] = approved_rules
+    updated["rule_versions"] = rule_versions
+    return updated
+
+
+def _ce_reject_proposal(state: dict, proposal_id: str) -> dict:
+    rejecter = getattr(ce, "reject_proposal", None)
+    if callable(rejecter):
+        try:
+            rejected = rejecter(state, proposal_id)
+            if isinstance(rejected, dict):
+                return rejected
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "reject proposal helper recovered", {"error": str(exc)[:160]})
+    updated = _normalize_creator_evolution_state(state)
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for prop in updated.get("proposals", []) or []:
+        if isinstance(prop, dict) and str(prop.get("id")) == str(proposal_id):
+            prop["status"] = "rejected"
+            prop["rejected_at"] = now_iso
+            break
+    return updated
+
+
+def _ce_rollback_rule(state: dict, proposal_id: str) -> dict:
+    rollback = getattr(ce, "rollback_rule", None)
+    if callable(rollback):
+        try:
+            rolled = rollback(state, proposal_id)
+            if isinstance(rolled, dict):
+                return rolled
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "rollback helper recovered", {"error": str(exc)[:160]})
+    updated = _normalize_creator_evolution_state(state)
+    for rule in updated.get("approved_rules", []) or []:
+        if isinstance(rule, dict) and str(rule.get("proposal_id")) == str(proposal_id):
+            rule["status"] = "rolled_back"
+    for version in updated.get("rule_versions", []) or []:
+        if isinstance(version, dict) and str(version.get("proposal_id")) == str(proposal_id):
+            version["status"] = "rolled_back"
+    return updated
+
+
+def _ce_build_generation_prompt(source: str, fmt: str, lane: str, state: dict,
+                                action: str = "evolve", live_stats_block: str = "",
+                                sports_ctx: str = "") -> str:
+    _ce_install_lane_recipe_text_compat()
+    lane = _ce_normalize_lane(lane)
+    builder = getattr(ce, "build_generation_prompt", None)
+    if callable(builder):
+        try:
+            prompt = builder(
+                source,
+                fmt,
+                lane,
+                state,
+                action=action,
+                live_stats_block=live_stats_block,
+                sports_ctx=sports_ctx,
+            )
+            if str(prompt or "").strip():
+                return str(prompt)
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "generation prompt helper recovered", {"error": str(exc)[:160]})
+    approved = _ce_approved_rules_text(state)
+    patterns = (state or {}).get("patterns", {}) or {}
+    return f"""
+CREATOR EVOLUTION PROMPT ({_ce_prompt_version()})
+
+Action: {action}
+Format: {fmt}
+Voice lane: {lane}
+
+Never use Hall of Fame tweets, Hall of Fame benchmarks, Creator Studio calibration, or copied viral hooks.
+Use only Creator Evolution approved rules and real performance context.
+
+LANE BEHAVIOR:
+{_ce_lane_recipe_text(lane)}
+
+APPROVED PERFORMANCE RULES:
+{approved or "- No approved rules yet. Use the source material and human voice contract."}
+
+CURRENT PERFORMANCE SUMMARY:
+- Mature tweets: {patterns.get("mature_count", 0)}
+- Best patterns: {patterns.get("best_current_patterns", [])[:3]}
+- Weak patterns: {patterns.get("worst_current_patterns", [])[:3]}
+
+SOURCE MATERIAL:
+{source}
+{live_stats_block or ""}
+{sports_ctx or ""}
+
+Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
+No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
+Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
+""".strip()
+
+
+def _ce_build_hot_signal_brief(topic: str, seed: str, source: str, why: str,
+                               lane: str, fmt: str) -> str:
+    _ce_install_lane_recipe_text_compat()
+    lane = _ce_normalize_lane(lane)
+    builder = getattr(ce, "build_hot_signal_brief", None)
+    if callable(builder):
+        try:
+            brief = builder(topic, seed, source, why, lane, fmt)
+            if str(brief or "").strip():
+                return str(brief)
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "hot signal helper recovered", {"error": str(exc)[:160]})
+    return f"""
+HOT SIGNAL:
+{topic}
+
+SOURCE:
+{source}
+
+WHY IT MATTERS NOW:
+{why}
+
+SOURCE MATERIAL:
+{seed}
+
+CREATOR EVOLUTION VOICE:
+{_ce_lane_recipe_text(lane)}
+
+Do not use Creator Studio voice modes or Hall of Fame examples. Build a {fmt} that sounds timely, human, witty, and reply-worthy.
+""".strip()
+
+
 def _ce_pulse_version() -> str:
     try:
         return str(getattr(pulse, "PULSE_VERSION", "ce-pulse-app-fallback") or "ce-pulse-app-fallback")
@@ -7406,7 +7822,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "char_count": char_count,
-            "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
+            "prompt_version": _ce_prompt_version(),
         }
     reporter = getattr(ce, "draft_quality_report", None)
     if callable(reporter):
@@ -7473,7 +7889,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "engagement_bait_hits": bait_hits,
         "cadence_hits": cadence_hits,
         "char_count": char_count,
-        "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
+        "prompt_version": _ce_prompt_version(),
     }
 
 
@@ -7588,7 +8004,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
         "hard_blocks": [],
         "risk_flags": [],
         "recommended_action": "tweet",
-        "recommended_lane": lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE,
+        "recommended_lane": _ce_normalize_lane(lane),
         "freshness_score": 20.0,
         "confidence": 87.3,
         "why_now": "Avalanche game/news is active in live sports context; newest signal 0.0h old",
@@ -7870,12 +8286,11 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
 
 
 def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) -> tuple[dict, dict, str]:
-    lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    lane = _ce_normalize_lane(lane)
     fmt = _normalize_tweet_format(fmt)
     source = _ce_pulse_source_material(decision)
     state = _creator_evolution_state()
-    _ce_install_lane_recipe_text_compat()
-    prompt = ce.build_generation_prompt(source, fmt, lane, state, action="build")
+    prompt = _ce_build_generation_prompt(source, fmt, lane, state, action="build")
     prompt += f"""
 
 CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
@@ -7929,9 +8344,10 @@ def _safe_find_creator_evolution_pulse(tweets, headlines, state, *, sports_conte
         return _ce_pulse_error_decision(str(exc)[:240])
 
 
-def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
+def _run_creator_evolution_pulse(lane: str | None = None,
                                  fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT) -> tuple[dict, int, int]:
     """Find one high-confidence Creator Evolution Pulse opportunity."""
+    lane = _ce_normalize_lane(lane)
     _all_tweets, _rss_headlines = [], []
     try:
         _all_tweets, _rss_headlines = _fetch_inspiration_feed()
@@ -7979,7 +8395,7 @@ def _run_creator_evolution_pulse(lane: str = ce.DEFAULT_LANE,
         _ce_pulse_debug_event("ok", "Avalanche Pulse fallback selected", {"previous_status": _decision.get("status", "")})
         _decision = _avs_decision
     _best = _decision.get("best") or {}
-    _decision["selected_lane"] = lane if lane in ce.EMOTION_LANES else _best.get("recommended_lane", ce.DEFAULT_LANE)
+    _decision["selected_lane"] = _ce_normalize_lane(lane or _best.get("recommended_lane"))
     _decision["selected_format"] = _normalize_tweet_format(fmt)
     return _decision, len(_all_tweets), len(_rss_headlines)
 
@@ -8215,10 +8631,10 @@ def _ci_inspiration_dialog():
 @st.dialog("Creator Evolution Pulse", width="large")
 def _ce_pulse_dialog():
     """One-best now-or-no-op decision layer for Creator Evolution."""
-    _lane_options = list(ce.EMOTION_LANES)
-    _lane = st.session_state.get("ce_pulse_lane") or st.session_state.get("ce_lane", ce.DEFAULT_LANE)
+    _lane_options = list(_ce_emotion_lanes())
+    _lane = st.session_state.get("ce_pulse_lane") or st.session_state.get("ce_lane", _ce_default_lane())
     if _lane not in _lane_options:
-        _lane = ce.DEFAULT_LANE
+        _lane = _ce_default_lane()
     if st.session_state.get("ce_pulse_lane") not in _lane_options:
         st.session_state["ce_pulse_lane"] = _lane
     _lane_widget_key = "ce_lane_pulse_select"
@@ -8303,7 +8719,7 @@ def _ce_pulse_dialog():
                 st.rerun(scope="app")
     else:
         _action = _best.get("recommended_action", "tweet")
-        _lane_pick = _lane if _lane in ce.EMOTION_LANES else (_best.get("recommended_lane") or ce.DEFAULT_LANE)
+        _lane_pick = _ce_normalize_lane(_lane or _best.get("recommended_lane"))
         st.markdown(
             f"""
 <div style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:10px;">
@@ -8375,7 +8791,7 @@ def _ce_pulse_dialog():
                 if st.button(f"Use Tweet {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _idx == 1 else "secondary"):
                     st.session_state["_ce_text_stage"] = str(_draft_text)
                     st.session_state["ce_format"] = _fmt
-                    st.session_state["ce_lane"] = _lane_pick if _lane_pick in ce.EMOTION_LANES else _lane
+                    st.session_state["ce_lane"] = _ce_normalize_lane(_lane_pick or _lane)
                     st.rerun(scope="app")
             with _save_col:
                 if st.button(f"Save Tweet {_idx}", key=f"ce_pulse_save_draft_{_idx}", use_container_width=True):
@@ -8422,13 +8838,11 @@ def _ce_pulse_dialog():
 def _ce_inspiration_dialog():
     """Creator Evolution hot signals: shared discovery, CE-only generation path."""
     _handle = get_current_handle()
-    _lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
-    if _lane not in ce.EMOTION_LANES:
-        _lane = ce.DEFAULT_LANE
+    _lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
     _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
     _cache_key = json.dumps({
         "formula_version": _WHATS_HOT_FORMULA_VERSION,
-        "prompt_version": ce.PROMPT_VERSION,
+        "prompt_version": _ce_prompt_version(),
         "handle": _handle,
         "guest": is_guest(),
         "lane": _lane,
@@ -8539,26 +8953,26 @@ def _ci_output_panel(_nonce, action, tweet_text, fmt, voice):
 
 
 def _normalize_creator_evolution_state(raw: dict | None = None) -> dict:
-    state = ce.initial_state()
+    state = _ce_initial_state()
     if isinstance(raw, dict):
         state.update(raw)
-    state.setdefault("prompt_version", ce.PROMPT_VERSION)
-    state.setdefault("scoring_version", ce.SCORING_VERSION)
-    state.setdefault("rule_version", ce.RULE_VERSION)
+    state.setdefault("prompt_version", _ce_prompt_version())
+    state.setdefault("scoring_version", _ce_scoring_version())
+    state.setdefault("rule_version", _ce_rule_version())
     state.setdefault("tweets", [])
     state.setdefault("tracked_tweets", [])
     state.setdefault("snapshots", [])
     state.setdefault("scores", [])
-    state.setdefault("patterns", ce.summarize_scores(state.get("scores", [])))
+    state.setdefault("patterns", _ce_summarize_scores(state.get("scores", [])))
     state.setdefault("proposals", [])
     state.setdefault("approved_rules", [])
     state.setdefault("rule_versions", [])
     state.setdefault("generated_lineage", [])
-    state.setdefault("budget_policy", dict(ce.BUDGET_POLICY))
-    sync_status = dict(ce.initial_state()["sync_status"])
+    state.setdefault("budget_policy", _ce_budget_policy())
+    sync_status = dict((_ce_initial_state().get("sync_status") or {}))
     sync_status.update(state.get("sync_status", {}) or {})
     state["sync_status"] = sync_status
-    api_usage = dict(ce.initial_state()["api_usage"])
+    api_usage = dict((_ce_initial_state().get("api_usage") or {}))
     api_usage.update(state.get("api_usage", {}) or {})
     state["api_usage"] = api_usage
     return state
@@ -8576,7 +8990,7 @@ def _load_creator_evolution_state() -> dict:
         try:
             gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
             resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
-            file_meta = resp.json().get("files", {}).get(ce.GIST_FILENAME, {})
+            file_meta = resp.json().get("files", {}).get(_ce_gist_filename(), {})
             raw_payload = ""
             if file_meta.get("raw_url"):
                 raw_resp = requests.get(file_meta["raw_url"], timeout=8)
@@ -8591,7 +9005,7 @@ def _load_creator_evolution_state() -> dict:
         except Exception:
             pass
 
-    state = _normalize_creator_evolution_state(load_json(ce.STATE_FILENAME, ce.initial_state()))
+    state = _normalize_creator_evolution_state(load_json(_ce_state_filename(), _ce_initial_state()))
     st.session_state["_creator_evolution_cache"] = state
     st.session_state["_creator_evolution_cache_handle"] = handle
     return state
@@ -8606,19 +9020,19 @@ def _save_creator_evolution_state(state: dict) -> dict:
         state["sync_status"]["persist_error"] = ""
         st.session_state["_creator_evolution_cache"] = state
         st.session_state["_creator_evolution_cache_handle"] = get_current_handle()
-        save_json(ce.STATE_FILENAME, state)
+        save_json(_ce_state_filename(), state)
         return state
 
     st.session_state["_creator_evolution_cache"] = state
     st.session_state["_creator_evolution_cache_handle"] = get_current_handle()
-    save_json(ce.STATE_FILENAME, state)
+    save_json(_ce_state_filename(), state)
     try:
         state["sync_status"]["persisted"] = "gist"
         state["sync_status"]["persist_error"] = ""
         gist_id = st.secrets.get("GIST_ID", "15fb167bbbfdaa79d5ce11c266c3f652")
         payload = json.dumps({
             "files": {
-                ce.GIST_FILENAME: {
+                _ce_gist_filename(): {
                     "content": json.dumps(state, indent=2, default=str),
                 }
             }
@@ -8629,14 +9043,14 @@ def _save_creator_evolution_state(state: dict) -> dict:
         state["sync_status"]["persisted"] = "local_only"
         state["sync_status"]["persist_error"] = str(exc)[:240]
     st.session_state["_creator_evolution_cache"] = state
-    save_json(ce.STATE_FILENAME, state)
+    save_json(_ce_state_filename(), state)
     return state
 
 
 def _refresh_creator_evolution_state(mode: str = "history") -> dict:
     existing = _load_creator_evolution_state()
     source = mode
-    budget = ce.budget_preflight_for_mode(mode, existing.get("budget_policy"))
+    budget = _ce_budget_preflight_for_mode(mode, existing.get("budget_policy"))
     if budget.get("blocked_by_budget"):
         existing["sync_status"] = dict(existing.get("sync_status", {}))
         existing["sync_status"].update({
@@ -8664,7 +9078,7 @@ def _refresh_creator_evolution_state(mode: str = "history") -> dict:
         else:
             tweets = _load_tweet_history_gist()
             source = "existing_history"
-        refreshed = ce.refresh_state(existing, tweets or [], handle=get_current_handle())
+        refreshed = _ce_refresh_state(existing, tweets or [], handle=get_current_handle())
         refreshed["sync_status"].update({
             "source": source,
             "sync_mode": budget["mode"],
@@ -8729,7 +9143,7 @@ def _creator_evolution_state() -> dict:
 
 def _ce_lane_recipe_text(lane: str) -> str:
     """Return Creator Evolution lane rules even when Cloud has a stale helper module."""
-    lane = lane if lane in getattr(ce, "EMOTION_LANES", ()) else getattr(ce, "DEFAULT_LANE", "Witty Edge")
+    lane = _ce_normalize_lane(lane)
     formatter = getattr(ce, "lane_recipe_text", None)
     if callable(formatter) and formatter is not _ce_lane_recipe_text:
         try:
@@ -8740,7 +9154,7 @@ def _ce_lane_recipe_text(lane: str) -> str:
             _ce_pulse_debug_event("warn", "lane recipe helper recovered", {"error": str(exc)[:160]})
 
     recipes = getattr(ce, "LANE_RECIPES", {}) or {}
-    recipe = recipes.get(lane) or recipes.get(getattr(ce, "DEFAULT_LANE", "Witty Edge")) or {
+    recipe = recipes.get(lane) or recipes.get(_ce_default_lane()) or {
         "target": "Funny, pointed, conversational, and human.",
         "do": "Use a specific sports detail and a sharp human reaction.",
         "avoid": "Content-strategy phrasing, generic templates, fake questions, and invented facts.",
@@ -8759,7 +9173,7 @@ def _ce_install_lane_recipe_text_compat() -> None:
     formatter = getattr(ce, "lane_recipe_text", None)
     if callable(formatter):
         try:
-            text = str(formatter(getattr(ce, "DEFAULT_LANE", "Witty Edge")) or "").strip()
+            text = str(formatter(_ce_default_lane()) or "").strip()
             if text:
                 return
         except Exception:
@@ -8769,7 +9183,7 @@ def _ce_install_lane_recipe_text_compat() -> None:
 
 def _creator_evolution_system_prompt(lane: str) -> str:
     handle = get_current_handle()
-    lane = lane if lane in ce.EMOTION_LANES else ce.DEFAULT_LANE
+    lane = _ce_normalize_lane(lane)
     _ce_install_lane_recipe_text_compat()
     lane_rules = _ce_lane_recipe_text(lane)
     return build_user_context() + f"""
@@ -8845,8 +9259,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                     except Exception:
                         pass
 
-    _ce_install_lane_recipe_text_compat()
-    prompt = ce.build_generation_prompt(
+    prompt = _ce_build_generation_prompt(
         tweet_text,
         fmt,
         lane,
@@ -8898,9 +9311,9 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             "seed_hash": hashlib.sha1(str(tweet_text or "").encode("utf-8")).hexdigest()[:12],
             "format": fmt,
             "lane": lane,
-            "prompt_version": ce.PROMPT_VERSION,
-            "scoring_version": ce.SCORING_VERSION,
-            "rule_version": ce.RULE_VERSION,
+            "prompt_version": _ce_prompt_version(),
+            "scoring_version": _ce_scoring_version(),
+            "rule_version": _ce_rule_version(),
             "options": [
                 {
                     "slot": idx,
@@ -8973,9 +9386,7 @@ def _ce_build_dialog():
         assembled = "\n".join(parts) if len(parts) > 1 else topic.strip()
 
         fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
-        lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
-        if lane not in ce.EMOTION_LANES:
-            lane = ce.DEFAULT_LANE
+        lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
 
         with st.spinner("Building Creator Evolution options..."):
             _run_ce_ai("build", assembled, fmt, lane)
@@ -9675,7 +10086,7 @@ def _render_creator_evolution_learning_panel(state: dict):
     persisted = status.get("persisted", "unknown")
     best = patterns.get("best_current_patterns", [])[:3]
     worst = patterns.get("worst_current_patterns", [])[:3]
-    approved_rules = ce.approved_rules_text(state)
+    approved_rules = _ce_approved_rules_text(state)
     last_sync_short = str(last_sync)[:16].replace("T", " ") if last_sync != "Never" else "Never"
 
     st.markdown(
@@ -9713,7 +10124,7 @@ def _render_creator_evolution_learning_panel(state: dict):
                 st.rerun(scope="app")
 
         if st.session_state.get("_ce_confirm_backfill"):
-            backfill_budget = ce.sync_budget_for_mode("backfill")
+            backfill_budget = _ce_sync_budget_for_mode("backfill")
             st.warning(
                 f"Deep Backfill can call twitterapi.io repeatedly. Estimate: "
                 f"{backfill_budget['estimated_requests']} requests, "
@@ -9756,7 +10167,7 @@ def _render_creator_evolution_learning_panel(state: dict):
                 _rv_id = version.get("proposal_id", "")
                 _rv_label = f"Rollback r{version.get('revision', '')}: {version.get('rule', '')[:72]}"
                 if st.button(_rv_label, key=f"ce_rollback_{_rv_id}", use_container_width=True):
-                    _save_creator_evolution_state(ce.rollback_rule(state, _rv_id))
+                    _save_creator_evolution_state(_ce_rollback_rule(state, _rv_id))
                     st.rerun(scope="app")
         if not pending:
             st.caption("No pending rule changes. Creator Evolution will not change its generation rules until you approve a proposal.")
@@ -9780,11 +10191,11 @@ def _render_creator_evolution_learning_panel(state: dict):
             approve_col, reject_col = st.columns([1, 1])
             with approve_col:
                 if st.button("Approve Rule", key=f"ce_approve_{prop_id}", use_container_width=True, type="primary"):
-                    _save_creator_evolution_state(ce.approve_proposal(state, prop_id))
+                    _save_creator_evolution_state(_ce_approve_proposal(state, prop_id))
                     st.rerun(scope="app")
             with reject_col:
                 if st.button("Reject Rule", key=f"ce_reject_{prop_id}", use_container_width=True):
-                    _save_creator_evolution_state(ce.reject_proposal(state, prop_id))
+                    _save_creator_evolution_state(_ce_reject_proposal(state, prop_id))
                     st.rerun(scope="app")
 
 
@@ -9824,11 +10235,9 @@ def _render_creator_evolution_editor():
                     st.session_state["ce_format"] = option
                     st.rerun(scope="fragment")
 
-        cur_lane = st.session_state.get("ce_lane", ce.DEFAULT_LANE)
-        if cur_lane not in ce.EMOTION_LANES:
-            cur_lane = ce.DEFAULT_LANE
+        cur_lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
-        _lane_opts = list(ce.EMOTION_LANES)
+        _lane_opts = list(_ce_emotion_lanes())
         _lane_idx = _lane_opts.index(cur_lane) if cur_lane in _lane_opts else 0
         st.selectbox(
             "Creator Evolution voice lane",
@@ -9848,7 +10257,7 @@ def _render_creator_evolution_editor():
                 action,
                 seed,
                 _normalize_tweet_format(st.session_state.get("ce_format")),
-                st.session_state.get("ce_lane", ce.DEFAULT_LANE),
+                _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane())),
             )
             st.rerun(scope="app")
 
@@ -9942,7 +10351,7 @@ def page_creator_evolution():
     if "ce_format" not in st.session_state:
         st.session_state["ce_format"] = CANONICAL_TWEET_DEFAULT_FORMAT
     if "ce_lane" not in st.session_state:
-        st.session_state["ce_lane"] = ce.DEFAULT_LANE
+        st.session_state["ce_lane"] = _ce_default_lane()
 
     state = _creator_evolution_state()
     _render_creator_evolution_learning_panel(state)
