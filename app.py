@@ -8180,6 +8180,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
 
 def _ce_pulse_source_material(decision: dict) -> str:
     best = decision.get("best") or {}
+    action = str(best.get("recommended_action") or "tweet").strip().lower()
     basis_lines = []
     for item in best.get("source_basis", []) or []:
         if not isinstance(item, dict):
@@ -8198,6 +8199,7 @@ def _ce_pulse_source_material(decision: dict) -> str:
         seed_summary = "A live Denver sports moment is active, but betting lines must be ignored."
     return (
         f"TOPIC: {best.get('topic', 'timely sports moment')}\n"
+        f"PULSE RECOMMENDED ACTION: {action}\n"
         f"PULSE SIGNAL: {seed_summary}\n"
         f"WHY NOW: {best.get('why_now', 'Fresh live context is active.')}\n"
         "SOURCE BASIS:\n"
@@ -8207,8 +8209,9 @@ def _ce_pulse_source_material(decision: dict) -> str:
         "- If a source says unknown time, do not write as if it just happened.\n"
         "- If no live game facts are present, make the tweet about the actual timeline argument, news tension, or fan reaction.\n\n"
         "PULSE DRAFT RULES:\n"
-        "- Return post-ready tweets immediately, not a strategy brief.\n"
+        "- Return post-ready copy immediately, not a strategy brief.\n"
         "- Show real personality: witty, specific, slightly sharp, and human.\n"
+        "- If action is reply, write direct reply copy to the specific source post and name enough context that the reply never depends on unexplained he/it/that pronouns.\n"
         "- If source basis includes a live score, clock, or period, write about that exact game state.\n"
         "- Never write generic game-night psychology when live score/clock context exists.\n"
         "- Do not make the tweet about gambling, moneyline, spread, odds, over/under, betting, or picks.\n"
@@ -8428,16 +8431,23 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
 def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) -> tuple[dict, dict, str]:
     lane = _ce_normalize_lane(lane)
     fmt = _normalize_tweet_format(fmt)
+    best = decision.get("best") or {}
+    action = str(best.get("recommended_action") or "tweet").strip().lower()
+    draft_label = "reply" if action == "reply" else "tweet"
+    draft_label_plural = "replies" if action == "reply" else "tweets"
     source = _ce_pulse_source_material(decision)
     state = _creator_evolution_state()
     prompt = _ce_build_generation_prompt(source, fmt, lane, state, action="build")
     prompt += f"""
 
 CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
-- Generate 3 options; the UI will show at least 2.
+- Recommended action: {action}.
+- Generate 3 post-ready {draft_label_plural}; the UI will show at least 2.
 - Regeneration nonce: {nonce}. If nonce is not 0, change the openings and angles materially.
 - No gambling language. Do not mention moneyline, odds, spread, over/under, betting, picks, locks, sportsbooks, or implied bets.
 - These must sound like @{get_current_handle()} posting from a phone, not an analyst, not a strategy deck, not a sportsbook account.
+- If this is a reply, write the actual reply text only. Do not summarize the source post, do not quote-tweet it, and do not start with vague pronouns.
+- Each {draft_label} should use the selected Creator Evolution voice and selected format behavior.
 """
     raw = ""
     try:
@@ -8858,6 +8868,11 @@ def _ce_pulse_dialog():
                 st.rerun(scope="app")
     else:
         _action = _best.get("recommended_action", "tweet")
+        _action_clean = str(_action or "tweet").strip().lower()
+        _items_label = "Replies" if _action_clean == "reply" else "Tweets"
+        _refresh_label = "Refresh Replies" if _action_clean == "reply" else "Refresh Tweets"
+        _use_label = "Use Reply" if _action_clean == "reply" else "Use Tweet"
+        _save_label = "Save Reply" if _action_clean == "reply" else "Save Tweet"
         _lane_pick = _ce_normalize_lane(_lane or _best.get("recommended_lane"))
         st.markdown(
             f"""
@@ -8902,11 +8917,11 @@ def _ce_pulse_dialog():
             if _pulse_drafts.get(f"option{idx}")
         ]
         st.markdown(
-            '<div style="font-size:11px;font-weight:800;letter-spacing:1.3px;color:#2DD4BF;text-transform:uppercase;margin:14px 0 8px;">Creator Evolution Tweets</div>',
+            f'<div style="font-size:11px;font-weight:800;letter-spacing:1.3px;color:#2DD4BF;text-transform:uppercase;margin:14px 0 8px;">Creator Evolution {_items_label}</div>',
             unsafe_allow_html=True,
         )
         if len(_draft_items) < 2:
-            st.warning("Pulse could not produce two clean Creator Evolution drafts yet. Use Refresh Tweets.")
+            st.warning(f"Pulse could not produce two clean Creator Evolution drafts yet. Use {_refresh_label}.")
             if st.session_state.get("ce_pulse_draft_raw"):
                 st.caption("Draft recovery detail: " + st.session_state.get("ce_pulse_draft_raw", "")[:220])
         for _idx, _draft_text, _pattern in _draft_items[:3]:
@@ -8927,13 +8942,13 @@ def _ce_pulse_dialog():
             )
             _use_col, _save_col = st.columns([1, 1])
             with _use_col:
-                if st.button(f"Use Tweet {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _idx == 1 else "secondary"):
+                if st.button(f"{_use_label} {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _idx == 1 else "secondary"):
                     st.session_state["_ce_text_stage"] = str(_draft_text)
                     st.session_state["ce_format"] = _fmt
                     st.session_state["ce_lane"] = _ce_normalize_lane(_lane_pick or _lane)
                     st.rerun(scope="app")
             with _save_col:
-                if st.button(f"Save Tweet {_idx}", key=f"ce_pulse_save_draft_{_idx}", use_container_width=True):
+                if st.button(f"{_save_label} {_idx}", key=f"ce_pulse_save_draft_{_idx}", use_container_width=True):
                     ideas = load_json("saved_ideas.json", [])
                     ideas.append({
                         "text": str(_draft_text),
@@ -8946,7 +8961,7 @@ def _ce_pulse_dialog():
                     st.success("Saved.")
         _build_col, _hot_col, _refresh_col = st.columns([2, 1, 1])
         with _build_col:
-            if st.button("Refresh Tweets", key="ce_pulse_refresh_drafts", use_container_width=True, type="primary"):
+            if st.button(_refresh_label, key="ce_pulse_refresh_drafts", use_container_width=True, type="primary"):
                 st.session_state["_ce_pulse_draft_nonce"] = int(st.session_state.get("_ce_pulse_draft_nonce", 0) or 0) + 1
                 st.session_state.pop("ce_pulse_drafts_key", None)
                 st.session_state.pop("ce_pulse_drafts", None)
