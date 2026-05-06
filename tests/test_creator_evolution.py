@@ -163,6 +163,39 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Straight-faced", prompt)
         self.assertIn("No exclamation points", prompt)
 
+    def test_format_recipe_changes_prompt_behavior(self):
+        base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
+        cases = {
+            "Punchy Tweet": "under 160 characters",
+            "Normal Tweet": "161-260 characters",
+            "Long Tweet": "500-1,100 characters",
+            "Thread": "---TWEET---",
+            "Article": "700-1,200 words",
+        }
+
+        for fmt, expected in cases.items():
+            with self.subTest(fmt=fmt):
+                prompt = ce.build_generation_prompt(base, fmt, "Witty Edge", ce.initial_state())
+                self.assertIn("FORMAT BEHAVIOR:", prompt)
+                self.assertIn(expected, prompt)
+
+    def test_format_quality_gate_enforces_selected_length_and_structure(self):
+        self.assertFalse(ce.draft_quality_report("This normal tweet is too short.", "Normal Tweet", "Witty Edge")["ok"])
+        self.assertFalse(ce.draft_quality_report("This is short.", "Long Tweet", "Witty Edge")["ok"])
+        self.assertFalse(ce.draft_quality_report("Tweet one\nTweet two\nTweet three", "Thread", "Witty Edge")["ok"])
+        self.assertFalse(ce.draft_quality_report("Headline\n\nShort article body.", "Article", "Witty Edge")["ok"])
+
+        punchy_too_long = "The Broncos offense keeps explaining itself like the answer is hiding in a footnote, and somehow every offseason turns into the same group project with worse handwriting."
+        self.assertFalse(ce.draft_quality_report(punchy_too_long, "Punchy Tweet", "Witty Edge")["ok"])
+
+        thread = "---TWEET---".join([
+            "The Broncos keep telling us the boring roster answer might be the plan.",
+            "That is not automatically bad. It is just less fun than the version everyone wants.",
+            "The real tell is whether Payton is building around stability or hiding from risk.",
+            "That is where this offseason gets uncomfortable.",
+        ])
+        self.assertTrue(ce.draft_quality_report(thread, "Thread", "Witty Edge")["ok"])
+
     def test_sarcastic_lane_matches_creator_studio_voice_block(self):
         self.assertIn("Sarcastic", ce.EMOTION_LANES)
 
@@ -534,6 +567,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('getattr(ce, "draft_quality_report", None)', app_text)
         self.assertNotIn("ce.draft_quality_report(", app_text)
         self.assertIn("def _ce_lane_recipe_text", app_text)
+        self.assertIn("def _ce_format_recipe_text", app_text)
         self.assertIn("def _ce_install_lane_recipe_text_compat", app_text)
         self.assertIn('getattr(ce, "lane_recipe_text", None)', app_text)
         self.assertIn('setattr(ce, "lane_recipe_text", _ce_lane_recipe_text)', app_text)
@@ -571,6 +605,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         for attr in fragile_ce_attrs:
             self.assertNotIn(attr, app_text)
         self.assertIn("_ce_pulse_source_material", app_text)
+        self.assertIn("CREATOR EVOLUTION FORMAT CONTRACT", app_text)
+        self.assertIn("_ce_format_quality_findings", app_text)
+        self.assertIn('max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700', app_text)
         self.assertIn("Refresh Tweets", app_text)
         self.assertIn("Use Tweet", app_text)
         self.assertIn("No gambling language", app_text)

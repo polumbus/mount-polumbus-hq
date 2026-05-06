@@ -98,6 +98,56 @@ SARCASTIC VOICE RULES:
     },
 }
 
+FORMAT_RECIPES = {
+    "Punchy Tweet": {
+        "target": "70-160 characters. One sharp thought. One or two sentences maximum.",
+        "structure": "No setup paragraph. No line breaks. Compress until it feels like a phone post.",
+        "must": "Every option must be under 160 characters and must not read like a normal-length tweet.",
+        "avoid": "Explaining the context, adding a second angle, threads, or soft qualifiers.",
+    },
+    "Normal Tweet": {
+        "target": "161-260 characters. A complete single-post take with room for tension.",
+        "structure": "One compact post. Usually 2-4 short lines or 2-3 sentences.",
+        "must": "Every option must use the extra space; do not return a punchy one-liner.",
+        "avoid": "Going over 280 characters, thread markers, or article-style paragraphing.",
+    },
+    "Long Tweet": {
+        "target": "500-1,100 characters. A long single post designed for dwell time.",
+        "structure": "Opening take, short supporting beat, contrast or consequence, closing pressure line.",
+        "must": "Every option must be a long-form single post, not a normal tweet stretched by filler.",
+        "avoid": "Thread markers, article headings, or empty recap paragraphs.",
+    },
+    "Thread": {
+        "target": "4-7 tweets. Each tweet must stand alone and stay under 280 characters.",
+        "structure": "Separate tweets with the exact marker ---TWEET--- inside each option.",
+        "must": "Every option must contain at least 4 tweet segments separated by ---TWEET---.",
+        "avoid": "One long paragraph, article headings, or a normal tweet pretending to be a thread.",
+    },
+    "Article": {
+        "target": "700-1,200 words per option. A real X Article/short column, not a tweet.",
+        "structure": "Headline, intro, 3-5 section headings, and a closing take.",
+        "must": "Every option must read like a complete article draft with section structure.",
+        "avoid": "Tweet-length output, thread markers, or a short caption with a headline.",
+    },
+}
+
+
+def format_recipe(fmt: str) -> dict[str, str]:
+    fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
+    return dict(FORMAT_RECIPES[fmt])
+
+
+def format_recipe_text(fmt: str) -> str:
+    fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
+    recipe = format_recipe(fmt)
+    return "\n".join([
+        f"{fmt}:",
+        f"- Target: {recipe['target']}",
+        f"- Structure: {recipe['structure']}",
+        f"- Must: {recipe['must']}",
+        f"- Avoid: {recipe['avoid']}",
+    ])
+
 SYNC_BUDGETS = {
     "history": {
         "label": "saved history refresh",
@@ -248,6 +298,7 @@ def build_hot_signal_brief(topic: str, seed: str, source: str, why: str, lane: s
     source = str(source or "hot feed").strip()
     why = str(why or "Active conversation signal").strip()
     fmt = str(fmt or "Normal Tweet").strip()
+    format_behavior = format_recipe_text(fmt)
     return f"""HOT SIGNAL:
 {topic}
 
@@ -262,6 +313,9 @@ SOURCE:
 
 FORMAT:
 {fmt}
+
+FORMAT BEHAVIOR:
+{format_behavior}
 
 PERSONALITY LANE:
 {lane}
@@ -450,13 +504,42 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     bait = engagement_bait_hits(text)
     cadence = cadence_hits(text)
     char_count = len(text)
+    sentence_count = len([part for part in re.split(r"[.!?]+", text) if part.strip()])
 
     if not text:
         issues.append("Empty draft.")
-    if fmt in ("Punchy Tweet", "Normal Tweet") and char_count > 280:
-        issues.append("Over 280 characters for a single-post format.")
-    if fmt == "Punchy Tweet" and char_count > 180:
-        warnings.append("Punchy lane is running long; the joke or take may lose force.")
+    if fmt == "Punchy Tweet":
+        if char_count > 160:
+            issues.append("Punchy Tweet must stay under 160 characters.")
+        if sentence_count > 2:
+            issues.append("Punchy Tweet must be one or two sentences maximum.")
+        if "\n" in text:
+            warnings.append("Punchy Tweet should not use line breaks.")
+    elif fmt == "Normal Tweet":
+        if char_count < 140:
+            issues.append("Normal Tweet is too short; use the 161-260 character format space.")
+        if char_count > 280:
+            issues.append("Normal Tweet must stay under 280 characters.")
+    elif fmt == "Long Tweet":
+        if char_count < 360:
+            issues.append("Long Tweet is too short; it should be a real long-form single post.")
+        if char_count > 1300:
+            issues.append("Long Tweet is too long; keep it under 1,300 characters.")
+        if "---TWEET---" in text:
+            issues.append("Long Tweet should be one post, not a thread.")
+    elif fmt == "Thread":
+        segments = [seg.strip() for seg in text.split("---TWEET---") if seg.strip()]
+        if len(segments) < 4:
+            issues.append("Thread format must include at least 4 tweet segments separated by ---TWEET---.")
+        if any(len(seg) > 280 for seg in segments):
+            issues.append("Every thread segment must stay under 280 characters.")
+    elif fmt == "Article":
+        if char_count < 1800:
+            issues.append("Article format is too short; it should be a real article draft, not a tweet.")
+        if "---TWEET---" in text:
+            issues.append("Article format should not use thread separators.")
+        if len(re.findall(r"\n[A-Z][A-Za-z0-9 ,'/-]{4,80}\n", f"\n{text}\n")) < 2:
+            warnings.append("Article should include visible section headings.")
     if ai_hits:
         issues.append("Contains banned AI/content-strategy wording: " + ", ".join(ai_hits[:4]))
     if bait:
@@ -1058,9 +1141,11 @@ def performance_context(state: dict[str, Any] | None) -> str:
 def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any] | None,
                             *, action: str = "evolve",
                             live_stats_block: str = "", sports_ctx: str = "") -> str:
+    fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
     lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
     context = performance_context(state)
     lane_behavior = lane_recipe_text(lane)
+    format_behavior = format_recipe_text(fmt)
     action = (action or "evolve").strip().lower()
     is_build = action == "build"
     source_label = "SOURCE MATERIAL" if is_build else "CONCEPT"
@@ -1083,6 +1168,9 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
 FORMAT:
 {fmt}
 
+FORMAT BEHAVIOR:
+{format_behavior}
+
 PERSONALITY LANE:
 {lane}
 
@@ -1095,6 +1183,7 @@ LANE BEHAVIOR:
 {build_rule}
 
 CREATOR EVOLUTION VOICE CONTRACT:
+- The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
@@ -1106,6 +1195,7 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - Never use Hall of Fame tweets, Hall of Fame examples, Hall of Fame hooks, or static HOF benchmark language.
 
 QUALITY GATE:
+- Reject any draft that does not obey the selected FORMAT BEHAVIOR above.
 - Reject any draft that sounds like content strategy instead of something posted from a phone.
 - Reject generic engagement bait endings like "thoughts?" or "what do you think?"
 - Heated lanes can attack a decision, excuse, pattern, or media narrative; they cannot harass a person.

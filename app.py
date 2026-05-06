@@ -7743,7 +7743,10 @@ def _ce_build_generation_prompt(source: str, fmt: str, lane: str, state: dict,
                 sports_ctx=sports_ctx,
             )
             if str(prompt or "").strip():
-                return str(prompt)
+                prompt = str(prompt)
+                if "FORMAT BEHAVIOR:" not in prompt:
+                    prompt += f"\n\nCREATOR EVOLUTION FORMAT CONTRACT:\n{_ce_format_recipe_text(fmt)}"
+                return prompt
         except Exception as exc:
             _ce_pulse_debug_event("warn", "generation prompt helper recovered", {"error": str(exc)[:160]})
     approved = _ce_approved_rules_text(state)
@@ -7760,6 +7763,9 @@ Use only Creator Evolution approved rules and real performance context.
 
 LANE BEHAVIOR:
 {_ce_lane_recipe_text(lane)}
+
+FORMAT BEHAVIOR:
+{_ce_format_recipe_text(fmt)}
 
 APPROVED PERFORMANCE RULES:
 {approved or "- No approved rules yet. Use the source material and human voice contract."}
@@ -7789,7 +7795,10 @@ def _ce_build_hot_signal_brief(topic: str, seed: str, source: str, why: str,
         try:
             brief = builder(topic, seed, source, why, lane, fmt)
             if str(brief or "").strip():
-                return str(brief)
+                brief = str(brief)
+                if "FORMAT BEHAVIOR:" not in brief:
+                    brief += f"\n\nCREATOR EVOLUTION FORMAT CONTRACT:\n{_ce_format_recipe_text(fmt)}"
+                return brief
         except Exception as exc:
             _ce_pulse_debug_event("warn", "hot signal helper recovered", {"error": str(exc)[:160]})
     return f"""
@@ -7807,6 +7816,9 @@ SOURCE MATERIAL:
 
 CREATOR EVOLUTION VOICE:
 {_ce_lane_recipe_text(lane)}
+
+FORMAT BEHAVIOR:
+{_ce_format_recipe_text(fmt)}
 
 Do not use Creator Studio voice modes or Hall of Fame examples. Build a {fmt} that sounds timely, human, witty, and reply-worthy.
 """.strip()
@@ -7848,6 +7860,48 @@ def _ce_is_completed_game_context(text: str) -> bool:
     return bool(has_game_label and has_final_status)
 
 
+def _ce_format_quality_findings(text: str, fmt: str) -> tuple[list[str], list[str]]:
+    clean = str(text or "").strip()
+    fmt = _normalize_tweet_format(fmt)
+    char_count = len(clean)
+    sentence_count = len([part for part in re.split(r"[.!?]+", clean) if part.strip()])
+    issues: list[str] = []
+    warnings: list[str] = []
+    if fmt == "Punchy Tweet":
+        if char_count > 160:
+            issues.append("Punchy Tweet must stay under 160 characters.")
+        if sentence_count > 2:
+            issues.append("Punchy Tweet must be one or two sentences maximum.")
+        if "\n" in clean:
+            warnings.append("Punchy Tweet should not use line breaks.")
+    elif fmt == "Normal Tweet":
+        if char_count < 140:
+            issues.append("Normal Tweet is too short; use the 161-260 character format space.")
+        if char_count > 280:
+            issues.append("Normal Tweet must stay under 280 characters.")
+    elif fmt == "Long Tweet":
+        if char_count < 360:
+            issues.append("Long Tweet is too short; it should be a real long-form single post.")
+        if char_count > 1300:
+            issues.append("Long Tweet is too long; keep it under 1,300 characters.")
+        if "---TWEET---" in clean:
+            issues.append("Long Tweet should be one post, not a thread.")
+    elif fmt == "Thread":
+        segments = [seg.strip() for seg in clean.split("---TWEET---") if seg.strip()]
+        if len(segments) < 4:
+            issues.append("Thread format must include at least 4 tweet segments separated by ---TWEET---.")
+        if any(len(seg) > 280 for seg in segments):
+            issues.append("Every thread segment must stay under 280 characters.")
+    elif fmt == "Article":
+        if char_count < 1800:
+            issues.append("Article format is too short; it should be a real article draft, not a tweet.")
+        if "---TWEET---" in clean:
+            issues.append("Article format should not use thread separators.")
+        if len(re.findall(r"\n[A-Z][A-Za-z0-9 ,'/-]{4,80}\n", f"\n{clean}\n")) < 2:
+            warnings.append("Article should include visible section headings.")
+    return issues, warnings
+
+
 def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
     clean = str(text or "").strip()
@@ -7871,6 +7925,15 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         try:
             report = reporter(text, fmt, lane)
             if isinstance(report, dict):
+                format_issues, format_warnings = _ce_format_quality_findings(clean, fmt)
+                if format_issues or format_warnings:
+                    report = dict(report)
+                    existing_issues = list(report.get("issues", []) or [])
+                    existing_warnings = list(report.get("warnings", []) or [])
+                    report["issues"] = list(dict.fromkeys(existing_issues + format_issues))
+                    report["warnings"] = list(dict.fromkeys(existing_warnings + format_warnings))
+                    report["ok"] = not report["issues"]
+                    report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(format_issues) * 25 - len(format_warnings) * 8))
                 return report
         except Exception as exc:
             _ce_pulse_debug_event("warn", "draft quality helper recovered", {"error": str(exc)[:160]})
@@ -7880,10 +7943,9 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
 
     if not clean:
         issues.append("Empty draft.")
-    if fmt in ("Punchy Tweet", "Normal Tweet") and char_count > 280:
-        issues.append("Over 280 characters for a single-post format.")
-    if fmt == "Punchy Tweet" and char_count > 180:
-        warnings.append("Punchy lane is running long; the joke or take may lose force.")
+    format_issues, format_warnings = _ce_format_quality_findings(clean, fmt)
+    issues.extend(format_issues)
+    warnings.extend(format_warnings)
     if _ce_text_has_betting_angle(clean):
         issues.append("Contains betting language.")
     ai_terms = (
@@ -8374,7 +8436,8 @@ CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
 """
     raw = ""
     try:
-        raw = call_claude(prompt, system=_creator_evolution_system_prompt(lane), max_tokens=900)
+        _pulse_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 900
+        raw = call_claude(prompt, system=_creator_evolution_system_prompt(lane), max_tokens=_pulse_tokens)
     except Exception as exc:
         raw = f"AI unavailable for Pulse drafts: {exc}"
     data = _parse_banger_json(raw or "") or {}
@@ -9240,6 +9303,57 @@ def _ce_lane_recipe_text(lane: str) -> str:
     ])
 
 
+def _ce_format_recipe_text(fmt: str) -> str:
+    """Return Creator Evolution format rules even when Cloud has a stale helper module."""
+    fmt = _normalize_tweet_format(fmt)
+    formatter = getattr(ce, "format_recipe_text", None)
+    if callable(formatter):
+        try:
+            text = str(formatter(fmt) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "format recipe helper recovered", {"error": str(exc)[:160]})
+    recipes = {
+        "Punchy Tweet": (
+            "Punchy Tweet:\n"
+            "- Target: 70-160 characters. One sharp thought. One or two sentences maximum.\n"
+            "- Structure: No setup paragraph. No line breaks. Compress until it feels like a phone post.\n"
+            "- Must: Every option must be under 160 characters and must not read like a normal-length tweet.\n"
+            "- Avoid: Explaining the context, adding a second angle, threads, or soft qualifiers."
+        ),
+        "Normal Tweet": (
+            "Normal Tweet:\n"
+            "- Target: 161-260 characters. A complete single-post take with room for tension.\n"
+            "- Structure: One compact post. Usually 2-4 short lines or 2-3 sentences.\n"
+            "- Must: Every option must use the extra space; do not return a punchy one-liner.\n"
+            "- Avoid: Going over 280 characters, thread markers, or article-style paragraphing."
+        ),
+        "Long Tweet": (
+            "Long Tweet:\n"
+            "- Target: 500-1,100 characters. A long single post designed for dwell time.\n"
+            "- Structure: Opening take, short supporting beat, contrast or consequence, closing pressure line.\n"
+            "- Must: Every option must be a long-form single post, not a normal tweet stretched by filler.\n"
+            "- Avoid: Thread markers, article headings, or empty recap paragraphs."
+        ),
+        "Thread": (
+            "Thread:\n"
+            "- Target: 4-7 tweets. Each tweet must stand alone and stay under 280 characters.\n"
+            "- Structure: Separate tweets with the exact marker ---TWEET--- inside each option.\n"
+            "- Must: Every option must contain at least 4 tweet segments separated by ---TWEET---.\n"
+            "- Avoid: One long paragraph, article headings, or a normal tweet pretending to be a thread."
+        ),
+        "Article": (
+            "Article:\n"
+            "- Target: 700-1,200 words per option. A real X Article/short column, not a tweet.\n"
+            "- Structure: Headline, intro, 3-5 section headings, and a closing take.\n"
+            "- Must: Every option must read like a complete article draft with section structure.\n"
+            "- Avoid: Tweet-length output, thread markers, or a short caption with a headline."
+        ),
+    }
+    return recipes.get(fmt, recipes["Normal Tweet"])
+
+
 def _ce_install_lane_recipe_text_compat() -> None:
     formatter = getattr(ce, "lane_recipe_text", None)
     if callable(formatter):
@@ -9340,7 +9454,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         live_stats_block=live_stats_block,
         sports_ctx=sports_ctx,
     )
-    max_tokens = 2000 if fmt in ("Thread", "Article") else 700
+    max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700
     raw = call_claude(prompt, system=_creator_evolution_system_prompt(lane), max_tokens=max_tokens)
     data = _parse_banger_json(raw or "")
     if data and data.get("option1"):
