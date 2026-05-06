@@ -24,6 +24,8 @@ _ESPN_SPORTS = {
     "nba": ("basketball", "nba"),
     "ncaam": ("basketball", "mens-college-basketball"),
     "nhl": ("hockey", "nhl"),
+    "mlb": ("baseball", "mlb"),
+    "ncaaf": ("football", "college-football"),
 }
 
 
@@ -571,6 +573,31 @@ def get_sports_context(force: bool = False) -> str:
     except Exception:
         pass
 
+    # MLB / Rockies games
+    try:
+        mlb = espn_scores("mlb", limit=20)
+        rockies_games = [g for g in mlb if _is_team_game(g, "COL", "Colorado Rockies")]
+        rockies_games = [g for g in rockies_games if _include_game_in_live_context(g)]
+        if rockies_games:
+            game_strs = [_format_game_line(g, full_names=True) for g in rockies_games[:2]]
+            lines.append(f"ROCKIES GAME: {' | '.join(game_strs)}")
+    except Exception:
+        pass
+
+    # College football / Buffs games
+    try:
+        ncaaf = espn_scores("ncaaf", limit=20)
+        buffs_games = [
+            g for g in ncaaf
+            if _is_team_game(g, "COLO", "Colorado Buffaloes") or _is_team_game(g, "CU", "Colorado Buffaloes")
+        ]
+        buffs_games = [g for g in buffs_games if _include_game_in_live_context(g)]
+        if buffs_games:
+            game_strs = [_format_game_line(g, full_names=True) for g in buffs_games[:2]]
+            lines.append(f"BUFFS GAME: {' | '.join(game_strs)}")
+    except Exception:
+        pass
+
     # NFL news
     try:
         nfl_news = espn_news("nfl", limit=6)
@@ -586,6 +613,21 @@ def get_sports_context(force: bool = False) -> str:
         if nba_news:
             headlines = [n["headline"][:80] for n in nba_news[:3]]
             lines.append(f"NBA NEWS: {' | '.join(headlines)}")
+    except Exception:
+        pass
+
+    # Colorado sports news across teams
+    try:
+        mlb_news = espn_news("mlb", limit=8)
+        ncaaf_news = espn_news("ncaaf", limit=8)
+        colorado_news = []
+        for n in (mlb_news + ncaaf_news):
+            blob = f"{n.get('headline', '')} {n.get('description', '')}"
+            if re.search(r"\b(rockies|colorado rockies|buffs|buffaloes|coach prime|deion|colorado)\b", blob, re.I):
+                colorado_news.append(n)
+        if colorado_news:
+            headlines = [n["headline"][:88] for n in colorado_news[:4]]
+            lines.append(f"COLORADO NEWS: {' | '.join(headlines)}")
     except Exception:
         pass
 

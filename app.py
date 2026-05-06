@@ -6902,7 +6902,7 @@ def _ci_output_panel_impl(action, tweet_text, fmt, voice):
 
 
 def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
-    """Fetch and parse an RSS feed, return list of headline strings."""
+    """Fetch and parse an RSS feed, preserving URL and publish time for Pulse."""
     try:
         import xml.etree.ElementTree as _ET
         _resp = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
@@ -6914,8 +6914,16 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
             _title = (_item.findtext("title") or "").strip()
             _desc = (_item.findtext("description") or "").strip()
             _pub = (_item.findtext("pubDate") or "").strip()
+            _link = (_item.findtext("link") or "").strip()
             if _title:
-                _out.append(f"{_title} [{_pub[:16]}]" + (f" — {_desc[:120]}" if _desc and _desc != _title else ""))
+                _text = _title + (f" — {_desc[:120]}" if _desc and _desc != _title else "")
+                _out.append({
+                    "title": _title,
+                    "text": _text,
+                    "url": _link,
+                    "publishedAt": _pub,
+                    "source": "news",
+                })
         return _out
     except Exception:
         return []
@@ -6965,8 +6973,12 @@ def _fetch_inspiration_feed():
             _search_queries.append(f"{_topic_or} min_faves:10 -filter:retweets")
     else:
         _search_queries = [
-            "Denver Broncos OR Denver Nuggets OR Avalanche -filter:retweets",
-            "March Madness OR NCAA Tournament OR NBA OR NFL Draft -filter:retweets",
+            "Denver Broncos OR Broncos OR Bo Nix OR Sean Payton -filter:retweets",
+            "Denver Nuggets OR Nuggets OR Jokic OR Jamal Murray -filter:retweets",
+            "Colorado Avalanche OR Avalanche OR Avs OR MacKinnon OR Makar -filter:retweets",
+            "Colorado Buffaloes OR CU Buffs OR Coach Prime OR Deion Sanders -filter:retweets",
+            "Colorado Rockies OR Rockies -filter:retweets",
+            "\"Denver sports\" OR \"Colorado sports\" OR \"Altitude Sports\" -filter:retweets",
         ]
 
     # Layer 3: RSS feeds — niche-aware for guests
@@ -7043,7 +7055,10 @@ def _fetch_inspiration_feed():
         for _f in _rss_futs:
             try:
                 _rss_results = _f.result()
-                _rss_headlines.extend([h for h in _rss_results if not h.startswith("RT ")])
+                for h in _rss_results:
+                    _h_text = (h.get("text") or h.get("title") or "") if isinstance(h, dict) else str(h or "")
+                    if _h_text.strip() and not _h_text.strip().startswith("RT "):
+                        _rss_headlines.append(h)
             except Exception: pass
         if _is_sports_niche:
             try: _espn_headlines = _espn_fut.result()
@@ -7277,10 +7292,15 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 
     if len(_ideas) < 8:
         for _headline in _rss_headlines:
-            _text = (_headline or "").strip()
+            if isinstance(_headline, dict):
+                _text = (_headline.get("text") or _headline.get("title") or _headline.get("headline") or "").strip()
+                _src_value = str(_headline.get("source") or "")
+            else:
+                _text = (_headline or "").strip()
+                _src_value = _text
             if not _text:
                 continue
-            _src = "espn" if "espn" in _text.lower() else "news"
+            _src = "espn" if "espn" in _src_value.lower() or "espn" in _text.lower() else "news"
             _append(_text, _src)
             if len(_ideas) >= 8:
                 break
@@ -7820,7 +7840,8 @@ def _ce_is_completed_game_context(text: str) -> bool:
     has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
     has_game_label = "game:" in lower or " game" in lower or has_matchup_shape
     has_final_status = bool(
-        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot)\)", clean, re.I)
+        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot|final\s+ot)\)", clean, re.I)
+        or re.search(r"\bfinal\s+(?:ot|so)\b", lower)
         or re.search(r"\b(final score|game final|went final|completed)\b", lower)
     )
     return bool(has_game_label and has_final_status)
@@ -7973,12 +7994,14 @@ def _ce_extract_avalanche_context(sports_context: str) -> str:
             continue
         if _ce_is_completed_game_context(line):
             continue
+        if not (line.upper().startswith("AVALANCHE GAME:") or line.upper().startswith("AVALANCHE NEWS:")):
+            continue
         if ("avalanche" in lower or re.search(r"\bavs\b", lower)) and any(
             term in lower
             for term in (
                 "game", "news", "breaking", "puck drop", "tonight", "scheduled", "goalie",
-                "starter", "injury", "coach", "line", "period", "final", "live",
-                "in progress", "playoff", "series", "next", "today", "score", "@", " vs ",
+                "starter", "injury", "coach", "line", "period", "live",
+                "in progress", "playoff", "series", "today", "score", "@", " vs ",
             )
         ):
             avs_lines.append(line)
@@ -8013,6 +8036,12 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
     except Exception:
         handle = ""
     checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _avs_state = _ce_avs_live_state(avs_line)
+    _lower_line = avs_line.lower()
+    _fresh_fallback = bool(_avs_state.get("score") or any(term in _lower_line for term in ("scheduled", "puck drop", "tonight", "starts", "pregame", "period", "live", "in progress")))
+    _fallback_status = "ready" if _fresh_fallback else "best_available"
+    _fallback_score = 82.0 if _fresh_fallback else 64.0
+    _fallback_confidence = 87.3 if _fresh_fallback else 72.0
     best = {
         "id": hashlib.sha1(f"avs|{avs_line}".encode("utf-8")).hexdigest()[:14],
         "topic": "avs",
@@ -8022,11 +8051,12 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
             "source": "sports_context",
             "text": avs_line,
             "url": "",
-            "freshness_status": "fresh",
-            "age_hours": 0,
+            "freshness_status": "fresh" if _fresh_fallback else "unknown_time",
+            "age_hours": 0 if _fresh_fallback else 999,
+            "timestamp_missing": not _fresh_fallback,
         }],
-        "score": 82.0,
-        "raw_score": 94.3,
+        "score": _fallback_score,
+        "raw_score": 94.3 if _fresh_fallback else 73.0,
         "weighted_scores": {
             "timeliness": 20.0,
             "velocity": 1.5,
@@ -8043,7 +8073,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
         "recommended_action": "tweet",
         "recommended_lane": _ce_normalize_lane(lane),
         "freshness_score": 20.0,
-        "confidence": 87.3,
+        "confidence": _fallback_confidence,
         "why_now": _ce_avalanche_why_now(avs_line),
     }
     brief = (
@@ -8054,7 +8084,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
         "WHY NOW:\n"
         f"{best['why_now']}\n\n"
         "SOURCE BASIS:\n"
-        f"- sports_context | fresh | {avs_line}\n\n"
+        f"- sports_context | {'fresh' if _fresh_fallback else 'unknown_time'} | {avs_line}\n\n"
         "CREATOR EVOLUTION LIVE RULES:\n"
         "- Use Creator Evolution voice rules only. No Hall of Fame examples.\n\n"
         "PULSE WRITING CONTRACT:\n"
@@ -8064,7 +8094,7 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
     )
     return {
         "version": _ce_pulse_version(),
-        "status": "ready",
+        "status": _fallback_status,
         "handle": handle,
         "threshold": 68.0,
         "checked_at": checked_at,
@@ -8089,7 +8119,8 @@ def _ce_pulse_source_material(decision: dict) -> str:
         text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
         if not text or _ce_text_has_betting_angle(text):
             continue
-        basis_lines.append(f"- {item.get('source', 'source')} | {item.get('freshness_status', 'fresh')} | {text}")
+        _time_note = " | unknown time" if item.get("timestamp_missing") else ""
+        basis_lines.append(f"- {item.get('source', 'source')} | {item.get('freshness_status', 'fresh')}{_time_note} | {text}")
     summary = re.sub(r"\s+", " ", str(best.get("summary_text") or "")).strip()
     if summary and not _ce_text_has_betting_angle(summary):
         seed_summary = summary
@@ -8103,6 +8134,10 @@ def _ce_pulse_source_material(decision: dict) -> str:
         f"WHY NOW: {best.get('why_now', 'Fresh live context is active.')}\n"
         "SOURCE BASIS:\n"
         f"{chr(10).join(basis_lines[:5]) if basis_lines else '- sports_context | fresh | Use the non-gambling game/news context only.'}\n\n"
+        "SOURCE LIMITS:\n"
+        "- X/Twitter is the room-reading layer. Sports/news context only grounds facts.\n"
+        "- If a source says unknown time, do not write as if it just happened.\n"
+        "- If no live game facts are present, make the tweet about the actual timeline argument, news tension, or fan reaction.\n\n"
         "PULSE DRAFT RULES:\n"
         "- Return post-ready tweets immediately, not a strategy brief.\n"
         "- Show real personality: witty, specific, slightly sharp, and human.\n"
@@ -8110,7 +8145,7 @@ def _ce_pulse_source_material(decision: dict) -> str:
         "- Never write generic game-night psychology when live score/clock context exists.\n"
         "- Do not make the tweet about gambling, moneyline, spread, odds, over/under, betting, or picks.\n"
         "- If betting data exists anywhere in source context, treat it as background only and do not mention it.\n"
-        "- The angle should be reply-worthy fan tension, not a schedule report.\n"
+        "- The angle should be reply-worthy Colorado sports tension, not a schedule report.\n"
         "- No invented stats, injuries, roster facts, or current-event claims beyond the source basis."
     )
 
@@ -8430,8 +8465,6 @@ def _run_creator_evolution_pulse(lane: str | None = None,
     if _avs_decision and (
         _decision.get("status") in ("pulse_error", "no_op")
         or not isinstance(_decision.get("best"), dict)
-        or (_decision.get("best") or {}).get("topic") != "avs"
-        or not _best_is_live_avs_game
     ):
         _ce_pulse_debug_event("ok", "Avalanche Pulse fallback selected", {"previous_status": _decision.get("status", "")})
         _decision = _avs_decision
@@ -8717,11 +8750,12 @@ def _ce_pulse_dialog():
     _status = _decision.get("status", "no_op")
     _status_label = {
         "ready": "READY",
+        "best_available": "BEST AVAILABLE",
         "save_for_later": "SAVE",
         "no_op": "NO SAFE SOURCE",
         "pulse_error": "PULSE RECOVERED",
     }.get(_status, _status.upper())
-    _accent = "#2DD4BF" if _status == "ready" else "#C49E3C" if _status in ("save_for_later", "pulse_error") else "#5a7090"
+    _accent = "#2DD4BF" if _status == "ready" else "#8FE6D8" if _status == "best_available" else "#C49E3C" if _status in ("save_for_later", "pulse_error") else "#5a7090"
     st.markdown(
         f"""
 <div style="border:1px solid rgba(45,212,191,0.16);background:rgba(10,18,32,0.58);border-radius:8px;padding:14px;margin-bottom:14px;">

@@ -17,7 +17,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v4-live-freshness"
+PULSE_VERSION = "ce-pulse-v5-room-reader"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -49,7 +49,8 @@ FRESHNESS_HOURS = {
 PRIMARY_AUDIENCE_TERMS = (
     "broncos", "nuggets", "rockies", "avalanche", "avs", "colorado",
     "denver", "bo nix", "jokic", "murray", "mackinnon", "makar",
-    "sean payton", "broncoscountry",
+    "sean payton", "broncoscountry", "buffs", "cu buffs", "coach prime",
+    "deion", "colorado buffaloes",
 )
 SPORTS_TERMS = (
     "game", "coach", "trade", "draft", "injury", "rumor", "playoff",
@@ -72,9 +73,18 @@ TENSION_TERMS = (
     "melting down", "boring", "hinted", "fans",
 )
 LIVE_TERMS = (
-    "now", "today", "tonight", "live", "breaking", "just", "final",
+    "now", "today", "tonight", "live", "breaking", "just",
     "halftime", "quarter", "injury", "trade", "report", "rumor",
     "pregame", "puck drop", "starts", "scheduled",
+)
+LIVE_GAME_TERMS = (
+    "period", "quarter", "half", "halftime", "intermission", "in progress",
+    "end of", "puck drop", "kickoff", "tipoff", "starts", "scheduled",
+)
+COLORADO_TEAM_TERMS = (
+    "broncos", "denver broncos", "nuggets", "denver nuggets",
+    "avalanche", "colorado avalanche", "avs", "rockies", "colorado rockies",
+    "buffs", "cu buffs", "colorado buffaloes", "coach prime", "deion",
 )
 UNSAFE_MONETIZATION_TERMS = (
     "slur", "kill", "die", "crime", "arrested", "lawsuit", "gambling lock",
@@ -188,6 +198,8 @@ def _ce_topic_tags(text: str) -> list[str]:
         "broncos": ("broncos", "bo nix", "sean payton", "paton"),
         "nuggets": ("nuggets", "jokic", "murray"),
         "avs": ("avs", "avalanche", "mackinnon", "makar"),
+        "buffs": ("buffs", "cu buffs", "colorado buffaloes", "coach prime", "deion"),
+        "rockies": ("rockies", "colorado rockies"),
         "draft": ("draft", "pick ", "combine", "prospect"),
         "media": ("media", "espn", "reporter", "narrative"),
     }.items():
@@ -227,9 +239,8 @@ def _now(now: datetime | None = None) -> datetime:
     return now.astimezone(timezone.utc)
 
 
-def _parse_time(value: Any, now: datetime | None = None) -> datetime:
-    parsed = _ce_parse_datetime(value)
-    return parsed or _now(now)
+def _parse_time(value: Any, now: datetime | None = None) -> datetime | None:
+    return _ce_parse_datetime(value)
 
 
 def _text(value: Any) -> str:
@@ -268,7 +279,22 @@ def _iter_feed_items(value: Any, *preferred_keys: str) -> list[Any]:
     return []
 
 
-def _age_hours(timestamp: datetime, now: datetime | None = None) -> float:
+def _split_sports_context_line(line: str) -> list[str]:
+    clean = _text(line)
+    if not clean:
+        return []
+    if " | " not in clean or ":" not in clean:
+        return [clean]
+    label, rest = clean.split(":", 1)
+    label_clean = label.strip()
+    if label_clean.upper() not in {"AVALANCHE GAME", "NUGGETS GAME", "BRONCOS GAME", "ROCKIES GAME", "BUFFS GAME", "NFL NEWS", "NBA NEWS", "NHL NEWS", "MLB NEWS", "AVALANCHE NEWS", "COLORADO NEWS"}:
+        return [clean]
+    return [f"{label_clean}: {part.strip()}" for part in rest.split(" | ") if part.strip()]
+
+
+def _age_hours(timestamp: datetime | None, now: datetime | None = None) -> float:
+    if timestamp is None:
+        return 999.0
     return max(0.0, (_now(now) - timestamp).total_seconds() / 3600.0)
 
 
@@ -297,7 +323,7 @@ def _audience_fit(text: str) -> float:
 
 def _reply_tension(text: str) -> float:
     lower = text.lower()
-    if _is_avalanche_pregame_or_news(lower):
+    if _is_colorado_current_context(lower):
         return 5.4
     hits = sum(1 for term in TENSION_TERMS if term in lower)
     if hits:
@@ -316,6 +342,10 @@ def _is_avalanche_pregame_or_news(text: str) -> bool:
     )
 
 
+def _is_colorado_pregame_or_news(text: str) -> bool:
+    return _is_colorado_current_context(text)
+
+
 def _is_completed_game_context(text: str) -> bool:
     """True for scoreboard-style finals, not news about a Cup Final."""
     clean = _text(text)
@@ -327,10 +357,32 @@ def _is_completed_game_context(text: str) -> bool:
     has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
     has_game_label = "game:" in lower or " game" in lower or has_matchup_shape
     has_final_status = bool(
-        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot)\)", clean, re.I)
+        re.search(r"\((?:f|final|final/ot|final\s*-\s*ot|final\s+ot)\)", clean, re.I)
+        or re.search(r"\bfinal\s+(?:ot|so)\b", lower)
         or re.search(r"\b(final score|game final|went final|completed)\b", lower)
     )
     return bool(has_game_label and has_final_status)
+
+
+def _is_live_game_context(text: str) -> bool:
+    clean = _text(text)
+    lower = clean.lower()
+    if not clean or _is_completed_game_context(clean):
+        return False
+    has_game_label = bool(re.match(r"^(avalanche game|nuggets game|broncos game|rockies game|buffs game|nba|nhl|nfl|mlb|ncaa):", lower))
+    has_score = bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
+    return has_game_label and (has_score or _contains_any(lower, LIVE_GAME_TERMS))
+
+
+def _is_colorado_current_context(text: str) -> bool:
+    lower = _text(text).lower()
+    if _is_completed_game_context(lower):
+        return False
+    return any(term in lower for term in COLORADO_TEAM_TERMS) and (
+        _is_live_game_context(lower)
+        or any(term in lower for term in PREGAME_OR_BREAKING_TERMS)
+        or any(term in lower for term in ("breaking", "report", "rumor", "quote", "coach", "trade", "injury"))
+    )
 
 
 def _is_betting_signal_text(text: str) -> bool:
@@ -350,6 +402,10 @@ def _is_avalanche_opportunity(item: dict[str, Any]) -> bool:
     return _is_avalanche_pregame_or_news(_opportunity_text(item))
 
 
+def _is_colorado_opportunity(item: dict[str, Any]) -> bool:
+    return _is_colorado_current_context(_opportunity_text(item))
+
+
 def _risk_flags(text: str) -> list[str]:
     flags = []
     lower = text.lower()
@@ -367,9 +423,13 @@ def _source_reliability(source: str) -> float:
     return SOURCE_RELIABILITY.get((source or "").lower(), SOURCE_RELIABILITY["news"])
 
 
-def _freshness_status(source: str, timestamp: datetime, text: str, now: datetime | None = None) -> str:
-    age = _age_hours(timestamp, now)
+def _freshness_status(source: str, timestamp: datetime | None, text: str, now: datetime | None = None) -> str:
     source_key = (source or "news").lower()
+    if timestamp is None:
+        if source_key == "sports_context" and _is_live_game_context(text):
+            return "fresh"
+        return "unknown_time"
+    age = _age_hours(timestamp, now)
     max_age = FRESHNESS_HOURS.get(source_key, 12.0)
     if _contains_any(text, LIVE_TERMS):
         max_age = min(max_age, 4.0)
@@ -386,9 +446,11 @@ def _velocity(item: dict[str, Any], age: float) -> float:
     likes = _metric(item, "likeCount", "like_count", "likes")
     quotes = _metric(item, "quoteCount", "quote_count", "quotes")
     views = _metric(item, "viewCount", "view_count", "views")
-    engagement = replies * 4 + reposts * 3 + quotes * 3 + likes
-    if views:
-        engagement += min(25, math.log10(max(views, 1)) * 4)
+    active = replies + reposts + quotes
+    passive_like_credit = min(likes, max(4, active * 4)) if active else min(likes, 3)
+    engagement = replies * 4 + reposts * 3 + quotes * 3 + passive_like_credit
+    if views and active:
+        engagement += min(8, math.log10(max(views, 1)) * 1.5)
     return round(engagement / max(age, 0.5), 2)
 
 
@@ -408,7 +470,8 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
         "id": str(tweet.get("id") or tweet.get("tweet_id") or _stable_id(text, src)),
         "source": src,
         "source_reliability": _source_reliability(src),
-        "timestamp": timestamp.isoformat(timespec="seconds"),
+        "timestamp": timestamp.isoformat(timespec="seconds") if timestamp else "",
+        "timestamp_missing": timestamp is None,
         "age_hours": round(age, 2),
         "topic": ", ".join(_ce_topic_tags(text)),
         "text": text,
@@ -423,7 +486,7 @@ def signal_from_tweet(tweet: dict[str, Any], *, source: str = "twitter",
         },
         "velocity": _velocity(tweet, age),
         "entities": sorted(_tokens(text) & _tokens(" ".join(PRIMARY_AUDIENCE_TERMS + SPORTS_TERMS)))[:12],
-        "fact_confidence": min(10.0, _source_reliability(src) + (1.0 if url else 0.0)),
+        "fact_confidence": max(0.0, min(10.0, _source_reliability(src) + (1.0 if url else 0.0) - (1.5 if timestamp is None else 0.0))),
         "audience_fit": _audience_fit(text),
         "reply_tension": _reply_tension(text),
         "risk_flags": _risk_flags(text),
@@ -441,7 +504,8 @@ def signal_from_text(text: str, *, source: str = "news", url: str = "",
         "id": _stable_id(clean, src),
         "source": src,
         "source_reliability": _source_reliability(src),
-        "timestamp": ts.isoformat(timespec="seconds"),
+        "timestamp": ts.isoformat(timespec="seconds") if ts else "",
+        "timestamp_missing": ts is None,
         "age_hours": round(_age_hours(ts, now), 2),
         "topic": ", ".join(_ce_topic_tags(clean)),
         "text": clean,
@@ -450,7 +514,7 @@ def signal_from_text(text: str, *, source: str = "news", url: str = "",
         "engagement": {},
         "velocity": 0.0,
         "entities": sorted(_tokens(clean) & _tokens(" ".join(PRIMARY_AUDIENCE_TERMS + SPORTS_TERMS)))[:12],
-        "fact_confidence": min(10.0, _source_reliability(src) + (1.0 if url else 0.0)),
+        "fact_confidence": max(0.0, min(10.0, _source_reliability(src) + (1.0 if url else 0.0) - (1.5 if ts is None else 0.0))),
         "audience_fit": _audience_fit(clean),
         "reply_tension": _reply_tension(clean),
         "risk_flags": _risk_flags(clean),
@@ -491,14 +555,16 @@ def build_signals(tweets: list[dict[str, Any]] | None,
         except Exception:
             continue
     if sports_context:
-        for line in str(sports_context).splitlines():
-            line = _text(line)
-            if _is_betting_signal_text(line):
-                continue
-            if _is_completed_game_context(line):
-                continue
-            if len(line) >= 24 and _contains_any(line, SPORTS_TERMS + PRIMARY_AUDIENCE_TERMS):
-                signals.append(signal_from_text(line, source="sports_context", now=now))
+        for raw_line in str(sports_context).splitlines():
+            for line in _split_sports_context_line(raw_line):
+                line = _text(line)
+                if _is_betting_signal_text(line):
+                    continue
+                if _is_completed_game_context(line):
+                    continue
+                if len(line) >= 24 and _contains_any(line, SPORTS_TERMS + PRIMARY_AUDIENCE_TERMS):
+                    timestamp = _now(now) if _is_live_game_context(line) else None
+                    signals.append(signal_from_text(line, source="sports_context", timestamp=timestamp, now=now))
     seen = set()
     unique = []
     for signal in signals:
@@ -572,14 +638,14 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         return {}
     primary = signals[0]
     text = " ".join(s.get("text", "") for s in signals[:4])
-    live_avalanche = _is_avalanche_pregame_or_news(text)
+    colorado_now = _is_colorado_pregame_or_news(text)
     fresh_count = sum(1 for s in signals if s.get("freshness_status") in ("fresh", "usable"))
     best_age = min(_signal_age_hours(s) for s in signals)
     max_velocity = max(float(s.get("velocity") or 0) for s in signals)
     audience_fit = max(float(s.get("audience_fit") or 0) for s in signals)
     reply_tension = max(float(s.get("reply_tension") or 0) for s in signals)
     fact_confidence = min(10.0, max(float(s.get("fact_confidence") or 0) for s in signals) + (1.0 if len(signals) >= 2 else 0.0))
-    if live_avalanche:
+    if colorado_now:
         audience_fit = max(audience_fit, 9.4)
         reply_tension = max(reply_tension, 6.6)
         fact_confidence = max(fact_confidence, 8.0)
@@ -600,11 +666,11 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if fresh_count >= 2:
         timeliness = min(20.0, timeliness + 2.0)
     velocity = min(15.0, max_velocity / 2.0 + len(signals) * 1.5)
-    if live_avalanche:
+    if colorado_now:
         timeliness = max(timeliness, 18.5)
         velocity = max(velocity, 6.0)
     urgency = 10.0 if _contains_any(text, LIVE_TERMS) else max(3.0, timeliness / 2.5)
-    if live_avalanche:
+    if colorado_now:
         urgency = 10.0
     voice_fit = min(10.0, 3.0 + reply_tension * 0.45 + audience_fit * 0.25)
     weighted = {
@@ -630,6 +696,8 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         soft_flags.append("weak_audience_fit")
     if reply_tension < 4.0:
         soft_flags.append("weak_reply_tension")
+    if len(signals) == 1 and max_velocity < 8 and reply_tension < 5.0 and not colorado_now:
+        soft_flags.append("thin_room_signal")
     if safety < 6.0:
         hard_blocks.append("monetization_risk")
     if novelty_flag == "duplicate_recent_angle":
@@ -644,6 +712,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "topic": cluster.get("topic", "general"),
         "summary_text": primary.get("text", ""),
         "sources": cluster.get("sources", []),
+        "signal_count": len(signals),
         "source_basis": [
             {
                 "source": s.get("source", ""),
@@ -651,6 +720,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
                 "url": s.get("url", ""),
                 "freshness_status": s.get("freshness_status", ""),
                 "age_hours": s.get("age_hours", 0),
+                "timestamp_missing": bool(s.get("timestamp_missing")),
             }
             for s in signals[:4]
         ],
@@ -672,6 +742,43 @@ def _blocking_blocks(item: dict[str, Any] | None) -> list[str]:
     if not isinstance(item, dict):
         return []
     return [block for block in item.get("hard_blocks", []) if block in BLOCKING_HARD_BLOCKS]
+
+
+def _has_strong_now_signal(item: dict[str, Any] | None) -> bool:
+    if not isinstance(item, dict):
+        return False
+    text = _opportunity_text(item)
+    weighted = item.get("weighted_scores", {}) or {}
+    sources = item.get("source_basis", []) or []
+    fresh_sources = [s for s in sources if isinstance(s, dict) and s.get("freshness_status") == "fresh"]
+    if _is_live_game_context(text):
+        return True
+    if _is_colorado_current_context(text) and fresh_sources and any(
+        term in text.lower() for term in ("breaking", "just", "report", "rumor", "quote", "coach", "trade", "injury")
+    ):
+        return True
+    if len(fresh_sources) >= 2 and float(weighted.get("reply_tension", 0) or 0) >= 8:
+        return True
+    if "twitter" in {str(s.get("source", "")) for s in sources if isinstance(s, dict)}:
+        return (
+            float(weighted.get("velocity", 0) or 0) >= 8
+            and float(weighted.get("reply_tension", 0) or 0) >= 7
+            and float(weighted.get("audience_fit", 0) or 0) >= 9
+        )
+    return False
+
+
+def _can_be_best_available(item: dict[str, Any] | None) -> bool:
+    if not isinstance(item, dict) or _blocking_blocks(item):
+        return False
+    weighted = item.get("weighted_scores", {}) or {}
+    if float(item.get("score", 0) or 0) < SAVE_THRESHOLD:
+        return False
+    if float(weighted.get("audience_fit", 0) or 0) < 8:
+        return False
+    if "thin_room_signal" in (item.get("soft_flags") or []) and float(weighted.get("reply_tension", 0) or 0) < 7:
+        return False
+    return True
 
 
 def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
@@ -713,17 +820,32 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     scored = [item for item in scored if item]
     scored.sort(key=lambda item: item.get("score", 0), reverse=True)
     usable = [item for item in scored if not _blocking_blocks(item)]
-    avs_usable = [item for item in usable if _is_avalanche_opportunity(item)]
-    best = avs_usable[0] if avs_usable else (usable[0] if usable else (scored[0] if scored else None))
-    status = "ready" if best and not _blocking_blocks(best) else "no_op"
-    if best and status == "ready" and best.get("score", 0) < threshold:
+    colorado_usable = [item for item in usable if _is_colorado_opportunity(item)]
+    strong_colorado = [item for item in colorado_usable if _has_strong_now_signal(item)]
+    best = strong_colorado[0] if strong_colorado else (usable[0] if usable else (scored[0] if scored else None))
+    status = "no_op"
+    if best and not _blocking_blocks(best):
+        _thin_room_signal = "thin_room_signal" in (best.get("soft_flags") or [])
+        if _has_strong_now_signal(best):
+            status = "ready"
+        elif best.get("score", 0) >= threshold and not _thin_room_signal:
+            status = "ready"
+        elif _can_be_best_available(best):
+            status = "best_available"
+    if best and status == "best_available":
         best = dict(best)
         best["recommended_action"] = "tweet"
         best["why_now"] = (
-            f"{best.get('why_now', 'Fresh live context is active.')}; "
-            "selected as the best safe tweet available right now"
+            f"{best.get('why_now', 'Fresh timeline context is active.')}; "
+            "selected as the best available Colorado timeline angle right now"
         )
-    elif best and status == "no_op" and best.get("score", 0) >= SAVE_THRESHOLD and not _blocking_blocks(best):
+    elif (
+        best
+        and status == "no_op"
+        and best.get("score", 0) >= SAVE_THRESHOLD
+        and not _blocking_blocks(best)
+        and "thin_room_signal" not in (best.get("soft_flags") or [])
+    ):
         status = "save_for_later"
         best = dict(best)
         best["recommended_action"] = "save"
@@ -738,7 +860,13 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
         "clusters_checked": len(clusters),
         "best": best,
         "top_rejected": [item for item in scored if item.get("id") != (best or {}).get("id")][:5],
-        "message": "No safe Pulse source right now." if status == "no_op" else "Pulse found the best tweet available right now.",
+        "message": (
+            "No safe Pulse source right now."
+            if status == "no_op"
+            else "Pulse found the best tweet available right now."
+            if status == "ready"
+            else "Pulse found the best available Colorado timeline angle right now."
+        ),
     }
     if best:
         decision["brief"] = build_pulse_brief(best, state)

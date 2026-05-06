@@ -270,7 +270,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v4-live-freshness")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v5-room-reader")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -294,7 +294,8 @@ class CreatorEvolutionTests(unittest.TestCase):
             handle="polfam",
             now=NOW,
         )
-        self.assertEqual(news_decision["status"], "ready")
+        self.assertEqual(news_decision["status"], "no_op")
+        self.assertIn("stale_source", news_decision["best"]["hard_blocks"])
 
     def test_pulse_ignores_final_avalanche_game_from_sports_context(self):
         sports_context = (
@@ -396,7 +397,46 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(decision["best"]["topic"], "avs")
         self.assertEqual(decision["best"]["hard_blocks"], [])
         self.assertIn("best tweet available right now", decision["message"])
-        self.assertIn("selected as the best safe tweet available right now", decision["best"]["why_now"])
+        self.assertIn("newest signal 0.0h old", decision["best"]["why_now"])
+
+    def test_pulse_reads_colorado_timeline_when_no_game_is_live(self):
+        tweets = [
+            _tweet(
+                16,
+                "Nuggets fans are arguing now because the front office keeps acting like the bench problem is a weather pattern",
+                hours_ago=0.4,
+                views=24000,
+                likes=520,
+                replies=180,
+                reposts=75,
+                quotes=24,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertEqual(decision["best"]["topic"], "nuggets")
+        self.assertIn("twitter", decision["brief"].lower())
+
+    def test_pulse_does_not_call_bland_fresh_timeline_noise_ready(self):
+        tweets = [
+            _tweet(
+                17,
+                "Denver sports are kind of interesting today",
+                hours_ago=0.2,
+                views=9000,
+                likes=8,
+                replies=0,
+                reposts=0,
+                quotes=0,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertNotEqual(decision["status"], "ready")
+        self.assertIn("thin_room_signal", decision["best"]["soft_flags"])
 
     def test_cavs_does_not_get_tagged_as_avs(self):
         self.assertNotIn("avs", pulse._ce_topic_tags("Allen going out will help Cavs offense tonight"))
@@ -479,7 +519,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("write about that exact game state", app_text)
         self.assertIn("Avs up {score}", app_text)
         self.assertIn("_best_is_live_avs_game", app_text)
-        self.assertIn("or not _best_is_live_avs_game", app_text)
+        self.assertNotIn("or not _best_is_live_avs_game", app_text)
         self.assertIn("required_score and required_score not in draft", app_text)
         self.assertIn("or _ce_pulse_meta_language(draft)", app_text)
         fallback_block = app_text.split("def _ce_pulse_local_fallback_drafts", 1)[1].split("def _ce_pulse_finalize_drafts", 1)[0]
@@ -500,7 +540,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v4-live-freshness", pulse_text)
+        self.assertIn("ce-pulse-v5-room-reader", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)
