@@ -196,6 +196,53 @@ class CreatorEvolutionTests(unittest.TestCase):
         ])
         self.assertTrue(ce.draft_quality_report(thread, "Thread", "Witty Edge")["ok"])
 
+    def test_format_evolution_learns_profiles_from_mature_tweets(self):
+        tweets = [
+            _tweet(20, "The Broncos keep acting like the boring roster answer is a side quest, but every real signal keeps pointing back to the same uncomfortable plan. That is usually where this league tells on itself...", hours_ago=90, views=14000, likes=320, replies=80, reposts=45),
+            _tweet(21, "Nuggets bench discourse is funny because everyone wants a clean answer, and the actual answer keeps looking like another weird compromise. Very normal way to spend a title window...", hours_ago=96, views=12000, likes=260, replies=72, reposts=36),
+            _tweet(22, "The Buffs argument always turns into Coach Prime theater, but the development conversation is sitting right there making people uncomfortable. Almost like both things can be true...", hours_ago=110, views=16000, likes=350, replies=95, reposts=50),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        profile = state["patterns"]["format_profiles"]["Normal Tweet"]
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are trying to decide whether boring is actually the plan",
+            "Normal Tweet",
+            "Witty Edge",
+            state,
+        )
+
+        self.assertEqual(profile["sample_size"], 3)
+        self.assertEqual(profile["status"], "mature")
+        self.assertEqual(len(profile["winner_ids"]), 1)
+        self.assertEqual(len(profile["loser_ids"]), 1)
+        self.assertNotEqual(profile["winner_ids"], profile["loser_ids"])
+        self.assertTrue(profile["traits"])
+        self.assertIn("LEARNED FORMAT PROFILE:", prompt)
+        self.assertIn("Normal Tweet learned profile", prompt)
+        self.assertIn("Winning trait:", prompt)
+
+    def test_format_evolution_rule_updates_are_approval_gated(self):
+        tweets = [
+            _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),
+            _tweet(24, "Nuggets fans keep asking for a clean bench answer, which is adorable because this team has chosen stress as a roster philosophy. At some point the chaos becomes the plan...", hours_ago=96, views=13000, likes=280, replies=76, reposts=38),
+            _tweet(25, "CU development discourse would be a lot easier if people admitted Coach Prime can be annoying and still have a real player story. The internet hates holding both thoughts...", hours_ago=110, views=17000, likes=370, replies=100, reposts=52),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        format_props = [
+            prop for prop in state["proposals"]
+            if prop["rule"].startswith("For Normal Tweet, follow the learned winning format profile")
+        ]
+
+        self.assertTrue(format_props)
+        self.assertNotIn(format_props[0]["rule"], ce.approved_rules_text(state))
+
+        approved = ce.approve_proposal(state, format_props[0]["id"], now=NOW)
+
+        self.assertIn(format_props[0]["rule"], ce.approved_rules_text(approved))
+        self.assertIn(format_props[0]["rule"], ce.performance_context(approved))
+
     def test_sarcastic_lane_matches_creator_studio_voice_block(self):
         self.assertIn("Sarcastic", ce.EMOTION_LANES)
 
@@ -568,6 +615,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("ce.draft_quality_report(", app_text)
         self.assertIn("def _ce_lane_recipe_text", app_text)
         self.assertIn("def _ce_format_recipe_text", app_text)
+        self.assertIn("def _ce_format_learning_text", app_text)
         self.assertIn("def _ce_install_lane_recipe_text_compat", app_text)
         self.assertIn('getattr(ce, "lane_recipe_text", None)', app_text)
         self.assertIn('setattr(ce, "lane_recipe_text", _ce_lane_recipe_text)', app_text)
@@ -606,6 +654,8 @@ class CreatorEvolutionTests(unittest.TestCase):
             self.assertNotIn(attr, app_text)
         self.assertIn("_ce_pulse_source_material", app_text)
         self.assertIn("CREATOR EVOLUTION FORMAT CONTRACT", app_text)
+        self.assertIn("LEARNED FORMAT PROFILE", app_text)
+        self.assertIn("Format Evolution", app_text)
         self.assertIn("_ce_format_quality_findings", app_text)
         self.assertIn('max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700', app_text)
         self.assertIn("Refresh Tweets", app_text)

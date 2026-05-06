@@ -680,6 +680,77 @@ def _proposal_id(rule: str, evidence_ids: list[str]) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
+def _ending_style(text: str) -> str:
+    clean = str(text or "").strip()
+    if not clean:
+        return "none"
+    if clean.endswith("?"):
+        return "question"
+    if clean.endswith("...") or clean.endswith("…"):
+        return "ellipsis"
+    if clean.endswith("!"):
+        return "exclamation"
+    if clean.endswith("."):
+        return "period"
+    return "open"
+
+
+def _format_features(text: str) -> dict[str, Any]:
+    clean = str(text or "").strip()
+    sentences = [part for part in re.split(r"[.!?]+", clean) if part.strip()]
+    lines = [line for line in clean.splitlines() if line.strip()]
+    thread_segments = [seg.strip() for seg in clean.split("---TWEET---") if seg.strip()]
+    return {
+        "char_count": len(clean),
+        "sentence_count": len(sentences),
+        "line_breaks": max(len(lines) - 1, 0),
+        "ending": _ending_style(clean),
+        "thread_segments": len(thread_segments) if "---TWEET---" in clean else 0,
+        "has_question": "?" in clean,
+        "has_ellipsis": "..." in clean or "…" in clean,
+    }
+
+
+def _avg(values: list[float]) -> float:
+    return sum(values) / max(len(values), 1)
+
+
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[mid])
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def _pct(values: list[bool]) -> int:
+    if not values:
+        return 0
+    return round(sum(1 for value in values if value) / len(values) * 100)
+
+
+def _most_common(values: list[str]) -> str:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    if not counts:
+        return ""
+    return sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)[0][0]
+
+
+def _char_band(values: list[int]) -> tuple[int, int]:
+    if not values:
+        return 0, 0
+    ordered = sorted(values)
+    if len(ordered) < 4:
+        return min(ordered), max(ordered)
+    lo_idx = max(0, round((len(ordered) - 1) * 0.25))
+    hi_idx = min(len(ordered) - 1, round((len(ordered) - 1) * 0.75))
+    return ordered[lo_idx], ordered[hi_idx]
+
+
 def _keep_existing_proposal_status(new_prop: dict[str, Any], existing: list[dict[str, Any]]) -> dict[str, Any]:
     for prop in existing:
         if prop.get("id") == new_prop["id"]:
@@ -689,6 +760,75 @@ def _keep_existing_proposal_status(new_prop: dict[str, Any], existing: list[dict
             merged["created_at"] = prop.get("created_at", new_prop["created_at"])
             return merged
     return new_prop
+
+
+def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool) -> dict[str, Any]:
+    ranked = sorted(items, key=lambda s: s["scores"]["creator_evolution"], reverse=True)
+    edge_count = max(1, min(5, (len(ranked) + 3) // 4))
+    winners = ranked[:edge_count]
+    losers = ranked[-edge_count:] if len(ranked) > edge_count else []
+    winner_features = [_format_features(item["text"]) for item in winners]
+    loser_features = [_format_features(item["text"]) for item in losers]
+    winner_chars = [int(f["char_count"]) for f in winner_features]
+    loser_chars = [int(f["char_count"]) for f in loser_features]
+    char_lo, char_hi = _char_band(winner_chars)
+    sentence_median = round(_median([float(f["sentence_count"]) for f in winner_features]), 1)
+    line_break_median = round(_median([float(f["line_breaks"]) for f in winner_features]), 1)
+    ending = _most_common([str(f["ending"]) for f in winner_features])
+    question_pct = _pct([bool(f["has_question"]) for f in winner_features])
+    ellipsis_pct = _pct([bool(f["has_ellipsis"]) for f in winner_features])
+    avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in items]), 2)
+    winner_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in winners]), 2)
+    loser_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in losers]), 2)
+    traits = [
+        f"{char_lo}-{char_hi} chars among current {fmt} winners" if char_lo and char_hi else "",
+        f"median {sentence_median:g} sentence(s)" if sentence_median else "",
+        f"median {line_break_median:g} line break(s)" if line_break_median else "",
+        f"most common ending: {ending}" if ending else "",
+    ]
+    if question_pct:
+        traits.append(f"{question_pct}% of winners include a question mark")
+    if ellipsis_pct:
+        traits.append(f"{ellipsis_pct}% of winners include ellipsis")
+    weak_traits = []
+    if loser_chars:
+        weak_traits.append(f"weak {fmt} examples average {round(_avg([float(v) for v in loser_chars]))} chars")
+    if loser_chars:
+        weak_traits.append(f"weak sample avg score {loser_avg_score}")
+    return {
+        "format": fmt,
+        "status": "mature" if mature_only else "provisional",
+        "sample_size": len(items),
+        "avg_score": avg_score,
+        "winner_avg_score": winner_avg_score,
+        "loser_avg_score": loser_avg_score,
+        "learned_char_range": [char_lo, char_hi],
+        "median_sentence_count": sentence_median,
+        "median_line_breaks": line_break_median,
+        "common_ending": ending,
+        "question_pct": question_pct,
+        "ellipsis_pct": ellipsis_pct,
+        "traits": [trait for trait in traits if trait],
+        "weak_traits": weak_traits,
+        "winner_ids": [item["id"] for item in winners if item["id"]],
+        "loser_ids": [item["id"] for item in losers if item["id"]],
+        "examples": [item["text"][:180] for item in winners[:3]],
+    }
+
+
+def build_format_profiles(scores: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    mature = [s for s in scores if s["cohort"]["lifecycle"] in ("mature", "archived")]
+    pool = mature or scores
+    mature_only = bool(mature)
+    by_format: dict[str, list[dict[str, Any]]] = {}
+    for score in pool:
+        by_format.setdefault(score["cohort"]["format"], []).append(score)
+    profiles = {
+        fmt: _format_profile(fmt, items, mature_only=mature_only)
+        for fmt, items in by_format.items()
+        if items
+    }
+    return dict(sorted(profiles.items(), key=lambda item: (item[1]["avg_score"], item[1]["sample_size"]), reverse=True))
 
 
 def summarize_scores(scores: list[dict[str, Any]]) -> dict[str, Any]:
@@ -718,6 +858,7 @@ def summarize_scores(scores: list[dict[str, Any]]) -> dict[str, Any]:
         "false_winner_ids": [s["id"] for s in false_winners[:5] if s["id"]],
         "false_loser_ids": [s["id"] for s in false_losers[:5] if s["id"]],
         "format_summary": format_summary,
+        "format_profiles": build_format_profiles(scores),
         "best_current_patterns": _pattern_lines(winners, positive=True),
         "worst_current_patterns": _pattern_lines(losers, positive=False),
     }
@@ -779,6 +920,44 @@ def propose_rules(scores: list[dict[str, Any]], existing: list[dict[str, Any]] |
             "before_after": {
                 "before": "Default to old Creator Studio structure regardless of current performance.",
                 "after": f"Open with {best['format']} pacing when no explicit format is chosen.",
+            },
+        })
+
+    format_profiles = summary.get("format_profiles", {}) or {}
+    for fmt, profile in format_profiles.items():
+        sample_size = int(profile.get("sample_size", 0) or 0)
+        if sample_size < 3:
+            continue
+        char_range = profile.get("learned_char_range", [0, 0])
+        try:
+            char_lo, char_hi = int(char_range[0] or 0), int(char_range[1] or 0)
+        except Exception:
+            char_lo, char_hi = 0, 0
+        traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
+        if not traits:
+            continue
+        evidence = list(profile.get("winner_ids", []) or [])[:4]
+        learned_summary = "; ".join(traits[:4])
+        rule = f"For {fmt}, follow the learned winning format profile: {learned_summary}."
+        proposals.append({
+            "id": _proposal_id(rule, evidence),
+            "status": "pending",
+            "created_at": iso_now(now),
+            "rule": rule,
+            "reason": (
+                f"{fmt} has {sample_size} {'mature' if profile.get('status') == 'mature' else 'tracked'} "
+                f"examples; current winner avg score {profile.get('winner_avg_score', 0)}."
+            ),
+            "evidence_tweet_ids": evidence,
+            "sample_size": sample_size,
+            "before_after": {
+                "before": f"Use the static {fmt} format guardrail.",
+                "after": (
+                    f"Use {fmt} with {char_lo}-{char_hi} chars, "
+                    f"median {profile.get('median_sentence_count', 0)} sentence(s), "
+                    f"median {profile.get('median_line_breaks', 0)} line break(s), "
+                    f"and {profile.get('common_ending', 'the learned')} ending."
+                ),
             },
         })
 
@@ -1122,6 +1301,26 @@ def approved_rules_text(state: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
+def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
+    patterns = (state or {}).get("patterns", {}) if isinstance(state, dict) else {}
+    profiles = patterns.get("format_profiles", {}) if isinstance(patterns, dict) else {}
+    profile = profiles.get(fmt) if isinstance(profiles, dict) else None
+    if not isinstance(profile, dict):
+        return ""
+    traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
+    weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
+    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
+    lines = [
+        f"{fmt} learned profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
+    ]
+    lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
+    lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
+    if examples:
+        lines.append("- Winning examples:")
+        lines.extend(f"  - {example[:150]}" for example in examples[:3])
+    return "\n".join(lines)
+
+
 def performance_context(state: dict[str, Any] | None) -> str:
     state = state or initial_state()
     patterns = state.get("patterns", {})
@@ -1146,6 +1345,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     context = performance_context(state)
     lane_behavior = lane_recipe_text(lane)
     format_behavior = format_recipe_text(fmt)
+    format_learning = format_learning_text(state, fmt)
     action = (action or "evolve").strip().lower()
     is_build = action == "build"
     source_label = "SOURCE MATERIAL" if is_build else "CONCEPT"
@@ -1170,6 +1370,9 @@ FORMAT:
 
 FORMAT BEHAVIOR:
 {format_behavior}
+
+LEARNED FORMAT PROFILE:
+{format_learning or "- No mature learned profile for this selected format yet. Use the static format behavior until enough real posts mature."}
 
 PERSONALITY LANE:
 {lane}

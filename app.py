@@ -7746,6 +7746,8 @@ def _ce_build_generation_prompt(source: str, fmt: str, lane: str, state: dict,
                 prompt = str(prompt)
                 if "FORMAT BEHAVIOR:" not in prompt:
                     prompt += f"\n\nCREATOR EVOLUTION FORMAT CONTRACT:\n{_ce_format_recipe_text(fmt)}"
+                if "LEARNED FORMAT PROFILE:" not in prompt:
+                    prompt += f"\n\nLEARNED FORMAT PROFILE:\n{_ce_format_learning_text(state, fmt) or '- No mature learned profile for this selected format yet.'}"
                 return prompt
         except Exception as exc:
             _ce_pulse_debug_event("warn", "generation prompt helper recovered", {"error": str(exc)[:160]})
@@ -7766,6 +7768,9 @@ LANE BEHAVIOR:
 
 FORMAT BEHAVIOR:
 {_ce_format_recipe_text(fmt)}
+
+LEARNED FORMAT PROFILE:
+{_ce_format_learning_text(state, fmt) or "- No mature learned profile for this selected format yet."}
 
 APPROVED PERFORMANCE RULES:
 {approved or "- No approved rules yet. Use the source material and human voice contract."}
@@ -9354,6 +9359,33 @@ def _ce_format_recipe_text(fmt: str) -> str:
     return recipes.get(fmt, recipes["Normal Tweet"])
 
 
+def _ce_format_learning_text(state: dict, fmt: str) -> str:
+    fmt = _normalize_tweet_format(fmt)
+    formatter = getattr(ce, "format_learning_text", None)
+    if callable(formatter):
+        try:
+            text = str(formatter(state, fmt) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "format learning helper recovered", {"error": str(exc)[:160]})
+    patterns = (state or {}).get("patterns", {}) or {}
+    profiles = patterns.get("format_profiles", {}) or {}
+    profile = profiles.get(fmt) if isinstance(profiles, dict) else None
+    if not isinstance(profile, dict):
+        return ""
+    traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
+    weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
+    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
+    lines = [f"{fmt} learned profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):"]
+    lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
+    lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
+    if examples:
+        lines.append("- Winning examples:")
+        lines.extend(f"  - {example[:150]}" for example in examples[:3])
+    return "\n".join(lines)
+
+
 def _ce_install_lane_recipe_text_compat() -> None:
     formatter = getattr(ce, "lane_recipe_text", None)
     if callable(formatter):
@@ -10272,6 +10304,9 @@ def _render_creator_evolution_learning_panel(state: dict):
     persisted = status.get("persisted", "unknown")
     best = patterns.get("best_current_patterns", [])[:3]
     worst = patterns.get("worst_current_patterns", [])[:3]
+    format_profiles = patterns.get("format_profiles", {}) if isinstance(patterns, dict) else {}
+    selected_fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
+    selected_profile = format_profiles.get(selected_fmt) if isinstance(format_profiles, dict) else None
     approved_rules = _ce_approved_rules_text(state)
     last_sync_short = str(last_sync)[:16].replace("T", " ") if last_sync != "Never" else "Never"
 
@@ -10344,6 +10379,29 @@ def _render_creator_evolution_learning_panel(state: dict):
                     st.caption(line)
             else:
                 st.caption("No mature losers yet.")
+
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2DD4BF;text-transform:uppercase;margin:12px 0 6px;">Format Evolution</div>', unsafe_allow_html=True)
+        if selected_profile:
+            _traits = selected_profile.get("traits", [])[:4]
+            _weak_traits = selected_profile.get("weak_traits", [])[:2]
+            st.caption(
+                f"{selected_fmt} | {selected_profile.get('status', 'tracked')} sample | "
+                f"n={int(selected_profile.get('sample_size', 0) or 0)} | "
+                f"avg {float(selected_profile.get('avg_score', 0) or 0):.1f}"
+            )
+            for line in _traits:
+                st.caption("Winning: " + str(line))
+            for line in _weak_traits:
+                st.caption("Avoid: " + str(line))
+        elif format_profiles:
+            for _fmt_name, _profile in list(format_profiles.items())[:3]:
+                _traits = _profile.get("traits", [])[:2]
+                st.caption(
+                    f"{_fmt_name} | n={int(_profile.get('sample_size', 0) or 0)} | "
+                    + " | ".join(str(t) for t in _traits)
+                )
+        else:
+            st.caption("No learned format profiles yet. Sync more mature original tweets.")
 
         st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#C49E3C;text-transform:uppercase;margin:12px 0 6px;">Rule Queue ({len(pending)} pending)</div>', unsafe_allow_html=True)
         if approved_rules:
