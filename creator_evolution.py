@@ -31,6 +31,7 @@ EMOTION_LANES = (
     "Skeptical",
     "Celebratory",
     "Deadpan",
+    "Sarcastic",
 )
 
 LANE_RECIPES = {
@@ -75,6 +76,25 @@ LANE_RECIPES = {
         "do": "Say the absurd part as plainly as possible and stop before explaining it.",
         "avoid": "Exclamation marks, emojis, winking, 'lol', and punchline explanation.",
         "ending": "A hard stop or tiny unfinished thought that gets funnier because it is underplayed.",
+    },
+    "Sarcastic": {
+        "text": """SARCASTIC VOICE — DRY HUMOR MODE:
+EXAMPLES (copy this exact energy):
+- "Turns out the Patriots offense doesn't suck because of a snow storm."
+- "That cornerback needs to call someone he trusts right now. Not about football."
+- "Starting to feel like Bo Nix really should have played with a broken ankle."
+- "Bold of Skip to finally come out and say it."
+
+SARCASTIC VOICE RULES:
+- Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
+- Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
+- Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
+- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
+- Drop it and walk away. Never explain the joke.""",
+        "target": "Creator Studio Sarcastic voice exactly as defined for dry humor mode.",
+        "do": "Use Cultural Leap for positive moments or Implied Real Story for negative moments.",
+        "avoid": "Generic sarcastic openers, joke explanation, and fallback default voice.",
+        "ending": "Drop it and walk away. Never explain the joke.",
     },
 }
 
@@ -167,6 +187,8 @@ def lane_recipe(lane: str) -> dict[str, str]:
 def lane_recipe_text(lane: str) -> str:
     lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
     recipe = lane_recipe(lane)
+    if recipe.get("text"):
+        return str(recipe["text"]).strip()
     return "\n".join([
         f"{lane}:",
         f"- Target: {recipe['target']}",

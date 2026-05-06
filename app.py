@@ -93,6 +93,7 @@ CE_COMPAT_DEFAULTS = {
         "Skeptical",
         "Celebratory",
         "Deadpan",
+        "Sarcastic",
     ),
     "BUDGET_POLICY": {
         "provider": "twitterapi.io",
@@ -9254,7 +9255,8 @@ def _creator_evolution_system_prompt(lane: str) -> str:
     lane = _ce_normalize_lane(lane)
     _ce_install_lane_recipe_text_compat()
     lane_rules = _ce_lane_recipe_text(lane)
-    return build_user_context() + f"""
+    base_system = get_system_for_voice("Sarcastic", "") if lane == "Sarcastic" else build_user_context()
+    return base_system + f"""
 
 You are Creator Evolution for @{handle}.
 

@@ -163,6 +163,31 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Straight-faced", prompt)
         self.assertIn("No exclamation points", prompt)
 
+    def test_sarcastic_lane_matches_creator_studio_voice_block(self):
+        self.assertIn("Sarcastic", ce.EMOTION_LANES)
+
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are watching the offense explain itself again",
+            "Punchy Tweet",
+            "Sarcastic",
+            ce.initial_state(),
+        )
+
+        self.assertIn("SARCASTIC VOICE — DRY HUMOR MODE:", prompt)
+        self.assertIn("Turns out the Patriots offense doesn't suck because of a snow storm.", prompt)
+        self.assertIn("That cornerback needs to call someone he trusts right now. Not about football.", prompt)
+        self.assertIn("Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)", prompt)
+        self.assertIn('Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"', prompt)
+        self.assertIn("Drop it and walk away. Never explain the joke.", prompt)
+
+    def test_app_creator_evolution_exposes_creator_studio_sarcastic_lane(self):
+        app_text = Path("app.py").read_text()
+        ce_defaults = app_text.split("CE_COMPAT_DEFAULTS", 1)[1].split("BUDGET_POLICY", 1)[0]
+        ce_system_prompt = app_text.split("def _creator_evolution_system_prompt", 1)[1].split("def _ce_capture_ai_error", 1)[0]
+
+        self.assertIn('"Sarcastic"', ce_defaults)
+        self.assertIn('get_system_for_voice("Sarcastic", "") if lane == "Sarcastic"', ce_system_prompt)
+
     def test_quality_gate_flags_ai_bait_and_deadpan_drift(self):
         report = ce.draft_quality_report(
             "Here's the thing: this is not just a game-changer but also a moment. Thoughts?!",
