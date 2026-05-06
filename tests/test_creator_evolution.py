@@ -268,7 +268,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("stale_source", decision["best"]["hard_blocks"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v2-avalanche-priority")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v3-best-now")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -330,6 +330,23 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertEqual(signals, [])
 
+    def test_pulse_returns_best_tweet_now_for_live_avalanche_game_even_above_threshold(self):
+        sports_context = (
+            "TODAY (Tue May 05, 2026):\n"
+            "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche (12:06 - 2nd Period, 12:06)\n"
+            "AVALANCHE NEWS: Wild tab Gustavsson as goalie for Game 2 against Avalanche\n"
+            "BETTING LINES (MyBookie.ag):\n"
+            "  Moneyline: Colorado Avalanche -1111 / Minnesota Wild +625"
+        )
+
+        decision = pulse.find_pulse([], [], {}, sports_context=sports_context, handle="polfam", now=NOW, threshold=99)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertEqual(decision["best"]["topic"], "avs")
+        self.assertEqual(decision["best"]["hard_blocks"], [])
+        self.assertIn("best tweet available right now", decision["message"])
+        self.assertIn("selected as the best safe tweet available right now", decision["best"]["why_now"])
+
     def test_cavs_does_not_get_tagged_as_avs(self):
         self.assertNotIn("avs", pulse._ce_topic_tags("Allen going out will help Cavs offense tonight"))
 
@@ -361,6 +378,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("ce_pulse_lane", pulse_dialog)
         self.assertIn("_lane_options = list(ce.EMOTION_LANES)", pulse_dialog)
         self.assertIn('st.session_state["ce_lane"] = _lane', pulse_dialog)
+        self.assertIn("NO SAFE SOURCE", pulse_dialog)
+        self.assertIn("best tweet available right now", Path("creator_evolution_pulse.py").read_text())
         self.assertNotIn("_run_ci_ai", pulse_dialog)
 
     def test_pulse_risk_flags_do_not_require_creator_evolution_risk_helper(self):

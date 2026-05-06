@@ -17,9 +17,15 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v2-avalanche-priority"
+PULSE_VERSION = "ce-pulse-v3-best-now"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
+BLOCKING_HARD_BLOCKS = {
+    "stale_source",
+    "low_fact_confidence",
+    "monetization_risk",
+    "duplicate_recent_angle",
+}
 SOURCE_RELIABILITY = {
     "trusted_list": 7.2,
     "twitter": 5.8,
@@ -545,12 +551,17 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         return {}
     primary = signals[0]
     text = " ".join(s.get("text", "") for s in signals[:4])
+    live_avalanche = _is_avalanche_pregame_or_news(text)
     fresh_count = sum(1 for s in signals if s.get("freshness_status") in ("fresh", "usable"))
     best_age = min(_signal_age_hours(s) for s in signals)
     max_velocity = max(float(s.get("velocity") or 0) for s in signals)
     audience_fit = max(float(s.get("audience_fit") or 0) for s in signals)
     reply_tension = max(float(s.get("reply_tension") or 0) for s in signals)
     fact_confidence = min(10.0, max(float(s.get("fact_confidence") or 0) for s in signals) + (1.0 if len(signals) >= 2 else 0.0))
+    if live_avalanche:
+        audience_fit = max(audience_fit, 9.4)
+        reply_tension = max(reply_tension, 6.6)
+        fact_confidence = max(fact_confidence, 8.0)
     novelty, novelty_flag = _novelty_score(text, state)
     safety = 10.0
     risk_flags = []
@@ -568,7 +579,12 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if fresh_count >= 2:
         timeliness = min(20.0, timeliness + 2.0)
     velocity = min(15.0, max_velocity / 2.0 + len(signals) * 1.5)
+    if live_avalanche:
+        timeliness = max(timeliness, 18.5)
+        velocity = max(velocity, 6.0)
     urgency = 10.0 if _contains_any(text, LIVE_TERMS) else max(3.0, timeliness / 2.5)
+    if live_avalanche:
+        urgency = 10.0
     voice_fit = min(10.0, 3.0 + reply_tension * 0.45 + audience_fit * 0.25)
     weighted = {
         "timeliness": timeliness,
@@ -584,14 +600,15 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     raw_score = sum(weighted.values())
     score = round(min(100.0, raw_score / 115.0 * 100.0), 2)
     hard_blocks = []
+    soft_flags = []
     if fresh_count == 0:
         hard_blocks.append("stale_source")
     if fact_confidence < 5.5:
         hard_blocks.append("low_fact_confidence")
     if audience_fit < 4.0:
-        hard_blocks.append("weak_audience_fit")
+        soft_flags.append("weak_audience_fit")
     if reply_tension < 4.0:
-        hard_blocks.append("weak_reply_tension")
+        soft_flags.append("weak_reply_tension")
     if safety < 6.0:
         hard_blocks.append("monetization_risk")
     if novelty_flag == "duplicate_recent_angle":
@@ -620,6 +637,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "raw_score": round(raw_score, 2),
         "weighted_scores": {k: round(v, 2) for k, v in weighted.items()},
         "hard_blocks": hard_blocks,
+        "soft_flags": soft_flags,
         "risk_flags": list(dict.fromkeys(risk_flags)),
         "recommended_action": action,
         "recommended_lane": _recommended_lane(text, reply_tension, safety),
@@ -627,6 +645,12 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "confidence": round((score + fact_confidence * 10 + safety * 10) / 3.0, 2),
         "why_now": _why_now(signals, weighted),
     }
+
+
+def _blocking_blocks(item: dict[str, Any] | None) -> list[str]:
+    if not isinstance(item, dict):
+        return []
+    return [block for block in item.get("hard_blocks", []) if block in BLOCKING_HARD_BLOCKS]
 
 
 def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
@@ -667,13 +691,18 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     scored = [score_cluster(cluster, state, now=now) for cluster in clusters]
     scored = [item for item in scored if item]
     scored.sort(key=lambda item: item.get("score", 0), reverse=True)
-    viable = [item for item in scored if item.get("score", 0) >= threshold and not item.get("hard_blocks")]
-    avs_viable = [item for item in viable if _is_avalanche_opportunity(item)]
-    best = avs_viable[0] if avs_viable else (viable[0] if viable else (scored[0] if scored else None))
-    status = "ready" if viable else "no_op"
-    if best and not viable and best.get("score", 0) >= SAVE_THRESHOLD and not any(
-        block in best.get("hard_blocks", []) for block in ("stale_source", "low_fact_confidence", "monetization_risk", "duplicate_recent_angle")
-    ):
+    usable = [item for item in scored if not _blocking_blocks(item)]
+    avs_usable = [item for item in usable if _is_avalanche_opportunity(item)]
+    best = avs_usable[0] if avs_usable else (usable[0] if usable else (scored[0] if scored else None))
+    status = "ready" if best and not _blocking_blocks(best) else "no_op"
+    if best and status == "ready" and best.get("score", 0) < threshold:
+        best = dict(best)
+        best["recommended_action"] = "tweet"
+        best["why_now"] = (
+            f"{best.get('why_now', 'Fresh live context is active.')}; "
+            "selected as the best safe tweet available right now"
+        )
+    elif best and status == "no_op" and best.get("score", 0) >= SAVE_THRESHOLD and not _blocking_blocks(best):
         status = "save_for_later"
         best = dict(best)
         best["recommended_action"] = "save"
@@ -683,12 +712,12 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
         "handle": handle,
         "threshold": threshold,
         "checked_at": _now(now).isoformat(timespec="seconds"),
-        "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "fallback_angle", "no_op"],
+        "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "best_available_now", "safety_gate"],
         "signals_checked": len(signals),
         "clusters_checked": len(clusters),
         "best": best,
         "top_rejected": [item for item in scored if item.get("id") != (best or {}).get("id")][:5],
-        "message": "No strong Pulse right now." if status == "no_op" else "Pulse found a viable moment.",
+        "message": "No safe Pulse source right now." if status == "no_op" else "Pulse found the best tweet available right now.",
     }
     if best:
         decision["brief"] = build_pulse_brief(best, state)

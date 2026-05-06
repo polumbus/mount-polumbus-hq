@@ -7419,7 +7419,12 @@ def _ce_extract_avalanche_context(sports_context: str) -> str:
         if _ce_text_has_betting_angle(line):
             continue
         if ("avalanche" in lower or re.search(r"\bavs\b", lower)) and any(
-            term in lower for term in ("game", "news", "breaking", "puck drop", "tonight", "scheduled", "goalie", "starter", "injury", "coach", "line")
+            term in lower
+            for term in (
+                "game", "news", "breaking", "puck drop", "tonight", "scheduled", "goalie",
+                "starter", "injury", "coach", "line", "period", "final", "live",
+                "in progress", "playoff", "series", "next", "today", "score", "@", " vs ",
+            )
         ):
             avs_lines.append(line)
     if not avs_lines:
@@ -7980,7 +7985,7 @@ def _ce_pulse_dialog():
     _status_label = {
         "ready": "READY",
         "save_for_later": "SAVE",
-        "no_op": "NO STRONG PULSE",
+        "no_op": "NO SAFE SOURCE",
         "pulse_error": "PULSE RECOVERED",
     }.get(_status, _status.upper())
     _accent = "#2DD4BF" if _status == "ready" else "#C49E3C" if _status in ("save_for_later", "pulse_error") else "#5a7090"
@@ -8003,7 +8008,7 @@ def _ce_pulse_dialog():
             st.warning("Pulse recovered from a live-feed parsing error instead of crashing. Use Hot Feed or refresh after the app redeploy finishes.")
             if _decision.get("error"):
                 st.caption(f"Recovered detail: {str(_decision.get('error'))[:220]}")
-        st.info("No strong Pulse right now. The system checked live signals, headlines, sports context, reply targets, and recent-topic duplication.")
+        st.info("Pulse could not find a safe source right now. It should only land here when sources are missing, stale, duplicated, or blocked by safety rules.")
         _hot_col, _refresh_col = st.columns([1, 1])
         with _hot_col:
             if st.button("Hot Feed", key="ce_pulse_empty_hot_feed", use_container_width=True):
