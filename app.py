@@ -7389,6 +7389,81 @@ def _ce_text_has_betting_angle(text: str) -> bool:
     return False
 
 
+def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
+    """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
+    reporter = getattr(ce, "draft_quality_report", None)
+    if callable(reporter):
+        try:
+            report = reporter(text, fmt, lane)
+            if isinstance(report, dict):
+                return report
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "draft quality helper recovered", {"error": str(exc)[:160]})
+
+    clean = str(text or "").strip()
+    lower = clean.lower()
+    issues: list[str] = []
+    warnings: list[str] = []
+    char_count = len(clean)
+
+    if not clean:
+        issues.append("Empty draft.")
+    if fmt in ("Punchy Tweet", "Normal Tweet") and char_count > 280:
+        issues.append("Over 280 characters for a single-post format.")
+    if fmt == "Punchy Tweet" and char_count > 180:
+        warnings.append("Punchy lane is running long; the joke or take may lose force.")
+    if _ce_text_has_betting_angle(clean):
+        issues.append("Contains betting language.")
+
+    ai_terms = (
+        "here's the thing", "let's dive in", "game-changer", "thought leader",
+        "content strategy", "in today's world", "unlock", "maximize engagement",
+    )
+    ai_hits = [term for term in ai_terms if term in lower]
+    if ai_hits:
+        issues.append("Contains banned AI/content-strategy wording: " + ", ".join(ai_hits[:4]))
+
+    bait_terms = ("thoughts?", "agree?", "what do you think", "reply below", "drop your")
+    bait_hits = [term for term in bait_terms if term in lower]
+    if bait_hits:
+        issues.append("Ends like engagement bait instead of a human open loop: " + ", ".join(bait_hits[:3]))
+
+    cadence_terms = ("not only", "but also", "here's why", "the reality is", "at the end of the day")
+    cadence_hits = [term for term in cadence_terms if term in lower]
+    if cadence_hits:
+        warnings.append("Sounds polished or LinkedIn-ish: " + ", ".join(cadence_hits[:4]))
+    if clean.rstrip().endswith("?"):
+        warnings.append("Direct question closer. Prefer declarative tension unless the question is truly the joke.")
+    if clean.count("\n") >= 4 and fmt in ("Punchy Tweet", "Normal Tweet"):
+        warnings.append("Too many line breaks for this format; it may read like a template.")
+
+    risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
+    risk_hits = [term for term in risk_terms if term in lower]
+    if risk_hits and lane in ("Annoyed", "Fired-Up"):
+        issues.append("Heated lane is targeting people instead of the decision/pattern: " + ", ".join(risk_hits[:4]))
+    elif len(risk_hits) >= 2:
+        issues.append("Risky language stack may hurt monetization safety: " + ", ".join(risk_hits[:4]))
+    elif risk_hits:
+        warnings.append("Risky language detected; keep the target on the take, not the person: " + ", ".join(risk_hits))
+
+    if lane == "Deadpan" and ("!" in clean or "lol" in lower):
+        issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+
+    penalty = len(issues) * 25 + len(warnings) * 8
+    return {
+        "ok": not issues,
+        "score": max(0, min(100, 100 - penalty)),
+        "issues": issues,
+        "warnings": warnings,
+        "ai_sounding_hits": ai_hits,
+        "risk_hits": risk_hits,
+        "engagement_bait_hits": bait_hits,
+        "cadence_hits": cadence_hits,
+        "char_count": char_count,
+        "prompt_version": getattr(ce, "PROMPT_VERSION", "app-fallback"),
+    }
+
+
 def _ce_pulse_cached_decision_valid(decision: dict | None, current_version: str) -> bool:
     """Keep ready Pulse results briefly, but never let no-op/error results stick."""
     if not isinstance(decision, dict):
@@ -7576,7 +7651,7 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         draft = _sanitize_output(raw).strip()
         if not draft or _ce_text_has_betting_angle(draft):
             continue
-        report = ce.draft_quality_report(draft, fmt, lane)
+        report = _ce_draft_quality_report(draft, fmt, lane)
         if not report.get("ok"):
             continue
         final[f"option{slot}"] = draft
@@ -7590,7 +7665,7 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
             break
         if any(fallback_text == final.get(f"option{i}") for i in range(1, slot)):
             continue
-        report = ce.draft_quality_report(fallback_text, fmt, lane)
+        report = _ce_draft_quality_report(fallback_text, fmt, lane)
         if not report.get("ok"):
             continue
         final[f"option{slot}"] = fallback_text
@@ -8592,7 +8667,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
     if not _ce_capture_ai_error(raw or ""):
         st.session_state["ce_result"] = _sanitize_output((raw or "").strip())
         st.session_state["ce_quality_report"] = {
-            "result": ce.draft_quality_report(st.session_state["ce_result"], fmt, lane)
+            "result": _ce_draft_quality_report(st.session_state["ce_result"], fmt, lane)
         }
 
 
@@ -9580,7 +9655,7 @@ def _render_creator_evolution_editor():
                 st.success("Saved.")
         if st.button("ce_post_direct", key="ce_post_direct"):
             if tweet_text.strip():
-                quality = ce.draft_quality_report(tweet_text.strip(), cur_fmt, cur_lane)
+                quality = _ce_draft_quality_report(tweet_text.strip(), cur_fmt, cur_lane)
                 if not quality.get("ok"):
                     st.error("Creator Evolution blocked this post for quality/safety. Fix: " + " | ".join(quality.get("issues", [])[:3]))
                 else:
