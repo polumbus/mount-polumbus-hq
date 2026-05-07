@@ -2,3 +2,20 @@
 __pycache__/
 *.pyc
 .env.local
+.vercel
+
+# Local agent/runtime state
+.claude/
+.codex
+.codex_cleanup/
+proxy.log
+
+# Local restore/screenshot/tutorial artifacts
+restore_points/
+tutorials/build/
+tutorials/output/
+bg_option_*.html
+demos/
+
+# Website build is maintained separately from the Streamlit app repo.
+web/

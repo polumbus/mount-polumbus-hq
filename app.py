@@ -7093,7 +7093,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-05-05-hot-signals-proxy-v2"
+_WHATS_HOT_FORMULA_VERSION = "2026-05-07-whats-hot-fast-feed-v3"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -7204,7 +7204,7 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
         "the", "and", "for", "with", "that", "this", "from", "into", "your", "have", "just",
         "they", "them", "their", "about", "after", "before", "over", "under", "through",
         "could", "would", "should", "because", "while", "where", "when", "what", "why",
-        "today", "right", "now", "news", "report", "reports", "reporting", "source", "sources",
+        "today", "right", "now", "new", "news", "report", "reports", "reporting", "source", "sources",
     }
 
     def _clean_source_text(text: str) -> str:
@@ -7216,7 +7216,7 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
                 _left, _right = _clean.rsplit(_sep, 1)
                 if len(_right.split()) <= 4:
                     _clean = _left.strip()
-        _clean = re.sub(r"^(breaking|report|reports|reporting)[:\-\s]+", "", _clean, flags=re.I)
+        _clean = re.sub(r"^(new|breaking|report|reports|reporting)[:\-\s]+", "", _clean, flags=re.I)
         return _clean.strip()
 
     def _topic_from_text(text: str) -> str:
@@ -7237,14 +7237,14 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
     def _follow_line(text: str, source: str) -> str:
         _text = (text or "").lower()
         if any(_w in _text for _w in ["draft", "trade", "free agency", "contract", "extension", "signing"]):
-            return "Those details usually tell you what the building really believes about the roster"
+            return "The real signal is what the move says about roster value, timing, and who still has leverage"
         if any(_w in _text for _w in ["injury", "ankle", "knee", "hamstring", "questionable", "out"]):
-            return "Availability stories usually get real before the public language does"
+            return "Availability stories usually reveal the real tension before the public language catches up"
         if any(_w in _text for _w in ["playoff", "rotation", "starting", "bench", "minutes", "series"]):
-            return "Those choices matter because postseason trust is usually decided before the series starts"
+            return "Those choices matter because trust is usually decided before the public realizes it"
         if any(_w in _text for _w in ["coach", "coordinator", "play calling", "scheme", "locker room"]):
-            return "Those are the details that usually tell you what the room actually thinks"
-        return "That is usually where the real conversation starts, not where the first reaction lands"
+            return "That is the kind of detail that usually tells you what the room actually thinks"
+        return "The important part is not the headline. It is the decision tension sitting underneath it"
 
     def _build_hook(text: str, topic: str, source: str) -> str:
         _lead = _clean_source_text(text)
@@ -7256,8 +7256,8 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
         _follow = _follow_line(text, source)
         _pool = [
             f"{_lead}\n{_follow}...",
-            f"{_lead}\nThat is the part I keep coming back to. {_follow.lower()}...",
-            f"{_lead}\nThat detail matters more than the first wave of takes. {_follow.lower()}...",
+            f"{_lead}\nThat is the part worth sitting with. {_follow}...",
+            f"{_lead}\nThe first reaction is easy. The sharper read is this: {_follow}...",
         ]
         _idx = int(hashlib.md5(f"{source}|{topic}|{_lead}".encode()).hexdigest(), 16) % len(_pool)
         return _pool[_idx]
@@ -7311,32 +7311,11 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_inspiration_claude(_cache_key: str = ""):
-    """Fetch feed + call Claude. Cached 30 min in-session, also saved to gist for cross-session."""
+    """Fetch feed-derived What's Hot ideas quickly, without blocking the dialog on AI builds."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
     _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
-
-    def _materialize_idea(_idea: dict) -> dict:
-        _updated = dict(_idea)
-        _seed = (_updated.get("seed") or _updated.get("hook") or _updated.get("topic") or "").strip()
-        _updated["_seed"] = _seed
-        _updated["voice"] = CANONICAL_TWEET_DEFAULT_VOICE
-        return _updated
-
-    _prepared = [_materialize_idea(_idea) for _idea in _ideas]
-    _materialized = []
-    for _item in _prepared:
-        _seed = (_item.get("_seed") or "").strip()
-        _original_hook = (_item.get("hook") or "").strip()
-        try:
-            _hook = _build_wh_hook_cached(_seed, _WHATS_HOT_FORMULA_VERSION) if _seed else ""
-        except Exception as exc:
-            _append_debug_event("whats_hot", "error", f"hook materialize failed {exc}", {"seed": _seed[:140]})
-            _hook = ""
-        _item["hook"] = (_hook or _original_hook)[:1200]
-        _item.pop("_seed", None)
-        if _item.get("hook", "").strip():
-            _materialized.append(_item)
-    _ideas = _materialized
+    for _idea in _ideas:
+        _idea["voice"] = CANONICAL_TWEET_DEFAULT_VOICE
 
     # Save to gist for instant loads on future visits
     if _ideas:
@@ -8659,10 +8638,14 @@ def _ci_inspiration_dialog():
         "guest": is_guest(),
         "topics": _inspo_topics,
     }, sort_keys=True)
-    if st.session_state.get("inspo_handle") != _inspo_handle:
+    if (
+        st.session_state.get("inspo_handle") != _inspo_handle
+        or st.session_state.get("inspo_formula_version") != _WHATS_HOT_FORMULA_VERSION
+    ):
         for _k in ["inspo_ideas", "inspo_meta", "inspo_page"]:
             st.session_state.pop(_k, None)
         st.session_state["inspo_handle"] = _inspo_handle
+        st.session_state["inspo_formula_version"] = _WHATS_HOT_FORMULA_VERSION
 
     # Load ideas: session state > gist cache > Claude (slowest, last resort)
     if "inspo_ideas" not in st.session_state:
@@ -13386,6 +13369,22 @@ _SIGNALS_CACHE = {"beat": None, "national": None, "ts": 0, "beat_cursor": "", "n
 _LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
 
 
+def _signal_query_chunks(query: str, chunk_size: int = 8) -> list[str]:
+    """Split large source-heavy Twitter queries into provider-safe chunks."""
+    import re as _re
+
+    handles = _re.findall(r"from:[A-Za-z0-9_]+", query or "")
+    if len(handles) <= chunk_size:
+        return [query]
+
+    chunks = [" OR ".join(handles[i:i + chunk_size]) for i in range(0, len(handles), chunk_size)]
+    if query.strip().startswith("("):
+        source_block = "(" + " OR ".join(handles) + ")"
+        if source_block in query:
+            return [query.replace(source_block, f"({chunk})") for chunk in chunks]
+    return chunks
+
+
 def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
     """Fetch tweets via TwitterAPI.io advanced_search with pagination, filtering stale results.
     Returns (tweets, last_cursor) tuple."""
@@ -13393,19 +13392,24 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
     try:
         from datetime import timedelta, timezone
         all_tweets = []
-        cursor = start_cursor
-        for _ in range(pages):
-            _record_twitter_api_call("tweet/advanced_search", "signals_fetch", query=query, extra={"count": min(count, 100), "cursor": bool(cursor)})
-            data = _twitterapi_get_json(
-                "/twitter/tweet/advanced_search",
-                {"query": query, "queryType": "Latest", "count": min(count, 100), "cursor": cursor},
-                caller="signals_fetch",
-            )
-            _LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
-            all_tweets.extend(data.get("tweets", []) if isinstance(data, dict) else [])
-            cursor = data.get("next_cursor", "") if isinstance(data, dict) else ""
-            if not cursor:
-                break
+        last_cursor = ""
+        query_chunks = _signal_query_chunks(query)
+        per_chunk_count = max(10, min(100, count if len(query_chunks) == 1 else max(10, count // len(query_chunks) + 5)))
+        for chunk_query in query_chunks:
+            cursor = start_cursor if len(query_chunks) == 1 else ""
+            for _ in range(pages if len(query_chunks) == 1 else 1):
+                _record_twitter_api_call("tweet/advanced_search", "signals_fetch", query=chunk_query, extra={"count": per_chunk_count, "cursor": bool(cursor)})
+                data = _twitterapi_get_json(
+                    "/twitter/tweet/advanced_search",
+                    {"query": chunk_query, "queryType": "Latest", "count": per_chunk_count, "cursor": cursor},
+                    caller="signals_fetch",
+                )
+                _LAST_SIGNALS_ERROR = {"status": "", "detail": "", "at": ""}
+                all_tweets.extend(data.get("tweets", []) if isinstance(data, dict) else [])
+                cursor = data.get("next_cursor", "") if isinstance(data, dict) else ""
+                last_cursor = cursor or last_cursor
+                if not cursor:
+                    break
         # Filter to recent tweets only
         cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         fresh = []
@@ -13416,7 +13420,7 @@ def _fetch_signals(query, count=30, max_age_hours=48, pages=1, start_cursor=""):
                     fresh.append(t)
             except (ValueError, TypeError):
                 pass
-        return fresh, cursor
+        return fresh, last_cursor
     except Exception as e:
         detail = str(e)[:240]
         status = "credits_depleted" if "Credits is not enough" in detail else "exception"
@@ -13825,7 +13829,10 @@ def page_signals_prompts():
                 st.session_state["_sig_nat_tweets"] = _nat
                 st.session_state["_sig_beat_cursor"] = _beat_cur
                 st.session_state["_sig_nat_cursor"] = _nat_cur
-                st.session_state["_sig_cache_ts"] = time.time()
+                if _beat or _nat:
+                    st.session_state["_sig_cache_ts"] = time.time()
+                else:
+                    st.session_state.pop("_sig_cache_ts", None)
                 _save_debug_status("signals_fetch", {
                     "status": "ok",
                     "at": datetime.now().isoformat(timespec="seconds"),
