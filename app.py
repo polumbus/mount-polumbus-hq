@@ -1429,13 +1429,14 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet via proxy/local helper, or return an X composer fallback URL."""
-    import urllib.parse as _up
-
+    """Post a new tweet natively first, then proxy/local helper, or return X composer fallback."""
     clean_text = (text or "").strip()[:280]
     if not clean_text:
         return False, "No tweet text to post"
-    intent_url = "https://twitter.com/intent/tweet?text=" + _up.quote(clean_text)
+    intent_url = _x_intent_url(clean_text)
+    native_ok, native_detail = _post_tweet_native_x(clean_text)
+    if native_ok:
+        return True, native_detail
     proxy_error = ""
     proxy_url = _get_proxy_url()
     if proxy_url:
@@ -1459,11 +1460,106 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             return True, ""
         helper_error = result.stderr.strip() or result.stdout.strip() or "local tweet helper failed"
         if proxy_error:
-            return False, f"Open in X to post: {intent_url}\n\nDirect post failed. {proxy_error} | Local helper: {helper_error}"
-        return False, f"Open in X to post: {intent_url}\n\nLocal helper: {helper_error}"
+            return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Proxy: {proxy_error} | Local helper: {helper_error}"
+        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Local helper: {helper_error}"
     if proxy_error:
-        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. {proxy_error}"
-    return False, f"Open in X to post: {intent_url}\n\nNo proxy available and local tweet helper not found"
+        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Proxy: {proxy_error}"
+    return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail}. No proxy available and local tweet helper not found"
+
+
+def _x_intent_url(text: str) -> str:
+    import urllib.parse as _up
+
+    return "https://twitter.com/intent/tweet?text=" + _up.quote((text or "").strip()[:280])
+
+
+def _x_native_post_credentials() -> dict:
+    return {
+        "consumer_key": _secret_or_env("X_API_KEY", "TWITTER_API_KEY", "X_CONSUMER_KEY", "TWITTER_CONSUMER_KEY"),
+        "consumer_secret": _secret_or_env("X_API_SECRET", "TWITTER_API_SECRET", "X_CONSUMER_SECRET", "TWITTER_CONSUMER_SECRET", "TWITTER_API_KEY_SECRET"),
+        "access_token": _secret_or_env("X_ACCESS_TOKEN", "TWITTER_ACCESS_TOKEN"),
+        "access_secret": _secret_or_env("X_ACCESS_TOKEN_SECRET", "TWITTER_ACCESS_TOKEN_SECRET"),
+        "username": _secret_or_env("X_USERNAME", "TWITTER_USERNAME", "X_SCREEN_NAME", "TWITTER_SCREEN_NAME").lstrip("@"),
+    }
+
+
+def _x_oauth_percent(value: object) -> str:
+    import urllib.parse as _up
+
+    return _up.quote(str(value), safe="~-._")
+
+
+def _x_oauth1_header(method: str, url: str, creds: dict, extra_params: dict | None = None) -> str:
+    import base64
+    import hmac
+    import secrets as _secrets
+    import urllib.parse as _up
+
+    oauth_params = {
+        "oauth_consumer_key": creds["consumer_key"],
+        "oauth_nonce": _secrets.token_hex(16),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp": str(int(time.time())),
+        "oauth_token": creds["access_token"],
+        "oauth_version": "1.0",
+    }
+    signing_params = dict(oauth_params)
+    signing_params.update(extra_params or {})
+    parsed = _up.urlparse(url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    normalized = "&".join(
+        f"{_x_oauth_percent(k)}={_x_oauth_percent(v)}"
+        for k, v in sorted(signing_params.items())
+    )
+    signature_base = "&".join([
+        method.upper(),
+        _x_oauth_percent(base_url),
+        _x_oauth_percent(normalized),
+    ])
+    signing_key = f"{_x_oauth_percent(creds['consumer_secret'])}&{_x_oauth_percent(creds['access_secret'])}"
+    digest = hmac.new(signing_key.encode(), signature_base.encode(), hashlib.sha1).digest()
+    oauth_params["oauth_signature"] = base64.b64encode(digest).decode()
+    return "OAuth " + ", ".join(
+        f'{_x_oauth_percent(k)}="{_x_oauth_percent(v)}"'
+        for k, v in sorted(oauth_params.items())
+    )
+
+
+def _post_tweet_native_x(text: str) -> tuple[bool, str]:
+    """Post through X API v2. Requires OAuth 1.0a user-context app secrets."""
+    import urllib.request
+
+    creds = _x_native_post_credentials()
+    missing = [name for name in ("consumer_key", "consumer_secret", "access_token", "access_secret") if not creds.get(name)]
+    if missing:
+        return False, "missing native X secrets: " + ", ".join(missing)
+    url = "https://api.x.com/2/tweets"
+    body = json.dumps({"text": text}).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": _x_oauth1_header("POST", url, creds),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="ignore")[:300]
+        return False, f"HTTP {exc.code}: {raw}"
+    except Exception as exc:
+        return False, str(exc)[:300]
+    tweet_id = str(((data or {}).get("data") or {}).get("id") or "")
+    if not tweet_id:
+        return False, f"native X response missing tweet id: {str(data)[:240]}"
+    username = creds.get("username") or get_current_handle()
+    if username:
+        return True, f"https://x.com/{username.lstrip('@')}/status/{tweet_id}"
+    return True, tweet_id
 
 
 def _render_post_failure(detail: str, *, prefix: str = "Post failed") -> None:
@@ -14600,6 +14696,16 @@ def page_debug_console():
         {"item": "Proxy health", "value": "ok" if proxy_health.get("ok") else "down", "notes": proxy_health.get("proxy_url", "")},
     ]
     st.dataframe(ai_rows, use_container_width=True, hide_index=True)
+
+    st.markdown("### Native X Posting")
+    x_creds = _x_native_post_credentials()
+    st.dataframe([
+        {"secret": "X_API_KEY / TWITTER_API_KEY", "present": bool(x_creds.get("consumer_key"))},
+        {"secret": "X_API_SECRET / TWITTER_API_SECRET", "present": bool(x_creds.get("consumer_secret"))},
+        {"secret": "X_ACCESS_TOKEN / TWITTER_ACCESS_TOKEN", "present": bool(x_creds.get("access_token"))},
+        {"secret": "X_ACCESS_TOKEN_SECRET / TWITTER_ACCESS_TOKEN_SECRET", "present": bool(x_creds.get("access_secret"))},
+        {"secret": "X_USERNAME / TWITTER_USERNAME", "present": bool(x_creds.get("username"))},
+    ], use_container_width=True, hide_index=True)
 
     last_probe = st.session_state.get("_debug_last_probe")
     if last_probe:
