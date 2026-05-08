@@ -8463,12 +8463,13 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
 
 def _ce_pulse_source_material(decision: dict) -> str:
     best = decision.get("best") or {}
-    action = str(best.get("recommended_action") or "tweet").strip().lower()
+    action = "save" if str(best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
     basis_lines = []
     for item in best.get("source_basis", []) or []:
         if not isinstance(item, dict):
             continue
         text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        text = re.sub(r"^@\w+\s+", "", text).strip()
         if not text or _ce_text_has_betting_angle(text):
             continue
         _time_note = " | unknown time" if item.get("timestamp_missing") else ""
@@ -8494,7 +8495,8 @@ def _ce_pulse_source_material(decision: dict) -> str:
         "PULSE DRAFT RULES:\n"
         "- Return post-ready copy immediately, not a strategy brief.\n"
         "- Show real personality: witty, specific, slightly sharp, and human.\n"
-        "- If action is reply, write direct reply copy to the specific source post and name enough context that the reply never depends on unexplained he/it/that pronouns.\n"
+        "- Pulse is for original standalone tweets, not replies. Never begin with or address a source handle.\n"
+        "- X/Twitter sources are room-reading signals only; do not write as if responding to the source author.\n"
         "- If source basis includes a live score, clock, or period, write about that exact game state.\n"
         "- Never write generic game-night psychology when live score/clock context exists.\n"
         "- Do not make the tweet about gambling, moneyline, spread, odds, over/under, betting, or picks.\n"
@@ -8715,9 +8717,9 @@ def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) ->
     lane = _ce_normalize_lane(lane)
     fmt = _normalize_tweet_format(fmt)
     best = decision.get("best") or {}
-    action = str(best.get("recommended_action") or "tweet").strip().lower()
-    draft_label = "reply" if action == "reply" else "tweet"
-    draft_label_plural = "replies" if action == "reply" else "tweets"
+    action = "save" if str(best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
+    draft_label = "tweet"
+    draft_label_plural = "tweets"
     source = _ce_pulse_source_material(decision)
     state = _creator_evolution_state()
     prompt = _ce_build_generation_prompt(source, fmt, lane, state, action="build")
@@ -8729,7 +8731,7 @@ CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
 - Regeneration nonce: {nonce}. If nonce is not 0, change the openings and angles materially.
 - No gambling language. Do not mention moneyline, odds, spread, over/under, betting, picks, locks, sportsbooks, or implied bets.
 - These must sound like @{get_current_handle()} posting from a phone, not an analyst, not a strategy deck, not a sportsbook account.
-- If this is a reply, write the actual reply text only. Do not summarize the source post, do not quote-tweet it, and do not start with vague pronouns.
+- These are original standalone tweets, not replies. Do not start with @handles, do not address source authors, and do not write direct response copy.
 - Each {draft_label} should use the selected Creator Evolution voice and selected format behavior.
 """
     raw = ""
@@ -9133,12 +9135,12 @@ def _ce_pulse_dialog():
                 st.session_state["_ce_pulse_force_refresh"] = True
                 st.rerun(scope="app")
     else:
-        _action = _best.get("recommended_action", "tweet")
-        _action_clean = str(_action or "tweet").strip().lower()
-        _items_label = "Replies" if _action_clean == "reply" else "Tweets"
-        _refresh_label = "Refresh Replies" if _action_clean == "reply" else "Refresh Tweets"
-        _use_label = "Use Reply" if _action_clean == "reply" else "Use Tweet"
-        _save_label = "Save Reply" if _action_clean == "reply" else "Save Tweet"
+        _action_clean = "save" if str(_best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
+        _action = "tweet"
+        _items_label = "Tweets"
+        _refresh_label = "Refresh Tweets"
+        _use_label = "Use Tweet"
+        _save_label = "Save Tweet"
         _lane_pick = _ce_normalize_lane(_lane or _best.get("recommended_lane"))
         st.markdown(
             f"""
@@ -10828,7 +10830,7 @@ def _render_creator_evolution_editor():
           </div>
           <div class="cs-idock-btn" data-dock="ce_pulse" title="Find the best thing to post right now" style="width:52px;height:52px;border-radius:14px;border:1px solid rgba(45,212,191,0.32);background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l2-6 4 12 2-6h6" stroke="#2DD4BF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="position:absolute;bottom:-20px;font-size:10px;color:#2DD4BF;white-space:nowrap;letter-spacing:0.04em;font-weight:700;">PULSE</span><span class="pa-tip">Find A Timely Tweet, Reply, Save, Or Do-Nothing Decision</span>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#2DD4BF;white-space:nowrap;letter-spacing:0.04em;font-weight:700;">PULSE</span><span class="pa-tip">Find A Timely Original Tweet, Save, Or Do-Nothing Decision</span>
           </div>
           <div class="cs-idock-btn" data-dock="ce_whats_hot" title="Find hot topics and build with Creator Evolution" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 14c0-4 4-5 4-10 4 3 6 7 4 11 1-1 2-2 2-4 2 3 2 8-3 10-5 2-10-1-10-6 0-3 2-5 4-7-1 3-1 5-1 6z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>

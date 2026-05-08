@@ -960,8 +960,6 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     action = "tweet"
     if score < DEFAULT_THRESHOLD and score >= SAVE_THRESHOLD:
         action = "save"
-    elif primary.get("source") == "twitter" and primary.get("is_reply_target") and score >= DEFAULT_THRESHOLD:
-        action = "reply"
     return {
         "id": cluster.get("id", ""),
         "topic": cluster.get("topic", "general"),
@@ -1178,7 +1176,7 @@ def safe_find_pulse(tweets: Any,
 
 
 def build_pulse_brief(opportunity: dict[str, Any], state: dict[str, Any] | None = None) -> str:
-    action = opportunity.get("recommended_action", "tweet")
+    action = "save" if opportunity.get("recommended_action") == "save" else "tweet"
     topic = opportunity.get("topic", "live opportunity")
     lane = opportunity.get("recommended_lane", _ce_default_lane())
     source_lines = []
@@ -1208,8 +1206,9 @@ CREATOR EVOLUTION LIVE RULES:
 
 PULSE WRITING CONTRACT:
 - Write only from the source basis above.
-- If the action is reply, sound like a sharp human joining the conversation, not quote-tweeting a strategy deck.
-- If the action is tweet, make it feel immediate without inventing facts.
+- Pulse writes original standalone tweets only. X/Twitter sources are room-reading signals, not reply targets.
+- Do not address, mention, or prefix any source author handle from the source basis.
+- Make it feel immediate without inventing facts.
 - No Hall of Fame hooks, no Creator Studio calibration, no old What's Hot formulas.
 - No fake engagement questions, no invented stats, no unsafe claims.
 - Default to witty edge unless the recommended lane says otherwise."""

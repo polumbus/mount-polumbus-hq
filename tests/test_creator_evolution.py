@@ -359,10 +359,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
 
         self.assertEqual(decision["status"], "ready")
-        self.assertIn(decision["best"]["recommended_action"], {"tweet", "reply"})
+        self.assertEqual(decision["best"]["recommended_action"], "tweet")
         self.assertGreaterEqual(decision["best"]["score"], pulse.DEFAULT_THRESHOLD)
         self.assertIn("PULSE OPPORTUNITY", decision["brief"])
         self.assertNotIn("Hall of Fame examples", decision["brief"])
+        self.assertIn("original standalone tweets only", decision["brief"])
 
     def test_pulse_returns_no_op_for_stale_or_weak_signal(self):
         tweets = [
@@ -791,12 +792,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_format_quality_findings", app_text)
         self.assertIn('max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700', app_text)
         self.assertIn("Refresh Tweets", app_text)
-        self.assertIn("Refresh Replies", app_text)
+        self.assertNotIn("Refresh Replies", app_text)
         self.assertIn("PULSE RECOMMENDED ACTION", app_text)
-        self.assertIn('draft_label_plural = "replies"', app_text)
-        self.assertIn("do not start with vague pronouns", app_text)
+        self.assertIn('draft_label_plural = "tweets"', app_text)
+        self.assertIn("original standalone tweets", app_text)
         self.assertIn("Use Tweet", app_text)
-        self.assertIn("Use Reply", app_text)
+        self.assertNotIn("Use Reply", app_text)
         self.assertIn("No gambling language", app_text)
         self.assertIn("def _ce_build_generation_prompt", app_text)
         self.assertIn("def _ce_build_hot_signal_brief", app_text)
