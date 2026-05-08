@@ -25,6 +25,7 @@ BLOCKING_HARD_BLOCKS = {
     "stale_source",
     "low_fact_confidence",
     "monetization_risk",
+    "betting_angle",
     "duplicate_recent_angle",
     "reply_fragment_context",
     "unresolved_pronoun_context",
@@ -103,7 +104,29 @@ UNSAFE_MONETIZATION_TERMS = (
 BETTING_SIGNAL_TERMS = (
     "betting lines", "moneyline", "money line", "spread:", "spread ",
     "over/under", "over under", "parlay", "odds", "sportsbook",
-    "draftkings", "fanduel", "bet365", "betrivers",
+    "draftkings", "fanduel", "bet365", "betrivers", "prop", "props",
+    "gambling", "bet slip", "best bet", "player prop",
+)
+CRYPTO_AVALANCHE_TERMS = (
+    "$avax", "avax", "altcoin", "crypto", "token", "coin", "smart money",
+    "trade alerts", "trading alert", "blockchain", "defi",
+)
+AVALANCHE_SPORTS_TERMS = (
+    "colorado avalanche", "goavsgo", "nhl", "hockey", "puck", "goalie",
+    "rink", "period", "wild", "stars", "jets", "macKinnon", "mackinnon",
+    "makar", "landeskog",
+)
+SPECULATIVE_REACTION_TERMS = (
+    "safe to say", "hopefully", "smells like", "feels like", "i think",
+    "i guess", "probably", "might be gone", "is gone", "are gone",
+    "word salad", "bullshit", "pathetic", "nothing of value",
+)
+SUBSTANTIVE_SOURCE_TERMS = (
+    "says", "said", "quote", "quotes", "comments", "availability",
+    "press conference", "presser", "news conference", "exit interview",
+    "exit interviews", "end of season", "end-of-season", "offseason",
+    "front office", "ownership", "staff", "kroenke", "booth", "malone",
+    "jokic", "murray", "renck", "haertl", "dnvr", "altitude",
 )
 FALLBACK_RISK_TERMS = (
     "idiot", "moron", "clown", "trash", "garbage", "hate", "stupid",
@@ -193,6 +216,11 @@ def _ce_tweet_text(tweet: dict[str, Any]) -> str:
 
 def _ce_topic_tags(text: str) -> list[str]:
     lower = text.lower()
+    crypto_avalanche = (
+        any(word in lower for word in ("$avax", "avax", "altcoin", "crypto", "smart money", "trade alerts"))
+        and any(word in lower for word in ("avalanche", "avs"))
+        and not any(word in lower for word in ("colorado avalanche", "goavsgo", "nhl", "hockey", "puck", "goalie", "mackinnon", "makar"))
+    )
 
     def has_topic_word(word: str) -> bool:
         cleaned = word.strip()
@@ -210,6 +238,8 @@ def _ce_topic_tags(text: str) -> list[str]:
         try:
             tags = tagger(text)
             tags = list(tags or ["general"])
+            if crypto_avalanche:
+                tags = [tag for tag in tags if tag != "avs"]
             if "avs" in tags and not any(has_topic_word(word) for word in AVALANCHE_PULSE_TERMS + ("mackinnon", "makar")):
                 tags = [tag for tag in tags if tag != "avs"]
             return tags or ["general"]
@@ -219,7 +249,7 @@ def _ce_topic_tags(text: str) -> list[str]:
     for tag, words in {
         "broncos": ("broncos", "bo nix", "sean payton", "paton"),
         "nuggets": ("nuggets", "jokic", "murray"),
-        "avs": ("avs", "avalanche", "mackinnon", "makar"),
+        "avs": () if crypto_avalanche else ("avs", "avalanche", "mackinnon", "makar"),
         "buffs": ("buffs", "cu buffs", "colorado buffaloes", "coach prime", "deion"),
         "rockies": ("rockies", "colorado rockies"),
         "draft": ("draft", "pick ", "combine", "prospect"),
@@ -404,24 +434,45 @@ def _is_live_game_context(text: str) -> bool:
     return has_game_label and (has_score or _contains_any(lower, LIVE_GAME_TERMS))
 
 
+def _is_crypto_avalanche_context(text: str) -> bool:
+    lower = _text(text).lower()
+    return (
+        _contains_any(lower, CRYPTO_AVALANCHE_TERMS)
+        and _contains_any(lower, AVALANCHE_PULSE_TERMS)
+        and not _contains_any(lower, AVALANCHE_SPORTS_TERMS)
+    )
+
+
+def _has_colorado_sports_entity(text: str) -> bool:
+    lower = _text(text).lower()
+    if _is_crypto_avalanche_context(lower):
+        return False
+    return _contains_any(lower, COLORADO_TEAM_TERMS)
+
+
 def _is_colorado_current_context(text: str) -> bool:
     lower = _text(text).lower()
     if _is_completed_game_context(lower):
         return False
-    has_colorado = _contains_any(lower, COLORADO_TEAM_TERMS)
+    has_colorado = _has_colorado_sports_entity(lower)
     if not has_colorado:
         return False
     return (
         _is_live_game_context(lower)
         or _contains_any(lower, PREGAME_OR_BREAKING_TERMS)
         or _contains_any(lower, TENSION_TERMS)
-        or _contains_any(lower, ("breaking", "just", "report", "rumor", "quote", "coach", "trade", "injury"))
+        or _contains_any(lower, ("breaking", "just", "report", "rumor", "quote", "coach", "trade", "trading", "injury", "says", "comments", "offseason", "front office"))
     )
 
 
 def _is_betting_signal_text(text: str) -> bool:
     lower = str(text or "").lower()
-    return _contains_any(lower, BETTING_SIGNAL_TERMS)
+    return (
+        _contains_any(lower, BETTING_SIGNAL_TERMS)
+        or bool(re.search(r"\b[oOuU]\s?\d+(?:\.\d+)?\b", lower))
+        or bool(re.search(r"\([+-]\d{2,4}\)", lower))
+        or bool(re.search(r"\b[+-]\d{2,4}\b", lower) and _contains_any(lower, ("ks", "points", "rebounds", "assists", "yards")))
+    )
 
 
 def _opportunity_text(item: dict[str, Any]) -> str:
@@ -440,9 +491,39 @@ def _is_colorado_opportunity(item: dict[str, Any]) -> bool:
     return _is_colorado_current_context(_opportunity_text(item))
 
 
+def _colorado_cluster_key(text: str) -> str:
+    lower = _text(text).lower()
+    if _is_crypto_avalanche_context(lower):
+        return ""
+    team = ""
+    if _contains_any(lower, ("nuggets", "denver nuggets", "nikola jokic", "jokic", "jamal murray", "aaron gordon", "michael malone", "calvin booth")):
+        team = "nuggets"
+    elif _contains_any(lower, ("broncos", "denver broncos", "bo nix", "sean payton", "courtland sutton")):
+        team = "broncos"
+    elif _contains_any(lower, ("avalanche", "colorado avalanche", "avs", "mackinnon", "nathan mackinnon", "makar", "cale makar")):
+        team = "avalanche"
+    elif _contains_any(lower, ("rockies", "colorado rockies")):
+        team = "rockies"
+    elif _contains_any(lower, ("buffs", "cu buffs", "colorado buffaloes", "coach prime", "deion")):
+        team = "buffs"
+    elif _contains_any(lower, ("denver sports", "colorado sports", "altitude sports")):
+        team = "colorado-sports"
+    if not team:
+        return ""
+    if _is_live_game_context(lower):
+        return team
+    if _contains_any(lower, ("press conference", "press conferences", "presser", "media availability", "availability", "exit interview", "exit interviews", "end of season", "end-of-season")):
+        return f"{team}-press"
+    if _contains_any(lower, ("injury", "report", "quote", "coach", "trade", "rumor", "breaking", "news")):
+        return f"{team}-news"
+    return ""
+
+
 def _risk_flags(text: str) -> list[str]:
     flags = []
     lower = text.lower()
+    if _is_betting_signal_text(text):
+        flags.append("betting_angle")
     for term in UNSAFE_MONETIZATION_TERMS:
         if term in lower:
             flags.append(f"unsafe:{term}")
@@ -633,11 +714,99 @@ def build_signals(tweets: list[dict[str, Any]] | None,
 
 
 def _cluster_key(signal: dict[str, Any]) -> str:
+    colorado_key = _colorado_cluster_key(signal.get("text", ""))
+    if colorado_key:
+        return colorado_key
     topic = signal.get("topic") or "general"
     if topic != "general":
         return topic.split(",")[0].strip()
     tokens = [tok for tok in _tokens(signal.get("text", "")) if tok not in {"this", "that", "with", "from", "they", "have"}]
     return " ".join(tokens[:3]) or "general"
+
+
+def _source_depth_score(signal: dict[str, Any]) -> float:
+    text = _text(signal.get("text", ""))
+    lower = text.lower()
+    score = min(6.0, len(text) / 45.0)
+    score += min(1.5, float(signal.get("source_reliability") or 0) / 4.0)
+    score += min(3.0, _count_terms(text, COLORADO_TEAM_TERMS + PREGAME_OR_BREAKING_TERMS))
+    if signal.get("url"):
+        score += 0.5
+    if _contains_any(lower, SUBSTANTIVE_SOURCE_TERMS):
+        score += 2.0
+    if re.search(r"\b(thank you for asking|genuine|transparent|ownership|staff)\b", lower):
+        score += 1.0
+    if _contains_any(lower, SPECULATIVE_REACTION_TERMS):
+        score -= 4.5
+    if lower.startswith("@"):
+        score -= 1.0
+    if lower.startswith(("me during", "me watching", "my reaction")):
+        score -= 4.0
+    if any(mark in text for mark in ("😒", "😂", "😭", "🤣")):
+        score -= 1.5
+    if " - " in text and re.search(r"\b(observer|gazette|post|sports|dnvr|altitude)\b", lower):
+        score += 1.0
+    if len(text) < 80:
+        score -= 1.5
+    return score
+
+
+def _is_speculative_reaction_source(signal: dict[str, Any]) -> bool:
+    text = _text((signal or {}).get("text", ""))
+    lower = text.lower()
+    return (
+        _contains_any(lower, SPECULATIVE_REACTION_TERMS)
+        or lower.startswith(("me during", "me watching", "my reaction"))
+        or any(mark in text for mark in ("😒", "😂", "😭", "🤣"))
+    )
+
+
+def _topic_team(topic: str) -> str:
+    topic = str(topic or "").lower()
+    if topic.startswith("nuggets"):
+        return "nuggets"
+    if topic.startswith("broncos"):
+        return "broncos"
+    if topic.startswith(("avs", "avalanche")):
+        return "avalanche"
+    if topic.startswith("rockies"):
+        return "rockies"
+    if topic.startswith("buffs"):
+        return "buffs"
+    return ""
+
+
+def _mentions_other_colorado_team(text: str, team: str) -> bool:
+    lower = _text(text).lower()
+    team_terms = {
+        "nuggets": ("nuggets", "jokic", "murray", "malone", "booth", "kroenke"),
+        "broncos": ("broncos", "bo nix", "payton", "paton", "sutton"),
+        "avalanche": ("avalanche", "avs", "mackinnon", "makar", "landeskog"),
+        "rockies": ("rockies",),
+        "buffs": ("buffs", "cu buffs", "coach prime", "deion"),
+    }
+    for other_team, terms in team_terms.items():
+        if other_team != team and _contains_any(lower, terms):
+            return True
+    return False
+
+
+def _draft_basis_signals(signals: list[dict[str, Any]], topic: str = "") -> list[dict[str, Any]]:
+    team = _topic_team(topic)
+    clean_basis = [
+        s for s in signals
+        if not _is_speculative_reaction_source(s)
+        and "unresolved_pronoun_context" not in set(s.get("context_flags", []) or [])
+        and s.get("freshness_status") != "stale"
+    ]
+    if team:
+        pure_basis = [s for s in clean_basis if not _mentions_other_colorado_team(s.get("text", ""), team)]
+        if pure_basis:
+            clean_basis = pure_basis
+    if clean_basis:
+        return clean_basis[:4]
+    non_speculative = [s for s in signals if not _is_speculative_reaction_source(s)]
+    return (non_speculative or signals)[:4]
 
 
 def cluster_signals(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -651,6 +820,7 @@ def cluster_signals(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
             key=lambda s: (
                 bool(set(s.get("context_flags", []) or []) & {"reply_fragment_context", "unresolved_pronoun_context"}),
                 s.get("freshness_status") == "stale",
+                -_source_depth_score(s),
                 -float(s.get("velocity") or 0),
             ),
         )
@@ -700,9 +870,12 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if not signals:
         return {}
     primary = signals[0]
+    draft_basis = _draft_basis_signals(signals, str(cluster.get("topic", "")))
+    draft_primary = draft_basis[0] if draft_basis else primary
     text = " ".join(s.get("text", "") for s in signals[:4])
     colorado_now = _is_colorado_pregame_or_news(text)
     fresh_count = sum(1 for s in signals if s.get("freshness_status") in ("fresh", "usable"))
+    source_count = len({str(s.get("source") or "") for s in signals if s.get("source")})
     best_age = min(_signal_age_hours(s) for s in signals)
     max_velocity = max(float(s.get("velocity") or 0) for s in signals)
     audience_fit = max(float(s.get("audience_fit") or 0) for s in signals)
@@ -732,6 +905,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if fresh_count >= 2:
         timeliness = min(20.0, timeliness + 2.0)
     velocity = min(15.0, max_velocity / 2.0 + len(signals) * 1.5)
+    conversation_dominance = min(15.0, max(0.0, (len(signals) - 1) * 2.1 + max(0, source_count - 1) * 2.0))
     if colorado_now:
         timeliness = max(timeliness, 18.5)
         velocity = max(velocity, 6.0)
@@ -749,9 +923,10 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "voice_fit": voice_fit,
         "monetization_safety": safety,
         "post_now_urgency": urgency,
+        "conversation_dominance": conversation_dominance,
     }
     raw_score = sum(weighted.values())
-    score = round(min(100.0, raw_score / 115.0 * 100.0), 2)
+    score = round(min(100.0, raw_score / 130.0 * 100.0), 2)
     hard_blocks = []
     soft_flags = []
     if fresh_count == 0:
@@ -766,6 +941,8 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         soft_flags.append("thin_room_signal")
     if safety < 6.0:
         hard_blocks.append("monetization_risk")
+    if "betting_angle" in risk_flags:
+        hard_blocks.append("betting_angle")
     if novelty_flag == "duplicate_recent_angle":
         hard_blocks.append("duplicate_recent_angle")
     primary_context_flags = set(primary.get("context_flags", []) or [])
@@ -788,7 +965,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     return {
         "id": cluster.get("id", ""),
         "topic": cluster.get("topic", "general"),
-        "summary_text": primary.get("text", ""),
+        "summary_text": draft_primary.get("text", ""),
         "sources": cluster.get("sources", []),
         "signal_count": len(signals),
         "source_basis": [
@@ -801,7 +978,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
                 "timestamp_missing": bool(s.get("timestamp_missing")),
                 "context_flags": list(s.get("context_flags", []) or []),
             }
-            for s in signals[:4]
+            for s in draft_basis[:4]
         ],
         "score": score,
         "raw_score": round(raw_score, 2),
@@ -905,10 +1082,8 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     scored = [item for item in scored if item]
     scored.sort(key=lambda item: item.get("score", 0), reverse=True)
     usable = [item for item in scored if not _blocking_blocks(item)]
-    colorado_scored = [item for item in scored if _is_colorado_opportunity(item)]
     colorado_usable = [item for item in usable if _is_colorado_opportunity(item)]
-    strong_colorado = [item for item in colorado_usable if _has_strong_now_signal(item)]
-    best = strong_colorado[0] if strong_colorado else (colorado_usable[0] if colorado_usable else (colorado_scored[0] if colorado_scored else None))
+    best = colorado_usable[0] if colorado_usable else None
     status = "no_op"
     if best and not _blocking_blocks(best):
         _thin_room_signal = "thin_room_signal" in (best.get("soft_flags") or [])
@@ -935,6 +1110,7 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
         status = "save_for_later"
         best = dict(best)
         best["recommended_action"] = "save"
+    decision_best = best if status != "no_op" else None
     decision = {
         "version": PULSE_VERSION,
         "status": status,
@@ -944,8 +1120,8 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
         "search_depth": ["fast_check", "deep_hunt", "reply_hunt", "best_available_now", "safety_gate"],
         "signals_checked": len(signals),
         "clusters_checked": len(clusters),
-        "best": best,
-        "top_rejected": [item for item in scored if item.get("id") != (best or {}).get("id")][:5],
+        "best": decision_best,
+        "top_rejected": [item for item in scored if item.get("id") != (decision_best or {}).get("id")][:5],
         "message": (
             "No safe Denver/Colorado Pulse source right now."
             if status == "no_op"
@@ -954,8 +1130,8 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
             else "Pulse found the best available Colorado timeline angle right now."
         ),
     }
-    if best:
-        decision["brief"] = build_pulse_brief(best, state)
+    if decision_best:
+        decision["brief"] = build_pulse_brief(decision_best, state)
     else:
         decision["brief"] = ""
     return decision

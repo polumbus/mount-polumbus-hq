@@ -7197,6 +7197,19 @@ def _ce_pulse_owner_colorado_item(item) -> bool:
     lower = str(text or "").lower()
     if not lower.strip():
         return False
+    betting_terms = (
+        "moneyline", "money line", "over/under", "over under", "parlay",
+        "sportsbook", "draftkings", "fanduel", "bet365", "betrivers",
+        "best bet", "player prop",
+    )
+    if any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lower) for term in betting_terms):
+        return False
+    if re.search(r"\b[oOuU]\s?\d+(?:\.\d+)?\b", lower) or re.search(r"\([+-]\d{2,4}\)", lower):
+        return False
+    crypto_terms = ("$avax", "avax", "altcoin", "crypto", "smart money", "trade alerts", "blockchain", "defi")
+    avs_sports_terms = ("colorado avalanche", "goavsgo", "nhl", "hockey", "puck", "goalie", "mackinnon", "makar")
+    if any(term in lower for term in crypto_terms) and ("avalanche" in lower or re.search(r"\bavs\b", lower)) and not any(term in lower for term in avs_sports_terms):
+        return False
     terms = (
         "broncos", "denver broncos", "bo nix", "sean payton", "courtland sutton",
         "nuggets", "denver nuggets", "jokic", "nikola jokic", "jamal murray",
@@ -7255,6 +7268,7 @@ def _fetch_inspiration_feed():
         _search_queries = [
             "Denver Broncos OR Broncos OR Bo Nix OR Sean Payton -filter:retweets",
             "Denver Nuggets OR Nuggets OR Jokic OR Jamal Murray -filter:retweets",
+            "\"Nuggets\" (\"press conference\" OR presser OR \"media availability\" OR \"exit interviews\" OR \"end of season\" OR \"Josh Kroenke\" OR \"Calvin Booth\" OR \"Michael Malone\") -filter:retweets",
             "Colorado Avalanche OR Avalanche OR Avs OR MacKinnon OR Makar -filter:retweets",
             "Colorado Buffaloes OR CU Buffs OR Coach Prime OR Deion Sanders -filter:retweets",
             "Colorado Rockies OR Rockies -filter:retweets",
@@ -7288,6 +7302,7 @@ def _fetch_inspiration_feed():
     else:
         _rss_feeds = [
             "https://news.google.com/rss/search?q=Denver+Nuggets+OR+Nuggets+OR+Jokic+OR+Jamal+Murray+OR+Michael+Malone+press+conference+breaking+news&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=Nuggets+Josh+Kroenke+OR+Calvin+Booth+OR+Michael+Malone+OR+exit+interviews+OR+media+availability+OR+end+of+season&hl=en-US&gl=US&ceid=US:en",
             "https://news.google.com/rss/search?q=Denver+Broncos+OR+Broncos+OR+Bo+Nix+OR+Sean+Payton+breaking+news&hl=en-US&gl=US&ceid=US:en",
             "https://news.google.com/rss/search?q=Colorado+Avalanche+OR+Avs+NHL+breaking+news&hl=en-US&gl=US&ceid=US:en",
             "https://news.google.com/rss/search?q=Colorado+Rockies+OR+Rockies+MLB+breaking+news&hl=en-US&gl=US&ceid=US:en",
@@ -7366,7 +7381,8 @@ def _fetch_inspiration_feed():
                           _newsapi_lines + _trends_lines + _reddit_lines + _rss_headlines)
     else:
         _broad_headlines = _espn_headlines + _sleeper_lines + _newsapi_lines + _trends_lines + _reddit_lines
-        _rss_headlines = [h for h in _broad_headlines if _ce_pulse_owner_colorado_item(h)] + _rss_headlines
+        _all_headlines = _broad_headlines + _rss_headlines
+        _rss_headlines = [h for h in _all_headlines if _ce_pulse_owner_colorado_item(h)]
 
     # Dedupe tweets
     _seen = set()
@@ -8793,27 +8809,6 @@ def _run_creator_evolution_pulse(lane: str | None = None,
     )
     if not isinstance(_decision, dict):
         _decision = _ce_pulse_error_decision("Pulse returned an invalid decision shape.")
-    _avs_decision = _ce_avalanche_pulse_decision(
-        _sports_ctx,
-        lane=lane,
-        fmt=_normalize_tweet_format(fmt),
-        reason="Avalanche game/news is active in live sports context.",
-    )
-    _best_text = " ".join([
-        str((_decision.get("best") or {}).get("summary_text") or ""),
-        " ".join(
-            f"{(src or {}).get('source', '')} {(src or {}).get('text', '')}"
-            for src in ((_decision.get("best") or {}).get("source_basis") or [])
-            if isinstance(src, dict)
-        ),
-    ]).upper()
-    _best_is_live_avs_game = "AVALANCHE GAME" in _best_text and "SPORTS_CONTEXT" in _best_text
-    if _avs_decision and (
-        _decision.get("status") in ("pulse_error", "no_op")
-        or not isinstance(_decision.get("best"), dict)
-    ):
-        _ce_pulse_debug_event("ok", "Avalanche Pulse fallback selected", {"previous_status": _decision.get("status", "")})
-        _decision = _avs_decision
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = _ce_normalize_lane(lane or _best.get("recommended_lane"))
     _decision["selected_format"] = _normalize_tweet_format(fmt)

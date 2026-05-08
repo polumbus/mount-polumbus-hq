@@ -432,6 +432,107 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(pulse._is_colorado_current_context(decision["best"]["summary_text"]))
         self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
 
+    def test_pulse_blocks_betting_pick_and_prefers_dominant_nuggets_conversation(self):
+        tweets = [
+            _tweet(
+                92,
+                "03. Jesus Luzardo o7.5 Ks (-140) Has cleared 8+ Ks in back to back starts. Facing road Rockies who rank 1st in K% vs. LHP Great spot.",
+                hours_ago=0.2,
+                views=50000,
+                likes=900,
+                replies=160,
+                reposts=60,
+                quotes=30,
+            ),
+            _tweet(93, "Nuggets end of season press conference is the whole Denver sports conversation today.", hours_ago=0.3, views=3000, likes=40, replies=8, reposts=3, quotes=2),
+            _tweet(94, "Michael Malone press conference with Nuggets media availability has everyone talking about what changes now.", hours_ago=0.4, views=3000, likes=40, replies=8, reposts=3, quotes=2),
+            _tweet(95, "Jokic and Jamal Murray availability after the Nuggets season is clearly the story in Denver right now.", hours_ago=0.5, views=3000, likes=40, replies=8, reposts=3, quotes=2),
+            _tweet(96, "Calvin Booth and Michael Malone comments at Nuggets press conferences are all over the timeline.", hours_ago=0.6, views=3000, likes=40, replies=8, reposts=3, quotes=2),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("Luzardo", decision["best"]["summary_text"])
+        rejected_betting = [
+            item for item in decision["top_rejected"]
+            if "Luzardo" in item.get("summary_text", "")
+        ]
+        self.assertTrue(rejected_betting)
+        self.assertIn("betting_angle", rejected_betting[0]["hard_blocks"])
+
+    def test_pulse_does_not_treat_avax_crypto_as_avalanche_hockey(self):
+        tweets = [
+            _tweet(
+                97,
+                "Another swing trade long on an altcoin like Avalanche $AVAX played out for a 9.15% gain in Smart Money crypto.",
+                hours_ago=0.2,
+                views=60000,
+                likes=1000,
+                replies=160,
+                reposts=60,
+                quotes=30,
+            ),
+            _tweet(
+                98,
+                "Josh Kroenke says everything is on the table for the Nuggets this offseason, outside of trading Nikola Jokic.",
+                hours_ago=0.5,
+                views=3000,
+                likes=60,
+                replies=12,
+                reposts=5,
+                quotes=3,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("AVAX", decision["best"]["summary_text"])
+        self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
+
+    def test_pulse_ranks_highest_scored_colorado_topic_before_strong_now_shortcut(self):
+        tweets = [
+            _tweet(
+                99,
+                "Another swing trade long on an altcoin like Avalanche $AVAX played out for a 9.15% gain in Smart Money crypto.",
+                hours_ago=0.2,
+                views=60000,
+                likes=1000,
+                replies=160,
+                reposts=60,
+                quotes=30,
+            ),
+            _tweet(
+                100,
+                "Josh Kroenke says everything is on the table for the Nuggets this offseason, except trading Nikola Jokic.",
+                hours_ago=0.5,
+                views=12000,
+                likes=500,
+                replies=90,
+                reposts=30,
+                quotes=20,
+            ),
+            _tweet(
+                101,
+                "Nuggets end of season press conference with Michael Malone and Calvin Booth is still dominating Denver sports today.",
+                hours_ago=0.6,
+                views=7000,
+                likes=140,
+                replies=25,
+                reposts=8,
+                quotes=5,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("Avalanche $AVAX", decision["best"]["summary_text"])
+
     def test_pulse_ignores_final_avalanche_game_from_sports_context(self):
         sports_context = (
             "TODAY (Wed May 06, 2026):\n"
@@ -529,7 +630,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse([], [], {}, sports_context=sports_context, handle="polfam", now=NOW, threshold=99)
 
         self.assertEqual(decision["status"], "ready")
-        self.assertEqual(decision["best"]["topic"], "avs")
+        self.assertEqual(decision["best"]["topic"], "avalanche")
         self.assertEqual(decision["best"]["hard_blocks"], [])
         self.assertIn("best tweet available right now", decision["message"])
         self.assertIn("newest signal 0.0h old", decision["best"]["why_now"])
@@ -590,8 +691,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
 
         self.assertEqual(decision["status"], "no_op")
-        self.assertIn("reply_fragment_context", decision["best"]["hard_blocks"])
-        self.assertIn("unresolved_pronoun_context", decision["best"]["hard_blocks"])
+        self.assertIsNone(decision["best"])
+        self.assertIn("reply_fragment_context", decision["top_rejected"][0]["hard_blocks"])
+        self.assertIn("unresolved_pronoun_context", decision["top_rejected"][0]["hard_blocks"])
 
     def test_pulse_allows_self_contained_named_timeline_context(self):
         tweets = [
@@ -704,8 +806,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("def _ce_pulse_meta_language", app_text)
         self.assertIn("write about that exact game state", app_text)
         self.assertIn("Avs up {score}", app_text)
-        self.assertIn("_best_is_live_avs_game", app_text)
-        self.assertNotIn("or not _best_is_live_avs_game", app_text)
+        self.assertNotIn("_best_is_live_avs_game", app_text)
+        self.assertNotIn("Avalanche Pulse fallback selected", app_text)
         self.assertIn("required_score and required_score not in draft", app_text)
         self.assertIn("or _ce_pulse_meta_language(draft)", app_text)
         fallback_block = app_text.split("def _ce_pulse_local_fallback_drafts", 1)[1].split("def _ce_pulse_finalize_drafts", 1)[0]
@@ -820,7 +922,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse(tweets, [], state, handle="polfam", now=NOW)
 
         self.assertEqual(decision["status"], "no_op")
-        self.assertIn("duplicate_recent_angle", decision["best"]["hard_blocks"])
+        self.assertIsNone(decision["best"])
+        self.assertIn("duplicate_recent_angle", decision["top_rejected"][0]["hard_blocks"])
 
 
 if __name__ == "__main__":
