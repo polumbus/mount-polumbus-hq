@@ -815,6 +815,26 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 CREDENTIALS_PATH = os.path.expanduser("~/.claude/.credentials.json")
 
 
+def _secret_or_env(*names: str) -> str:
+    for name in names:
+        value = ""
+        try:
+            value = st.secrets.get(name, "")
+        except Exception:
+            value = ""
+        if not value:
+            value = os.environ.get(name, "")
+        value = str(value or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _running_on_streamlit_cloud() -> bool:
+    home = os.path.expanduser("~")
+    return home.startswith("/home/appuser") or bool(os.environ.get("STREAMLIT_SHARING_MODE"))
+
+
 def _load_oauth_credentials():
     """Load OAuth credentials from local credentials file."""
     try:
@@ -1122,6 +1142,82 @@ def _call_claude_direct(prompt: str, system: str, max_tokens: int, model: str = 
     raise Exception(f"API error: {data.get('error', data)}")
 
 
+def _call_anthropic_api_key(prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6", timeout: int = 45) -> str:
+    """Hosted-safe Anthropic call using an API key, not local Claude OAuth."""
+    import urllib.request
+
+    api_key = _secret_or_env("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")
+    if not api_key:
+        raise Exception("No ANTHROPIC_API_KEY configured")
+    body = json.dumps({
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system or "",
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        ANTHROPIC_API_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    if data.get("content"):
+        return data["content"][0].get("text", "").strip()
+    raise Exception(f"API error: {data.get('error', data)}")
+
+
+def _extract_openai_response_text(data: dict) -> str:
+    text = (data or {}).get("output_text")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    for item in (data or {}).get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if isinstance(content, dict):
+                ctext = content.get("text") or content.get("output_text")
+                if isinstance(ctext, str) and ctext.strip():
+                    return ctext.strip()
+    return ""
+
+
+def _call_openai_api_key(prompt: str, system: str, max_tokens: int, timeout: int = 60) -> str:
+    """Hosted-safe OpenAI fallback using Streamlit secrets or environment."""
+    import urllib.request
+
+    api_key = _secret_or_env("OPENAI_API_KEY")
+    if not api_key:
+        raise Exception("No OPENAI_API_KEY configured")
+    model = _secret_or_env("OPENAI_MODEL") or "gpt-5.2"
+    body = json.dumps({
+        "model": model,
+        "instructions": system or "",
+        "input": prompt,
+        "max_output_tokens": max_tokens,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    text = _extract_openai_response_text(data)
+    if text:
+        return text
+    raise Exception(f"OpenAI API returned empty text: {str(data)[:240]}")
+
+
 def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
     """Thread-safe direct API call — token passed in, no session state access."""
     import urllib.request, hashlib as _hl
@@ -1392,9 +1488,27 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
 
     st.session_state["_ai_last_model"] = model
     _ai_failure_chain_start()
+    hosted = _running_on_streamlit_cloud()
+
+    # 0. Hosted API-key route. Streamlit Cloud cannot rely on local OAuth files.
+    if hosted:
+        try:
+            result = _call_anthropic_api_key(prompt, system or "", max_tokens, model)
+            st.session_state["_ai_last_route"] = "anthropic_api_key"
+            st.session_state["_ai_last_provider"] = "anthropic"
+            st.session_state["_ai_last_source"] = "streamlit_api_key"
+            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+            _append_debug_event("ai_call", "ok", "anthropic_api_key", {"model": model})
+            return result
+        except urllib.error.HTTPError as e:
+            _record_ai_failure("anthropic_api_key", f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}")
+            _append_debug_event("ai_call", "error", f"anthropic_api_key HTTP {e.code}", {"model": model})
+        except Exception as e:
+            _record_ai_failure("anthropic_api_key", e)
+            _append_debug_event("ai_call", "error", f"anthropic_api_key {e}", {"model": model})
 
     # 1. Direct OAuth HTTP — fastest, no subprocess overhead
-    if not anthropic_is_blocked():
+    if not hosted and not anthropic_is_blocked():
         try:
             result = _call_claude_direct(prompt, system or "", max_tokens, model)
             anthropic_mark_available("streamlit_direct")
@@ -1420,7 +1534,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
             _append_debug_event("ai_call", "error", f"anthropic_direct {e}", {"model": model})
 
     # 2. Local CLI fallback
-    if os.path.exists(CLAUDE_CLI):
+    if not hosted and os.path.exists(CLAUDE_CLI):
         try:
             clean_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             cmd = [CLAUDE_CLI, "-p", "--model", model]
@@ -1460,21 +1574,38 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         _append_debug_event("ai_call", "error", f"proxy {e}", {"model": model})
         pass
 
-    # 4. ChatGPT OAuth fallback via local Codex login
+    # 4. Hosted OpenAI API-key fallback. This avoids Codex OAuth on Streamlit Cloud.
     try:
-        chatgpt_text = call_chatgpt_oauth(prompt, system or "")
-        st.session_state["_ai_last_route"] = "chatgpt_oauth"
-        st.session_state["_ai_last_provider"] = "chatgpt"
-        st.session_state["_ai_last_source"] = "local_codex_oauth"
+        openai_text = _call_openai_api_key(prompt, system or "", max_tokens)
+        st.session_state["_ai_last_route"] = "openai_api_key"
+        st.session_state["_ai_last_provider"] = "openai"
+        st.session_state["_ai_last_source"] = "streamlit_api_key"
         st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
-        _append_debug_event("ai_call", "ok", "chatgpt_oauth", {"model": model})
-        return chatgpt_text
+        _append_debug_event("ai_call", "ok", "openai_api_key", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
+        return openai_text
+    except urllib.error.HTTPError as e:
+        _record_ai_failure("openai_api_key", f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}")
+        _append_debug_event("ai_call", "error", f"openai_api_key HTTP {e.code}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
     except Exception as e:
-        _record_ai_failure("chatgpt_oauth", e)
-        _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
-        pass
+        _record_ai_failure("openai_api_key", e)
+        _append_debug_event("ai_call", "error", f"openai_api_key {e}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
 
-    return "AI unavailable — Anthropic direct/CLI, proxy, and ChatGPT fallback all failed."
+    # 5. ChatGPT OAuth fallback via local Codex login. Local only; cloud has no Codex auth file.
+    if not hosted:
+        try:
+            chatgpt_text = call_chatgpt_oauth(prompt, system or "")
+            st.session_state["_ai_last_route"] = "chatgpt_oauth"
+            st.session_state["_ai_last_provider"] = "chatgpt"
+            st.session_state["_ai_last_source"] = "local_codex_oauth"
+            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+            _append_debug_event("ai_call", "ok", "chatgpt_oauth", {"model": model})
+            return chatgpt_text
+        except Exception as e:
+            _record_ai_failure("chatgpt_oauth", e)
+            _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
+            pass
+
+    return "AI unavailable — API key, proxy, and local OAuth fallback routes all failed."
 
 
 def _is_ai_unavailable_text(value: str) -> bool:
