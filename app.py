@@ -1429,29 +1429,60 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet via proxy or shared local helper. Returns (success, detail_or_error)."""
+    """Post a new tweet via proxy/local helper, or return an X composer fallback URL."""
+    import urllib.parse as _up
+
+    clean_text = (text or "").strip()[:280]
+    if not clean_text:
+        return False, "No tweet text to post"
+    intent_url = "https://twitter.com/intent/tweet?text=" + _up.quote(clean_text)
+    proxy_error = ""
     proxy_url = _get_proxy_url()
     if proxy_url:
         try:
-            data = _proxy_json_request("/tweet/post", {"text": text}, method="POST", timeout=30)
+            data = _proxy_json_request("/tweet/post", {"text": clean_text}, method="POST", timeout=30)
             if data.get("ok", False):
                 detail = data.get("tweet_url") or data.get("screen_name") or ""
                 return True, detail
-            return False, data.get("error", "Proxy returned not ok")
+            proxy_error = data.get("error", "Proxy returned not ok")
         except Exception as e:
-            return False, f"Proxy error: {e}"
+            proxy_error = f"Proxy error: {e}"
     helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
     if os.path.exists(helper):
         result = subprocess.run(
-            ["python3", helper, "--text", text],
+            ["python3", helper, "--text", clean_text],
             capture_output=True,
             text=True,
             timeout=15,
         )
         if result.returncode == 0:
             return True, ""
-        return False, result.stderr.strip() or result.stdout.strip() or "local tweet helper failed"
-    return False, "No proxy available and local tweet helper not found"
+        helper_error = result.stderr.strip() or result.stdout.strip() or "local tweet helper failed"
+        if proxy_error:
+            return False, f"Open in X to post: {intent_url}\n\nDirect post failed. {proxy_error} | Local helper: {helper_error}"
+        return False, f"Open in X to post: {intent_url}\n\nLocal helper: {helper_error}"
+    if proxy_error:
+        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. {proxy_error}"
+    return False, f"Open in X to post: {intent_url}\n\nNo proxy available and local tweet helper not found"
+
+
+def _render_post_failure(detail: str, *, prefix: str = "Post failed") -> None:
+    detail = str(detail or "").strip()
+    match = re.search(r"https://twitter\.com/intent/tweet\?text=\S+", detail)
+    if match:
+        url = match.group(0)
+        clean_detail = detail.replace(url, "").replace("Open in X to post:", "").strip()
+        st.warning(f"{prefix}. Direct posting is unavailable right now, so use the X composer fallback.")
+        st.markdown(
+            f'<a href="{html.escape(url)}" target="_blank" '
+            'style="display:inline-block;padding:9px 16px;background:#2DD4BF;border-radius:9px;'
+            'color:#050810;font-weight:700;text-decoration:none;">Open in X to Post</a>',
+            unsafe_allow_html=True,
+        )
+        if clean_detail:
+            st.caption(clean_detail)
+        return
+    st.error(f"{prefix}: {detail}")
 
 
 def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
@@ -10322,7 +10353,7 @@ def _render_creator_studio_editor():
                     else:
                         st.success("Posted to X.")
                 else:
-                    st.error(f"Post failed — {_detail}")
+                    _render_post_failure(_detail)
 
 
 def page_compose_ideas():
@@ -10733,7 +10764,7 @@ def _render_creator_evolution_editor():
                         if str(detail).startswith("https://"):
                             st.markdown(f"[Open posted tweet]({detail})")
                     else:
-                        st.error(f"Post failed: {detail}")
+                        _render_post_failure(detail)
 
 
 def page_creator_evolution():
@@ -15072,7 +15103,10 @@ def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
         st.warning(st.session_state["gd_error"])
     if st.session_state.get("gd_post_message"):
         level, detail = st.session_state["gd_post_message"]
-        (st.success if level == "success" else st.error)(detail)
+        if level == "success":
+            st.success(detail)
+        else:
+            _render_post_failure(detail)
     if not drafts:
         return
     lane = html.escape(st.session_state.get("gd_last_lane") or st.session_state.get("gd_lane") or "Fan Pulse")
@@ -15124,7 +15158,7 @@ def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
                     success, detail = _post_tweet(draft)
                     st.session_state["gd_post_message"] = (
                         "success" if success else "error",
-                        f"Posted. {detail}" if success else f"Post failed: {detail}",
+                        f"Posted. {detail}" if success else detail,
                     )
                 st.rerun()
         with c3:
@@ -15303,7 +15337,7 @@ def _gd_draft_dialog(_nonce):
                         if detail.startswith("https://"):
                             st.markdown(f"[Open posted tweet]({detail})")
                     else:
-                        st.error(f"Post failed - {detail}")
+                        _render_post_failure(detail)
         with c2:
             if st.button("Copy", key=f"gd_copy_{i}", use_container_width=True):
                 st.session_state["gd_copy_text"] = draft
