@@ -8212,10 +8212,10 @@ def _ce_format_quality_findings(text: str, fmt: str) -> tuple[list[str], list[st
         if char_count > 280:
             issues.append("Normal Tweet must stay under 280 characters.")
     elif fmt == "Long Tweet":
-        if char_count < 360:
+        if char_count < 260:
             issues.append("Long Tweet is too short; it should be a real long-form single post.")
-        if char_count > 1300:
-            issues.append("Long Tweet is too long; keep it under 1,300 characters.")
+        if char_count > 900:
+            issues.append("Long Tweet is too long; keep it under 900 characters.")
         if "---TWEET---" in clean:
             issues.append("Long Tweet should be one post, not a thread.")
     elif fmt == "Thread":
@@ -9783,6 +9783,8 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
     profile = profiles.get(fmt) if isinstance(profiles, dict) else None
     if not isinstance(profile, dict):
         return ""
+    if str(profile.get("status", "")).lower() != "mature":
+        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
     examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
@@ -9790,7 +9792,7 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
     lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
     lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
     if examples:
-        lines.append("- Winning examples:")
+        lines.append("- Winning examples are calibration only; do not copy exact wording, hooks, or closers:")
         lines.extend(f"  - {example[:150]}" for example in examples[:3])
     return "\n".join(lines)
 
@@ -9807,6 +9809,8 @@ def _ce_voice_learning_text(state: dict) -> str:
     patterns = (state or {}).get("patterns", {}) or {}
     profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
     if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+        return ""
+    if str(profile.get("status", "")).lower() != "mature":
         return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]

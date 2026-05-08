@@ -255,6 +255,63 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Use this as influence, not a hook library", prompt)
         self.assertTrue(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
 
+    def test_provisional_profiles_do_not_influence_generation_prompt(self):
+        tweets = [
+            _tweet(130, "The Broncos roster plan is getting weird enough that everyone wants to skip the uncomfortable part...", hours_ago=3, views=9000, likes=180, replies=40, reposts=20),
+            _tweet(131, "The Nuggets bench answer is still hiding inside the same pressure point...", hours_ago=4, views=8000, likes=160, replies=35, reposts=18),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are arguing about the roster plan",
+            "Normal Tweet",
+            "Witty Edge",
+            state,
+        )
+
+        self.assertEqual(state["patterns"]["mature_count"], 0)
+        self.assertIn("No mature learned profile for this selected format yet", prompt)
+        self.assertIn("No mature learned voice profile yet", prompt)
+        self.assertNotIn("Winning examples:", prompt)
+        self.assertNotIn("Winning voice trait:", prompt)
+        self.assertFalse(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
+
+    def test_format_examples_are_marked_calibration_only(self):
+        tweets = [
+            _tweet(140, "The Broncos plan looks boring until the roster math starts telling on it. That is where the offseason gets uncomfortable...", hours_ago=90, views=15000, likes=320, replies=80, reposts=46),
+            _tweet(141, "Nuggets fans want a clean bench answer, which is adorable because this team keeps choosing stress as a roster philosophy...", hours_ago=96, views=14000, likes=300, replies=78, reposts=42),
+            _tweet(142, "The Avs usage conversation is weird because the simple answer keeps hiding behind the same uncomfortable lineup question...", hours_ago=100, views=13000, likes=280, replies=70, reposts=39),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        text = ce.format_learning_text(state, "Punchy Tweet")
+
+        self.assertIn("Winning examples are calibration only", text)
+        self.assertIn("do not copy exact wording", text)
+
+    def test_legacy_missing_voice_profile_is_safe(self):
+        state = ce.initial_state()
+        state["patterns"] = {"format_profiles": {}}
+
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are trying to read the next roster move",
+            "Normal Tweet",
+            "Witty Edge",
+            state,
+        )
+
+        self.assertIn("No mature learned voice profile yet", prompt)
+        self.assertNotIn("Traceback", prompt)
+
+    def test_app_creator_evolution_long_tweet_gate_matches_core_range(self):
+        app_text = Path("app.py").read_text()
+        app_gate = app_text.split("def _ce_format_quality_findings", 1)[1].split("def _ce_draft_quality_report", 1)[0]
+
+        self.assertIn("if char_count < 260:", app_gate)
+        self.assertIn("if char_count > 900:", app_gate)
+        self.assertNotIn("if char_count < 360:", app_gate)
+        self.assertNotIn("if char_count > 1300:", app_gate)
+
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
             _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),

@@ -1472,6 +1472,8 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
     profile = profiles.get(fmt) if isinstance(profiles, dict) else None
     if not isinstance(profile, dict):
         return ""
+    if str(profile.get("status", "")).lower() != "mature":
+        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
     examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
@@ -1481,7 +1483,7 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
     lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
     lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
     if examples:
-        lines.append("- Winning examples:")
+        lines.append("- Winning examples are calibration only; do not copy exact wording, hooks, or closers:")
         lines.extend(f"  - {example[:150]}" for example in examples[:3])
     return "\n".join(lines)
 
@@ -1490,6 +1492,8 @@ def voice_learning_text(state: dict[str, Any] | None) -> str:
     patterns = (state or {}).get("patterns", {}) if isinstance(state, dict) else {}
     profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
     if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+        return ""
+    if str(profile.get("status", "")).lower() != "mature":
         return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
