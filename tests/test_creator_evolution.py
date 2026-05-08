@@ -376,7 +376,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v6-colorado-hard-gate")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v7-source-quality-gates")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -493,6 +493,82 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Nuggets", decision["best"]["summary_text"])
         self.assertNotIn("AVAX", decision["best"]["summary_text"])
         self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
+
+    def test_pulse_rejects_non_english_nuggets_sources(self):
+        tweets = [
+            _tweet(
+                102,
+                "« Je pense que cet été, toutes les options seront mises sur la table, à l’exception d’un trade de Nikola…je le précise, parce que mes propos ont sympathiquement été déformés l’été dernier… » Josh Kroenke, big boss des Denver Nuggets !",
+                hours_ago=0.1,
+                views=90000,
+                likes=1200,
+                replies=200,
+                reposts=80,
+                quotes=40,
+            ),
+            _tweet(
+                103,
+                "Josh Kroenke says everything is on the table for the Nuggets this offseason except trading Nikola Jokic.",
+                hours_ago=0.4,
+                views=5000,
+                likes=90,
+                replies=20,
+                reposts=8,
+                quotes=4,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("Je pense", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_english_source_text(tweets[1]["text"]))
+        self.assertFalse(pulse._is_english_source_text(tweets[0]["text"]))
+
+    def test_pulse_returns_no_op_for_french_only_sources(self):
+        tweets = [
+            _tweet(
+                104,
+                "« Je pense que cet été, toutes les options seront mises sur la table, à l’exception d’un trade de Nikola… » Josh Kroenke, big boss des Denver Nuggets !",
+                hours_ago=0.1,
+                views=120000,
+                likes=1800,
+                replies=400,
+                reposts=120,
+                quotes=70,
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "no_op")
+        self.assertIsNone(decision["best"])
+
+    def test_pulse_rejects_out_of_market_malone_unc_story(self):
+        headlines = [
+            {
+                "title": "North Carolina working to finalize deal to hire Michael Malone as basketball coach, AP source says - AP News",
+                "source": "news",
+                "publishedAt": (NOW - timedelta(hours=0.1)).isoformat(),
+                "url": "https://example.com/unc-malone",
+            },
+            {
+                "title": "Denver Nuggets boss Josh Kroenke says everything is on the table this offseason except trading Nikola Jokic",
+                "source": "news",
+                "publishedAt": (NOW - timedelta(hours=0.4)).isoformat(),
+                "url": "https://example.com/nuggets-kroenke",
+            },
+        ]
+
+        decision = pulse.find_pulse([], headlines, ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertIn("Kroenke", decision["best"]["summary_text"])
+        self.assertNotIn("North Carolina", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_out_of_market_context(headlines[0]["title"]))
+        self.assertFalse(pulse._is_out_of_market_context(headlines[1]["title"]))
 
     def test_pulse_ranks_highest_scored_colorado_topic_before_strong_now_shortcut(self):
         tweets = [
@@ -831,7 +907,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v6-colorado-hard-gate", pulse_text)
+        self.assertIn("ce-pulse-v7-source-quality-gates", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)

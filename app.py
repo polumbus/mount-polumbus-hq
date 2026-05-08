@@ -8314,6 +8314,54 @@ def _ce_pulse_meta_language(text: str) -> bool:
     )
 
 
+def _ce_pulse_source_text_blocked(text: str) -> bool:
+    clean = str(text or "").strip()
+    if not clean or _ce_text_has_betting_angle(clean):
+        return True
+    english_check = getattr(pulse, "_is_english_source_text", None)
+    if callable(english_check):
+        try:
+            if not english_check(clean):
+                return True
+        except Exception:
+            pass
+    out_of_market_check = getattr(pulse, "_is_out_of_market_context", None)
+    if callable(out_of_market_check):
+        try:
+            if out_of_market_check(clean):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _ce_pulse_draft_contract_issues(text: str, decision: dict | None = None) -> list[str]:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    issues: list[str] = []
+    if not clean:
+        issues.append("Empty Pulse draft.")
+        return issues
+    if re.match(r"^@\w+", clean):
+        issues.append("Pulse draft is a reply, not an original tweet.")
+    if re.search(r"\b(thanks|thank you|appreciate you)\b.{0,50}\b(asking|sharing|posting|pressing)\b", lower):
+        issues.append("Pulse draft addresses the source author.")
+    if re.search(r"\byou(r)?\s+(tweet|post|question|point|take)\b", lower):
+        issues.append("Pulse draft is direct response copy.")
+    if _ce_pulse_source_text_blocked(clean):
+        issues.append("Pulse draft uses blocked source language or context.")
+    best = (decision or {}).get("best") or {}
+    source_text = " ".join([
+        str(best.get("summary_text") or ""),
+        " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
+    ]).lower()
+    for handle in re.findall(r"@\w+", clean):
+        if handle.lower() not in source_text:
+            issues.append("Pulse draft introduces or addresses an unsupported handle.")
+            break
+    return list(dict.fromkeys(issues))
+
+
 def _ce_pulse_cached_decision_valid(decision: dict | None, current_version: str) -> bool:
     """Keep ready Pulse results briefly, but never let no-op/error results stick."""
     if not isinstance(decision, dict):
@@ -8321,6 +8369,13 @@ def _ce_pulse_cached_decision_valid(decision: dict | None, current_version: str)
     if decision.get("version") != current_version:
         return False
     if decision.get("status") in ("pulse_error", "no_op"):
+        return False
+    best = decision.get("best") or {}
+    source_text = " ".join([
+        str(best.get("summary_text") or ""),
+        " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
+    ])
+    if _ce_pulse_source_text_blocked(source_text):
         return False
     try:
         checked_at = datetime.fromisoformat(str(decision.get("checked_at", "")).replace("Z", "+00:00"))
@@ -8470,12 +8525,12 @@ def _ce_pulse_source_material(decision: dict) -> str:
             continue
         text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
         text = re.sub(r"^@\w+\s+", "", text).strip()
-        if not text or _ce_text_has_betting_angle(text):
+        if _ce_pulse_source_text_blocked(text):
             continue
         _time_note = " | unknown time" if item.get("timestamp_missing") else ""
         basis_lines.append(f"- {item.get('source', 'source')} | {item.get('freshness_status', 'fresh')}{_time_note} | {text}")
     summary = re.sub(r"\s+", " ", str(best.get("summary_text") or "")).strip()
-    if summary and not _ce_text_has_betting_angle(summary):
+    if summary and not _ce_pulse_source_text_blocked(summary):
         seed_summary = summary
     elif basis_lines:
         seed_summary = basis_lines[0].split("|", 2)[-1].strip()
@@ -8683,6 +8738,8 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         draft = _sanitize_output(raw).strip()
         if not draft or _ce_text_has_betting_angle(draft) or _ce_pulse_meta_language(draft):
             continue
+        if _ce_pulse_draft_contract_issues(draft, decision):
+            continue
         if required_score and required_score not in draft:
             continue
         report = _ce_draft_quality_report(draft, fmt, lane)
@@ -8700,6 +8757,8 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         if any(fallback_text == final.get(f"option{i}") for i in range(1, slot)):
             continue
         if _ce_pulse_meta_language(fallback_text):
+            continue
+        if _ce_pulse_draft_contract_issues(fallback_text, decision):
             continue
         report = _ce_draft_quality_report(fallback_text, fmt, lane)
         if not report.get("ok"):
@@ -9136,7 +9195,7 @@ def _ce_pulse_dialog():
                 st.rerun(scope="app")
     else:
         _action_clean = "save" if str(_best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
-        _action = "tweet"
+        _action = _action_clean
         _items_label = "Tweets"
         _refresh_label = "Refresh Tweets"
         _use_label = "Use Tweet"
@@ -9165,6 +9224,10 @@ def _ce_pulse_dialog():
             "version": _decision.get("version", ""),
             "best_id": _best.get("id", ""),
             "summary": _best.get("summary_text", ""),
+            "action": _action_clean,
+            "source_basis": _best.get("source_basis", []),
+            "hard_blocks": _best.get("hard_blocks", []),
+            "risk_flags": _best.get("risk_flags", []),
             "lane": _lane_pick,
             "fmt": _fmt,
             "nonce": _draft_nonce,

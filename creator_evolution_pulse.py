@@ -18,7 +18,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v6-colorado-hard-gate"
+PULSE_VERSION = "ce-pulse-v7-source-quality-gates"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -26,6 +26,8 @@ BLOCKING_HARD_BLOCKS = {
     "low_fact_confidence",
     "monetization_risk",
     "betting_angle",
+    "non_english_source",
+    "out_of_market_context",
     "duplicate_recent_angle",
     "reply_fragment_context",
     "unresolved_pronoun_context",
@@ -131,6 +133,22 @@ SUBSTANTIVE_SOURCE_TERMS = (
 FALLBACK_RISK_TERMS = (
     "idiot", "moron", "clown", "trash", "garbage", "hate", "stupid",
     "fraud", "loser", "shut up", "dumb",
+)
+NON_ENGLISH_MARKERS = (
+    " je ", " pense ", " cet ", " été", " toutes ", " exception ", " propos ",
+    " déform", " parce que ", " l'été", " le ", " la ", " les ", " des ",
+    " une ", " dans ", " avec ", " pour ", " mais ", " cela ",
+)
+NON_ENGLISH_CHARS = "àâäçéèêëîïôöùûüÿœæñ¿¡"
+OUT_OF_MARKET_MALONE_TERMS = (
+    "north carolina", "unc", "tar heels", "college basketball",
+    "finalize deal", "finalizing a deal", "hire michael malone",
+    "michael malone as basketball coach", "basketball coach",
+)
+DENVER_MALONE_ANCHORS = (
+    "denver nuggets", "nuggets owner", "josh kroenke", "calvin booth",
+    "nikola jokic", "jamal murray", "nuggets roster", "nuggets offseason",
+    "front office", "exit interview", "press conference", "presser",
 )
 UNRESOLVED_PRONOUN_TERMS = (
     "he", "him", "his", "himself", "that guy", "this guy", "that dude",
@@ -447,6 +465,8 @@ def _has_colorado_sports_entity(text: str) -> bool:
     lower = _text(text).lower()
     if _is_crypto_avalanche_context(lower):
         return False
+    if _is_out_of_market_context(lower):
+        return False
     return _contains_any(lower, COLORADO_TEAM_TERMS)
 
 
@@ -475,6 +495,38 @@ def _is_betting_signal_text(text: str) -> bool:
     )
 
 
+def _is_out_of_market_context(text: str) -> bool:
+    lower = _text(text).lower()
+    if "michael malone" in lower and _contains_any(lower, OUT_OF_MARKET_MALONE_TERMS):
+        if not _contains_any(lower, DENVER_MALONE_ANCHORS):
+            return True
+        if "north carolina" in lower or "unc" in lower or "tar heels" in lower:
+            denver_hits = _count_terms(lower, DENVER_MALONE_ANCHORS)
+            out_hits = _count_terms(lower, OUT_OF_MARKET_MALONE_TERMS)
+            return out_hits > denver_hits
+    return False
+
+
+def _is_english_source_text(text: str) -> bool:
+    clean = _text(text)
+    if not clean:
+        return False
+    lower = f" {clean.lower()} "
+    letters = re.findall(r"[A-Za-zÀ-ÿ]", clean)
+    if not letters:
+        return False
+    marker_hits = sum(1 for marker in NON_ENGLISH_MARKERS if marker in lower)
+    accented = sum(1 for ch in clean.lower() if ch in NON_ENGLISH_CHARS)
+    if marker_hits >= 3:
+        return False
+    if accented >= 2 and marker_hits >= 1:
+        return False
+    ascii_letters = sum(1 for ch in letters if "a" <= ch.lower() <= "z")
+    if len(letters) >= 80 and ascii_letters / max(len(letters), 1) < 0.9:
+        return False
+    return True
+
+
 def _opportunity_text(item: dict[str, Any]) -> str:
     parts = [str(item.get("summary_text") or "")]
     for source in item.get("source_basis", []) or []:
@@ -493,7 +545,7 @@ def _is_colorado_opportunity(item: dict[str, Any]) -> bool:
 
 def _colorado_cluster_key(text: str) -> str:
     lower = _text(text).lower()
-    if _is_crypto_avalanche_context(lower):
+    if _is_crypto_avalanche_context(lower) or _is_out_of_market_context(lower):
         return ""
     team = ""
     if _contains_any(lower, ("nuggets", "denver nuggets", "nikola jokic", "jokic", "jamal murray", "aaron gordon", "michael malone", "calvin booth")):
@@ -524,6 +576,10 @@ def _risk_flags(text: str) -> list[str]:
     lower = text.lower()
     if _is_betting_signal_text(text):
         flags.append("betting_angle")
+    if not _is_english_source_text(text):
+        flags.append("non_english_source")
+    if _is_out_of_market_context(text):
+        flags.append("out_of_market_context")
     for term in UNSAFE_MONETIZATION_TERMS:
         if term in lower:
             flags.append(f"unsafe:{term}")
@@ -670,6 +726,10 @@ def build_signals(tweets: list[dict[str, Any]] | None,
             text = _ce_tweet_text(tweet)
             if not text or text.startswith("RT "):
                 continue
+            if not _is_english_source_text(text):
+                continue
+            if _is_out_of_market_context(text):
+                continue
             signals.append(signal_from_tweet(tweet, source="twitter", now=now))
         except Exception:
             continue
@@ -686,6 +746,10 @@ def build_signals(tweets: list[dict[str, Any]] | None,
                 source = "news"
                 timestamp = None
             if text:
+                if not _is_english_source_text(text):
+                    continue
+                if _is_out_of_market_context(text):
+                    continue
                 if "espn" in text.lower() or source == "espn":
                     source = "espn"
                 signals.append(signal_from_text(text, source=source, url=url, timestamp=timestamp, now=now))
@@ -798,6 +862,8 @@ def _draft_basis_signals(signals: list[dict[str, Any]], topic: str = "") -> list
         if not _is_speculative_reaction_source(s)
         and "unresolved_pronoun_context" not in set(s.get("context_flags", []) or [])
         and s.get("freshness_status") != "stale"
+        and "non_english_source" not in set(s.get("risk_flags", []) or [])
+        and "out_of_market_context" not in set(s.get("risk_flags", []) or [])
     ]
     if team:
         pure_basis = [s for s in clean_basis if not _mentions_other_colorado_team(s.get("text", ""), team)]
@@ -943,6 +1009,10 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         hard_blocks.append("monetization_risk")
     if "betting_angle" in risk_flags:
         hard_blocks.append("betting_angle")
+    if "non_english_source" in risk_flags:
+        hard_blocks.append("non_english_source")
+    if "out_of_market_context" in risk_flags:
+        hard_blocks.append("out_of_market_context")
     if novelty_flag == "duplicate_recent_angle":
         hard_blocks.append("duplicate_recent_angle")
     primary_context_flags = set(primary.get("context_flags", []) or [])
