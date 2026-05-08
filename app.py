@@ -8084,7 +8084,7 @@ Format: {fmt}
 Voice lane: {lane}
 
 Never use Hall of Fame tweets, Hall of Fame benchmarks, Creator Studio calibration, or copied viral hooks.
-Use only Creator Evolution approved rules and real performance context.
+Use only Creator Evolution approved rules plus mature metric-derived profiles from real performance context.
 
 LANE BEHAVIOR:
 {_ce_lane_recipe_text(lane)}
@@ -8104,8 +8104,7 @@ APPROVED PERFORMANCE RULES:
 
 CURRENT PERFORMANCE SUMMARY:
 - Mature tweets: {patterns.get("mature_count", 0)}
-- Best patterns: {patterns.get("best_current_patterns", [])[:3]}
-- Weak patterns: {patterns.get("worst_current_patterns", [])[:3]}
+- Raw winning and losing tweet text is withheld from generation prompts to prevent copying.
 
 SOURCE MATERIAL:
 {source}
@@ -9738,14 +9737,14 @@ def _ce_format_recipe_text(fmt: str) -> str:
         ),
         "Normal Tweet": (
             "Normal Tweet:\n"
-            "- Target: 161-260 characters. A complete single-post take with room for tension.\n"
+            "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
             "- Structure: One compact post. Usually 2-4 short lines or 2-3 sentences.\n"
             "- Must: Every option must use the extra space; do not return a punchy one-liner.\n"
             "- Avoid: Going over 280 characters, thread markers, or article-style paragraphing."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
-            "- Target: 261-700 characters. An expanded single post designed for dwell time.\n"
+            "- Target: 261-700 preferred characters. Hard validator tolerance: 260-900.\n"
             "- Structure: Opening take, short supporting beat, contrast or consequence, closing pressure line.\n"
             "- Must: Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.\n"
             "- Avoid: Thread markers, article headings, or empty recap paragraphs."
@@ -9770,6 +9769,15 @@ def _ce_format_recipe_text(fmt: str) -> str:
 
 def _ce_format_learning_text(state: dict, fmt: str) -> str:
     fmt = _normalize_tweet_format(fmt)
+    patterns = (state or {}).get("patterns", {}) or {}
+    profiles = patterns.get("format_profiles", {}) or {}
+    profile = profiles.get(fmt) if isinstance(profiles, dict) else None
+    if not isinstance(profile, dict):
+        return ""
+    if str(profile.get("status", "")).lower() != "mature":
+        return ""
+    if int(profile.get("sample_size", 0) or 0) < 3:
+        return ""
     formatter = getattr(ce, "format_learning_text", None)
     if callable(formatter):
         try:
@@ -9778,26 +9786,24 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
                 return text
         except Exception as exc:
             _ce_pulse_debug_event("warn", "format learning helper recovered", {"error": str(exc)[:160]})
-    patterns = (state or {}).get("patterns", {}) or {}
-    profiles = patterns.get("format_profiles", {}) or {}
-    profile = profiles.get(fmt) if isinstance(profiles, dict) else None
-    if not isinstance(profile, dict):
-        return ""
-    if str(profile.get("status", "")).lower() != "mature":
-        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
-    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
     lines = [f"{fmt} learned profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):"]
+    lines.append("- Calibration is abstract only; raw winner text is intentionally withheld from generation prompts to prevent copying.")
     lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
     lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
-    if examples:
-        lines.append("- Winning examples are calibration only; do not copy exact wording, hooks, or closers:")
-        lines.extend(f"  - {example[:150]}" for example in examples[:3])
     return "\n".join(lines)
 
 
 def _ce_voice_learning_text(state: dict) -> str:
+    patterns = (state or {}).get("patterns", {}) or {}
+    profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
+    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+        return ""
+    if str(profile.get("status", "")).lower() != "mature":
+        return ""
+    if int(profile.get("sample_size", 0) or 0) < 8:
+        return ""
     formatter = getattr(ce, "voice_learning_text", None)
     if callable(formatter):
         try:
@@ -9806,17 +9812,11 @@ def _ce_voice_learning_text(state: dict) -> str:
                 return text
         except Exception as exc:
             _ce_pulse_debug_event("warn", "voice learning helper recovered", {"error": str(exc)[:160]})
-    patterns = (state or {}).get("patterns", {}) or {}
-    profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
-    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
-        return ""
-    if str(profile.get("status", "")).lower() != "mature":
-        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
     lines = [
         f"Creator Evolution learned voice profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
-        "- Use this as influence, not a hook library. Do not copy exact wording from examples.",
+        "- Use this as influence, not a hook library. Raw winner text is intentionally withheld from generation prompts.",
     ]
     lines.extend(f"- Winning voice trait: {trait}" for trait in traits[:7])
     lines.extend(f"- Avoid voice drift: {trait}" for trait in avoid_traits[:3])
@@ -9840,7 +9840,7 @@ def _creator_evolution_system_prompt(lane: str) -> str:
     lane = _ce_normalize_lane(lane)
     _ce_install_lane_recipe_text_compat()
     lane_rules = _ce_lane_recipe_text(lane)
-    base_system = get_system_for_voice("Sarcastic", "") if lane == "Sarcastic" else build_user_context()
+    base_system = build_user_context()
     return base_system + f"""
 
 You are Creator Evolution for @{handle}.
@@ -9853,7 +9853,7 @@ Active lane behavior:
 
 Hard boundaries:
 - Do not use Creator Studio's Hall of Fame examples, benchmarks, calibration blocks, hooks, or cached prompt context.
-- Learn only from Creator Evolution's approved real-performance rules and current metric summary.
+- Learn only from Creator Evolution's approved real-performance rules plus mature metric-derived profiles.
 - Be monetization-safe: heat, annoyance, and argument are allowed; slurs, harassment, invented facts, and cheap rage bait are not.
 - No invented stats, rankings, injuries, roster facts, transaction claims, or current-event claims.
 - Return only the requested JSON.

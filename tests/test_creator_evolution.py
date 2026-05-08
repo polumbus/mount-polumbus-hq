@@ -170,8 +170,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
         cases = {
             "Punchy Tweet": "under 160 characters",
-            "Normal Tweet": "161-260 characters",
-            "Long Tweet": "261-700 characters",
+            "Normal Tweet": "161-260 preferred characters",
+            "Long Tweet": "261-700 preferred characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
         }
@@ -254,6 +254,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Winning voice trait:", prompt)
         self.assertIn("Use this as influence, not a hook library", prompt)
         self.assertTrue(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
+        self.assertNotIn(tweets[0]["text"][:80], prompt)
 
     def test_provisional_profiles_do_not_influence_generation_prompt(self):
         tweets = [
@@ -274,7 +275,57 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("No mature learned voice profile yet", prompt)
         self.assertNotIn("Winning examples:", prompt)
         self.assertNotIn("Winning voice trait:", prompt)
+        self.assertNotIn("CURRENT WINNING PERFORMANCE PATTERNS:", prompt)
         self.assertFalse(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
+
+    def test_tiny_mature_samples_do_not_influence_generation_prompt(self):
+        tweets = [
+            _tweet(132, "The Broncos roster plan is getting weird enough that everyone wants to skip the uncomfortable part...", hours_ago=90, views=9000, likes=180, replies=40, reposts=20),
+            _tweet(133, "The Nuggets bench answer is still hiding inside the same pressure point...", hours_ago=96, views=8000, likes=160, replies=35, reposts=18),
+            _tweet(134, "Fresh Broncos thought with huge early numbers should not teach the model yet...", hours_ago=2, views=90000, likes=900, replies=300, reposts=150),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are arguing about the roster plan",
+            "Punchy Tweet",
+            "Witty Edge",
+            state,
+        )
+
+        self.assertEqual(state["patterns"]["mature_count"], 2)
+        self.assertIn("No mature learned profile for this selected format yet", prompt)
+        self.assertIn("No mature learned voice profile yet", prompt)
+        self.assertNotIn("Fresh Broncos thought with huge early numbers", prompt)
+        self.assertNotIn("CURRENT WINNING PERFORMANCE PATTERNS:", prompt)
+
+    def test_seven_mature_voice_samples_do_not_create_voice_rule_or_prompt_profile(self):
+        tweets = [
+            _tweet(150 + i, f"The Broncos roster plan keeps hiding the uncomfortable part in plain sight number {i}...", hours_ago=90 + i, views=9000 + i, likes=180, replies=40, reposts=20)
+            for i in range(7)
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        prompt = ce.build_generation_prompt("Broncos roster plan", "Punchy Tweet", "Witty Edge", state)
+
+        self.assertEqual(state["patterns"]["voice_profile"]["sample_size"], 7)
+        self.assertIn("No mature learned voice profile yet", prompt)
+        self.assertFalse(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
+
+    def test_mixed_mature_and_fresh_uses_mature_only_for_profiles(self):
+        mature_tweets = [
+            _tweet(170, "The Broncos plan looks boring until the roster math starts telling on it...", hours_ago=90, views=15000, likes=320, replies=80, reposts=46),
+            _tweet(171, "Nuggets fans want a clean bench answer because the window math keeps getting uncomfortable...", hours_ago=96, views=14000, likes=300, replies=78, reposts=42),
+            _tweet(172, "The Avs usage conversation keeps hiding behind the same uncomfortable lineup question...", hours_ago=100, views=13000, likes=280, replies=70, reposts=39),
+        ]
+        fresh_tweet = _tweet(173, "Fresh viral sentence that should not become a learned profile trait yet.", hours_ago=1, views=999999, likes=9999, replies=999, reposts=999)
+
+        state = ce.refresh_state(None, mature_tweets + [fresh_tweet], handle="polfam", now=NOW)
+        prompt = ce.build_generation_prompt("Broncos roster plan", "Punchy Tweet", "Witty Edge", state)
+
+        self.assertEqual(state["patterns"]["mature_count"], 3)
+        self.assertNotIn("Fresh viral sentence", prompt)
+        self.assertNotIn(fresh_tweet["id"], state["patterns"]["format_profiles"]["Punchy Tweet"]["winner_ids"])
 
     def test_format_examples_are_marked_calibration_only(self):
         tweets = [
@@ -286,8 +337,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
         text = ce.format_learning_text(state, "Punchy Tweet")
 
-        self.assertIn("Winning examples are calibration only", text)
-        self.assertIn("do not copy exact wording", text)
+        self.assertIn("Calibration is abstract only", text)
+        self.assertIn("raw winner text is intentionally withheld", text)
+        self.assertNotIn(tweets[0]["text"][:80], text)
 
     def test_legacy_missing_voice_profile_is_safe(self):
         state = ce.initial_state()
@@ -312,6 +364,22 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("if char_count < 360:", app_gate)
         self.assertNotIn("if char_count > 1300:", app_gate)
 
+    def test_long_tweet_core_boundary_documents_preferred_vs_hard_bounds(self):
+        self.assertFalse(ce.draft_quality_report("x" * 259, "Long Tweet", "Witty Edge")["ok"])
+        self.assertTrue(ce.draft_quality_report("x" * 260, "Long Tweet", "Witty Edge")["ok"])
+        self.assertTrue(ce.draft_quality_report("x" * 900, "Long Tweet", "Witty Edge")["ok"])
+        self.assertFalse(ce.draft_quality_report("x" * 901, "Long Tweet", "Witty Edge")["ok"])
+
+    def test_lane_specific_quality_gates_block_drift(self):
+        sarcastic = ce.draft_quality_report("Turns out that guy is a total loser.", "Punchy Tweet", "Sarcastic")
+        amused = ce.draft_quality_report("This lineup is so unserious lol 😂", "Punchy Tweet", "Amused")
+        skeptical = ce.draft_quality_report("Obviously this is guaranteed to fail. Book it.", "Punchy Tweet", "Skeptical")
+
+        self.assertFalse(sarcastic["ok"])
+        self.assertFalse(amused["ok"])
+        self.assertFalse(skeptical["ok"])
+        self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
+
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
             _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),
@@ -333,7 +401,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn(format_props[0]["rule"], ce.approved_rules_text(approved))
         self.assertIn(format_props[0]["rule"], ce.performance_context(approved))
 
-    def test_sarcastic_lane_matches_creator_studio_voice_block(self):
+    def test_sarcastic_lane_is_creator_evolution_owned_and_example_free(self):
         self.assertIn("Sarcastic", ce.EMOTION_LANES)
 
         prompt = ce.build_generation_prompt(
@@ -344,19 +412,22 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("SARCASTIC VOICE — DRY HUMOR MODE:", prompt)
-        self.assertIn("Turns out the Patriots offense doesn't suck because of a snow storm.", prompt)
-        self.assertIn("That cornerback needs to call someone he trusts right now. Not about football.", prompt)
         self.assertIn("Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)", prompt)
+        self.assertIn("Never copy old sarcastic examples", prompt)
         self.assertIn('Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"', prompt)
         self.assertIn("Drop it and walk away. Never explain the joke.", prompt)
+        self.assertNotIn("Turns out the Patriots offense", prompt)
+        self.assertNotIn("That cornerback needs to call someone", prompt)
+        self.assertNotIn("copy this exact energy", prompt)
 
-    def test_app_creator_evolution_exposes_creator_studio_sarcastic_lane(self):
+    def test_app_creator_evolution_uses_ce_owned_sarcastic_lane(self):
         app_text = Path("app.py").read_text()
         ce_defaults = app_text.split("CE_COMPAT_DEFAULTS", 1)[1].split("BUDGET_POLICY", 1)[0]
         ce_system_prompt = app_text.split("def _creator_evolution_system_prompt", 1)[1].split("def _ce_capture_ai_error", 1)[0]
 
         self.assertIn('"Sarcastic"', ce_defaults)
-        self.assertIn('get_system_for_voice("Sarcastic", "") if lane == "Sarcastic"', ce_system_prompt)
+        self.assertIn("base_system = build_user_context()", ce_system_prompt)
+        self.assertNotIn('get_system_for_voice("Sarcastic", "")', ce_system_prompt)
 
     def test_quality_gate_flags_ai_bait_and_deadpan_drift(self):
         report = ce.draft_quality_report(

@@ -79,21 +79,16 @@ LANE_RECIPES = {
     },
     "Sarcastic": {
         "text": """SARCASTIC VOICE — DRY HUMOR MODE:
-EXAMPLES (copy this exact energy):
-- "Turns out the Patriots offense doesn't suck because of a snow storm."
-- "That cornerback needs to call someone he trusts right now. Not about football."
-- "Starting to feel like Bo Nix really should have played with a broken ankle."
-- "Bold of Skip to finally come out and say it."
-
 SARCASTIC VOICE RULES:
 - Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
 - Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
 - Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
 - Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
+- Never copy old sarcastic examples, sentence frames, or punchline structures.
 - Drop it and walk away. Never explain the joke.""",
-        "target": "Creator Studio Sarcastic voice exactly as defined for dry humor mode.",
+        "target": "Creator Evolution dry sarcasm: implied real story or unexpected cultural leap, without copied examples.",
         "do": "Use Cultural Leap for positive moments or Implied Real Story for negative moments.",
-        "avoid": "Generic sarcastic openers, joke explanation, and fallback default voice.",
+        "avoid": "Generic sarcastic openers, joke explanation, copied examples, direct insults, and fallback default voice.",
         "ending": "Drop it and walk away. Never explain the joke.",
     },
 }
@@ -106,13 +101,13 @@ FORMAT_RECIPES = {
         "avoid": "Explaining the context, adding a second angle, threads, or soft qualifiers.",
     },
     "Normal Tweet": {
-        "target": "161-260 characters. A complete single-post take with room for tension.",
+        "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
         "structure": "One compact post. Usually 2-4 short lines or 2-3 sentences.",
         "must": "Every option must use the extra space; do not return a punchy one-liner.",
         "avoid": "Going over 280 characters, thread markers, or article-style paragraphing.",
     },
     "Long Tweet": {
-        "target": "261-700 characters. An expanded single post designed for dwell time.",
+        "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
         "structure": "Opening take, short supporting beat, contrast or consequence, closing pressure line.",
         "must": "Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.",
         "avoid": "Thread markers, article headings, or empty recap paragraphs.",
@@ -562,10 +557,17 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
 
     if lane == "Deadpan" and ("!" in text or "lol" in lower):
         issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+    if lane == "Sarcastic":
+        if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
+            issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+        if risky:
+            issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risky[:4]))
+    if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
+        issues.append("Amused should be dry and observational, not meme-caption energy.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
-    if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly")):
-        warnings.append("Skeptical should feel like doubt, not certainty cosplay.")
+    if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
+        issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
 
     penalty = len(issues) * 25 + len(warnings) * 8
     score = max(0, min(100, 100 - penalty))
@@ -1474,17 +1476,16 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
+    if int(profile.get("sample_size", 0) or 0) < 3:
+        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
-    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
     lines = [
         f"{fmt} learned profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
+        "- Calibration is abstract only; raw winner text is intentionally withheld from generation prompts to prevent copying.",
     ]
     lines.extend(f"- Winning trait: {trait}" for trait in traits[:5])
     lines.extend(f"- Avoid: {trait}" for trait in weak_traits[:3])
-    if examples:
-        lines.append("- Winning examples are calibration only; do not copy exact wording, hooks, or closers:")
-        lines.extend(f"  - {example[:150]}" for example in examples[:3])
     return "\n".join(lines)
 
 
@@ -1495,32 +1496,31 @@ def voice_learning_text(state: dict[str, Any] | None) -> str:
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
+    if int(profile.get("sample_size", 0) or 0) < 8:
+        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
-    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
     lines = [
         f"Creator Evolution learned voice profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
-        "- Use this as influence, not a hook library. Do not copy exact wording from examples.",
+        "- Use this as influence, not a hook library. Raw winner text is intentionally withheld from generation prompts.",
     ]
     lines.extend(f"- Winning voice trait: {trait}" for trait in traits[:7])
     lines.extend(f"- Avoid voice drift: {trait}" for trait in avoid_traits[:3])
-    if examples:
-        lines.append("- Winning examples are calibration only:")
-        lines.extend(f"  - {example[:150]}" for example in examples[:3])
     return "\n".join(lines)
 
 
 def performance_context(state: dict[str, Any] | None) -> str:
     state = state or initial_state()
     patterns = state.get("patterns", {})
-    best = patterns.get("best_current_patterns", [])
-    worst = patterns.get("worst_current_patterns", [])
+    mature_count = int(patterns.get("mature_count", 0) or 0) if isinstance(patterns, dict) else 0
     rules = approved_rules_text(state)
     blocks = []
-    if best:
-        blocks.append("CURRENT WINNING PERFORMANCE PATTERNS:\n" + "\n".join(f"- {line}" for line in best[:5]))
-    if worst:
-        blocks.append("CURRENT LOSING PERFORMANCE PATTERNS:\n" + "\n".join(f"- {line}" for line in worst[:5]))
+    if mature_count >= 3:
+        blocks.append(
+            "CURRENT PERFORMANCE SUMMARY:\n"
+            f"- Mature original posts analyzed: {mature_count}\n"
+            "- Raw winning and losing tweet text is withheld from generation prompts to prevent copying."
+        )
     if rules:
         blocks.append("APPROVED CREATOR EVOLUTION RULES:\n" + rules)
     return "\n\n".join(blocks)
@@ -1562,7 +1562,7 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {format_learning or "- No mature learned profile for this selected format yet. Use the static format behavior until enough real posts mature."}
-When a mature learned format profile exists, it overrides the static target range for this selected format.
+Mature metric-derived profiles are allowed input alongside approved rules. When a mature learned format profile exists, it overrides the preferred static target range while the hard validator bounds still apply.
 
 PERSONALITY LANE:
 {lane}
@@ -1580,6 +1580,7 @@ LEARNED VOICE PROFILE:
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
+- Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
