@@ -790,6 +790,13 @@ def _pct(values: list[bool]) -> int:
     return round(sum(1 for value in values if value) / len(values) * 100)
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
 def _most_common(values: list[str]) -> str:
     counts: dict[str, int] = {}
     for value in values:
@@ -871,7 +878,7 @@ def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool)
         "weak_traits": weak_traits,
         "winner_ids": [item["id"] for item in winners if item["id"]],
         "loser_ids": [item["id"] for item in losers if item["id"]],
-        "examples": [item["text"][:180] for item in winners[:3]],
+        "examples": [],
     }
 
 
@@ -969,7 +976,7 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
         "avoid_traits": avoid_traits,
         "winner_ids": [item["id"] for item in winners if item["id"]],
         "loser_ids": [item["id"] for item in losers if item["id"]],
-        "examples": [item["text"][:180] for item in winners[:3]],
+        "examples": [],
     }
 
 
@@ -1012,16 +1019,16 @@ def _pattern_lines(items: list[dict[str, Any]], *, positive: bool) -> list[str]:
     for item in items[:5]:
         metrics = item["metrics"]
         cohort = item["cohort"]
-        text = item["text"].replace("\n", " ")
         if positive:
             lines.append(
                 f"{cohort['format']} | {metrics['views']:,} views | "
-                f"{metrics['reply_per_1k']:.1f} replies/1k | {text[:110]}"
+                f"{metrics['reply_per_1k']:.1f} replies/1k | "
+                f"{metrics['repost_per_1k']:.1f} reposts/1k | topics: {', '.join(cohort.get('topics', [])[:3])}"
             )
         else:
             lines.append(
                 f"{cohort['format']} | low score {item['scores']['creator_evolution']:.1f} | "
-                f"{metrics['views']:,} views | {text[:110]}"
+                f"{metrics['views']:,} views | topics: {', '.join(cohort.get('topics', [])[:3])}"
             )
     return lines
 
@@ -1476,7 +1483,7 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
-    if int(profile.get("sample_size", 0) or 0) < 3:
+    if _safe_int(profile.get("sample_size", 0)) < 3:
         return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
@@ -1492,11 +1499,11 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
 def voice_learning_text(state: dict[str, Any] | None) -> str:
     patterns = (state or {}).get("patterns", {}) if isinstance(state, dict) else {}
     profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
-    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+    if not isinstance(profile, dict) or not _safe_int(profile.get("sample_size", 0)):
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
-    if int(profile.get("sample_size", 0) or 0) < 8:
+    if _safe_int(profile.get("sample_size", 0)) < 8:
         return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
@@ -1512,7 +1519,7 @@ def voice_learning_text(state: dict[str, Any] | None) -> str:
 def performance_context(state: dict[str, Any] | None) -> str:
     state = state or initial_state()
     patterns = state.get("patterns", {})
-    mature_count = int(patterns.get("mature_count", 0) or 0) if isinstance(patterns, dict) else 0
+    mature_count = _safe_int(patterns.get("mature_count", 0)) if isinstance(patterns, dict) else 0
     rules = approved_rules_text(state)
     blocks = []
     if mature_count >= 3:

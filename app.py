@@ -8330,18 +8330,25 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
 
 def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
     """Validate options without trusting stale Creator Evolution module internals."""
+    reports: dict = {}
     validator = getattr(ce, "validate_generation_options", None)
     if callable(validator):
         try:
             report = validator(data, fmt, lane)
             if isinstance(report, dict):
-                return report
+                reports.update(report)
         except Exception as exc:
             _ce_pulse_debug_event("warn", "generation validator recovered", {"error": str(exc)[:160]})
-    reports: dict = {}
     for option_key in ("option1", "option2", "option3"):
         if data.get(option_key):
-            reports[option_key] = _ce_draft_quality_report(str(data[option_key]), fmt, lane)
+            local_report = _ce_draft_quality_report(str(data[option_key]), fmt, lane)
+            helper_report = reports.get(option_key, {}) if isinstance(reports.get(option_key), dict) else {}
+            merged = dict(helper_report)
+            merged.update(local_report)
+            merged["issues"] = list(dict.fromkeys(list(helper_report.get("issues", []) or []) + list(local_report.get("issues", []) or [])))
+            merged["warnings"] = list(dict.fromkeys(list(helper_report.get("warnings", []) or []) + list(local_report.get("warnings", []) or [])))
+            merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))
+            reports[option_key] = merged
     return reports
 
 
@@ -9776,7 +9783,11 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
-    if int(profile.get("sample_size", 0) or 0) < 3:
+    try:
+        sample_size = int(profile.get("sample_size", 0) or 0)
+    except (TypeError, ValueError):
+        sample_size = 0
+    if sample_size < 3:
         return ""
     formatter = getattr(ce, "format_learning_text", None)
     if callable(formatter):
@@ -9798,11 +9809,17 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
 def _ce_voice_learning_text(state: dict) -> str:
     patterns = (state or {}).get("patterns", {}) or {}
     profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
-    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+    if not isinstance(profile, dict):
+        return ""
+    try:
+        sample_size = int(profile.get("sample_size", 0) or 0)
+    except (TypeError, ValueError):
+        sample_size = 0
+    if not sample_size:
         return ""
     if str(profile.get("status", "")).lower() != "mature":
         return ""
-    if int(profile.get("sample_size", 0) or 0) < 8:
+    if sample_size < 8:
         return ""
     formatter = getattr(ce, "voice_learning_text", None)
     if callable(formatter):

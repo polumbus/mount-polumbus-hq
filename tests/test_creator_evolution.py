@@ -224,6 +224,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("LEARNED FORMAT PROFILE:", prompt)
         self.assertIn("Normal Tweet learned profile", prompt)
         self.assertIn("Winning trait:", prompt)
+        self.assertEqual(profile["examples"], [])
 
     def test_voice_evolution_learns_profile_from_mature_tweets(self):
         tweets = [
@@ -255,6 +256,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Use this as influence, not a hook library", prompt)
         self.assertTrue(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
         self.assertNotIn(tweets[0]["text"][:80], prompt)
+        self.assertEqual(profile["examples"], [])
 
     def test_provisional_profiles_do_not_influence_generation_prompt(self):
         tweets = [
@@ -325,7 +327,9 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertEqual(state["patterns"]["mature_count"], 3)
         self.assertNotIn("Fresh viral sentence", prompt)
+        self.assertNotIn("Fresh viral sentence", " ".join(state["patterns"]["best_current_patterns"]))
         self.assertNotIn(fresh_tweet["id"], state["patterns"]["format_profiles"]["Punchy Tweet"]["winner_ids"])
+        self.assertEqual(state["patterns"]["voice_profile"]["examples"], [])
 
     def test_format_examples_are_marked_calibration_only(self):
         tweets = [
@@ -340,6 +344,50 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Calibration is abstract only", text)
         self.assertIn("raw winner text is intentionally withheld", text)
         self.assertNotIn(tweets[0]["text"][:80], text)
+        self.assertEqual(state["patterns"]["format_profiles"]["Punchy Tweet"]["examples"], [])
+
+    def test_pattern_summaries_do_not_store_raw_tweet_text(self):
+        unique = "UNIQUE_RAW_COPY_RISK_SENTENCE"
+        state = ce.refresh_state(None, [
+            _tweet(145, f"{unique} Broncos roster pressure keeps hiding in plain sight...", hours_ago=90, views=16000, likes=320, replies=80, reposts=46),
+            _tweet(146, "Nuggets window math keeps getting uncomfortable in the same exact spot...", hours_ago=96, views=15000, likes=300, replies=78, reposts=42),
+            _tweet(147, "The Avs lineup question keeps refusing to become a clean answer...", hours_ago=100, views=14000, likes=280, replies=70, reposts=39),
+        ], handle="polfam", now=NOW)
+        joined_patterns = "\n".join(state["patterns"]["best_current_patterns"] + state["patterns"]["worst_current_patterns"])
+        prompt = ce.build_generation_prompt("Broncos roster pressure", "Punchy Tweet", "Witty Edge", state)
+
+        self.assertNotIn(unique, joined_patterns)
+        self.assertNotIn(unique, prompt)
+
+    def test_malformed_legacy_profiles_fail_closed_without_leaking_examples(self):
+        state = ce.initial_state()
+        state["patterns"] = {
+            "mature_count": "bad",
+            "format_profiles": {
+                "Punchy Tweet": {
+                    "status": "mature",
+                    "sample_size": "bad",
+                    "traits": ["safe abstract trait"],
+                    "examples": ["RAW_FORMAT_LEAK"],
+                }
+            },
+            "voice_profile": {
+                "status": "mature",
+                "sample_size": "bad",
+                "traits": ["safe voice trait"],
+                "examples": ["RAW_VOICE_LEAK"],
+            },
+            "best_current_patterns": ["RAW_PATTERN_LEAK"],
+            "worst_current_patterns": ["RAW_PATTERN_LEAK"],
+        }
+
+        prompt = ce.build_generation_prompt("Broncos roster pressure", "Punchy Tweet", "Witty Edge", state)
+
+        self.assertIn("No mature learned profile for this selected format yet", prompt)
+        self.assertIn("No mature learned voice profile yet", prompt)
+        self.assertNotIn("RAW_FORMAT_LEAK", prompt)
+        self.assertNotIn("RAW_VOICE_LEAK", prompt)
+        self.assertNotIn("RAW_PATTERN_LEAK", prompt)
 
     def test_legacy_missing_voice_profile_is_safe(self):
         state = ce.initial_state()
@@ -363,6 +411,14 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("if char_count > 900:", app_gate)
         self.assertNotIn("if char_count < 360:", app_gate)
         self.assertNotIn("if char_count > 1300:", app_gate)
+
+    def test_app_generation_validator_merges_stale_helper_with_local_gate(self):
+        app_text = Path("app.py").read_text()
+        validator = app_text.split("def _ce_validate_generation_options", 1)[1].split("def _ce_pulse_meta_language", 1)[0]
+
+        self.assertIn("local_report = _ce_draft_quality_report", validator)
+        self.assertIn('merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))', validator)
+        self.assertNotIn("return report\n", validator)
 
     def test_long_tweet_core_boundary_documents_preferred_vs_hard_bounds(self):
         self.assertFalse(ce.draft_quality_report("x" * 259, "Long Tweet", "Witty Edge")["ok"])
