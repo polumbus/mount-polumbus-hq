@@ -10,8 +10,8 @@ import creator_evolution_pulse as pulse
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)
 
 
-def _tweet(tweet_id, text, *, hours_ago, views=1000, likes=20, replies=4, reposts=2, quotes=0, bookmarks=0):
-    return {
+def _tweet(tweet_id, text, *, hours_ago, views=1000, likes=20, replies=4, reposts=2, quotes=0, bookmarks=0, author=""):
+    item = {
         "id": str(tweet_id),
         "text": text,
         "createdAt": (NOW - timedelta(hours=hours_ago)).isoformat(),
@@ -22,6 +22,9 @@ def _tweet(tweet_id, text, *, hours_ago, views=1000, likes=20, replies=4, repost
         "quoteCount": quotes,
         "bookmarkCount": bookmarks,
     }
+    if author:
+        item["author"] = author
+    return item
 
 
 class CreatorEvolutionTests(unittest.TestCase):
@@ -376,7 +379,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v7-source-quality-gates")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v8-dominant-source-gates")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -569,6 +572,77 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("North Carolina", decision["best"]["summary_text"])
         self.assertTrue(pulse._is_out_of_market_context(headlines[0]["title"]))
         self.assertFalse(pulse._is_out_of_market_context(headlines[1]["title"]))
+
+    def test_pulse_prefers_multi_source_denver_conversation_over_single_viral_tangent(self):
+        tweets = [
+            _tweet(
+                110,
+                "Bo Nix discourse is going nuclear because everyone is mad about one offseason clip from practice.",
+                hours_ago=0.1,
+                views=120000,
+                likes=2200,
+                replies=500,
+                reposts=240,
+                quotes=100,
+                author="random_broncos_fan",
+            ),
+            _tweet(
+                111,
+                "Josh Kroenke said everything is on the table for the Nuggets this offseason except trading Nikola Jokic.",
+                hours_ago=0.2,
+                views=9000,
+                likes=180,
+                replies=38,
+                reposts=20,
+                quotes=8,
+                author="TroyRenck",
+            ),
+            _tweet(
+                112,
+                "Nuggets ownership keeps coming back to the same pressure point: Jokic is still the window and the roster has to match it.",
+                hours_ago=0.3,
+                views=7000,
+                likes=140,
+                replies=25,
+                reposts=16,
+                quotes=6,
+                author="DNVR_Nuggets",
+            ),
+            _tweet(
+                113,
+                "David Adelman and Josh Kroenke both talked about leadership, roster urgency, and not wasting the Nuggets' championship window.",
+                hours_ago=0.4,
+                views=6000,
+                likes=130,
+                replies=22,
+                reposts=11,
+                quotes=5,
+                author="HarrisonWind",
+            ),
+            _tweet(
+                114,
+                "The Nuggets press conference kept circling back to complacency, injuries, and what this front office does around Jokic next.",
+                hours_ago=0.5,
+                views=5000,
+                likes=100,
+                replies=18,
+                reposts=8,
+                quotes=3,
+                author="AltitudeTV",
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertTrue(decision["best"]["topic"].startswith("nuggets"))
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("Bo Nix", decision["best"]["summary_text"])
+
+    def test_pulse_does_not_flag_die_inside_diehard_as_unsafe(self):
+        flags = pulse._risk_flags("PLAYOFFS DIEHARD SPECIAL is live for Nuggets fans.")
+
+        self.assertNotIn("unsafe:die", flags)
 
     def test_pulse_ranks_highest_scored_colorado_topic_before_strong_now_shortcut(self):
         tweets = [
@@ -907,7 +981,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v7-source-quality-gates", pulse_text)
+        self.assertIn("ce-pulse-v8-dominant-source-gates", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)

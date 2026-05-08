@@ -18,7 +18,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v7-source-quality-gates"
+PULSE_VERSION = "ce-pulse-v8-dominant-source-gates"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -149,6 +149,11 @@ DENVER_MALONE_ANCHORS = (
     "denver nuggets", "nuggets owner", "josh kroenke", "calvin booth",
     "nikola jokic", "jamal murray", "nuggets roster", "nuggets offseason",
     "front office", "exit interview", "press conference", "presser",
+)
+LOCAL_TRUST_TERMS = (
+    "dnvr", "denver post", "altitude", "troy renck", "renck", "katy winge",
+    "harrison wind", "mike singer", "ryan blackburn", "vinny benedetto",
+    "bennett durando", "chris dempsey", "vic lombardi", "haertl",
 )
 UNRESOLVED_PRONOUN_TERMS = (
     "he", "him", "his", "himself", "that guy", "this guy", "that dude",
@@ -581,7 +586,7 @@ def _risk_flags(text: str) -> list[str]:
     if _is_out_of_market_context(text):
         flags.append("out_of_market_context")
     for term in UNSAFE_MONETIZATION_TERMS:
-        if term in lower:
+        if _term_in_text(lower, term):
             flags.append(f"unsafe:{term}")
     for term in _heated_risk_hits(text):
         flags.append(f"heated:{term}")
@@ -790,7 +795,12 @@ def _cluster_key(signal: dict[str, Any]) -> str:
 
 def _source_depth_score(signal: dict[str, Any]) -> float:
     text = _text(signal.get("text", ""))
-    lower = text.lower()
+    source_identity = " ".join([
+        text,
+        _text(signal.get("author", "")),
+        _text(signal.get("url", "")),
+    ])
+    lower = source_identity.lower()
     score = min(6.0, len(text) / 45.0)
     score += min(1.5, float(signal.get("source_reliability") or 0) / 4.0)
     score += min(3.0, _count_terms(text, COLORADO_TEAM_TERMS + PREGAME_OR_BREAKING_TERMS))
@@ -810,6 +820,8 @@ def _source_depth_score(signal: dict[str, Any]) -> float:
         score -= 1.5
     if " - " in text and re.search(r"\b(observer|gazette|post|sports|dnvr|altitude)\b", lower):
         score += 1.0
+    if _contains_any(lower, LOCAL_TRUST_TERMS):
+        score += 2.5
     if len(text) < 80:
         score -= 1.5
     return score
@@ -942,6 +954,11 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     colorado_now = _is_colorado_pregame_or_news(text)
     fresh_count = sum(1 for s in signals if s.get("freshness_status") in ("fresh", "usable"))
     source_count = len({str(s.get("source") or "") for s in signals if s.get("source")})
+    independent_source_count = len({
+        str(s.get("author") or s.get("url") or s.get("id") or "")
+        for s in signals
+        if s.get("author") or s.get("url") or s.get("id")
+    })
     best_age = min(_signal_age_hours(s) for s in signals)
     max_velocity = max(float(s.get("velocity") or 0) for s in signals)
     audience_fit = max(float(s.get("audience_fit") or 0) for s in signals)
@@ -971,7 +988,10 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if fresh_count >= 2:
         timeliness = min(20.0, timeliness + 2.0)
     velocity = min(15.0, max_velocity / 2.0 + len(signals) * 1.5)
-    conversation_dominance = min(15.0, max(0.0, (len(signals) - 1) * 2.1 + max(0, source_count - 1) * 2.0))
+    conversation_dominance = min(
+        15.0,
+        max(0.0, (len(signals) - 1) * 1.8 + max(0, source_count - 1) * 1.5 + max(0, independent_source_count - 1) * 1.4),
+    )
     if colorado_now:
         timeliness = max(timeliness, 18.5)
         velocity = max(velocity, 6.0)
