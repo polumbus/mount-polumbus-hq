@@ -8748,12 +8748,31 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
             options = _ce_avs_live_fallback_options(avs_state)
         else:
             options = _ce_avs_no_score_fallback_options(avs_state)
+    elif "kroenke" in text or "jokic" in text or "nuggets" in text:
+        if "adelman" in text:
+            options = [
+                ("The Nuggets can say the plan is stable, and maybe it is. The hard part is making stability look different from standing still when Jokic is still carrying the championship window.", "Source-grounded Nuggets press-conference tension."),
+                ("Adelman getting public confidence matters. What matters more is whether the roster around Jokic changes enough to make those words feel like a plan instead of a press conference reset.", "Uses the source topic without inventing facts."),
+                ("This Nuggets offseason is not really about saying the window is open. It is about proving the next move has enough force behind it to change what this team actually becomes.", "Standalone original tweet from the live signal."),
+            ]
+        else:
+            options = [
+                ("The Nuggets can call the championship window open as long as Jokic is here. The uncomfortable part is how little margin that leaves everywhere else on the roster.", "Turns the source into a standalone roster-tension tweet."),
+                ("Everything being on the table except Jokic sounds simple until you get to the roster math. That is where this Nuggets offseason moves from talking point to actual pressure.", "Concrete decision tension from the source basis."),
+                ("The Nuggets still have the easiest part of the argument. Jokic keeps the window alive. The rest of the roster has to prove this is not just another version of the same idea.", "Clear original tweet, not a reply or source recap."),
+            ]
+    elif "broncos" in text or "bo nix" in text or "sean payton" in text:
+        options = [
+            ("The Broncos have reached the part of the offseason where the words matter less than the next roster decision. That is usually where a plan either starts to show up or gets exposed.", "Original Broncos decision-tension fallback."),
+            ("This is where the Broncos' plan has to start showing up in personnel, not just press conference language. The next move says more than the explanation around it.", "Source-grounded but not dependent on AI."),
+            ("The Broncos can sell patience for only so long. Eventually the roster has to show where the real priority is, and that is when the offseason gets honest.", "Reply-ready open loop without a direct question."),
+        ]
     else:
         topic = str(best.get("topic") or "Denver sports").strip().title()
         options = [
-            (f"{topic} discourse is funniest right before everyone realizes they are not emotionally prepared for the normal version of events.", "Witty tension from the live signal."),
-            (f"This is one of those {topic} moments where the take is going to age either beautifully or like milk in direct sunlight.", "Reply-worthy contradiction without fake bait."),
-            (f"The best part of {topic} nights is everyone pretending they have perspective for about nine minutes.", "Human voice, not content strategy."),
+            (f"{topic} has a real signal in the noise right now. The useful part is not the headline. It is what the next decision says about the plan.", "Generic but source-shaped Pulse fallback."),
+            (f"The {topic} angle today is less about the first reaction and more about what comes next. That is usually where the real story starts.", "Original standalone fallback from the live signal."),
+            (f"{topic} is sitting in that weird space where one decision can change how everyone reads the whole week.", "Conversation tension without replying to a source."),
         ]
     return [(text, pattern) for text, pattern in options if not _ce_text_has_betting_angle(text)][:3]
 

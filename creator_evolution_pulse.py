@@ -18,7 +18,7 @@ from typing import Any
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v8-dominant-source-gates"
+PULSE_VERSION = "ce-pulse-v9-source-sanity-gates"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -28,6 +28,9 @@ BLOCKING_HARD_BLOCKS = {
     "betting_angle",
     "non_english_source",
     "out_of_market_context",
+    "non_sports_avs_context",
+    "promo_source",
+    "commerce_source",
     "duplicate_recent_angle",
     "reply_fragment_context",
     "unresolved_pronoun_context",
@@ -117,6 +120,22 @@ AVALANCHE_SPORTS_TERMS = (
     "colorado avalanche", "goavsgo", "nhl", "hockey", "puck", "goalie",
     "rink", "period", "wild", "stars", "jets", "macKinnon", "mackinnon",
     "makar", "landeskog",
+)
+NON_SPORTS_AVS_TERMS = (
+    "avs encode", "avs encoding", "av sync", "audio video", "physicalmedia",
+    "physical media", "cbhd", "hddvd", "blu-ray", "bluray", "warnerbros",
+    "disc", "dvd", "4k transfer", "image is nice and sharp", "black levels",
+)
+PROMO_SOURCE_TERMS = (
+    " is live!", " is live -", "watch live", "join us live", "subscribe",
+    "podcast is live", "show is live", "stream is live", "presented by",
+    "favorite memories", "top 5 favorite", "drafting things that are overrated",
+    "things that are overrated", "coming up on", "live now:",
+)
+COMMERCE_SOURCE_TERMS = (
+    "for dogs & cats", "for dogs and cats", "jersey for dogs", "pet jersey",
+    "buy now", "shop now", "on sale", "sale ends", "use code", "promo code",
+    "free shipping", "merch", "merchandise", "store link",
 )
 SPECULATIVE_REACTION_TERMS = (
     "safe to say", "hopefully", "smells like", "feels like", "i think",
@@ -466,11 +485,40 @@ def _is_crypto_avalanche_context(text: str) -> bool:
     )
 
 
+def _is_non_sports_avs_context(text: str) -> bool:
+    lower = _text(text).lower()
+    if not re.search(r"\bavs\b", lower):
+        return False
+    if not _contains_any(lower, NON_SPORTS_AVS_TERMS):
+        return False
+    return not _contains_any(lower, AVALANCHE_SPORTS_TERMS)
+
+
+def _is_promo_source_text(text: str) -> bool:
+    lower = _text(text).lower()
+    return _contains_any(lower, PROMO_SOURCE_TERMS)
+
+
+def _is_commerce_source_text(text: str) -> bool:
+    lower = _text(text).lower()
+    return _contains_any(lower, COMMERCE_SOURCE_TERMS)
+
+
+def _is_low_quality_source_text(text: str) -> bool:
+    return (
+        _is_non_sports_avs_context(text)
+        or _is_promo_source_text(text)
+        or _is_commerce_source_text(text)
+    )
+
+
 def _has_colorado_sports_entity(text: str) -> bool:
     lower = _text(text).lower()
     if _is_crypto_avalanche_context(lower):
         return False
     if _is_out_of_market_context(lower):
+        return False
+    if _is_low_quality_source_text(lower):
         return False
     return _contains_any(lower, COLORADO_TEAM_TERMS)
 
@@ -550,7 +598,7 @@ def _is_colorado_opportunity(item: dict[str, Any]) -> bool:
 
 def _colorado_cluster_key(text: str) -> str:
     lower = _text(text).lower()
-    if _is_crypto_avalanche_context(lower) or _is_out_of_market_context(lower):
+    if _is_crypto_avalanche_context(lower) or _is_out_of_market_context(lower) or _is_low_quality_source_text(lower):
         return ""
     team = ""
     if _contains_any(lower, ("nuggets", "denver nuggets", "nikola jokic", "jokic", "jamal murray", "aaron gordon", "michael malone", "calvin booth")):
@@ -585,6 +633,12 @@ def _risk_flags(text: str) -> list[str]:
         flags.append("non_english_source")
     if _is_out_of_market_context(text):
         flags.append("out_of_market_context")
+    if _is_non_sports_avs_context(text):
+        flags.append("non_sports_avs_context")
+    if _is_promo_source_text(text):
+        flags.append("promo_source")
+    if _is_commerce_source_text(text):
+        flags.append("commerce_source")
     for term in UNSAFE_MONETIZATION_TERMS:
         if _term_in_text(lower, term):
             flags.append(f"unsafe:{term}")
@@ -735,6 +789,8 @@ def build_signals(tweets: list[dict[str, Any]] | None,
                 continue
             if _is_out_of_market_context(text):
                 continue
+            if _is_low_quality_source_text(text):
+                continue
             signals.append(signal_from_tweet(tweet, source="twitter", now=now))
         except Exception:
             continue
@@ -754,6 +810,8 @@ def build_signals(tweets: list[dict[str, Any]] | None,
                 if not _is_english_source_text(text):
                     continue
                 if _is_out_of_market_context(text):
+                    continue
+                if _is_low_quality_source_text(text):
                     continue
                 if "espn" in text.lower() or source == "espn":
                     source = "espn"
@@ -801,6 +859,8 @@ def _source_depth_score(signal: dict[str, Any]) -> float:
         _text(signal.get("url", "")),
     ])
     lower = source_identity.lower()
+    if _is_low_quality_source_text(lower):
+        return -10.0
     score = min(6.0, len(text) / 45.0)
     score += min(1.5, float(signal.get("source_reliability") or 0) / 4.0)
     score += min(3.0, _count_terms(text, COLORADO_TEAM_TERMS + PREGAME_OR_BREAKING_TERMS))
@@ -812,6 +872,8 @@ def _source_depth_score(signal: dict[str, Any]) -> float:
         score += 1.0
     if _contains_any(lower, SPECULATIVE_REACTION_TERMS):
         score -= 4.5
+    if _is_promo_source_text(lower) or _is_commerce_source_text(lower):
+        score -= 7.0
     if lower.startswith("@"):
         score -= 1.0
     if lower.startswith(("me during", "me watching", "my reaction")):
@@ -832,6 +894,7 @@ def _is_speculative_reaction_source(signal: dict[str, Any]) -> bool:
     lower = text.lower()
     return (
         _contains_any(lower, SPECULATIVE_REACTION_TERMS)
+        or _is_low_quality_source_text(lower)
         or lower.startswith(("me during", "me watching", "my reaction"))
         or any(mark in text for mark in ("😒", "😂", "😭", "🤣"))
     )
@@ -876,6 +939,9 @@ def _draft_basis_signals(signals: list[dict[str, Any]], topic: str = "") -> list
         and s.get("freshness_status") != "stale"
         and "non_english_source" not in set(s.get("risk_flags", []) or [])
         and "out_of_market_context" not in set(s.get("risk_flags", []) or [])
+        and "non_sports_avs_context" not in set(s.get("risk_flags", []) or [])
+        and "promo_source" not in set(s.get("risk_flags", []) or [])
+        and "commerce_source" not in set(s.get("risk_flags", []) or [])
     ]
     if team:
         pure_basis = [s for s in clean_basis if not _mentions_other_colorado_team(s.get("text", ""), team)]
@@ -1033,6 +1099,12 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         hard_blocks.append("non_english_source")
     if "out_of_market_context" in risk_flags:
         hard_blocks.append("out_of_market_context")
+    if "non_sports_avs_context" in risk_flags:
+        hard_blocks.append("non_sports_avs_context")
+    if "promo_source" in risk_flags:
+        hard_blocks.append("promo_source")
+    if "commerce_source" in risk_flags:
+        hard_blocks.append("commerce_source")
     if novelty_flag == "duplicate_recent_angle":
         hard_blocks.append("duplicate_recent_angle")
     primary_context_flags = set(primary.get("context_flags", []) or [])

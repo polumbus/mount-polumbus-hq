@@ -379,7 +379,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v8-dominant-source-gates")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v9-source-sanity-gates")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -435,6 +435,103 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("Cavs", decision["best"]["summary_text"])
         self.assertTrue(pulse._is_colorado_current_context(decision["best"]["summary_text"]))
         self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
+
+    def test_pulse_rejects_non_sports_avs_encode_source(self):
+        tweets = [
+            _tweet(
+                901,
+                "I’ve always enjoyed this sequence in the movie. I was looking forward to see how the AVS encode on the CBHD disc would be. Black levels looks pretty good. #PhysicalMedia #HDDVD",
+                hours_ago=0.1,
+                views=90000,
+                likes=1200,
+                replies=260,
+                reposts=100,
+                quotes=50,
+            ),
+            _tweet(
+                902,
+                "Josh Kroenke said everything is on the table for the Nuggets this offseason except trading Nikola Jokic.",
+                hours_ago=0.2,
+                views=7000,
+                likes=130,
+                replies=25,
+                reposts=14,
+                quotes=7,
+                author="TroyRenck",
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("CBHD", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_non_sports_avs_context(tweets[0]["text"]))
+        self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
+
+    def test_pulse_rejects_live_show_promo_listicle_source(self):
+        tweets = [
+            _tweet(
+                903,
+                "DNVR Buffs Primetime is live! - are the Cleveland Browns setting Shedeur Sanders up for success in year 2? - Andre shares his top 5 favorite Buffs memories - drafting things that are OVERRATED",
+                hours_ago=0.4,
+                views=85000,
+                likes=1000,
+                replies=200,
+                reposts=95,
+                quotes=40,
+                author="DNVR_Buffs",
+            ),
+            _tweet(
+                904,
+                "Nuggets ownership press conference keeps coming back to the same pressure point: Jokic is still the window and the roster has to match it.",
+                hours_ago=0.2,
+                views=7000,
+                likes=140,
+                replies=30,
+                reposts=15,
+                quotes=8,
+                author="DNVR_Nuggets",
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertTrue(decision["best"]["topic"].startswith("nuggets"))
+        self.assertNotIn("Primetime", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_promo_source_text(tweets[0]["text"]))
+
+    def test_pulse_rejects_merchandise_source(self):
+        tweets = [
+            _tweet(
+                905,
+                "NHL Colorado Avalanche Jersey for Dogs & Cats. Let your pet rep the Avs today. Buy now and use code.",
+                hours_ago=0.2,
+                views=60000,
+                likes=700,
+                replies=90,
+                reposts=80,
+                quotes=25,
+            ),
+            _tweet(
+                906,
+                "Colorado Avalanche coach quote sparks debate today about the playoff lineup and who actually starts tonight.",
+                hours_ago=0.3,
+                views=6000,
+                likes=100,
+                replies=20,
+                reposts=12,
+                quotes=4,
+                author="AltitudeTV",
+            ),
+        ]
+
+        decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertNotIn("Dogs", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_commerce_source_text(tweets[0]["text"]))
 
     def test_pulse_blocks_betting_pick_and_prefers_dominant_nuggets_conversation(self):
         tweets = [
@@ -981,7 +1078,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v8-dominant-source-gates", pulse_text)
+        self.assertIn("ce-pulse-v9-source-sanity-gates", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)
