@@ -372,10 +372,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
 
         self.assertEqual(decision["status"], "no_op")
-        self.assertIn("stale_source", decision["best"]["hard_blocks"])
+        self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v5-room-reader")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v6-colorado-hard-gate")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -399,8 +399,38 @@ class CreatorEvolutionTests(unittest.TestCase):
             handle="polfam",
             now=NOW,
         )
-        self.assertEqual(news_decision["status"], "no_op")
-        self.assertIn("stale_source", news_decision["best"]["hard_blocks"])
+        self.assertEqual(news_decision["status"], "ready")
+        self.assertEqual(news_decision["best"]["hard_blocks"], [])
+        self.assertIn("newest signal 0.0h old", news_decision["best"]["why_now"])
+
+    def test_pulse_rejects_cavs_false_avs_and_prefers_nuggets_presser(self):
+        tweets = [
+            _tweet(
+                91,
+                "Cavs on/offs vs. Pistons through two games. For the love. Of GOD. Play Jaylon Tyson.",
+                hours_ago=1,
+                views=30000,
+                likes=800,
+                replies=140,
+                reposts=50,
+                quotes=25,
+            ),
+        ]
+        headlines = [
+            {
+                "title": "Nuggets hold end of season press conference with Michael Malone, Nikola Jokic, and Jamal Murray today",
+                "source": "news",
+                "publishedAt": "Mon, 04 May 2026 11:45:00 GMT",
+            },
+        ]
+
+        decision = pulse.find_pulse(tweets, headlines, ce.initial_state(), handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("Nuggets", decision["best"]["summary_text"])
+        self.assertNotIn("Cavs", decision["best"]["summary_text"])
+        self.assertTrue(pulse._is_colorado_current_context(decision["best"]["summary_text"]))
+        self.assertFalse(pulse._is_colorado_current_context(tweets[0]["text"]))
 
     def test_pulse_ignores_final_avalanche_game_from_sports_context(self):
         sports_context = (
@@ -541,7 +571,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         decision = pulse.find_pulse(tweets, [], ce.initial_state(), handle="polfam", now=NOW)
 
         self.assertNotEqual(decision["status"], "ready")
-        self.assertIn("thin_room_signal", decision["best"]["soft_flags"])
+        self.assertIsNone(decision["best"])
 
     def test_pulse_blocks_contextless_reply_fragments_with_unresolved_he(self):
         tweets = [
@@ -698,7 +728,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v5-room-reader", pulse_text)
+        self.assertIn("ce-pulse-v6-colorado-hard-gate", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)

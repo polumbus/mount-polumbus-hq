@@ -7188,6 +7188,27 @@ def _fetch_rss_headlines(url: str, max_items: int = 15) -> list:
         return []
 
 
+def _ce_pulse_owner_colorado_item(item) -> bool:
+    """Keep owner Pulse broad-feed noise out unless it is Denver/Colorado sports."""
+    try:
+        text = (item.get("text") or item.get("title") or item.get("headline") or "") if isinstance(item, dict) else str(item or "")
+    except Exception:
+        text = ""
+    lower = str(text or "").lower()
+    if not lower.strip():
+        return False
+    terms = (
+        "broncos", "denver broncos", "bo nix", "sean payton", "courtland sutton",
+        "nuggets", "denver nuggets", "jokic", "nikola jokic", "jamal murray",
+        "aaron gordon", "michael porter", "christian braun", "michael malone",
+        "calvin booth", "avalanche", "colorado avalanche", "avs", "mackinnon",
+        "nathan mackinnon", "makar", "cale makar", "rockies", "colorado rockies",
+        "buffs", "cu buffs", "colorado buffaloes", "coach prime", "deion",
+        "denver sports", "colorado sports", "altitude sports",
+    )
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lower) for term in terms)
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_inspiration_feed():
     """Fetch all lists + Twitter searches + RSS. Cached 20 min — data doesn't change that fast."""
@@ -7266,7 +7287,11 @@ def _fetch_inspiration_feed():
             _rss_feeds.append(f"https://news.google.com/rss/search?q={_tp.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en")
     else:
         _rss_feeds = [
+            "https://news.google.com/rss/search?q=Denver+Nuggets+OR+Nuggets+OR+Jokic+OR+Jamal+Murray+OR+Michael+Malone+press+conference+breaking+news&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=Denver+Broncos+OR+Broncos+OR+Bo+Nix+OR+Sean+Payton+breaking+news&hl=en-US&gl=US&ceid=US:en",
             "https://news.google.com/rss/search?q=Colorado+Avalanche+OR+Avs+NHL+breaking+news&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=Colorado+Rockies+OR+Rockies+MLB+breaking+news&hl=en-US&gl=US&ceid=US:en",
+            "https://news.google.com/rss/search?q=Colorado+Buffaloes+OR+CU+Buffs+OR+Coach+Prime+breaking+news&hl=en-US&gl=US&ceid=US:en",
             "https://www.espn.com/espn/rss/news",
             "https://www.espn.com/espn/rss/nfl/news",
             "https://www.espn.com/espn/rss/nba/news",
@@ -7334,9 +7359,14 @@ def _fetch_inspiration_feed():
             try: _crypto_lines = _crypto_fut.result()
             except Exception: pass
 
-    # Merge all headline sources — higher quality sources first
-    _rss_headlines = (_espn_headlines + _sleeper_lines + _crypto_lines +
-                      _newsapi_lines + _trends_lines + _reddit_lines + _rss_headlines)
+    # Merge all headline sources. Owner Pulse is Colorado-first; broad feeds are
+    # enrichment only after they prove local relevance.
+    if _is_g:
+        _rss_headlines = (_espn_headlines + _sleeper_lines + _crypto_lines +
+                          _newsapi_lines + _trends_lines + _reddit_lines + _rss_headlines)
+    else:
+        _broad_headlines = _espn_headlines + _sleeper_lines + _newsapi_lines + _trends_lines + _reddit_lines
+        _rss_headlines = [h for h in _broad_headlines if _ce_pulse_owner_colorado_item(h)] + _rss_headlines
 
     # Dedupe tweets
     _seen = set()
