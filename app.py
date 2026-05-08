@@ -8069,6 +8069,8 @@ def _ce_build_generation_prompt(source: str, fmt: str, lane: str, state: dict,
                     prompt += f"\n\nCREATOR EVOLUTION FORMAT CONTRACT:\n{_ce_format_recipe_text(fmt)}"
                 if "LEARNED FORMAT PROFILE:" not in prompt:
                     prompt += f"\n\nLEARNED FORMAT PROFILE:\n{_ce_format_learning_text(state, fmt) or '- No mature learned profile for this selected format yet.'}"
+                if "LEARNED VOICE PROFILE:" not in prompt:
+                    prompt += f"\n\nLEARNED VOICE PROFILE:\n{_ce_voice_learning_text(state) or '- No mature learned voice profile yet.'}"
                 return prompt
         except Exception as exc:
             _ce_pulse_debug_event("warn", "generation prompt helper recovered", {"error": str(exc)[:160]})
@@ -8092,6 +8094,10 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {_ce_format_learning_text(state, fmt) or "- No mature learned profile for this selected format yet."}
+When a mature learned format profile exists, it overrides the static target range for this selected format.
+
+LEARNED VOICE PROFILE:
+{_ce_voice_learning_text(state) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
 
 APPROVED PERFORMANCE RULES:
 {approved or "- No approved rules yet. Use the source material and human voice contract."}
@@ -9739,9 +9745,9 @@ def _ce_format_recipe_text(fmt: str) -> str:
         ),
         "Long Tweet": (
             "Long Tweet:\n"
-            "- Target: 500-1,100 characters. A long single post designed for dwell time.\n"
+            "- Target: 261-700 characters. An expanded single post designed for dwell time.\n"
             "- Structure: Opening take, short supporting beat, contrast or consequence, closing pressure line.\n"
-            "- Must: Every option must be a long-form single post, not a normal tweet stretched by filler.\n"
+            "- Must: Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.\n"
             "- Avoid: Thread markers, article headings, or empty recap paragraphs."
         ),
         "Thread": (
@@ -9786,6 +9792,30 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
     if examples:
         lines.append("- Winning examples:")
         lines.extend(f"  - {example[:150]}" for example in examples[:3])
+    return "\n".join(lines)
+
+
+def _ce_voice_learning_text(state: dict) -> str:
+    formatter = getattr(ce, "voice_learning_text", None)
+    if callable(formatter):
+        try:
+            text = str(formatter(state) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            _ce_pulse_debug_event("warn", "voice learning helper recovered", {"error": str(exc)[:160]})
+    patterns = (state or {}).get("patterns", {}) or {}
+    profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
+    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+        return ""
+    traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
+    avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
+    lines = [
+        f"Creator Evolution learned voice profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
+        "- Use this as influence, not a hook library. Do not copy exact wording from examples.",
+    ]
+    lines.extend(f"- Winning voice trait: {trait}" for trait in traits[:7])
+    lines.extend(f"- Avoid voice drift: {trait}" for trait in avoid_traits[:3])
     return "\n".join(lines)
 
 
@@ -10805,6 +10835,21 @@ def _render_creator_evolution_learning_panel(state: dict):
                 )
         else:
             st.caption("No learned format profiles yet. Sync more mature original tweets.")
+
+        voice_profile = patterns.get("voice_profile", {}) if isinstance(patterns, dict) else {}
+        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2DD4BF;text-transform:uppercase;margin:12px 0 6px;">Voice Evolution</div>', unsafe_allow_html=True)
+        if isinstance(voice_profile, dict) and int(voice_profile.get("sample_size", 0) or 0):
+            st.caption(
+                f"{voice_profile.get('status', 'tracked')} sample | "
+                f"n={int(voice_profile.get('sample_size', 0) or 0)} | "
+                f"winner avg {float(voice_profile.get('winner_avg_score', 0) or 0):.1f}"
+            )
+            for line in voice_profile.get("traits", [])[:5]:
+                st.caption("Winning voice: " + str(line))
+            for line in voice_profile.get("avoid_traits", [])[:2]:
+                st.caption("Avoid: " + str(line))
+        else:
+            st.caption("No learned voice profile yet. Sync more mature original tweets.")
 
         st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#C49E3C;text-transform:uppercase;margin:12px 0 6px;">Rule Queue ({len(pending)} pending)</div>', unsafe_allow_html=True)
         if approved_rules:

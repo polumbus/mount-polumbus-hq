@@ -16,7 +16,7 @@ from typing import Any
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v4-pulse-quality"
+PROMPT_VERSION = "ce-prompt-v5-voice-profile"
 SCORING_VERSION = "ce-score-v3-tracked-cohorts"
 RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
@@ -112,9 +112,9 @@ FORMAT_RECIPES = {
         "avoid": "Going over 280 characters, thread markers, or article-style paragraphing.",
     },
     "Long Tweet": {
-        "target": "500-1,100 characters. A long single post designed for dwell time.",
+        "target": "261-700 characters. An expanded single post designed for dwell time.",
         "structure": "Opening take, short supporting beat, contrast or consequence, closing pressure line.",
-        "must": "Every option must be a long-form single post, not a normal tweet stretched by filler.",
+        "must": "Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.",
         "avoid": "Thread markers, article headings, or empty recap paragraphs.",
     },
     "Thread": {
@@ -521,10 +521,10 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         if char_count > 280:
             issues.append("Normal Tweet must stay under 280 characters.")
     elif fmt == "Long Tweet":
-        if char_count < 360:
+        if char_count < 260:
             issues.append("Long Tweet is too short; it should be a real long-form single post.")
-        if char_count > 1300:
-            issues.append("Long Tweet is too long; keep it under 1,300 characters.")
+        if char_count > 900:
+            issues.append("Long Tweet is too long; keep it under 900 characters.")
         if "---TWEET---" in text:
             issues.append("Long Tweet should be one post, not a thread.")
     elif fmt == "Thread":
@@ -711,6 +711,63 @@ def _format_features(text: str) -> dict[str, Any]:
     }
 
 
+VOICE_TENSION_TERMS = (
+    "uncomfortable", "weird", "boring", "pressure", "plan", "window",
+    "actual", "real", "funny", "annoying", "stress", "chaos", "tell",
+    "problem", "mistake", "thing", "move", "roster",
+)
+
+
+def _opening_style(text: str) -> str:
+    clean = str(text or "").strip()
+    first = clean.splitlines()[0].strip() if clean else ""
+    lower = first.lower()
+    if not first:
+        return "none"
+    if first.endswith("?"):
+        return "direct question"
+    if lower.startswith(("breaking", "report", "sources")):
+        return "news beat"
+    if re.match(r"^[-•]?\s*[A-Z][A-Za-z]+(?:/[A-Z][A-Za-z]+)*\s*:", first):
+        return "label setup"
+    if re.search(r"\b(i'm|i am|i was|i can|i don't|i do not|my)\b", lower):
+        return "first-person reaction"
+    if re.search(r"\b(the|this|that|these|those)\b", lower[:20]):
+        return "declarative observation"
+    return "compact statement"
+
+
+def _target_frame(text: str) -> str:
+    lower = str(text or "").lower()
+    if any(term in lower for term in ("roster", "front office", "gm", "draft", "trade", "free agency", "offseason")):
+        return "roster/decision tension"
+    if any(term in lower for term in ("coach", "payton", "malone", "adelman", "booth", "paton", "kroenke")):
+        return "coach/front-office read"
+    if any(term in lower for term in ("fans", "everyone", "timeline", "discourse", "arguing")):
+        return "fan conversation tension"
+    if any(term in lower for term in ("media", "reporter", "narrative", "press conference", "presser")):
+        return "media/narrative read"
+    if any(term in lower for term in ("game", "quarter", "period", "bench", "starter", "lineup")):
+        return "game/usage read"
+    return "general sports observation"
+
+
+def _voice_features(text: str) -> dict[str, Any]:
+    clean = str(text or "").strip()
+    lower = clean.lower()
+    tension_hits = [term for term in VOICE_TENSION_TERMS if re.search(rf"\b{re.escape(term)}\b", lower)]
+    return {
+        "opening_style": _opening_style(clean),
+        "target_frame": _target_frame(clean),
+        "ending": _ending_style(clean),
+        "has_question": "?" in clean,
+        "has_ellipsis": "..." in clean or "…" in clean,
+        "first_person": bool(re.search(r"\b(i'm|i am|i was|i can|i don't|i do not|my)\b", lower)),
+        "tension_terms": tension_hits[:5],
+        "specificity_hits": len(topic_tags(clean)) + len(re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", clean)),
+    }
+
+
 def _avg(values: list[float]) -> float:
     return sum(values) / max(len(values), 1)
 
@@ -831,6 +888,89 @@ def build_format_profiles(scores: list[dict[str, Any]]) -> dict[str, dict[str, A
     return dict(sorted(profiles.items(), key=lambda item: (item[1]["avg_score"], item[1]["sample_size"]), reverse=True))
 
 
+def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
+    mature = [s for s in scores if s["cohort"]["lifecycle"] in ("mature", "archived")]
+    pool = mature or scores
+    if not pool:
+        return {
+            "status": "empty",
+            "sample_size": 0,
+            "traits": [],
+            "avoid_traits": [],
+            "winner_ids": [],
+            "loser_ids": [],
+        }
+    ranked = sorted(pool, key=lambda s: s["scores"]["creator_evolution"], reverse=True)
+    edge_count = max(1, min(8, (len(ranked) + 3) // 4))
+    winners = ranked[:edge_count]
+    losers = ranked[-edge_count:] if len(ranked) > edge_count else []
+    winner_features = [_voice_features(item["text"]) for item in winners]
+    loser_features = [_voice_features(item["text"]) for item in losers]
+    winner_tension_terms: list[str] = []
+    loser_tension_terms: list[str] = []
+    for feature in winner_features:
+        winner_tension_terms.extend(feature.get("tension_terms", []))
+    for feature in loser_features:
+        loser_tension_terms.extend(feature.get("tension_terms", []))
+    opening = _most_common([str(f["opening_style"]) for f in winner_features])
+    target = _most_common([str(f["target_frame"]) for f in winner_features])
+    ending = _most_common([str(f["ending"]) for f in winner_features])
+    loser_opening = _most_common([str(f["opening_style"]) for f in loser_features])
+    loser_target = _most_common([str(f["target_frame"]) for f in loser_features])
+    question_pct = _pct([bool(f["has_question"]) for f in winner_features])
+    ellipsis_pct = _pct([bool(f["has_ellipsis"]) for f in winner_features])
+    first_person_pct = _pct([bool(f["first_person"]) for f in winner_features])
+    specificity = round(_avg([float(f["specificity_hits"]) for f in winner_features]), 1)
+    top_tension = []
+    for term in sorted(set(winner_tension_terms), key=lambda t: (winner_tension_terms.count(t), t), reverse=True):
+        if term not in top_tension:
+            top_tension.append(term)
+        if len(top_tension) >= 5:
+            break
+    traits = [
+        f"open with {opening}" if opening else "",
+        f"aim the take at {target}" if target else "",
+        f"close with {ending} ending" if ending else "",
+        f"{question_pct}% of winners use a question mark",
+        f"{ellipsis_pct}% of winners use ellipsis",
+        f"{first_person_pct}% of winners use first-person reaction",
+        f"average specificity signal {specificity:g}",
+    ]
+    if top_tension:
+        traits.append("recurring tension language: " + ", ".join(top_tension))
+    avoid_traits = []
+    if loser_opening:
+        avoid_traits.append(f"weak posts often open with {loser_opening}")
+    if loser_target:
+        avoid_traits.append(f"weak posts often aim at {loser_target}")
+    if loser_tension_terms:
+        weak_terms = []
+        for term in sorted(set(loser_tension_terms), key=lambda t: (loser_tension_terms.count(t), t), reverse=True):
+            weak_terms.append(term)
+            if len(weak_terms) >= 4:
+                break
+        avoid_traits.append("weak recurring language: " + ", ".join(weak_terms))
+    return {
+        "status": "mature" if mature else "provisional",
+        "sample_size": len(pool),
+        "winner_avg_score": round(_avg([float(i["scores"]["creator_evolution"]) for i in winners]), 2),
+        "loser_avg_score": round(_avg([float(i["scores"]["creator_evolution"]) for i in losers]), 2),
+        "common_opening_style": opening,
+        "common_target_frame": target,
+        "common_ending": ending,
+        "question_pct": question_pct,
+        "ellipsis_pct": ellipsis_pct,
+        "first_person_pct": first_person_pct,
+        "avg_specificity_signal": specificity,
+        "top_tension_terms": top_tension,
+        "traits": [trait for trait in traits if trait],
+        "avoid_traits": avoid_traits,
+        "winner_ids": [item["id"] for item in winners if item["id"]],
+        "loser_ids": [item["id"] for item in losers if item["id"]],
+        "examples": [item["text"][:180] for item in winners[:3]],
+    }
+
+
 def summarize_scores(scores: list[dict[str, Any]]) -> dict[str, Any]:
     mature = [s for s in scores if s["cohort"]["lifecycle"] in ("mature", "archived")]
     provisional = [s for s in scores if s["cohort"]["lifecycle"] == "provisional"]
@@ -859,6 +999,7 @@ def summarize_scores(scores: list[dict[str, Any]]) -> dict[str, Any]:
         "false_loser_ids": [s["id"] for s in false_losers[:5] if s["id"]],
         "format_summary": format_summary,
         "format_profiles": build_format_profiles(scores),
+        "voice_profile": build_voice_profile(scores),
         "best_current_patterns": _pattern_lines(winners, positive=True),
         "worst_current_patterns": _pattern_lines(losers, positive=False),
     }
@@ -1028,6 +1169,30 @@ def propose_rules(scores: list[dict[str, Any]], existing: list[dict[str, Any]] |
             "before_after": {
                 "before": "What do you think?",
                 "after": "The uncomfortable part is what the next move says about the whole plan...",
+            },
+        })
+
+    voice_profile = summary.get("voice_profile", {}) or {}
+    voice_traits = [str(t) for t in voice_profile.get("traits", []) if str(t).strip()]
+    if int(voice_profile.get("sample_size", 0) or 0) >= 8 and voice_traits:
+        evidence = list(voice_profile.get("winner_ids", []) or [])[:4]
+        learned_summary = "; ".join(voice_traits[:4])
+        rule = f"For Creator Evolution voice, follow the learned winning voice profile: {learned_summary}."
+        proposals.append({
+            "id": _proposal_id(rule, evidence),
+            "status": "pending",
+            "created_at": iso_now(now),
+            "rule": rule,
+            "reason": (
+                f"Voice profile has {voice_profile.get('sample_size', 0)} "
+                f"{voice_profile.get('status', 'tracked')} examples; winner avg score "
+                f"{voice_profile.get('winner_avg_score', 0)}."
+            ),
+            "evidence_tweet_ids": evidence,
+            "sample_size": int(voice_profile.get("sample_size", 0) or 0),
+            "before_after": {
+                "before": "Use only static lane instructions for voice.",
+                "after": learned_summary,
             },
         })
 
@@ -1321,6 +1486,26 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
     return "\n".join(lines)
 
 
+def voice_learning_text(state: dict[str, Any] | None) -> str:
+    patterns = (state or {}).get("patterns", {}) if isinstance(state, dict) else {}
+    profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
+    if not isinstance(profile, dict) or not int(profile.get("sample_size", 0) or 0):
+        return ""
+    traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
+    avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
+    examples = [str(t).replace("\n", " ") for t in profile.get("examples", []) if str(t).strip()]
+    lines = [
+        f"Creator Evolution learned voice profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
+        "- Use this as influence, not a hook library. Do not copy exact wording from examples.",
+    ]
+    lines.extend(f"- Winning voice trait: {trait}" for trait in traits[:7])
+    lines.extend(f"- Avoid voice drift: {trait}" for trait in avoid_traits[:3])
+    if examples:
+        lines.append("- Winning examples are calibration only:")
+        lines.extend(f"  - {example[:150]}" for example in examples[:3])
+    return "\n".join(lines)
+
+
 def performance_context(state: dict[str, Any] | None) -> str:
     state = state or initial_state()
     patterns = state.get("patterns", {})
@@ -1373,12 +1558,16 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {format_learning or "- No mature learned profile for this selected format yet. Use the static format behavior until enough real posts mature."}
+When a mature learned format profile exists, it overrides the static target range for this selected format.
 
 PERSONALITY LANE:
 {lane}
 
 LANE BEHAVIOR:
 {lane_behavior}
+
+LEARNED VOICE PROFILE:
+{voice_learning_text(state) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
 
 {context}
 {live_stats_block}

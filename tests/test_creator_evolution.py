@@ -171,7 +171,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         cases = {
             "Punchy Tweet": "under 160 characters",
             "Normal Tweet": "161-260 characters",
-            "Long Tweet": "500-1,100 characters",
+            "Long Tweet": "261-700 characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
         }
@@ -224,6 +224,36 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("LEARNED FORMAT PROFILE:", prompt)
         self.assertIn("Normal Tweet learned profile", prompt)
         self.assertIn("Winning trait:", prompt)
+
+    def test_voice_evolution_learns_profile_from_mature_tweets(self):
+        tweets = [
+            _tweet(120, "The Broncos plan looks boring until the roster math starts telling on it. That is where the offseason gets uncomfortable...", hours_ago=90, views=15000, likes=320, replies=80, reposts=46),
+            _tweet(121, "Nuggets fans want a clean bench answer, which is adorable because this team keeps choosing stress as a roster philosophy...", hours_ago=96, views=14000, likes=300, replies=78, reposts=42),
+            _tweet(122, "The Avs usage conversation is weird because the simple answer keeps hiding behind the same uncomfortable lineup question...", hours_ago=100, views=13000, likes=280, replies=70, reposts=39),
+            _tweet(123, "This Broncos offseason keeps coming back to the same pressure point. The fun answer and the real answer might not be friends...", hours_ago=104, views=16000, likes=340, replies=88, reposts=50),
+            _tweet(124, "The Nuggets window is still alive because Jokic is Jokic. The uncomfortable part is everything that has to be true around him...", hours_ago=108, views=17000, likes=360, replies=92, reposts=55),
+            _tweet(125, "CU discourse is funny because everyone wants one clean villain and the actual player development story refuses to cooperate...", hours_ago=112, views=15500, likes=330, replies=86, reposts=48),
+            _tweet(126, "The Broncos keep selling patience like it is a plan. Eventually the roster has to say the quiet part out loud...", hours_ago=116, views=14500, likes=310, replies=82, reposts=44),
+            _tweet(127, "The Nuggets can explain the injuries all day. The real pressure is what the next move says about how they see the window...", hours_ago=120, views=16500, likes=350, replies=90, reposts=52),
+        ]
+
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        profile = state["patterns"]["voice_profile"]
+        prompt = ce.build_generation_prompt(
+            "Broncos fans are arguing about whether the boring roster answer is the tell",
+            "Normal Tweet",
+            "Witty Edge",
+            state,
+        )
+
+        self.assertEqual(profile["status"], "mature")
+        self.assertEqual(profile["sample_size"], 8)
+        self.assertTrue(profile["traits"])
+        self.assertIn("common_opening_style", profile)
+        self.assertIn("LEARNED VOICE PROFILE:", prompt)
+        self.assertIn("Winning voice trait:", prompt)
+        self.assertIn("Use this as influence, not a hook library", prompt)
+        self.assertTrue(any("Creator Evolution voice" in prop["rule"] for prop in state["proposals"]))
 
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
