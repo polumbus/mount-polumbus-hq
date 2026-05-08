@@ -8257,14 +8257,33 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
             report = reporter(text, fmt, lane)
             if isinstance(report, dict):
                 format_issues, format_warnings = _ce_format_quality_findings(clean, fmt)
-                if format_issues or format_warnings:
+                local_issues: list[str] = []
+                local_warnings: list[str] = []
+                local_issues.extend(format_issues)
+                local_warnings.extend(format_warnings)
+                if lane == "Deadpan" and ("!" in clean or "lol" in lower):
+                    local_issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+                if lane == "Sarcastic":
+                    if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
+                        local_issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+                    local_risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
+                    local_risk_hits = [term for term in local_risk_terms if term in lower]
+                    if local_risk_hits:
+                        local_issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(local_risk_hits[:4]))
+                if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
+                    local_issues.append("Amused should be dry and observational, not meme-caption energy.")
+                if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
+                    local_warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
+                if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
+                    local_issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
+                if local_issues or local_warnings:
                     report = dict(report)
                     existing_issues = list(report.get("issues", []) or [])
                     existing_warnings = list(report.get("warnings", []) or [])
-                    report["issues"] = list(dict.fromkeys(existing_issues + format_issues))
-                    report["warnings"] = list(dict.fromkeys(existing_warnings + format_warnings))
+                    report["issues"] = list(dict.fromkeys(existing_issues + local_issues))
+                    report["warnings"] = list(dict.fromkeys(existing_warnings + local_warnings))
                     report["ok"] = not report["issues"]
-                    report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(format_issues) * 25 - len(format_warnings) * 8))
+                    report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(local_issues) * 25 - len(local_warnings) * 8))
                 return report
         except Exception as exc:
             _ce_pulse_debug_event("warn", "draft quality helper recovered", {"error": str(exc)[:160]})
@@ -8312,6 +8331,17 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
 
     if lane == "Deadpan" and ("!" in clean or "lol" in lower):
         issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+    if lane == "Sarcastic":
+        if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
+            issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+        if risk_hits:
+            issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risk_hits[:4]))
+    if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
+        issues.append("Amused should be dry and observational, not meme-caption energy.")
+    if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
+        warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
+    if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
+        issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
 
     penalty = len(issues) * 25 + len(warnings) * 8
     return {

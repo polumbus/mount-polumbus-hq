@@ -420,6 +420,18 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))', validator)
         self.assertNotIn("return report\n", validator)
 
+    def test_app_draft_quality_report_rechecks_lane_gates_after_helper_report(self):
+        app_text = Path("app.py").read_text()
+        quality_report = app_text.split("def _ce_draft_quality_report", 1)[1].split("def _ce_validate_generation_options", 1)[0]
+        helper_branch = quality_report.split("if callable(reporter):", 1)[1].split("except Exception as exc:", 1)[0]
+
+        self.assertIn('if lane == "Sarcastic":', helper_branch)
+        self.assertIn("cannot copy old example frames", helper_branch)
+        self.assertIn('if lane == "Amused"', helper_branch)
+        self.assertIn('if lane == "Skeptical"', helper_branch)
+        self.assertIn("local_issues.extend(format_issues)", helper_branch)
+        self.assertIn('report["ok"] = not report["issues"]', helper_branch)
+
     def test_long_tweet_core_boundary_documents_preferred_vs_hard_bounds(self):
         self.assertFalse(ce.draft_quality_report("x" * 259, "Long Tweet", "Witty Edge")["ok"])
         self.assertTrue(ce.draft_quality_report("x" * 260, "Long Tweet", "Witty Edge")["ok"])
