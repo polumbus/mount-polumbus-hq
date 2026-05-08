@@ -1437,6 +1437,13 @@ def _post_tweet(text: str) -> tuple[bool, str]:
     native_ok, native_detail = _post_tweet_native_x(clean_text)
     if native_ok:
         return True, native_detail
+
+    helper_error = ""
+    helper_ok, helper_detail = _post_tweet_xurl_helper(clean_text)
+    if helper_ok:
+        return True, helper_detail
+    helper_error = helper_detail
+
     proxy_error = ""
     proxy_url = _get_proxy_url()
     if proxy_url:
@@ -1448,23 +1455,54 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             proxy_error = data.get("error", "Proxy returned not ok")
         except Exception as e:
             proxy_error = f"Proxy error: {e}"
+    failure_parts = [f"Native X: {native_detail}"]
+    if helper_error:
+        failure_parts.append(f"Local X helper: {helper_error}")
+    if proxy_error:
+        failure_parts.append(f"Proxy: {proxy_error}")
+    if not proxy_url:
+        failure_parts.append("Proxy: not configured")
+    return False, f"Open in X to post: {intent_url}\n\nDirect post failed. " + " | ".join(failure_parts)
+
+
+def _xurl_helper_app_name() -> str:
+    configured = _secret_or_env("XURL_APP_NAME", "X_POST_APP_NAME", "TWITTER_XURL_APP_NAME").strip()
+    return configured or "my-app"
+
+
+def _post_tweet_xurl_helper(text: str) -> tuple[bool, str]:
     helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
-    if os.path.exists(helper):
+    if not os.path.exists(helper):
+        return False, "local tweet helper not found"
+    app_name = _xurl_helper_app_name()
+    try:
         result = subprocess.run(
-            ["python3", helper, "--text", clean_text],
+            ["python3", helper, "--app-name", app_name, "--text", text],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=180,
         )
-        if result.returncode == 0:
-            return True, ""
-        helper_error = result.stderr.strip() or result.stdout.strip() or "local tweet helper failed"
-        if proxy_error:
-            return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Proxy: {proxy_error} | Local helper: {helper_error}"
-        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Local helper: {helper_error}"
-    if proxy_error:
-        return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail} | Proxy: {proxy_error}"
-    return False, f"Open in X to post: {intent_url}\n\nDirect post failed. Native X: {native_detail}. No proxy available and local tweet helper not found"
+    except subprocess.TimeoutExpired:
+        return False, f"timed out using xurl profile {app_name}"
+    except Exception as exc:
+        return False, str(exc)[:240]
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    if result.returncode != 0:
+        return False, stderr or stdout or f"xurl profile {app_name} failed"
+    try:
+        payload = json.loads(stdout)
+    except Exception:
+        payload = {}
+    if isinstance(payload, dict) and not payload.get("ok", True):
+        return False, str(payload.get("error") or stdout)[:300]
+    tweet_id = str((payload or {}).get("tweet_id") or "")
+    if tweet_id:
+        handle = get_current_handle()
+        if handle:
+            return True, f"https://x.com/{handle.lstrip('@')}/status/{tweet_id}"
+        return True, tweet_id
+    return True, ""
 
 
 def _x_intent_url(text: str) -> str:
@@ -1591,7 +1629,7 @@ def _proxy_tweet_action(action: str, tweet_id: str, text: str = "") -> bool:
         # Fall back to the shared local helper for replies if available.
         helper = "/home/polfam/.openclaw/scripts/twitter_post.py"
         if action == "reply" and os.path.exists(helper):
-            cmd = ["python3", helper, "--text", text, "--reply-to", tweet_id]
+            cmd = ["python3", helper, "--app-name", _xurl_helper_app_name(), "--text", text, "--reply-to", tweet_id]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return result.returncode == 0
         return False
