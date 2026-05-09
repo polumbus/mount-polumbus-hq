@@ -133,6 +133,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Creator Evolution rejected every generated draft", app_text)
         self.assertIn("Creator Evolution blocked this post", app_text)
         self.assertIn("ci_banger_data", app_text)
+        self.assertIn('return "Creator Evolution" if is_owner() else "Creator Studio"', app_text)
+        self.assertIn("st.session_state.current_page = _default_landing_page()", app_text)
 
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
         self.assertIn("_ce_build_generation_prompt", ce_runner)
@@ -147,6 +149,18 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_pending", ce_hot)
         self.assertNotIn("_run_ci_ai", ce_hot)
         self.assertNotIn("_build_wh_hook_cached", ce_hot)
+
+    def test_creator_evolution_build_dialog_uses_form_and_persistent_result_panel(self):
+        app_text = Path("app.py").read_text()
+        build_dialog = app_text.split("def _ce_build_dialog", 1)[1].split("def _ce_output_panel_impl", 1)[0]
+
+        self.assertIn('st.form("ce_build_form"', build_dialog)
+        self.assertIn("st.form_submit_button", build_dialog)
+        self.assertIn('st.session_state["_ce_build_result_ready"] = True', build_dialog)
+        self.assertIn('if st.session_state.get("_ce_build_result_ready"):', build_dialog)
+        result_panel = build_dialog.split('if st.session_state.get("_ce_build_result_ready"):', 1)[1]
+        self.assertIn('st.session_state.get("ce_banger_data")', result_panel)
+        self.assertIn("Your Options", result_panel)
 
     def test_ai_sounding_phrase_detector_catches_generic_content_language(self):
         hits = ce.ai_sounding_hits("Here's the thing: at the end of the day this is a game-changer.")

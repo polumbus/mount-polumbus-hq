@@ -3179,12 +3179,19 @@ if st.query_params.get("user"):
 
 _qp_page = st.query_params.get("page", "")
 _nav_override = st.session_state.pop("_nav_override", False)
+
+
+def _default_landing_page() -> str:
+    """Owner lands in Creator Evolution; guest/non-owner keeps the public studio."""
+    return "Creator Evolution" if is_owner() else "Creator Studio"
+
+
 if _nav_override:
     pass  # current_page already set by nav button callback
 elif _qp_page:
     st.session_state.current_page = _qp_page
 else:
-    st.session_state.current_page = "Creator Studio"
+    st.session_state.current_page = _default_landing_page()
 # Sync URL bar with current page so refresh preserves it
 # Only sync when the user already has a page param or when button-driven nav changed the page.
 if (_qp_page or _nav_override) and _qp_page != st.session_state.current_page:
@@ -10045,34 +10052,36 @@ def _ce_build_dialog():
         unsafe_allow_html=True,
     )
 
-    topic = st.text_input(
-        "What's the topic?",
-        placeholder="e.g. Broncos draft needs, Jokic MVP case, Sean Payton play calling",
-        key="ce_build_topic",
-    )
-    take = st.text_input(
-        "What's your take? (optional)",
-        placeholder="e.g. the room is better than people think, this is where the plan gets real",
-        key="ce_build_take",
-    )
-
-    tension_col, stats_col = st.columns(2)
-    with tension_col:
-        tension = st.text_input(
-            "What's the debate? (optional)",
-            placeholder="e.g. fans disagree, media is missing the point",
-            key="ce_build_tension",
+    with st.form("ce_build_form", clear_on_submit=False):
+        topic = st.text_input(
+            "What's the topic?",
+            placeholder="e.g. Broncos draft needs, Jokic MVP case, Sean Payton play calling",
+            key="ce_build_topic",
         )
-    with stats_col:
-        stats = st.text_input(
-            "Any specific stats or facts? (optional)",
-            placeholder="Only facts you know are true",
-            key="ce_build_stats",
+        take = st.text_input(
+            "What's your take? (optional)",
+            placeholder="e.g. the room is better than people think, this is where the plan gets real",
+            key="ce_build_take",
         )
 
-    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+        tension_col, stats_col = st.columns(2)
+        with tension_col:
+            tension = st.text_input(
+                "What's the debate? (optional)",
+                placeholder="e.g. fans disagree, media is missing the point",
+                key="ce_build_tension",
+            )
+        with stats_col:
+            stats = st.text_input(
+                "Any specific stats or facts? (optional)",
+                placeholder="Only facts you know are true",
+                key="ce_build_stats",
+            )
 
-    if st.button("BUILD IT", key="ce_build_submit", use_container_width=True, type="primary"):
+        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+        submitted = st.form_submit_button("BUILD IT", use_container_width=True, type="primary")
+
+    if submitted:
         if not topic.strip():
             st.warning("Add a topic first.")
             return
@@ -10090,9 +10099,16 @@ def _ce_build_dialog():
         fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
         lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
 
+        st.session_state.pop("ce_banger_data", None)
+        st.session_state.pop("ce_result", None)
+        st.session_state.pop("ce_error", None)
+        st.session_state["_ce_build_result_ready"] = False
+        st.session_state["_ce_build_last_source"] = assembled
         with st.spinner("Building Creator Evolution options..."):
             _run_ce_ai("build", assembled, fmt, lane)
+        st.session_state["_ce_build_result_ready"] = True
 
+    if st.session_state.get("_ce_build_result_ready"):
         result = st.session_state.get("ce_banger_data")
         if result:
             st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
@@ -10119,6 +10135,7 @@ def _ce_build_dialog():
                 if st.button(f"Use Option {idx}", key=f"ce_build_use_{idx}", use_container_width=True, type="primary" if is_pick else "secondary"):
                     st.session_state["_ce_text_stage"] = opt
                     st.session_state["_ce_show_build_dialog"] = False
+                    st.session_state.pop("_ce_build_result_ready", None)
                     st.query_params["page"] = "Creator Evolution"
                     st.rerun(scope="app")
         elif st.session_state.get("ce_error"):
@@ -10131,6 +10148,7 @@ def _ce_build_dialog():
             if st.button("Use This", key="ce_build_use_raw", use_container_width=True, type="primary"):
                 st.session_state["_ce_text_stage"] = st.session_state["ce_result"]
                 st.session_state["_ce_show_build_dialog"] = False
+                st.session_state.pop("_ce_build_result_ready", None)
                 st.query_params["page"] = "Creator Evolution"
                 st.rerun(scope="app")
         else:
@@ -11066,6 +11084,10 @@ def _render_creator_evolution_editor():
             _queue_ce_action("evolve")
         if st.button("ce_build", key="ce_build"):
             _ce_reset_main_action_state(keep="_ce_show_build_dialog")
+            st.session_state.pop("ce_banger_data", None)
+            st.session_state.pop("ce_result", None)
+            st.session_state.pop("ce_error", None)
+            st.session_state.pop("_ce_build_result_ready", None)
             st.session_state["_ce_show_build_dialog"] = True
             st.rerun(scope="app")
         if st.button("ce_pulse", key="ce_pulse"):
@@ -18289,7 +18311,7 @@ if page not in page_map:
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
     })
-    page = "Creator Studio"
+    page = _default_landing_page()
     st.session_state.current_page = page
     st.query_params["page"] = page
     if "podcast_state" in st.query_params:
