@@ -14740,18 +14740,11 @@ def _get_build_info() -> dict:
 
 
 def _get_proxy_health_debug() -> dict:
-    import urllib.request
     proxy_url = _get_proxy_url()
     if not proxy_url:
         return {"ok": False, "error": "No proxy URL configured"}
     try:
-        req = urllib.request.Request(
-            f"{proxy_url.rstrip('/')}/health",
-            headers={"ngrok-skip-browser-warning": "1"},
-            method="GET",
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
+        data = _proxy_json_request("/health", method="GET", timeout=30)
         return {"ok": True, "proxy_url": proxy_url, "data": data}
     except Exception as e:
         return {"ok": False, "proxy_url": proxy_url, "error": str(e)}

@@ -75,7 +75,15 @@ with urllib.request.urlopen(req2, timeout=15) as r:
 PYEOF
 
 # --- 1. Keep proxy alive ---
-if ! /usr/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:$PROXY_PORT/health', timeout=2)" > /dev/null 2>&1; then
+if ! HQ_PROXY_KEY="$HQ_PROXY_KEY" PROXY_PORT="$PROXY_PORT" /usr/bin/python3 - <<'PYEOF' > /dev/null 2>&1
+import os, urllib.request
+port = os.environ.get("PROXY_PORT", "7821")
+key = os.environ.get("HQ_PROXY_KEY", "")
+headers = {"X-Proxy-Key": key} if key else {}
+req = urllib.request.Request(f"http://localhost:{port}/health", headers=headers, method="GET")
+urllib.request.urlopen(req, timeout=2).read()
+PYEOF
+then
     echo "[$(date)] Proxy down — restarting..."
     pkill -f "claude_proxy.py" 2>/dev/null
     sleep 1
