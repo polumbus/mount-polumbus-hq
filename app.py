@@ -835,12 +835,6 @@ def _running_on_streamlit_cloud() -> bool:
     return home.startswith("/home/appuser") or bool(os.environ.get("STREAMLIT_SHARING_MODE"))
 
 
-def _streamlit_api_key_routes_enabled() -> bool:
-    """Root Streamlit app defaults to OAuth/proxy, not website-style API keys."""
-    value = _secret_or_env("STREAMLIT_ENABLE_API_KEY_AI", "HQ_STREAMLIT_ENABLE_API_KEY_AI")
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
 def _load_oauth_credentials():
     """Load OAuth credentials from local credentials file."""
     try:
@@ -1660,11 +1654,9 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     st.session_state["_ai_last_model"] = model
     _ai_failure_chain_start()
     hosted = _running_on_streamlit_cloud()
-    api_key_routes_enabled = _streamlit_api_key_routes_enabled()
 
-    # 0. Optional Streamlit API-key route. Disabled by default: website uses API keys;
-    # root Streamlit uses OAuth/proxy/Codex OAuth unless explicitly opted in.
-    if api_key_routes_enabled:
+    # 0. Hosted API-key route. Streamlit Cloud cannot rely on local OAuth files.
+    if hosted:
         try:
             result = _call_anthropic_api_key(prompt, system or "", max_tokens, model)
             st.session_state["_ai_last_route"] = "anthropic_api_key"
@@ -1747,23 +1739,21 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
         _append_debug_event("ai_call", "error", f"proxy {e}", {"model": model})
         pass
 
-    # 4. Optional OpenAI API-key fallback. Keep it out of the default Streamlit app
-    # route so website API-key configuration cannot break app OAuth behavior.
-    if api_key_routes_enabled:
-        try:
-            openai_text = _call_openai_api_key(prompt, system or "", max_tokens)
-            st.session_state["_ai_last_route"] = "openai_api_key"
-            st.session_state["_ai_last_provider"] = "openai"
-            st.session_state["_ai_last_source"] = "streamlit_api_key"
-            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
-            _append_debug_event("ai_call", "ok", "openai_api_key", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
-            return openai_text
-        except urllib.error.HTTPError as e:
-            _record_ai_failure("openai_api_key", f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}")
-            _append_debug_event("ai_call", "error", f"openai_api_key HTTP {e.code}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
-        except Exception as e:
-            _record_ai_failure("openai_api_key", e)
-            _append_debug_event("ai_call", "error", f"openai_api_key {e}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
+    # 4. Hosted OpenAI API-key fallback. This avoids Codex OAuth on Streamlit Cloud.
+    try:
+        openai_text = _call_openai_api_key(prompt, system or "", max_tokens)
+        st.session_state["_ai_last_route"] = "openai_api_key"
+        st.session_state["_ai_last_provider"] = "openai"
+        st.session_state["_ai_last_source"] = "streamlit_api_key"
+        st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+        _append_debug_event("ai_call", "ok", "openai_api_key", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
+        return openai_text
+    except urllib.error.HTTPError as e:
+        _record_ai_failure("openai_api_key", f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}")
+        _append_debug_event("ai_call", "error", f"openai_api_key HTTP {e.code}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
+    except Exception as e:
+        _record_ai_failure("openai_api_key", e)
+        _append_debug_event("ai_call", "error", f"openai_api_key {e}", {"model": _secret_or_env("OPENAI_MODEL") or "gpt-5.2"})
 
     # 5. ChatGPT OAuth fallback via local Codex login. Local only; cloud has no Codex auth file.
     if not hosted:
@@ -1780,7 +1770,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
             _append_debug_event("ai_call", "error", f"chatgpt_oauth {e}", {"model": model})
             pass
 
-    return "AI unavailable — OAuth, proxy, and local Codex OAuth routes all failed."
+    return "AI unavailable — API key, proxy, and local OAuth fallback routes all failed."
 
 
 def _is_ai_unavailable_text(value: str) -> bool:
