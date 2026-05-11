@@ -1675,7 +1675,8 @@ def _record_ai_failure(route: str, error: object) -> None:
     chain.append(detail[:500])
 
 
-def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6") -> str:
+def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: str = "claude-sonnet-4-6",
+                timeout_seconds: int | None = None) -> str:
     if system is None:
         system = get_voice_context()
 
@@ -1688,7 +1689,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     # root Streamlit uses OAuth/proxy/Codex OAuth unless explicitly opted in.
     if api_key_routes_enabled:
         try:
-            result = _call_anthropic_api_key(prompt, system or "", max_tokens, model)
+            result = _call_anthropic_api_key(prompt, system or "", max_tokens, model, timeout=timeout_seconds or 45)
             st.session_state["_ai_last_route"] = "anthropic_api_key"
             st.session_state["_ai_last_provider"] = "anthropic"
             st.session_state["_ai_last_source"] = "streamlit_api_key"
@@ -1705,7 +1706,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     # 1. Direct OAuth HTTP — fastest, no subprocess overhead
     if not hosted and not anthropic_is_blocked():
         try:
-            result = _call_claude_direct(prompt, system or "", max_tokens, model)
+            result = _call_claude_direct(prompt, system or "", max_tokens, model, timeout=timeout_seconds or 30)
             anthropic_mark_available("streamlit_direct")
             st.session_state["_ai_last_route"] = "anthropic_direct"
             st.session_state["_ai_last_provider"] = "anthropic"
@@ -1737,7 +1738,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
                 cmd += ["--system-prompt", system]
             result = subprocess.run(
                 cmd,
-                input=prompt, capture_output=True, text=True, timeout=20, env=clean_env,
+                input=prompt, capture_output=True, text=True, timeout=min(timeout_seconds or 20, 20), env=clean_env,
             )
             if result.returncode == 0 and result.stdout.strip():
                 anthropic_mark_available("streamlit_cli")
@@ -1757,7 +1758,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
 
     # 3. Proxy server (Streamlit Cloud path — ngrok to Tyler's local machine)
     try:
-        proxy_text = _call_claude_proxy(prompt, system or "", max_tokens, model)
+        proxy_text = _call_claude_proxy(prompt, system or "", max_tokens, model, timeout=timeout_seconds or 90)
         st.session_state["_ai_last_route"] = "proxy"
         st.session_state["_ai_last_provider"] = "proxy"
         st.session_state["_ai_last_source"] = "streamlit_proxy"
@@ -1773,7 +1774,7 @@ def call_claude(prompt: str, system: str = None, max_tokens: int = 1500, model: 
     # route so website API-key configuration cannot break app OAuth behavior.
     if api_key_routes_enabled:
         try:
-            openai_text = _call_openai_api_key(prompt, system or "", max_tokens)
+            openai_text = _call_openai_api_key(prompt, system or "", max_tokens, timeout=timeout_seconds or 45)
             st.session_state["_ai_last_route"] = "openai_api_key"
             st.session_state["_ai_last_provider"] = "openai"
             st.session_state["_ai_last_source"] = "streamlit_api_key"
@@ -8509,7 +8510,8 @@ def _ce_quality_failure_summary(quality_report: dict, limit: int = 5) -> str:
 
 
 def _ce_repair_failed_generation(original_prompt: str, data: dict, quality_report: dict,
-                                 fmt: str, lane: str, max_tokens: int) -> tuple[dict | None, dict, list[str]]:
+                                 fmt: str, lane: str, max_tokens: int,
+                                 timeout_seconds: int = 30) -> tuple[dict | None, dict, list[str]]:
     failure_summary = _ce_quality_failure_summary(quality_report, limit=8)
     repair_prompt = f"""{original_prompt}
 
@@ -8525,10 +8527,11 @@ Previous rejected JSON:
 Rewrite all 3 options so each one passes the selected format and lane quality gates.
 Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """
-    raw = call_claude(
+    raw = _call_creator_evolution_ai(
         repair_prompt,
-        system=_creator_evolution_system_prompt(lane),
-        max_tokens=max_tokens,
+        lane,
+        max_tokens,
+        timeout_seconds=timeout_seconds,
     )
     repaired = _parse_banger_json(raw or "")
     if not repaired or not repaired.get("option1"):
@@ -10084,6 +10087,25 @@ def _ce_capture_ai_error(raw_text: str) -> bool:
     return True
 
 
+def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeout_seconds: int = 35) -> str:
+    started = time.monotonic()
+    raw = call_claude(
+        prompt,
+        system=_creator_evolution_system_prompt(lane),
+        max_tokens=max_tokens,
+        timeout_seconds=timeout_seconds,
+    )
+    elapsed = time.monotonic() - started
+    if elapsed > timeout_seconds + 5:
+        _append_debug_event(
+            "creator_evolution",
+            "warn",
+            "slow AI call",
+            {"elapsed_seconds": round(elapsed, 1), "lane": lane, "max_tokens": max_tokens},
+        )
+    return raw
+
+
 def _run_ce_ai(action, tweet_text, fmt, lane):
     """Run Creator Evolution generation through the isolated CE prompt path."""
     for key in [
@@ -10131,7 +10153,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         sports_ctx=sports_ctx,
     )
     max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700
-    raw = call_claude(prompt, system=_creator_evolution_system_prompt(lane), max_tokens=max_tokens)
+    raw = _call_creator_evolution_ai(prompt, lane, max_tokens, timeout_seconds=35)
     data = _parse_banger_json(raw or "")
     if data and data.get("option1"):
         for option_key in ["option1", "option2", "option3"]:
