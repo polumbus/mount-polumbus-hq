@@ -841,6 +841,26 @@ def _streamlit_api_key_routes_enabled() -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _streamlit_ai_profile_status() -> dict:
+    """Non-secret provider profile snapshot for owner diagnostics."""
+    api_key_enabled = _streamlit_api_key_routes_enabled()
+    last_route = st.session_state.get("_ai_last_route", "")
+    return {
+        "profile": "root_streamlit_oauth_proxy",
+        "expected": "OAuth/direct, local CLI, proxy, then local ChatGPT OAuth",
+        "api_key_routes_enabled": api_key_enabled,
+        "anthropic_api_key_present": bool(_secret_or_env("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")),
+        "openai_api_key_present": bool(_secret_or_env("OPENAI_API_KEY")),
+        "last_route": last_route or "no AI call yet",
+        "last_provider": st.session_state.get("_ai_last_provider", "unknown"),
+        "last_source": st.session_state.get("_ai_last_source", "unknown"),
+        "last_at": st.session_state.get("_ai_last_at", ""),
+        "last_error": st.session_state.get("_ai_last_error", "") or "none",
+        "failure_chain": st.session_state.get("_ai_error_chain", [])[-5:],
+        "profile_violation": (last_route == "openai_api_key" and not api_key_enabled),
+    }
+
+
 def _load_oauth_credentials():
     """Load OAuth credentials from local credentials file."""
     try:
@@ -8129,6 +8149,7 @@ SOURCE MATERIAL:
 {sports_ctx or ""}
 
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
+For Normal Tweet, do not use the old three-stacked-line template; prefer one compact paragraph or one intentional break only.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
 Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """.strip()
@@ -8334,7 +8355,11 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         warnings.append("Sounds polished or LinkedIn-ish: " + ", ".join(cadence_hits[:4]))
     if clean.rstrip().endswith("?"):
         warnings.append("Direct question closer. Prefer declarative tension unless the question is truly the joke.")
-    if clean.count("\n") >= 4 and fmt in ("Punchy Tweet", "Normal Tweet"):
+    paragraph_breaks = len(re.findall(r"\n\s*\n", clean))
+    non_empty_lines = [line.strip() for line in clean.splitlines() if line.strip()]
+    if fmt == "Punchy Tweet" and "\n" in clean:
+        warnings.append("Too many line breaks for this format; it may read like a template.")
+    elif fmt == "Normal Tweet" and (paragraph_breaks >= 2 or len(non_empty_lines) > 3):
         warnings.append("Too many line breaks for this format; it may read like a template.")
 
     risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
@@ -9569,6 +9594,7 @@ def _normalize_creator_evolution_state(raw: dict | None = None) -> dict:
     state.setdefault("approved_rules", [])
     state.setdefault("rule_versions", [])
     state.setdefault("generated_lineage", [])
+    state.setdefault("review_queue", [])
     state.setdefault("budget_policy", _ce_budget_policy())
     sync_status = dict((_ce_initial_state().get("sync_status") or {}))
     sync_status.update(state.get("sync_status", {}) or {})
@@ -9792,9 +9818,9 @@ def _ce_format_recipe_text(fmt: str) -> str:
         "Normal Tweet": (
             "Normal Tweet:\n"
             "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
-            "- Structure: One compact post. Usually 2-4 short lines or 2-3 sentences.\n"
-            "- Must: Every option must use the extra space; do not return a punchy one-liner.\n"
-            "- Avoid: Going over 280 characters, thread markers, or article-style paragraphing."
+            "- Structure: One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.\n"
+            "- Must: Every option must use the extra space without turning into a stacked template.\n"
+            "- Avoid: Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
@@ -9918,6 +9944,7 @@ Active lane behavior:
 Hard boundaries:
 - Do not use Creator Studio's Hall of Fame examples, benchmarks, calibration blocks, hooks, or cached prompt context.
 - Learn only from Creator Evolution's approved real-performance rules plus mature metric-derived profiles.
+- For Normal Tweet, do not use the old three-stacked-line template; prefer one compact paragraph or one intentional break only.
 - Be monetization-safe: heat, annoyance, and argument are allowed; slurs, harassment, invented facts, and cheap rage bait are not.
 - No invented stats, rankings, injuries, roster facts, transaction claims, or current-event claims.
 - Return only the requested JSON.
@@ -10929,6 +10956,24 @@ def _render_creator_evolution_learning_panel(state: dict):
                 st.caption("Avoid: " + str(line))
         else:
             st.caption("No learned voice profile yet. Sync more mature original tweets.")
+
+        review_queue = [item for item in state.get("review_queue", []) if isinstance(item, dict)]
+        st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2DD4BF;text-transform:uppercase;margin:12px 0 6px;">Review Queue ({len(review_queue)} tracked)</div>', unsafe_allow_html=True)
+        if review_queue:
+            st.dataframe([
+                {
+                    "at": str(item.get("at", ""))[:19],
+                    "action": item.get("action", ""),
+                    "lane": item.get("lane", ""),
+                    "format": item.get("format", ""),
+                    "source": item.get("source", ""),
+                    "score": item.get("score", ""),
+                    "text": str(item.get("text", ""))[:140],
+                }
+                for item in review_queue[-20:][::-1]
+            ], use_container_width=True, hide_index=True)
+        else:
+            st.caption("No reviewed Creator Evolution drafts yet. Discord/app actions will appear here before any learning rule can be approved.")
 
         st.markdown(f'<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#C49E3C;text-transform:uppercase;margin:12px 0 6px;">Rule Queue ({len(pending)} pending)</div>', unsafe_allow_html=True)
         if approved_rules:
@@ -14750,6 +14795,101 @@ def _get_proxy_health_debug() -> dict:
         return {"ok": False, "proxy_url": proxy_url, "error": str(e)}
 
 
+def _safe_read_json_path(path: Path, default):
+    try:
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data
+    except Exception:
+        pass
+    return default
+
+
+def _pulse_artifact_dir() -> Path:
+    return Path("/home/polfam/.openclaw/workspace-omaha/state/workflow/tweets/pulse")
+
+
+def _load_latest_pulse_artifact() -> dict:
+    data = _safe_read_json_path(_pulse_artifact_dir() / "latest.json", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _load_active_pulse_artifact() -> dict:
+    data = _safe_read_json_path(_pulse_artifact_dir() / "active.json", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _load_tweets_listener_status() -> dict:
+    root = Path("/home/polfam/.openclaw/workspace-omaha")
+    candidates = [
+        root / "state" / "tweets_react_listener.heartbeat.json",
+        root / "state" / "topic_react_listener.heartbeat.json",
+        root / "verified_reply_state.json",
+    ]
+    for path in candidates:
+        data = _safe_read_json_path(path, {})
+        if isinstance(data, dict) and data:
+            data["_path"] = str(path)
+            return data
+    return {"status": "unknown", "detail": "No listener heartbeat/status artifact found."}
+
+
+def _load_pulse_review_events(limit: int = 40) -> list:
+    path = Path("/home/polfam/.openclaw/workspace-omaha/state/workflow/tweets/pulse/review_queue.jsonl")
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()[-limit:]
+        events = []
+        for line in lines:
+            try:
+                item = json.loads(line)
+                if isinstance(item, dict):
+                    events.append(item)
+            except Exception:
+                continue
+        return events
+    except Exception:
+        return []
+
+
+def _command_center_snapshot() -> dict:
+    pulse_latest = _load_latest_pulse_artifact()
+    pulse_active = _load_active_pulse_artifact()
+    decision = pulse_latest.get("decision") if isinstance(pulse_latest.get("decision"), dict) else {}
+    quality = pulse_latest.get("quality_reports") if isinstance(pulse_latest.get("quality_reports"), dict) else {}
+    state = _load_creator_evolution_state()
+    pending_rules = [p for p in state.get("proposals", []) if isinstance(p, dict) and p.get("status") == "pending"]
+    review_queue = [item for item in state.get("review_queue", []) if isinstance(item, dict)]
+    pulse_review_events = _load_pulse_review_events()
+    return {
+        "ai_profile": _streamlit_ai_profile_status(),
+        "pulse_latest": pulse_latest,
+        "pulse_active": pulse_active,
+        "pulse_status": {
+            "request_id": pulse_latest.get("request_id") or pulse_active.get("request_id") or "none",
+            "status": pulse_latest.get("status", "none"),
+            "topic": pulse_latest.get("topic_query") or (pulse_latest.get("subject_contract") or {}).get("canonical") or str(decision.get("topic") or ""),
+            "draft_count": len(pulse_latest.get("drafts") or []),
+            "source_count": len(pulse_latest.get("source_basis") or []),
+            "rejected_count": len((decision or {}).get("rejected") or (decision or {}).get("rejected_signals") or []),
+            "quality_accepted": quality.get("accepted", "n/a"),
+            "fallback_used": bool(quality.get("fallback_used")),
+            "artifact": pulse_latest.get("artifact_path") or str(_pulse_artifact_dir() / "latest.json"),
+        },
+        "discord": _load_tweets_listener_status(),
+        "creator_evolution": {
+            "pending_rule_count": len(pending_rules),
+            "review_queue_count": len(review_queue) + len(pulse_review_events),
+            "last_review_action": (pulse_review_events[-1] if pulse_review_events else (review_queue[-1] if review_queue else {})).get("action", "none"),
+            "prompt_version": state.get("prompt_version", ""),
+            "rule_version": state.get("rule_version", ""),
+            "last_sync": (state.get("sync_status") or {}).get("last_sync_at", ""),
+            "pulse_review_events": pulse_review_events,
+        },
+    }
+
+
 def _run_owner_ai_probe() -> dict:
     started = time.time()
     result = {
@@ -14842,8 +14982,8 @@ def page_debug_console():
         st.warning("Owner access required.")
         return
 
-    st.markdown('<div class="main-header">DEBUG <span>CONSOLE</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Owner-only visibility into routing, services, runtime state, and live backend probes.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">COMMAND <span>CENTER</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Owner-only control plane for AI routing, Creator Evolution, Pulse, Discord, posting, and live backend probes.</div>', unsafe_allow_html=True)
     st.markdown(
         '''<div style="display:flex;justify-content:flex-start;margin:0 0 16px 0;">
             <span class="cs-bot" data-bot="dbg_help_video" style="height:52px;padding:0 18px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid rgba(196,158,60,0.45);background:rgba(45,212,191,0.1);color:#C49E3C;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">See How It Works</span>
@@ -14853,6 +14993,22 @@ def page_debug_console():
     if st.button("bot_dbg_help_video", key="dbg_help_video"):
         _debug_console_help_dialog()
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+
+    command_snapshot = _command_center_snapshot()
+    ai_profile = command_snapshot["ai_profile"]
+    pulse_status = command_snapshot["pulse_status"]
+    discord_status = command_snapshot["discord"]
+    ce_status = command_snapshot["creator_evolution"]
+    if ai_profile.get("profile_violation"):
+        st.error("Provider profile violation: root Streamlit used `openai_api_key` while API-key AI routes are disabled.")
+    elif ai_profile.get("api_key_routes_enabled"):
+        st.warning("Root Streamlit API-key AI routes are explicitly enabled. This is not the default app profile.")
+
+    cc1, cc2, cc3, cc4 = st.columns(4)
+    cc1.metric("AI Profile", "OAuth/Proxy", "API keys on" if ai_profile.get("api_key_routes_enabled") else "API keys off")
+    cc2.metric("Pulse Drafts", str(pulse_status.get("draft_count", 0)), f"{pulse_status.get('status', 'none')}")
+    cc3.metric("Discord Pulse", str(discord_status.get("status", "unknown"))[:18], str(discord_status.get("_path", ""))[-28:])
+    cc4.metric("Review Queue", str(ce_status.get("review_queue_count", 0)), f"{ce_status.get('pending_rule_count', 0)} rules pending")
 
     b1, b2 = st.columns(2)
     with b1:
@@ -14951,9 +15107,62 @@ def page_debug_console():
             {"check": "Recent debug events", "value": len(_load_debug_events())},
         ], use_container_width=True, hide_index=True)
 
+    st.markdown("### Creator Evolution Control Plane")
+    ce_rows = [
+        {"surface": "Build", "status": "tracked", "detail": "uses shared Creator Evolution prompt builder"},
+        {"surface": "Go Viral", "status": "tracked", "detail": "uses call_claude route profile"},
+        {"surface": "Repurpose", "status": "tracked", "detail": "uses call_claude route profile"},
+        {"surface": "Grades", "status": "tracked", "detail": "uses Creator Evolution scoring helpers"},
+        {"surface": "What's Hot", "status": "tracked", "detail": "uses canonical voice/format rules"},
+        {"surface": "Pulse", "status": pulse_status.get("status", "none"), "detail": f"{pulse_status.get('source_count', 0)} sources | {pulse_status.get('quality_accepted', 'n/a')} accepted | fallback={pulse_status.get('fallback_used')}"},
+        {"surface": "Review queue", "status": ce_status.get("last_review_action", "none"), "detail": f"{ce_status.get('review_queue_count', 0)} tracked actions | {ce_status.get('pending_rule_count', 0)} pending rules"},
+    ]
+    st.dataframe(ce_rows, use_container_width=True, hide_index=True)
+
+    st.markdown("### Discord Pulse")
+    st.dataframe([
+        {"item": "Active request", "value": pulse_status.get("request_id", "none"), "notes": pulse_status.get("topic", "")},
+        {"item": "Artifact", "value": pulse_status.get("artifact", ""), "notes": ""},
+        {"item": "Drafts", "value": pulse_status.get("draft_count", 0), "notes": f"sources={pulse_status.get('source_count', 0)} rejected={pulse_status.get('rejected_count', 0)}"},
+        {"item": "Listener status", "value": discord_status.get("status", "unknown"), "notes": discord_status.get("detail", discord_status.get("_path", ""))},
+    ], use_container_width=True, hide_index=True)
+    latest_pulse = command_snapshot.get("pulse_latest") or {}
+    latest_basis = latest_pulse.get("source_basis") if isinstance(latest_pulse.get("source_basis"), list) else []
+    if latest_basis:
+        with st.expander("Latest Pulse source basis", expanded=False):
+            st.dataframe([
+                {
+                    "source": item.get("source") or item.get("source_type") or "source",
+                    "age": item.get("age_hours", ""),
+                    "text": str(item.get("text") or item.get("title") or "")[:260],
+                }
+                for item in latest_basis[:8] if isinstance(item, dict)
+            ], use_container_width=True, hide_index=True)
+    latest_quality = latest_pulse.get("quality_reports") if isinstance(latest_pulse.get("quality_reports"), dict) else {}
+    if latest_quality:
+        with st.expander("Latest Pulse draft quality gates", expanded=False):
+            st.json(latest_quality)
+    pulse_review_events = ce_status.get("pulse_review_events") if isinstance(ce_status.get("pulse_review_events"), list) else []
+    if pulse_review_events:
+        with st.expander("Latest Discord Pulse review actions", expanded=False):
+            st.dataframe([
+                {
+                    "at": str(item.get("at", ""))[:19],
+                    "action": item.get("action", ""),
+                    "draft": item.get("draft_num", ""),
+                    "lane": item.get("lane", ""),
+                    "format": item.get("format", ""),
+                    "text": str(item.get("text", ""))[:180],
+                }
+                for item in pulse_review_events[-20:][::-1] if isinstance(item, dict)
+            ], use_container_width=True, hide_index=True)
+
     st.markdown("### AI Routing")
     anthropic_state = anthropic_get_state()
     ai_rows = [
+        {"item": "Expected root profile", "value": ai_profile.get("profile", ""), "notes": ai_profile.get("expected", "")},
+        {"item": "API-key AI routes enabled", "value": str(ai_profile.get("api_key_routes_enabled")), "notes": "must be false unless intentionally testing website-style API keys"},
+        {"item": "API keys present", "value": f"Anthropic={ai_profile.get('anthropic_api_key_present')} OpenAI={ai_profile.get('openai_api_key_present')}", "notes": "presence only; values hidden"},
         {"item": "Primary model", "value": st.session_state.get("_ai_last_model", "claude-sonnet-4-6"), "notes": "default app model"},
         {"item": "Last route used", "value": st.session_state.get("_ai_last_route", "no AI call yet"), "notes": st.session_state.get("_ai_last_provider", "")},
         {"item": "Last route source", "value": st.session_state.get("_ai_last_source", "unknown"), "notes": st.session_state.get("_ai_last_at", "")},

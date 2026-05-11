@@ -102,9 +102,9 @@ FORMAT_RECIPES = {
     },
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
-        "structure": "One compact post. Usually 2-4 short lines or 2-3 sentences.",
-        "must": "Every option must use the extra space; do not return a punchy one-liner.",
-        "avoid": "Going over 280 characters, thread markers, or article-style paragraphing.",
+        "structure": "One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.",
+        "must": "Every option must use the extra space without turning into a stacked template.",
+        "avoid": "Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence.",
     },
     "Long Tweet": {
         "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
@@ -543,7 +543,11 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         warnings.append("Sounds polished or LinkedIn-ish: " + ", ".join(cadence[:4]))
     if text.rstrip().endswith("?"):
         warnings.append("Direct question closer. Prefer declarative tension unless the question is truly the joke.")
-    if text.count("\n") >= 4 and fmt in ("Punchy Tweet", "Normal Tweet"):
+    paragraph_breaks = len(re.findall(r"\n\s*\n", text))
+    non_empty_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if fmt == "Punchy Tweet" and "\n" in text:
+        warnings.append("Too many line breaks for this format; it may read like a template.")
+    elif fmt == "Normal Tweet" and (paragraph_breaks >= 2 or len(non_empty_lines) > 3):
         warnings.append("Too many line breaks for this format; it may read like a template.")
     if re.search(r"\b(i think|honestly|maybe|kind of|sort of)\b", lower):
         warnings.append("Hedging weakens the human read; make the take cleaner or funnier.")
@@ -1588,6 +1592,7 @@ LEARNED VOICE PROFILE:
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
+- If the selected format is Normal Tweet, do not use the old three-stacked-line template. Prefer one compact paragraph or one intentional break only.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
