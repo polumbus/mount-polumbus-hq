@@ -558,6 +558,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(report["ok"], report)
         self.assertFalse(any("cliffhanger" in warning.lower() for warning in report["warnings"]))
 
+    def test_promo_quality_gate_accepts_qb_ankle_cliffhanger(self):
+        good = (
+            "Bo Nix may be trending toward camp, but ankle ready and ankle trusted are two different things. "
+            "One more QB decision is coming that tells the truth. The roster will say it out loud…"
+        )
+        report = ce.draft_quality_report(good, "Normal Tweet", "Promo")
+
+        self.assertTrue(report["ok"], report)
+
     def test_validate_generation_options_identifies_all_rejected_promo_drafts(self):
         data = {
             "option1": "New video is live. You won't believe what I found. Watch until the end.",

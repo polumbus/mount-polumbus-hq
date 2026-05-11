@@ -537,6 +537,7 @@ PROMO_CLICKBAIT_PHRASES = (
 
 PROMO_CLIFFHANGER_MARKERS = (
     "...",
+    "…",
     "but",
     "until",
     "before",
@@ -560,6 +561,12 @@ PROMO_SPECIFIC_TENSION_TERMS = (
     "stat",
     "film",
     "clip",
+    "qb",
+    "ankle",
+    "camp",
+    "trust",
+    "trusted",
+    "ready",
     "box score",
     "sequence",
     "forced",

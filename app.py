@@ -8289,13 +8289,14 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "will blow your mind", "click here",
     )
     promo_cliffhanger_markers = (
-        "...", "but", "until", "before", "right before", "the part nobody", "the part that changes",
+        "...", "…", "but", "until", "before", "right before", "the part nobody", "the part that changes",
         "what happens next", "where it gets interesting", "that's where", "the problem is",
         "the question is", "points somewhere else", "points somewhere more uncomfortable",
         "where the whole argument flips", "where the video gets weird", "missing third act",
     )
     promo_specific_tension_terms = (
-        "decision", "stat", "film", "clip", "box score", "sequence", "forced", "switch",
+        "decision", "stat", "film", "clip", "qb", "ankle", "camp", "trust", "trusted", "ready",
+        "box score", "sequence", "forced", "switch",
         "pressure", "contradiction", "assumption", "rotation", "bench", "protection",
         "scheme", "matchup", "roster", "goalie", "quarterback", "line", "series",
     )
@@ -10161,7 +10162,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
-        if not passing:
+        if len(passing) < 3:
             repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
                 prompt,
                 data,
@@ -10170,7 +10171,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 lane,
                 max_tokens,
             )
-            if repaired and repaired_passing:
+            if repaired and len(repaired_passing) >= max(1, len(passing)):
                 data = repaired
                 quality_report = repaired_quality
                 passing = repaired_passing
