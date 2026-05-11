@@ -8154,6 +8154,7 @@ SOURCE MATERIAL:
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
 For Normal Tweet, do not use the old three-stacked-line template; prefer one compact paragraph or one intentional break only.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
+No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """.strip()
 
@@ -8335,6 +8336,18 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         or re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", clean)
         or re.findall(r"\b\d+(?:[-.]\d+)?\b", clean)
     )
+    punctuation_target = clean.replace("---TWEET---", "")
+    polished_punctuation_hits = []
+    if re.search(r"[-–—]", punctuation_target):
+        polished_punctuation_hits.append("hyphen/dash")
+    if ";" in punctuation_target:
+        polished_punctuation_hits.append("semicolon")
+    if ":" in punctuation_target:
+        polished_punctuation_hits.append("colon")
+    if re.search(r"[()]", punctuation_target):
+        polished_punctuation_hits.append("parentheses")
+    if re.search(r"[\[\]{}]", punctuation_target):
+        polished_punctuation_hits.append("brackets")
     promo_has_specific_tension = len(promo_specific_hits) >= 2 and not any(frame in lower for frame in promo_generic_frames)
     if _ce_pulse_meta_language(clean):
         return {
@@ -8389,6 +8402,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                     local_issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
                 if not has_concrete_sports_detail:
                     local_issues.append("Needs a concrete sports/source detail so it does not read like generic strategy copy.")
+                if polished_punctuation_hits:
+                    local_issues.append("Uses polished punctuation that does not sound like Tyler: " + ", ".join(polished_punctuation_hits[:4]))
                 if lane == "Promo":
                     if promo_clickbait_hits:
                         local_issues.append("Promo cannot use cheap clickbait phrasing: " + ", ".join(promo_clickbait_hits[:3]))
@@ -8449,6 +8464,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         warnings.append("Too many line breaks for this format; it may read like a template.")
     if not has_concrete_sports_detail:
         issues.append("Needs a concrete sports/source detail so it does not read like generic strategy copy.")
+    if polished_punctuation_hits:
+        issues.append("Uses polished punctuation that does not sound like Tyler: " + ", ".join(polished_punctuation_hits[:4]))
 
     risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
     risk_hits = [term for term in risk_terms if term in lower]
@@ -8507,6 +8524,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "risk_hits": risk_hits,
         "engagement_bait_hits": bait_hits,
         "cadence_hits": cadence_hits,
+        "polished_punctuation_hits": polished_punctuation_hits,
         "char_count": char_count,
         "prompt_version": _ce_prompt_version(),
     }

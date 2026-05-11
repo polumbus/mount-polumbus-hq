@@ -673,6 +673,18 @@ def _specificity_signal_count(text: str) -> int:
     return term_hits + min(name_hits, 4) + min(numeric_hits, 3)
 
 
+def polished_punctuation_hits(text: str) -> list[str]:
+    clean = str(text or "").replace("---TWEET---", "")
+    checks = (
+        ("hyphen/dash", r"[-–—]"),
+        ("semicolon", r";"),
+        ("colon", r":"),
+        ("parentheses", r"[()]"),
+        ("brackets", r"[\[\]{}]"),
+    )
+    return [label for label, pattern in checks if re.search(pattern, clean)]
+
+
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
@@ -684,6 +696,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     risky = risk_hits(text)
     bait = engagement_bait_hits(text)
     cadence = cadence_hits(text)
+    polished_punctuation = polished_punctuation_hits(text)
     char_count = len(text)
     sentence_count = len([part for part in re.split(r"[.!?]+", text) if part.strip()])
 
@@ -727,6 +740,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         issues.append("Ends like engagement bait instead of a human open loop: " + ", ".join(bait[:3]))
     if cadence:
         warnings.append("Sounds polished or LinkedIn-ish: " + ", ".join(cadence[:4]))
+    if polished_punctuation:
+        issues.append("Uses polished punctuation that does not sound like Tyler: " + ", ".join(polished_punctuation[:4]))
     if text.rstrip().endswith("?"):
         warnings.append("Direct question closer. Prefer declarative tension unless the question is truly the joke.")
     paragraph_breaks = len(re.findall(r"\n\s*\n", text))
@@ -798,6 +813,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         "risk_hits": risky,
         "engagement_bait_hits": bait,
         "cadence_hits": cadence,
+        "polished_punctuation_hits": polished_punctuation,
         "char_count": char_count,
         "prompt_version": PROMPT_VERSION,
     }
@@ -1961,12 +1977,14 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - No hashtags, no links unless the user supplied them.
 - No invented stats, rankings, injuries, roster facts, or current-event claims.
 - No corporate polish, LinkedIn cadence, fake balance, symmetrical three-part essay structure, or over-explaining.
+- No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 - Never use these phrases: {", ".join(ANTI_AI_BANNED_PHRASES)}.
 - Never use Hall of Fame tweets, Hall of Fame examples, Hall of Fame hooks, or static HOF benchmark language.
 
 QUALITY GATE:
 - Reject any draft that does not obey the selected FORMAT BEHAVIOR above.
 - Reject any draft that sounds like content strategy instead of something posted from a phone.
+- Reject any draft that uses polished punctuation Tyler would not naturally type, especially hyphens, dashes, semicolons, colons, parentheses, or brackets.
 - Reject generic engagement bait endings like "thoughts?" or "what do you think?"
 - Heated lanes can attack a decision, excuse, pattern, or media narrative; they cannot harass a person.
 - If the lane is Deadpan, underplay it. No exclamation points, no winking, no explanation.

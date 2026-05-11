@@ -1558,6 +1558,22 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(celebratory["ok"])
         self.assertFalse(deadpan["ok"])
 
+    def test_polished_punctuation_is_rejected_from_tweet_copy(self):
+        bad = ce.draft_quality_report(
+            "Broncos camp is simple: Bo Nix looks ready - but the QB room says otherwise.",
+            "Punchy Tweet",
+            "Witty Edge",
+        )
+        thread = ce.draft_quality_report(
+            "Broncos camp will tell us what the QB room really believes.\n---TWEET---\nBo Nix can look ready and still force one more roster decision.\n---TWEET---\nThat is the part that usually tells on a team.\n---TWEET---\nThe room will say it before the press conference does...",
+            "Thread",
+            "Witty Edge",
+        )
+
+        self.assertFalse(bad["ok"])
+        self.assertIn("polished punctuation", " ".join(bad["issues"]))
+        self.assertTrue(thread["ok"])
+
     def test_each_voice_has_a_passing_engagement_fixture(self):
         fixtures = {
             "Witty Edge": "Broncos roster math is doing that thing where the boring answer starts looking like the dangerous one...",
@@ -1689,6 +1705,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("ACTIVE CALIBRATION", app_text)
         self.assertIn("TRACKED ONLY - not used in generation yet", app_text)
         self.assertIn("Needs a concrete sports/source detail so it does not read like generic strategy copy.", app_text)
+        self.assertIn("No polished punctuation in tweet copy", app_text)
+        self.assertIn("Uses polished punctuation that does not sound like Tyler", app_text)
 
 
 if __name__ == "__main__":
