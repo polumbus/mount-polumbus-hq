@@ -132,9 +132,9 @@ FORMAT_RECIPES = {
     },
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
-        "structure": "One compact phone-style post with a hook, one concrete supporting beat, and a clean pressure-line ending.",
-        "must": "Every option must use the extra space for specificity, contrast, or stakes instead of filler.",
-        "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, engagement bait, or template-sounding setup/punchline rhythm.",
+        "structure": "Two or three natural sentences, then one intentional line break, then one final declarative statement that invites engagement without asking a direct question.",
+        "must": "Every option must use the first paragraph for specificity, contrast, or stakes, then land a final statement people can argue with or add to.",
+        "avoid": "Going over 280 characters, thread markers, multiple blank-line breaks, direct question closers, engagement bait, or perfect essay punctuation.",
     },
     "Long Tweet": {
         "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
@@ -699,6 +699,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     polished_punctuation = polished_punctuation_hits(text)
     char_count = len(text)
     sentence_count = len([part for part in re.split(r"[.!?]+", text) if part.strip()])
+    paragraph_breaks = len(re.findall(r"\n\s*\n", text))
+    non_empty_lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     if not text:
         issues.append("Empty draft.")
@@ -714,6 +716,20 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Normal Tweet is too short; use the 161-260 character format space.")
         if char_count > 280:
             issues.append("Normal Tweet must stay under 280 characters.")
+        if paragraph_breaks != 1:
+            issues.append("Normal Tweet should use exactly one line break before the final statement.")
+        else:
+            parts = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+            final_part = parts[-1] if parts else ""
+            first_part = parts[0] if parts else ""
+            first_sentence_count = len([part for part in re.split(r"[.!?]+", first_part) if part.strip()])
+            final_sentence_count = len([part for part in re.split(r"[.!?]+", final_part) if part.strip()])
+            if first_sentence_count < 2 or first_sentence_count > 3:
+                issues.append("Normal Tweet first paragraph should be two or three sentences.")
+            if final_sentence_count != 1:
+                issues.append("Normal Tweet final line should be one final statement.")
+            if final_part.rstrip().endswith("?"):
+                issues.append("Normal Tweet final line should invite replies without a direct question.")
     elif fmt == "Long Tweet":
         if char_count < 260:
             issues.append("Long Tweet is too short; it should be a real long-form single post.")
@@ -744,8 +760,6 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         issues.append("Uses polished punctuation that does not sound like Tyler: " + ", ".join(polished_punctuation[:4]))
     if text.rstrip().endswith("?"):
         warnings.append("Direct question closer. Prefer declarative tension unless the question is truly the joke.")
-    paragraph_breaks = len(re.findall(r"\n\s*\n", text))
-    non_empty_lines = [line.strip() for line in text.splitlines() if line.strip()]
     if fmt == "Punchy Tweet" and "\n" in text:
         warnings.append("Too many line breaks for this format; it may read like a template.")
     elif fmt == "Normal Tweet" and (paragraph_breaks >= 2 or len(non_empty_lines) > 3):
@@ -1968,7 +1982,7 @@ LEARNED VOICE PROFILE:
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
-- If the selected format is Normal Tweet, do not use the old three-stacked-line template. Prefer one compact paragraph or one intentional break only.
+- If the selected format is Normal Tweet, use two or three natural sentences, then one line break, then one final declarative statement that invites engagement without a direct question.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.

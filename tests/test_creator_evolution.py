@@ -185,7 +185,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
         cases = {
             "Punchy Tweet": "under 160 characters",
-            "Normal Tweet": "161-260 preferred characters",
+            "Normal Tweet": "one final declarative statement",
             "Long Tweet": "261-700 preferred characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
@@ -202,6 +202,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(ce.draft_quality_report("This is short.", "Long Tweet", "Witty Edge")["ok"])
         self.assertFalse(ce.draft_quality_report("Tweet one\nTweet two\nTweet three", "Thread", "Witty Edge")["ok"])
         self.assertFalse(ce.draft_quality_report("Headline\n\nShort article body.", "Article", "Witty Edge")["ok"])
+        valid_normal = (
+            "The Broncos keep saying the roster is close. That sounds good until the next few depth chart decisions show whether they actually believe it.\n\n"
+            "The protection tells the story..."
+        )
+        invalid_normal = "The Broncos keep saying the roster is close. The next few depth chart decisions will tell us if they actually believe it..."
+        self.assertTrue(ce.draft_quality_report(valid_normal, "Normal Tweet", "Witty Edge")["ok"])
+        self.assertFalse(ce.draft_quality_report(invalid_normal, "Normal Tweet", "Witty Edge")["ok"])
 
         punchy_too_long = "The Broncos offense keeps explaining itself like the answer is hiding in a footnote, and somehow every offseason turns into the same group project with worse handwriting."
         self.assertFalse(ce.draft_quality_report(punchy_too_long, "Punchy Tweet", "Witty Edge")["ok"])
@@ -553,7 +560,7 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_promo_quality_gate_accepts_honest_video_tension(self):
         good = (
             "The Avs goalie switch looks like a simple matchup call until you isolate the one sequence "
-            "that forced the bench into it. The box score points one direction. The film points somewhere more uncomfortable..."
+            "that forced the bench into it. The box score points one direction.\n\nThe film points somewhere more uncomfortable..."
         )
         report = ce.draft_quality_report(good, "Normal Tweet", "Promo")
 
@@ -563,7 +570,7 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_promo_quality_gate_accepts_qb_ankle_cliffhanger(self):
         good = (
             "Bo Nix may be trending toward camp, but ankle ready and ankle trusted are two different things. "
-            "One more QB decision is coming that tells the truth. The roster will say it out loud…"
+            "One more QB decision is coming that tells the truth.\n\nThe roster will say it out loud…"
         )
         report = ce.draft_quality_report(good, "Normal Tweet", "Promo")
 
@@ -1542,7 +1549,7 @@ class CreatorEvolutionTests(unittest.TestCase):
             "option2": "This Denver sports moment is where it gets weird. The roster will tell us what matters next...",
             "option3": "This Denver sports moment is where the whole thing shifts. The roster will tell us what matters next...",
         }, "Normal Tweet", "Witty Edge")))
-        self.assertIn("specificity, contrast, or stakes", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("Two or three natural sentences", ce.format_recipe_text("Normal Tweet"))
         self.assertIn("each segment must earn its slot", ce.format_recipe_text("Thread"))
 
     def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
@@ -1614,7 +1621,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         article = article_body + ("The roster spot math keeps turning a medical update into a football decision. " * 12)
         fixtures = {
             "Punchy Tweet": "Broncos camp is about to turn one ankle update into a full roster truth serum.",
-            "Normal Tweet": "Bo Nix can be on track for camp and still force a real Broncos decision. Healthy enough to practice and trusted enough to shape the QB room are not the same thing. That roster spot will tell on them...",
+            "Normal Tweet": "Bo Nix can be on track for camp and still force a real Broncos decision. Healthy enough to practice and trusted enough to shape the QB room are not the same thing.\n\nThat roster spot will tell on them...",
             "Long Tweet": "Bo Nix being on track for camp is the easy part of the Broncos conversation. The harder part is what they do with the rest of the quarterback room once the reps get real. If the ankle is fully trusted, the roster can stay aggressive elsewhere. If it is only medically ready, the insurance plan starts costing them somewhere else...",
             "Thread": "Bo Nix being on track for camp is the headline.\n---TWEET---\nThe real Broncos tell is how they build the QB room around him once reps start getting protected.\n---TWEET---\nHealthy enough to practice and trusted enough to shape the roster are not the same thing.\n---TWEET---\nThat last quarterback decision is where the ankle update becomes a roster truth serum...",
             "Article": article,
@@ -1696,7 +1703,7 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_app_fallback_recipes_include_current_creator_evolution_language(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("specificity, contrast, or stakes instead of filler", app_text)
+        self.assertIn("two or three natural sentences", app_text)
         self.assertIn("each segment must earn its slot with a new beat", app_text)
         self.assertIn("Witty Edge should not lean on hot-take", app_text)
         self.assertIn("Generated options repeat the same opener", app_text)

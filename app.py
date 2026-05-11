@@ -8152,7 +8152,7 @@ SOURCE MATERIAL:
 {sports_ctx or ""}
 
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
-For Normal Tweet, do not use the old three-stacked-line template; prefer one compact paragraph or one intentional break only.
+For Normal Tweet, use two or three natural sentences, then one line break, then one final declarative statement that invites engagement without a direct question.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
 No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
@@ -8252,6 +8252,21 @@ def _ce_format_quality_findings(text: str, fmt: str) -> tuple[list[str], list[st
             issues.append("Normal Tweet is too short; use the 161-260 character format space.")
         if char_count > 280:
             issues.append("Normal Tweet must stay under 280 characters.")
+        paragraph_breaks = len(re.findall(r"\n\s*\n", clean))
+        if paragraph_breaks != 1:
+            issues.append("Normal Tweet should use exactly one line break before the final statement.")
+        else:
+            parts = [part.strip() for part in re.split(r"\n\s*\n", clean) if part.strip()]
+            final_part = parts[-1] if parts else ""
+            first_part = parts[0] if parts else ""
+            first_sentence_count = len([part for part in re.split(r"[.!?]+", first_part) if part.strip()])
+            final_sentence_count = len([part for part in re.split(r"[.!?]+", final_part) if part.strip()])
+            if first_sentence_count < 2 or first_sentence_count > 3:
+                issues.append("Normal Tweet first paragraph should be two or three sentences.")
+            if final_sentence_count != 1:
+                issues.append("Normal Tweet final line should be one final statement.")
+            if final_part.rstrip().endswith("?"):
+                issues.append("Normal Tweet final line should invite replies without a direct question.")
     elif fmt == "Long Tweet":
         if char_count < 260:
             issues.append("Long Tweet is too short; it should be a real long-form single post.")
@@ -10048,9 +10063,9 @@ def _ce_format_recipe_text(fmt: str) -> str:
         "Normal Tweet": (
             "Normal Tweet:\n"
             "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
-            "- Structure: One compact phone-style post with a hook, one concrete supporting beat, and a clean pressure-line ending.\n"
-            "- Must: Every option must use the extra space for specificity, contrast, or stakes instead of filler.\n"
-            "- Avoid: Going over 280 characters, thread markers, repeated blank-line cadence, engagement bait, or template-sounding setup/punchline rhythm."
+            "- Structure: Two or three natural sentences, then one intentional line break, then one final declarative statement that invites engagement without asking a direct question.\n"
+            "- Must: Every option must use the first paragraph for specificity, contrast, or stakes, then land a final statement people can argue with or add to.\n"
+            "- Avoid: Going over 280 characters, thread markers, multiple blank-line breaks, direct question closers, engagement bait, or perfect essay punctuation."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
