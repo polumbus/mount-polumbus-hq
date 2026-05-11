@@ -184,8 +184,8 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_format_recipe_changes_prompt_behavior(self):
         base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
         cases = {
-            "Punchy Tweet": "under 160 characters",
-            "Normal Tweet": "one final declarative statement",
+            "Punchy Tweet": "same punchline rhythm every time",
+            "Normal Tweet": "Vary the ending type",
             "Long Tweet": "261-700 preferred characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
@@ -206,8 +206,10 @@ class CreatorEvolutionTests(unittest.TestCase):
             "The Broncos keep saying the roster is close. That sounds good until the next few depth chart decisions show whether they actually believe it.\n\n"
             "The protection tells the story..."
         )
-        invalid_normal = "The Broncos keep saying the roster is close. The next few depth chart decisions will tell us if they actually believe it..."
+        valid_one_paragraph_normal = "The Broncos keep saying the roster is close. The next few depth chart decisions will tell us if they actually believe it, because cautious teams always leave fingerprints..."
+        invalid_normal = "The Broncos keep saying the roster is close.\n\nThe next few depth chart decisions will tell us if they actually believe it.\n\nThe protection tells the story..."
         self.assertTrue(ce.draft_quality_report(valid_normal, "Normal Tweet", "Witty Edge")["ok"])
+        self.assertTrue(ce.draft_quality_report(valid_one_paragraph_normal, "Normal Tweet", "Witty Edge")["ok"])
         self.assertFalse(ce.draft_quality_report(invalid_normal, "Normal Tweet", "Witty Edge")["ok"])
 
         punchy_too_long = "The Broncos offense keeps explaining itself like the answer is hiding in a footnote, and somehow every offseason turns into the same group project with worse handwriting."
@@ -1549,7 +1551,11 @@ class CreatorEvolutionTests(unittest.TestCase):
             "option2": "This Denver sports moment is where it gets weird. The roster will tell us what matters next...",
             "option3": "This Denver sports moment is where the whole thing shifts. The roster will tell us what matters next...",
         }, "Normal Tweet", "Witty Edge")))
-        self.assertIn("Two or three natural sentences", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("one-paragraph versions are allowed", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("same punchline rhythm every time", ce.format_recipe_text("Punchy Tweet"))
+        self.assertIn("same final-turn formula", ce.format_recipe_text("Long Tweet"))
+        self.assertIn("same hook-middle-close pattern every time", ce.format_recipe_text("Thread"))
+        self.assertIn("reusable article skeleton", ce.format_recipe_text("Article"))
         self.assertIn("each segment must earn its slot", ce.format_recipe_text("Thread"))
 
     def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
@@ -1703,7 +1709,10 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_app_fallback_recipes_include_current_creator_evolution_language(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("two or three natural sentences", app_text)
+        self.assertIn("Vary the ending type", app_text)
+        self.assertIn("Every format has flexibility inside its shape", app_text)
+        self.assertIn("same punchline rhythm every time", app_text)
+        self.assertIn("reusable article skeleton", app_text)
         self.assertIn("each segment must earn its slot with a new beat", app_text)
         self.assertIn("Witty Edge should not lean on hot-take", app_text)
         self.assertIn("Generated options repeat the same opener", app_text)
