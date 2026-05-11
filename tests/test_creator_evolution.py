@@ -558,6 +558,18 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(report["ok"], report)
         self.assertFalse(any("cliffhanger" in warning.lower() for warning in report["warnings"]))
 
+    def test_validate_generation_options_identifies_all_rejected_promo_drafts(self):
+        data = {
+            "option1": "New video is live. You won't believe what I found. Watch until the end.",
+            "option2": "This video is about the Broncos offense and there is a lot to talk about. What happens next...",
+            "option3": "Full breakdown here. Like and subscribe. https://youtu.be/test",
+        }
+        report = ce.validate_generation_options(data, "Normal Tweet", "Promo")
+
+        self.assertFalse(any(item.get("ok") for item in report.values()))
+        self.assertTrue(any("clickbait" in " ".join(item.get("issues", [])).lower() for item in report.values()))
+        self.assertTrue(any("specific sports tension" in " ".join(item.get("issues", [])) for item in report.values()))
+
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
             _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),

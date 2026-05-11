@@ -8483,6 +8483,63 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
     return reports
 
 
+def _ce_passing_option_ids(data: dict, quality_report: dict) -> list[str]:
+    passing: list[str] = []
+    for idx in [1, 2, 3]:
+        option_key = f"option{idx}"
+        report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
+        if data.get(option_key) and report.get("ok"):
+            passing.append(str(idx))
+    return passing
+
+
+def _ce_quality_failure_summary(quality_report: dict, limit: int = 5) -> str:
+    reasons: list[str] = []
+    for option_key in ("option1", "option2", "option3"):
+        report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
+        for issue in list(report.get("issues", []) or []):
+            clean_issue = str(issue or "").strip()
+            if clean_issue and clean_issue not in reasons:
+                reasons.append(clean_issue)
+        for warning in list(report.get("warnings", []) or []):
+            clean_warning = str(warning or "").strip()
+            if clean_warning and clean_warning not in reasons:
+                reasons.append(clean_warning)
+    return " | ".join(reasons[:limit])
+
+
+def _ce_repair_failed_generation(original_prompt: str, data: dict, quality_report: dict,
+                                 fmt: str, lane: str, max_tokens: int) -> tuple[dict | None, dict, list[str]]:
+    failure_summary = _ce_quality_failure_summary(quality_report, limit=8)
+    repair_prompt = f"""{original_prompt}
+
+REPAIR REQUIRED:
+The previous JSON was rejected by Creator Evolution quality gates.
+
+Blocking issues:
+{failure_summary or "Unknown quality failure."}
+
+Previous rejected JSON:
+{json.dumps(data, ensure_ascii=False)[:3500]}
+
+Rewrite all 3 options so each one passes the selected format and lane quality gates.
+Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
+"""
+    raw = call_claude(
+        repair_prompt,
+        system=_creator_evolution_system_prompt(lane),
+        max_tokens=max_tokens,
+    )
+    repaired = _parse_banger_json(raw or "")
+    if not repaired or not repaired.get("option1"):
+        return None, quality_report, []
+    for option_key in ["option1", "option2", "option3"]:
+        if repaired.get(option_key):
+            repaired[option_key] = _sanitize_output(repaired[option_key]).strip()
+    repaired_quality = _ce_validate_generation_options(repaired, fmt, lane)
+    return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
+
+
 def _ce_pulse_meta_language(text: str) -> bool:
     lower = str(text or "").lower()
     return any(
@@ -10081,22 +10138,34 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             if data.get(option_key):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
         quality_report = _ce_validate_generation_options(data, fmt, lane)
-        passing = []
-        for idx in [1, 2, 3]:
-            option_key = f"option{idx}"
-            report = quality_report.get(option_key, {})
-            if data.get(option_key) and report.get("ok"):
-                passing.append(str(idx))
-            else:
-                data.pop(option_key, None)
-                data.pop(f"{option_key}_pattern", None)
+        passing = _ce_passing_option_ids(data, quality_report)
         if not passing:
+            repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
+                prompt,
+                data,
+                quality_report,
+                fmt,
+                lane,
+                max_tokens,
+            )
+            if repaired and repaired_passing:
+                data = repaired
+                quality_report = repaired_quality
+                passing = repaired_passing
+        if not passing:
+            failure_summary = _ce_quality_failure_summary(quality_report)
             st.session_state["ce_error"] = (
                 "Creator Evolution rejected every generated draft for quality/safety. "
+                f"Blocking reason: {failure_summary or 'unknown quality failure'}. "
                 "Try a more specific source or lower-risk angle."
             )
             st.session_state["ce_quality_report"] = quality_report
             return
+        for idx in [1, 2, 3]:
+            option_key = f"option{idx}"
+            if str(idx) not in passing:
+                data.pop(option_key, None)
+                data.pop(f"{option_key}_pattern", None)
         if str(data.get("pick", "")).strip() not in passing:
             data["pick"] = passing[0]
             data["pick_reason"] = "Selected the highest available draft that passed Creator Evolution's quality gate."
