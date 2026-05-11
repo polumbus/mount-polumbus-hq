@@ -133,8 +133,8 @@ FORMAT_RECIPES = {
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
         "structure": "Preferred shape is two or three natural sentences, then one intentional line break, then one final statement that invites engagement without asking a direct question. Strong one-paragraph versions are allowed when they sound more natural.",
-        "must": "Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula.",
-        "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or the same setup and final-line rhythm every time.",
+        "must": "Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. Ellipsis endings are allowed and often good, but rotate with period-ending consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.",
+        "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or ending every option with ellipsis.",
     },
     "Long Tweet": {
         "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
@@ -878,6 +878,14 @@ def _option_set_findings(data: dict[str, Any]) -> dict[str, list[str]]:
             findings[key].append("Generated options repeat the same line-break skeleton; vary the structure across options.")
         if frame and frame_counts.get(frame, 0) >= 2:
             findings[key].append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")
+    ellipsis_endings = [
+        key
+        for key, text in options.items()
+        if text.rstrip().endswith(("...", "…"))
+    ]
+    if len(options) >= 3 and len(ellipsis_endings) == len(options):
+        for key in ellipsis_endings:
+            findings[key].append("Generated options all end with ellipsis; keep ellipsis available but vary at least one ending type.")
     return findings
 
 
@@ -1986,6 +1994,7 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - If the selected format is Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
+- Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.

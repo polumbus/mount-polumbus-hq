@@ -8154,6 +8154,7 @@ SOURCE MATERIAL:
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
 Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
 For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
+Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
 No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
@@ -8604,6 +8605,8 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
                 set_issues.append("Generated options repeat the same line-break skeleton; vary the structure across options.")
             if frame and frame_counts.get(frame, 0) >= 2:
                 set_issues.append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")
+            if len(option_texts) >= 3 and all(text.rstrip().endswith(("...", "…")) for text in option_texts.values()):
+                set_issues.append("Generated options all end with ellipsis; keep ellipsis available but vary at least one ending type.")
             if set_issues:
                 report = dict(reports.get(option_key, {}))
                 report["issues"] = list(dict.fromkeys(list(report.get("issues", []) or []) + set_issues))
@@ -10067,8 +10070,8 @@ def _ce_format_recipe_text(fmt: str) -> str:
             "Normal Tweet:\n"
             "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
             "- Structure: Preferred shape is two or three natural sentences, then one intentional line break, then one final statement that invites engagement without asking a direct question. Strong one-paragraph versions are allowed when they sound more natural.\n"
-            "- Must: Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula.\n"
-            "- Avoid: Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or the same setup and final-line rhythm every time."
+            "- Must: Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. Ellipsis endings are allowed and often good, but rotate with period-ending consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.\n"
+            "- Avoid: Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or ending every option with ellipsis."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
@@ -10196,7 +10199,8 @@ Active lane behavior:
 Hard boundaries:
 - Do not use Creator Studio's Hall of Fame examples, benchmarks, calibration blocks, hooks, or cached prompt context.
 - Learn only from Creator Evolution's approved real-performance rules plus mature metric-derived profiles.
-- For Normal Tweet, do not use the old three-stacked-line template; prefer one compact paragraph or one intentional break only.
+- For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Strong one-paragraph versions are allowed when they sound more natural.
+- Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.
 - Be monetization-safe: heat, annoyance, and argument are allowed; slurs, harassment, invented facts, and cheap rage bait are not.
 - No invented stats, rankings, injuries, roster facts, transaction claims, or current-event claims.
 - Return only the requested JSON.

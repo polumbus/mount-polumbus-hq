@@ -1649,6 +1649,17 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(all(not item["ok"] for item in report.values()))
         self.assertTrue(any("same opener" in " ".join(item["issues"]) for item in report.values()))
 
+    def test_option_set_validation_keeps_ellipsis_from_being_the_only_ending(self):
+        data = {
+            "option1": "The Broncos keep saying the roster is close. The next depth chart move will show whether they mean it.\n\nThe protection tells the story...",
+            "option2": "The Nuggets keep saying they trust the bench. The next playoff rotation is where that gets tested.\n\nTrust looks different when the game tightens...",
+            "option3": "The Avs keep calling the goalie situation settled. One tough start usually tells you if that is belief or hope.\n\nThat is when the noise gets loud...",
+        }
+        report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
+
+        self.assertTrue(all(not item["ok"] for item in report.values()))
+        self.assertTrue(any("all end with ellipsis" in " ".join(item["issues"]) for item in report.values()))
+
     def test_learning_profiles_require_confidence_before_prompt_influence(self):
         tweets = [
             _tweet(700 + idx, f"The Broncos roster plan keeps pointing at the same pressure point number {idx}. That is where the offseason gets uncomfortable...", hours_ago=90 + idx, views=12000 + idx, likes=250 + idx, replies=60, reposts=30)
@@ -1710,9 +1721,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         app_text = Path("app.py").read_text()
 
         self.assertIn("Vary the ending type", app_text)
+        self.assertIn("Ellipsis is a strong Tyler ending, but it must not be the only ending", app_text)
         self.assertIn("Every format has flexibility inside its shape", app_text)
         self.assertIn("same punchline rhythm every time", app_text)
         self.assertIn("reusable article skeleton", app_text)
+        self.assertIn("Generated options all end with ellipsis", app_text)
         self.assertIn("each segment must earn its slot with a new beat", app_text)
         self.assertIn("Witty Edge should not lean on hot-take", app_text)
         self.assertIn("Generated options repeat the same opener", app_text)
