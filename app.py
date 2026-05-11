@@ -8134,7 +8134,7 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {_ce_format_learning_text(state, fmt) or "- No mature learned profile for this selected format yet."}
-When a mature learned format profile exists, it overrides the static target range for this selected format.
+When a confident learned format profile exists, use it to tune pacing inside this selected format. It does not override the static guardrails or hard validator bounds.
 
 LEARNED VOICE PROFILE:
 {_ce_voice_learning_text(state) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
@@ -8304,6 +8304,13 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "this video is about", "there is a lot to talk about", "things are changing",
         "what happens next", "a lot going on", "you need to see",
     )
+    concrete_sports_terms = (
+        "broncos", "nuggets", "avs", "avalanche", "buffs", "rockies", "rapids",
+        "qb", "quarterback", "goalie", "coach", "roster", "draft", "trade", "camp",
+        "ankle", "presser", "press conference", "lineup", "rotation", "bench", "series",
+        "period", "quarter", "playoff", "offseason", "front office", "ownership",
+        "payton", "nix", "jokic", "mackinnon", "wedgwood", "wedgewood", "blackwood",
+    )
     promo_clickbait_hits = [phrase for phrase in promo_clickbait_terms if phrase in lower]
     promo_specific_hits = [
         term
@@ -8314,6 +8321,20 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
             else re.search(rf"\b{re.escape(term)}\b", lower)
         )
     ]
+    concrete_term_hits = [
+        term
+        for term in concrete_sports_terms
+        if (
+            term in lower
+            if " " in term
+            else re.search(rf"\b{re.escape(term)}\b", lower)
+        )
+    ]
+    has_concrete_sports_detail = bool(
+        concrete_term_hits
+        or re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", clean)
+        or re.findall(r"\b\d+(?:[-.]\d+)?\b", clean)
+    )
     promo_has_specific_tension = len(promo_specific_hits) >= 2 and not any(frame in lower for frame in promo_generic_frames)
     if _ce_pulse_meta_language(clean):
         return {
@@ -8340,9 +8361,22 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                 local_warnings.extend(format_warnings)
                 if lane == "Deadpan" and ("!" in clean or "lol" in lower):
                     local_issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+                if lane == "Deadpan" and re.search(r"[\U0001F300-\U0001FAFF]", clean):
+                    local_issues.append("Deadpan should stay straight-faced: no emojis.")
+                if lane == "Witty Edge" and any(phrase in lower for phrase in ("hot take", "unpopular opinion", "hear me out")):
+                    local_issues.append("Witty Edge should not lean on hot-take or stock engagement framing.")
+                if lane == "Fired-Up" and any(phrase in lower for phrase in ("we are so back", "we're so back", "let's go", "nobody wants us")):
+                    local_issues.append("Fired-Up needs specific stakes, not generic rally-cry hype.")
+                if lane == "Critical":
+                    if any(phrase in lower for phrase in ("fire everyone", "trash", "garbage", "clown show")):
+                        local_issues.append("Critical should diagnose the failure without cheap rage-bait language.")
+                    if clean.rstrip().endswith("?"):
+                        local_issues.append("Critical should end with a consequence line, not a direct question closer.")
                 if lane == "Sarcastic":
                     if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
                         local_issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+                    if lower.startswith(("sure", "cool", "oh great", "oh interesting")):
+                        local_issues.append("Sarcastic lane should not use generic sarcastic openers.")
                     local_risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
                     local_risk_hits = [term for term in local_risk_terms if term in lower]
                     if local_risk_hits:
@@ -8350,9 +8384,11 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                 if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
                     local_issues.append("Amused should be dry and observational, not meme-caption energy.")
                 if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
-                    local_warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
+                    local_issues.append("Celebratory works better when the joy is specific instead of generic hype.")
                 if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
                     local_issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
+                if not has_concrete_sports_detail:
+                    local_issues.append("Needs a concrete sports/source detail so it does not read like generic strategy copy.")
                 if lane == "Promo":
                     if promo_clickbait_hits:
                         local_issues.append("Promo cannot use cheap clickbait phrasing: " + ", ".join(promo_clickbait_hits[:3]))
@@ -8411,6 +8447,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         warnings.append("Too many line breaks for this format; it may read like a template.")
     elif fmt == "Normal Tweet" and (paragraph_breaks >= 2 or len(non_empty_lines) > 3):
         warnings.append("Too many line breaks for this format; it may read like a template.")
+    if not has_concrete_sports_detail:
+        issues.append("Needs a concrete sports/source detail so it does not read like generic strategy copy.")
 
     risk_terms = tuple(getattr(ce, "RISK_TERMS", ("idiot", "moron", "clown", "trash", "garbage", "hate", "stupid", "fraud")) or ())
     risk_hits = [term for term in risk_terms if term in lower]
@@ -8423,15 +8461,28 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
 
     if lane == "Deadpan" and ("!" in clean or "lol" in lower):
         issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+    if lane == "Deadpan" and re.search(r"[\U0001F300-\U0001FAFF]", clean):
+        issues.append("Deadpan should stay straight-faced: no emojis.")
+    if lane == "Witty Edge" and any(phrase in lower for phrase in ("hot take", "unpopular opinion", "hear me out")):
+        issues.append("Witty Edge should not lean on hot-take or stock engagement framing.")
+    if lane == "Fired-Up" and any(phrase in lower for phrase in ("we are so back", "we're so back", "let's go", "nobody wants us")):
+        issues.append("Fired-Up needs specific stakes, not generic rally-cry hype.")
+    if lane == "Critical":
+        if any(phrase in lower for phrase in ("fire everyone", "trash", "garbage", "clown show")):
+            issues.append("Critical should diagnose the failure without cheap rage-bait language.")
+        if clean.rstrip().endswith("?"):
+            issues.append("Critical should end with a consequence line, not a direct question closer.")
     if lane == "Sarcastic":
         if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
             issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+        if lower.startswith(("sure", "cool", "oh great", "oh interesting")):
+            issues.append("Sarcastic lane should not use generic sarcastic openers.")
         if risk_hits:
             issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risk_hits[:4]))
     if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
         issues.append("Amused should be dry and observational, not meme-caption energy.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
-        warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
+        issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
         issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
     if lane == "Promo":
@@ -8482,6 +8533,47 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
             merged["warnings"] = list(dict.fromkeys(list(helper_report.get("warnings", []) or []) + list(local_report.get("warnings", []) or [])))
             merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))
             reports[option_key] = merged
+    option_texts = {
+        option_key: str(data.get(option_key) or "").strip()
+        for option_key in ("option1", "option2", "option3")
+        if str(data.get(option_key) or "").strip()
+    }
+    if len(option_texts) >= 2:
+        opener_counts: dict[str, int] = {}
+        skeleton_counts: dict[str, int] = {}
+        frame_counts: dict[str, int] = {}
+        signatures: dict[str, tuple[str, str, str]] = {}
+        generic_frames = (
+            "this denver sports moment", "where it gets interesting", "where it gets weird",
+            "the uncomfortable part is", "that is where", "that's where",
+        )
+        for option_key, text in option_texts.items():
+            first_line = text.splitlines()[0].strip().lower() if text else ""
+            opener = " ".join(re.findall(r"[a-z0-9']+", first_line)[:3])
+            skeleton = "-".join("x" for line in text.splitlines() if line.strip())
+            lower_text = text.lower()
+            frame = next((phrase for phrase in generic_frames if phrase in lower_text), "")
+            signatures[option_key] = (opener, skeleton, frame)
+            if opener:
+                opener_counts[opener] = opener_counts.get(opener, 0) + 1
+            if skeleton:
+                skeleton_counts[skeleton] = skeleton_counts.get(skeleton, 0) + 1
+            if frame:
+                frame_counts[frame] = frame_counts.get(frame, 0) + 1
+        for option_key, (opener, skeleton, frame) in signatures.items():
+            set_issues: list[str] = []
+            if opener and opener_counts.get(opener, 0) >= 2:
+                set_issues.append("Generated options repeat the same opener; each option needs a distinct first move.")
+            if skeleton and skeleton_counts.get(skeleton, 0) == len(option_texts) and len(option_texts) >= 3:
+                set_issues.append("Generated options repeat the same line-break skeleton; vary the structure across options.")
+            if frame and frame_counts.get(frame, 0) >= 2:
+                set_issues.append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")
+            if set_issues:
+                report = dict(reports.get(option_key, {}))
+                report["issues"] = list(dict.fromkeys(list(report.get("issues", []) or []) + set_issues))
+                report["ok"] = False
+                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 25))
+                reports[option_key] = report
     return reports
 
 
@@ -9930,38 +10022,38 @@ def _ce_format_recipe_text(fmt: str) -> str:
     recipes = {
         "Punchy Tweet": (
             "Punchy Tweet:\n"
-            "- Target: 70-160 characters. One sharp thought. One or two sentences maximum.\n"
-            "- Structure: No setup paragraph. No line breaks. Compress until it feels like a phone post.\n"
-            "- Must: Every option must be under 160 characters and must not read like a normal-length tweet.\n"
-            "- Avoid: Explaining the context, adding a second angle, threads, or soft qualifiers."
+            "- Target: 70-160 characters. One sharp, complete reaction with a visible tension, joke, or contradiction.\n"
+            "- Structure: No setup paragraph. No line breaks. One or two sentences that land fast and feel typed on a phone.\n"
+            "- Must: Every option must make one specific point, create curiosity without asking for engagement, and stay under 160 characters.\n"
+            "- Avoid: Explaining context, adding a second angle, soft qualifiers, generic hype, or vague reaction-caption energy."
         ),
         "Normal Tweet": (
             "Normal Tweet:\n"
             "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
-            "- Structure: One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.\n"
-            "- Must: Every option must use the extra space without turning into a stacked template.\n"
-            "- Avoid: Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence."
+            "- Structure: One compact phone-style post with a hook, one concrete supporting beat, and a clean pressure-line ending.\n"
+            "- Must: Every option must use the extra space for specificity, contrast, or stakes instead of filler.\n"
+            "- Avoid: Going over 280 characters, thread markers, repeated blank-line cadence, engagement bait, or template-sounding setup/punchline rhythm."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
             "- Target: 261-700 preferred characters. Hard validator tolerance: 260-900.\n"
-            "- Structure: Opening take, short supporting beat, contrast or consequence, closing pressure line.\n"
-            "- Must: Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.\n"
-            "- Avoid: Thread markers, article headings, or empty recap paragraphs."
+            "- Structure: Opening take, 2-3 short evidence/contrast beats, then a memorable closing line that raises the stakes.\n"
+            "- Must: Every option must reward the extra length with escalation, specificity, and a stronger final turn than a Normal Tweet.\n"
+            "- Avoid: Thread markers, article headings, recap paragraphs, filler transitions, or stretching one normal tweet into a bloated post."
         ),
         "Thread": (
             "Thread:\n"
             "- Target: 4-7 tweets. Each tweet must stand alone and stay under 280 characters.\n"
-            "- Structure: Separate tweets with the exact marker ---TWEET--- inside each option.\n"
-            "- Must: Every option must contain at least 4 tweet segments separated by ---TWEET---.\n"
-            "- Avoid: One long paragraph, article headings, or a normal tweet pretending to be a thread."
+            "- Structure: Separate tweets with ---TWEET---. Tweet 1 hooks the tension, middle tweets escalate or reframe, final tweet lands the takeaway.\n"
+            "- Must: Every option must contain at least 4 tweet segments and each segment must earn its slot with a new beat.\n"
+            "- Avoid: One long paragraph, numbered article sections, repeated setup lines, or a normal tweet chopped into pieces."
         ),
         "Article": (
             "Article:\n"
             "- Target: 700-1,200 words per option. A real X Article/short column, not a tweet.\n"
-            "- Structure: Headline, intro, 3-5 section headings, and a closing take.\n"
-            "- Must: Every option must read like a complete article draft with section structure.\n"
-            "- Avoid: Tweet-length output, thread markers, or a short caption with a headline."
+            "- Structure: Headline, sharp intro, 3-5 section headings, concrete examples or consequences, and a closing take worth remembering.\n"
+            "- Must: Every option must read like a complete opinion column with a clear argument and no invented facts.\n"
+            "- Avoid: Tweet-length output, thread markers, generic newsletter tone, filler sections, or a headline attached to a caption."
         ),
     }
     return recipes.get(fmt, recipes["Normal Tweet"])
@@ -9981,6 +10073,8 @@ def _ce_format_learning_text(state: dict, fmt: str) -> str:
     except (TypeError, ValueError):
         sample_size = 0
     if sample_size < 3:
+        return ""
+    if profile.get("confidence_active") is not True:
         return ""
     formatter = getattr(ce, "format_learning_text", None)
     if callable(formatter):
@@ -10013,6 +10107,8 @@ def _ce_voice_learning_text(state: dict) -> str:
     if str(profile.get("status", "")).lower() != "mature":
         return ""
     if sample_size < 8:
+        return ""
+    if profile.get("confidence_active") is not True:
         return ""
     formatter = getattr(ce, "voice_learning_text", None)
     if callable(formatter):
@@ -11074,20 +11170,24 @@ def _render_creator_evolution_learning_panel(state: dict):
         if selected_profile:
             _traits = selected_profile.get("traits", [])[:4]
             _weak_traits = selected_profile.get("weak_traits", [])[:2]
+            _profile_active = selected_profile.get("confidence_active") is True
+            _profile_mode = "ACTIVE CALIBRATION" if _profile_active else "TRACKED ONLY - not used in generation yet"
             st.caption(
-                f"{selected_fmt} | {selected_profile.get('status', 'tracked')} sample | "
+                f"{selected_fmt} | {_profile_mode} | {selected_profile.get('status', 'tracked')} sample | "
                 f"n={int(selected_profile.get('sample_size', 0) or 0)} | "
-                f"avg {float(selected_profile.get('avg_score', 0) or 0):.1f}"
+                f"avg {float(selected_profile.get('avg_score', 0) or 0):.1f} | "
+                f"winner topics {int(selected_profile.get('winner_topic_diversity', 0) or 0)}"
             )
             for line in _traits:
-                st.caption("Winning: " + str(line))
+                st.caption(("Active winning signal: " if _profile_active else "Tracked winning signal: ") + str(line))
             for line in _weak_traits:
-                st.caption("Avoid: " + str(line))
+                st.caption(("Active avoid signal: " if _profile_active else "Tracked avoid signal: ") + str(line))
         elif format_profiles:
             for _fmt_name, _profile in list(format_profiles.items())[:3]:
                 _traits = _profile.get("traits", [])[:2]
+                _profile_mode = "ACTIVE CALIBRATION" if _profile.get("confidence_active") is True else "TRACKED ONLY - not used in generation yet"
                 st.caption(
-                    f"{_fmt_name} | n={int(_profile.get('sample_size', 0) or 0)} | "
+                    f"{_fmt_name} | {_profile_mode} | n={int(_profile.get('sample_size', 0) or 0)} | "
                     + " | ".join(str(t) for t in _traits)
                 )
         else:
@@ -11096,15 +11196,18 @@ def _render_creator_evolution_learning_panel(state: dict):
         voice_profile = patterns.get("voice_profile", {}) if isinstance(patterns, dict) else {}
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#2DD4BF;text-transform:uppercase;margin:12px 0 6px;">Voice Evolution</div>', unsafe_allow_html=True)
         if isinstance(voice_profile, dict) and int(voice_profile.get("sample_size", 0) or 0):
+            _voice_active = voice_profile.get("confidence_active") is True
+            _voice_mode = "ACTIVE CALIBRATION" if _voice_active else "TRACKED ONLY - not used in generation yet"
             st.caption(
-                f"{voice_profile.get('status', 'tracked')} sample | "
+                f"{_voice_mode} | {voice_profile.get('status', 'tracked')} sample | "
                 f"n={int(voice_profile.get('sample_size', 0) or 0)} | "
-                f"winner avg {float(voice_profile.get('winner_avg_score', 0) or 0):.1f}"
+                f"winner avg {float(voice_profile.get('winner_avg_score', 0) or 0):.1f} | "
+                f"winner topics {int(voice_profile.get('winner_topic_diversity', 0) or 0)}"
             )
             for line in voice_profile.get("traits", [])[:5]:
-                st.caption("Winning voice: " + str(line))
+                st.caption(("Active winning voice: " if _voice_active else "Tracked winning voice: ") + str(line))
             for line in voice_profile.get("avoid_traits", [])[:2]:
-                st.caption("Avoid: " + str(line))
+                st.caption(("Active avoid voice: " if _voice_active else "Tracked avoid voice: ") + str(line))
         else:
             st.caption("No learned voice profile yet. Sync more mature original tweets.")
 

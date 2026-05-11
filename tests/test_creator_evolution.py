@@ -232,8 +232,8 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertEqual(profile["sample_size"], 3)
         self.assertEqual(profile["status"], "mature")
-        self.assertEqual(len(profile["winner_ids"]), 1)
-        self.assertEqual(len(profile["loser_ids"]), 1)
+        self.assertEqual(len(profile["winner_ids"]), 2)
+        self.assertEqual(len(profile["loser_ids"]), 2)
         self.assertNotEqual(profile["winner_ids"], profile["loser_ids"])
         self.assertTrue(profile["traits"])
         self.assertIn("LEARNED FORMAT PROFILE:", prompt)
@@ -479,9 +479,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("without direct insults" in issue for issue in report["issues"]))
 
     def test_long_tweet_core_boundary_documents_preferred_vs_hard_bounds(self):
+        at_260 = "Broncos " + ("x" * 252)
+        at_900 = "Broncos " + ("x" * 892)
         self.assertFalse(ce.draft_quality_report("x" * 259, "Long Tweet", "Witty Edge")["ok"])
-        self.assertTrue(ce.draft_quality_report("x" * 260, "Long Tweet", "Witty Edge")["ok"])
-        self.assertTrue(ce.draft_quality_report("x" * 900, "Long Tweet", "Witty Edge")["ok"])
+        self.assertTrue(ce.draft_quality_report(at_260, "Long Tweet", "Witty Edge")["ok"])
+        self.assertTrue(ce.draft_quality_report(at_900, "Long Tweet", "Witty Edge")["ok"])
         self.assertFalse(ce.draft_quality_report("x" * 901, "Long Tweet", "Witty Edge")["ok"])
 
     def test_lane_specific_quality_gates_block_drift(self):
@@ -1529,6 +1531,164 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(decision["status"], "no_op")
         self.assertIsNone(decision["best"])
         self.assertIn("duplicate_recent_angle", decision["top_rejected"][0]["hard_blocks"])
+
+    def test_voice_and_format_recipes_are_engagement_focused_without_replacing_learning(self):
+        self.assertIn("one funny pressure point", ce.lane_recipe_text("Witty Edge"))
+        self.assertIn("leave the optimism on trial", ce.lane_recipe_text("Skeptical"))
+        self.assertIn("accountability", ce.lane_recipe_text("Critical"))
+        self.assertIn("specific sports contradiction", ce.lane_recipe_text("Promo"))
+        self.assertIn("source-specific wording", str(ce.validate_generation_options({
+            "option1": "This Denver sports moment is where it gets interesting. The roster will tell us what matters next...",
+            "option2": "This Denver sports moment is where it gets weird. The roster will tell us what matters next...",
+            "option3": "This Denver sports moment is where the whole thing shifts. The roster will tell us what matters next...",
+        }, "Normal Tweet", "Witty Edge")))
+        self.assertIn("specificity, contrast, or stakes", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("each segment must earn its slot", ce.format_recipe_text("Thread"))
+
+    def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
+        witty = ce.draft_quality_report("Hot take: Broncos camp is where this roster gets interesting.", "Punchy Tweet", "Witty Edge")
+        fired = ce.draft_quality_report("Let's go. The Avs are so back and nobody wants us now.", "Punchy Tweet", "Fired-Up")
+        critical = ce.draft_quality_report("Fire everyone. This Broncos plan is trash?", "Punchy Tweet", "Critical")
+        celebratory = ce.draft_quality_report("Let's go. Massive Nuggets win. We are so back.", "Punchy Tweet", "Celebratory")
+        deadpan = ce.draft_quality_report("The Avs changed goalies again 😂", "Punchy Tweet", "Deadpan")
+
+        self.assertFalse(witty["ok"])
+        self.assertFalse(fired["ok"])
+        self.assertFalse(critical["ok"])
+        self.assertFalse(celebratory["ok"])
+        self.assertFalse(deadpan["ok"])
+
+    def test_each_voice_has_a_passing_engagement_fixture(self):
+        fixtures = {
+            "Witty Edge": "Broncos roster math is doing that thing where the boring answer starts looking like the dangerous one...",
+            "Amused": "The Avs goalie conversation went from calm to courtroom drama in about four minutes. Very normal playoff hobby...",
+            "Annoyed": "The Nuggets keep treating the bench problem like it is weather. At some point the pattern becomes the plan...",
+            "Fired-Up": "MacKinnon shifts change the whole temperature of a series. Colorado has the lever sitting right there...",
+            "Skeptical": "Bo Nix being ready for camp and being trusted at camp are two different Broncos conversations...",
+            "Critical": "The Broncos process keeps creating the same roster pressure. That is a decision problem, not a luck problem...",
+            "Promo": "Bo Nix ankle ready and ankle trusted are different Broncos decisions. Camp will say the quiet part...",
+            "Celebratory": "The Nuggets finally got a bench stretch that felt like oxygen. That changes the whole math of the night...",
+            "Deadpan": "The Avs changed goalies and immediately turned warmups into a congressional hearing.",
+            "Sarcastic": "The Broncos calling this patience is generous. The roster is doing a full TED Talk on pressure management.",
+        }
+
+        for lane, text in fixtures.items():
+            with self.subTest(lane=lane):
+                self.assertTrue(ce.draft_quality_report(text, "Punchy Tweet", lane)["ok"])
+
+    def test_each_format_has_a_passing_engagement_fixture(self):
+        article_body = (
+            "Broncos Roster Pressure\n\n"
+            "The Broncos keep trying to make the quiet roster answer sound simple, but the football part keeps getting louder. "
+            "Bo Nix can be on track for camp and still leave the staff with a real trust decision once the practice script gets uncomfortable. "
+            "That is the part fans usually feel before anyone says it publicly.\n\n"
+            "The Camp Tell\n\n"
+            "The tell is not the headline about health. It is the way the quarterback work gets split when the team has to protect rhythm, timing, and the install at the same time. "
+            "A normal rep plan says one thing. A protected rep plan says something else. Coaches can dress that up, but the field usually leaks the truth first.\n\n"
+            "The Roster Consequence\n\n"
+            "That matters because every extra insurance decision costs a roster spot somewhere else. The Broncos do not get to carry every comfort blanket and still pretend the rest of the depth chart is untouched. "
+            "If the ankle is fully trusted, the room can stay lean. If it is only medically ready, the room starts asking for protection.\n\n"
+            "The Fan Argument\n\n"
+            "This is why the conversation keeps turning sideways. Fans hear progress and want to move on. The roster hears uncertainty and starts preparing for the expensive version. "
+            "Both can be true, which is usually where the most honest football argument lives.\n\n"
+            "The Bottom Line\n\n"
+            "Training camp will tell us whether Bo Nix is healthy. It will also tell us whether the Broncos are willing to build the room like they believe it. "
+            "That is where the next quarterback decision gets louder than the public update...\n\n"
+        )
+        article = article_body + ("The roster spot math keeps turning a medical update into a football decision. " * 12)
+        fixtures = {
+            "Punchy Tweet": "Broncos camp is about to turn one ankle update into a full roster truth serum.",
+            "Normal Tweet": "Bo Nix can be on track for camp and still force a real Broncos decision. Healthy enough to practice and trusted enough to shape the QB room are not the same thing. That roster spot will tell on them...",
+            "Long Tweet": "Bo Nix being on track for camp is the easy part of the Broncos conversation. The harder part is what they do with the rest of the quarterback room once the reps get real. If the ankle is fully trusted, the roster can stay aggressive elsewhere. If it is only medically ready, the insurance plan starts costing them somewhere else...",
+            "Thread": "Bo Nix being on track for camp is the headline.\n---TWEET---\nThe real Broncos tell is how they build the QB room around him once reps start getting protected.\n---TWEET---\nHealthy enough to practice and trusted enough to shape the roster are not the same thing.\n---TWEET---\nThat last quarterback decision is where the ankle update becomes a roster truth serum...",
+            "Article": article,
+        }
+
+        for fmt, text in fixtures.items():
+            with self.subTest(fmt=fmt):
+                self.assertTrue(ce.draft_quality_report(text, fmt, "Witty Edge")["ok"])
+
+    def test_option_set_validation_blocks_repeated_template_structure(self):
+        data = {
+            "option1": "The Broncos roster math keeps pointing at the same problem.\n\nThat is where this gets uncomfortable...",
+            "option2": "The Broncos roster math keeps pointing at the same problem.\n\nThat is where this gets expensive...",
+            "option3": "The Broncos roster math keeps pointing at the same problem.\n\nThat is where this gets real...",
+        }
+        report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
+
+        self.assertTrue(report)
+        self.assertTrue(all(not item["ok"] for item in report.values()))
+        self.assertTrue(any("same opener" in " ".join(item["issues"]) for item in report.values()))
+
+    def test_learning_profiles_require_confidence_before_prompt_influence(self):
+        tweets = [
+            _tweet(700 + idx, f"The Broncos roster plan keeps pointing at the same pressure point number {idx}. That is where the offseason gets uncomfortable...", hours_ago=90 + idx, views=12000 + idx, likes=250 + idx, replies=60, reposts=30)
+            for idx in range(3)
+        ]
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        profile = next(iter(state["patterns"]["format_profiles"].values()))
+        prompt = ce.build_generation_prompt("Broncos roster plan", "Normal Tweet", "Witty Edge", state)
+
+        self.assertEqual(profile["status"], "mature")
+        self.assertFalse(profile["confidence_active"])
+        self.assertIn("needs winning evidence across at least 2 topic/team buckets", profile["confidence_notes"])
+        self.assertNotIn("Winning trait:", prompt)
+        self.assertFalse(any("Start Creator Evolution drafts" in prop["rule"] for prop in state["proposals"]))
+        self.assertFalse(any("learned winning format profile" in prop["rule"] for prop in state["proposals"]))
+
+    def test_voice_learning_confidence_blocks_single_topic_formula(self):
+        tweets = [
+            _tweet(800 + idx, f"The Broncos roster plan keeps pointing at the same pressure point number {idx}. That is where the offseason gets uncomfortable...", hours_ago=90 + idx, views=15000 + idx, likes=320 + idx, replies=80, reposts=40)
+            for idx in range(8)
+        ]
+        state = ce.refresh_state(None, tweets, handle="polfam", now=NOW)
+        profile = state["patterns"]["voice_profile"]
+        prompt = ce.build_generation_prompt("Broncos roster plan", "Normal Tweet", "Witty Edge", state)
+
+        self.assertEqual(profile["status"], "mature")
+        self.assertFalse(profile["confidence_active"])
+        self.assertNotIn("Winning voice trait:", prompt)
+        self.assertFalse(any("learned winning voice profile" in prop["rule"] for prop in state["proposals"]))
+
+    def test_legacy_profiles_without_confidence_fail_closed(self):
+        state = {
+            "patterns": {
+                "format_profiles": {
+                    "Normal Tweet": {
+                        "status": "mature",
+                        "sample_size": 10,
+                        "traits": ["LEGACY_TRAIT"],
+                        "weak_traits": [],
+                    }
+                },
+                "voice_profile": {
+                    "status": "mature",
+                    "sample_size": 10,
+                    "traits": ["LEGACY_VOICE"],
+                    "avoid_traits": [],
+                },
+            },
+            "proposals": ce.propose_rules([
+                ce.score_tweet(_tweet(900 + idx, f"The Broncos roster pressure keeps showing up in the same place number {idx}.", hours_ago=90 + idx, views=12000, likes=220, replies=40, reposts=20), NOW)
+                for idx in range(3)
+            ]),
+        }
+
+        self.assertEqual(ce.format_learning_text(state, "Normal Tweet"), "")
+        self.assertEqual(ce.voice_learning_text(state), "")
+
+    def test_app_fallback_recipes_include_current_creator_evolution_language(self):
+        app_text = Path("app.py").read_text()
+
+        self.assertIn("specificity, contrast, or stakes instead of filler", app_text)
+        self.assertIn("each segment must earn its slot with a new beat", app_text)
+        self.assertIn("Witty Edge should not lean on hot-take", app_text)
+        self.assertIn("Generated options repeat the same opener", app_text)
+        self.assertIn('profile.get("confidence_active") is not True', app_text)
+        self.assertNotIn("overrides the static target range", app_text)
+        self.assertIn("ACTIVE CALIBRATION", app_text)
+        self.assertIn("TRACKED ONLY - not used in generation yet", app_text)
+        self.assertIn("Needs a concrete sports/source detail so it does not read like generic strategy copy.", app_text)
 
 
 if __name__ == "__main__":

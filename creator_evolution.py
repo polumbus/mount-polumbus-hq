@@ -38,40 +38,40 @@ EMOTION_LANES = (
 
 LANE_RECIPES = {
     "Witty Edge": {
-        "target": "Funny, pointed, conversational, and a little dangerous without sounding mean.",
-        "do": "Use a sharp human read, a specific sports detail, and a final line that leaves tension hanging.",
-        "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, and copied viral hooks.",
+        "target": "A sharp sports read with one funny pressure point: confident, phone-written, and a little dangerous without getting mean.",
+        "do": "Name the exact contradiction, add one human/sports detail, then land a punchline or open loop that makes people want to argue the premise.",
+        "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, hot-take framing, and copied viral hooks.",
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Amused": {
-        "target": "The smile you make when sports gets absurd and everyone else is pretending it is normal.",
-        "do": "Find the weird human detail and understate it like the reader is already in on the joke.",
-        "avoid": "LOL energy, obvious jokes, meme captions, and explaining why the thing is funny.",
-        "ending": "A dry little walk-off line that makes the reader complete the joke.",
+        "target": "Quietly entertained by the absurdity, like the reader already saw the same weird thing.",
+        "do": "Spot the strange human detail, understate it, and let the gap between normal wording and absurd reality create the joke.",
+        "avoid": "LOL energy, meme captions, obvious punchlines, emoji reactions, and explaining why it is funny.",
+        "ending": "A dry walk-off line that makes the reader finish the joke.",
     },
     "Annoyed": {
-        "target": "Irritated but controlled. The decision, pattern, or excuse is the target, not a person.",
-        "do": "Name the specific thing that is bothering you and why it keeps happening.",
-        "avoid": "Personal insults, harassment, all-caps fury, and broad 'everyone is stupid' framing.",
+        "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
+        "do": "Name the recurring behavior, explain why it keeps costing them, and keep the anger aimed at the pattern.",
+        "avoid": "Personal insults, harassment, all-caps fury, vague 'everyone is stupid' framing, and doom spirals.",
         "ending": "A tight consequence line that makes the annoyance feel earned.",
     },
     "Fired-Up": {
-        "target": "Fan-first heat with confidence, urgency, and forward motion.",
-        "do": "Sound like you actually care, then point that energy at the next stakes in front of the team.",
-        "avoid": "Motivational-poster language, fake certainty, and empty 'we are so back' hype.",
-        "ending": "A strong statement that dares the timeline to argue without begging for replies.",
+        "target": "Fan-first heat with urgency, belief, and something real at stake.",
+        "do": "Sound like you care, attach the energy to the next concrete test, and make the post feel like momentum, not noise.",
+        "avoid": "Motivational-poster language, fake certainty, empty 'we are so back' hype, and generic rally cries.",
+        "ending": "A strong declarative challenge that dares disagreement without begging for replies.",
     },
     "Skeptical": {
-        "target": "Smart doubt. The kind of raised eyebrow that makes optimistic fans defend the case.",
-        "do": "Expose the assumption underneath the popular take and make the reader sit with it.",
-        "avoid": "Cynicism for its own sake, prediction cosplay, and generic contrarian framing.",
+        "target": "Smart doubt that pressures the popular assumption without sounding like default negativity.",
+        "do": "Expose the assumption everyone is skipping, ask what has to be true, and leave the optimism on trial.",
+        "avoid": "Cynicism for its own sake, prediction cosplay, 'obviously/guaranteed' certainty, and generic contrarian framing.",
         "ending": "A quiet pressure point, not a dunk.",
     },
     "Critical": {
-        "target": "Clear diagnosis. Firm, specific, and accountability-minded without becoming rage bait.",
-        "do": "Name the decision, pattern, or process problem and explain the consequence in plain language.",
-        "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, and generic 'this is bad' framing.",
-        "ending": "A sharp consequence line that makes the diagnosis feel unavoidable.",
+        "target": "Clear diagnosis with accountability: firm, specific, and useful without rage bait.",
+        "do": "Name the decision/process failure, connect it to the consequence, and make the critique feel earned by evidence.",
+        "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, 'fire everyone' energy, and generic 'this is bad' framing.",
+        "ending": "A sharp consequence line that makes the diagnosis feel hard to dodge.",
     },
     "Promo": {
         "text": """PROMO VOICE - VIDEO CLICK TENSION MODE:
@@ -95,9 +95,9 @@ PROMO VOICE RULES:
         "ending": "A declarative cliffhanger tied to the video subject. Stop one beat before the answer. No generic question closer.",
     },
     "Celebratory": {
-        "target": "Happy without becoming generic hype. Specific joy beats generic excitement.",
-        "do": "Celebrate the exact detail that made the moment feel different.",
-        "avoid": "Corporate hype words, victory-lap cliches, and empty 'let's go' filler.",
+        "target": "Specific joy that feels earned, not corporate hype or empty victory-lap energy.",
+        "do": "Celebrate the exact detail that changed the mood and connect it to what it unlocks next.",
+        "avoid": "Corporate hype words, victory-lap cliches, empty 'let's go' filler, 'massive/unreal/so back' defaults, and generic positivity.",
         "ending": "A specific emotional payoff or forward statement.",
     },
     "Deadpan": {
@@ -112,10 +112,11 @@ SARCASTIC VOICE RULES:
 - Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
 - Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
 - Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
+- The sarcasm must reveal a sports truth, not just sound clever.
 - Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
 - Never copy old sarcastic examples, sentence frames, or punchline structures.
 - Drop it and walk away. Never explain the joke.""",
-        "target": "Creator Evolution dry sarcasm: implied real story or unexpected cultural leap, without copied examples.",
+        "target": "Dry sarcasm that reveals the real sports story through implication or a specific cultural leap, without copied examples.",
         "do": "Use Cultural Leap for positive moments or Implied Real Story for negative moments.",
         "avoid": "Generic sarcastic openers, joke explanation, copied examples, direct insults, and fallback default voice.",
         "ending": "Drop it and walk away. Never explain the joke.",
@@ -124,34 +125,34 @@ SARCASTIC VOICE RULES:
 
 FORMAT_RECIPES = {
     "Punchy Tweet": {
-        "target": "70-160 characters. One sharp thought. One or two sentences maximum.",
-        "structure": "No setup paragraph. No line breaks. Compress until it feels like a phone post.",
-        "must": "Every option must be under 160 characters and must not read like a normal-length tweet.",
-        "avoid": "Explaining the context, adding a second angle, threads, or soft qualifiers.",
+        "target": "70-160 characters. One sharp, complete reaction with a visible tension, joke, or contradiction.",
+        "structure": "No setup paragraph. No line breaks. One or two sentences that land fast and feel typed on a phone.",
+        "must": "Every option must make one specific point, create curiosity without asking for engagement, and stay under 160 characters.",
+        "avoid": "Explaining context, adding a second angle, soft qualifiers, generic hype, or vague reaction-caption energy.",
     },
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
-        "structure": "One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.",
-        "must": "Every option must use the extra space without turning into a stacked template.",
-        "avoid": "Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence.",
+        "structure": "One compact phone-style post with a hook, one concrete supporting beat, and a clean pressure-line ending.",
+        "must": "Every option must use the extra space for specificity, contrast, or stakes instead of filler.",
+        "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, engagement bait, or template-sounding setup/punchline rhythm.",
     },
     "Long Tweet": {
         "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
-        "structure": "Opening take, short supporting beat, contrast or consequence, closing pressure line.",
-        "must": "Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.",
-        "avoid": "Thread markers, article headings, or empty recap paragraphs.",
+        "structure": "Opening take, 2-3 short evidence/contrast beats, then a memorable closing line that raises the stakes.",
+        "must": "Every option must reward the extra length with escalation, specificity, and a stronger final turn than a Normal Tweet.",
+        "avoid": "Thread markers, article headings, recap paragraphs, filler transitions, or stretching one normal tweet into a bloated post.",
     },
     "Thread": {
         "target": "4-7 tweets. Each tweet must stand alone and stay under 280 characters.",
-        "structure": "Separate tweets with the exact marker ---TWEET--- inside each option.",
-        "must": "Every option must contain at least 4 tweet segments separated by ---TWEET---.",
-        "avoid": "One long paragraph, article headings, or a normal tweet pretending to be a thread.",
+        "structure": "Separate tweets with ---TWEET---. Tweet 1 hooks the tension, middle tweets escalate or reframe, final tweet lands the takeaway.",
+        "must": "Every option must contain at least 4 tweet segments and each segment must earn its slot with a new beat.",
+        "avoid": "One long paragraph, numbered article sections, repeated setup lines, or a normal tweet chopped into pieces.",
     },
     "Article": {
         "target": "700-1,200 words per option. A real X Article/short column, not a tweet.",
-        "structure": "Headline, intro, 3-5 section headings, and a closing take.",
-        "must": "Every option must read like a complete article draft with section structure.",
-        "avoid": "Tweet-length output, thread markers, or a short caption with a headline.",
+        "structure": "Headline, sharp intro, 3-5 section headings, concrete examples or consequences, and a closing take worth remembering.",
+        "must": "Every option must read like a complete opinion column with a clear argument and no invented facts.",
+        "avoid": "Tweet-length output, thread markers, generic newsletter tone, filler sections, or a headline attached to a caption.",
     },
 }
 
@@ -633,6 +634,45 @@ def cadence_hits(text: str) -> list[str]:
     return list(dict.fromkeys(hits))
 
 
+GENERIC_OPTION_FRAMES = (
+    "this denver sports moment",
+    "where it gets interesting",
+    "where it gets weird",
+    "the uncomfortable part is",
+    "that is where",
+    "that's where",
+    "it matters because",
+    "the public answer matters less",
+)
+
+CONCRETE_SPORTS_TERMS = (
+    "broncos", "nuggets", "avs", "avalanche", "buffs", "rockies", "rapids",
+    "qb", "quarterback", "goalie", "coach", "roster", "draft", "trade", "camp",
+    "ankle", "presser", "press conference", "lineup", "rotation", "bench", "series",
+    "period", "quarter", "playoff", "offseason", "front office", "ownership",
+    "payton", "nix", "jokic", "mackinnon", "wedgwood", "wedgewood", "blackwood",
+)
+
+
+def _has_emoji(text: str) -> bool:
+    return bool(re.search(r"[\U0001F300-\U0001FAFF]", str(text or "")))
+
+
+def _specificity_signal_count(text: str) -> int:
+    lower = str(text or "").lower()
+    term_hits = 0
+    for term in CONCRETE_SPORTS_TERMS:
+        if (
+            term in lower
+            if " " in term
+            else re.search(rf"\b{re.escape(term)}\b", lower)
+        ):
+            term_hits += 1
+    name_hits = len(re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", str(text or "")))
+    numeric_hits = len(re.findall(r"\b\d+(?:[-.]\d+)?\b", str(text or "")))
+    return term_hits + min(name_hits, 4) + min(numeric_hits, 3)
+
+
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
@@ -698,6 +738,9 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     if re.search(r"\b(i think|honestly|maybe|kind of|sort of)\b", lower):
         warnings.append("Hedging weakens the human read; make the take cleaner or funnier.")
 
+    if fmt in ("Normal Tweet", "Long Tweet", "Thread", "Article", "Punchy Tweet") and _specificity_signal_count(text) == 0:
+        issues.append("Needs a concrete sports/source detail so it does not read like generic strategy copy.")
+
     if risky and lane in ("Annoyed", "Fired-Up"):
         issues.append("Heated lane is targeting people instead of the decision/pattern: " + ", ".join(risky[:4]))
     elif len(risky) >= 2:
@@ -707,15 +750,28 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
 
     if lane == "Deadpan" and ("!" in text or "lol" in lower):
         issues.append("Deadpan should stay straight-faced: no exclamation marks or lol.")
+    if lane == "Deadpan" and _has_emoji(text):
+        issues.append("Deadpan should stay straight-faced: no emojis.")
+    if lane == "Witty Edge" and any(phrase in lower for phrase in ("hot take", "unpopular opinion", "hear me out")):
+        issues.append("Witty Edge should not lean on hot-take or stock engagement framing.")
+    if lane == "Fired-Up" and any(phrase in lower for phrase in ("we are so back", "we're so back", "let's go", "nobody wants us")):
+        issues.append("Fired-Up needs specific stakes, not generic rally-cry hype.")
+    if lane == "Critical":
+        if any(phrase in lower for phrase in ("fire everyone", "trash", "garbage", "clown show")):
+            issues.append("Critical should diagnose the failure without cheap rage-bait language.")
+        if text.rstrip().endswith("?"):
+            issues.append("Critical should end with a consequence line, not a direct question closer.")
     if lane == "Sarcastic":
         if any(phrase in lower for phrase in ("turns out", "bold of", "needs to call someone", "starting to feel like")):
             issues.append("Sarcastic lane cannot copy old example frames or familiar sarcastic templates.")
+        if lower.startswith(("sure", "cool", "oh great", "oh interesting")):
+            issues.append("Sarcastic lane should not use generic sarcastic openers.")
         if risky:
             issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risky[:4]))
     if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
         issues.append("Amused should be dry and observational, not meme-caption energy.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
-        warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
+        issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
         issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
     if lane == "Promo":
@@ -747,11 +803,65 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     }
 
 
+def _option_signature(text: str) -> tuple[str, str, str]:
+    clean = str(text or "").strip()
+    first_line = clean.splitlines()[0].strip().lower() if clean else ""
+    first_words = " ".join(re.findall(r"[a-z0-9']+", first_line)[:3])
+    line_skeleton = "-".join("x" for line in clean.splitlines() if line.strip())
+    lower = clean.lower()
+    frame = ""
+    for phrase in GENERIC_OPTION_FRAMES:
+        if phrase in lower:
+            frame = phrase
+            break
+    return first_words, line_skeleton, frame
+
+
+def _option_set_findings(data: dict[str, Any]) -> dict[str, list[str]]:
+    options = {
+        option_key: str(data.get(option_key) or "").strip()
+        for option_key in ("option1", "option2", "option3")
+        if str(data.get(option_key) or "").strip()
+    }
+    findings = {key: [] for key in options}
+    if len(options) < 2:
+        return findings
+
+    signatures = {key: _option_signature(text) for key, text in options.items()}
+    first_word_counts: dict[str, int] = {}
+    skeleton_counts: dict[str, int] = {}
+    frame_counts: dict[str, int] = {}
+    for first_words, skeleton, frame in signatures.values():
+        if first_words:
+            first_word_counts[first_words] = first_word_counts.get(first_words, 0) + 1
+        if skeleton:
+            skeleton_counts[skeleton] = skeleton_counts.get(skeleton, 0) + 1
+        if frame:
+            frame_counts[frame] = frame_counts.get(frame, 0) + 1
+
+    for key, (first_words, skeleton, frame) in signatures.items():
+        if first_words and first_word_counts.get(first_words, 0) >= 2:
+            findings[key].append("Generated options repeat the same opener; each option needs a distinct first move.")
+        if skeleton and skeleton_counts.get(skeleton, 0) == len(options) and len(options) >= 3:
+            findings[key].append("Generated options repeat the same line-break skeleton; vary the structure across options.")
+        if frame and frame_counts.get(frame, 0) >= 2:
+            findings[key].append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")
+    return findings
+
+
 def validate_generation_options(data: dict[str, Any], fmt: str, lane: str) -> dict[str, dict[str, Any]]:
     reports: dict[str, dict[str, Any]] = {}
+    option_set_findings = _option_set_findings(data)
     for option_key in ("option1", "option2", "option3"):
         if data.get(option_key):
-            reports[option_key] = draft_quality_report(str(data[option_key]), fmt, lane)
+            report = draft_quality_report(str(data[option_key]), fmt, lane)
+            set_issues = option_set_findings.get(option_key, [])
+            if set_issues:
+                report = dict(report)
+                report["issues"] = list(dict.fromkeys(list(report.get("issues", []) or []) + set_issues))
+                report["ok"] = False
+                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 25))
+            reports[option_key] = report
     return reports
 
 
@@ -979,6 +1089,42 @@ def _char_band(values: list[int]) -> tuple[int, int]:
     return ordered[lo_idx], ordered[hi_idx]
 
 
+def _topic_diversity(items: list[dict[str, Any]]) -> int:
+    topics: set[str] = set()
+    for item in items:
+        cohort = item.get("cohort", {}) if isinstance(item, dict) else {}
+        for topic in cohort.get("topics", []) or []:
+            clean = str(topic or "").strip().lower()
+            if clean:
+                topics.add(clean)
+    return len(topics)
+
+
+def _topic_list(items: list[dict[str, Any]]) -> list[str]:
+    topics: set[str] = set()
+    for item in items:
+        cohort = item.get("cohort", {}) if isinstance(item, dict) else {}
+        for topic in cohort.get("topics", []) or []:
+            clean = str(topic or "").strip().lower()
+            if clean:
+                topics.add(clean)
+    return sorted(topics)
+
+
+def _first_words(text: str, count: int = 3) -> str:
+    clean = str(text or "").strip().lower()
+    return " ".join(re.findall(r"[a-z0-9']+", clean)[:count])
+
+
+def _dominant_first_words(items: list[dict[str, Any]], count: int = 3) -> tuple[str, int]:
+    values = [_first_words(item.get("text", ""), count) for item in items]
+    values = [value for value in values if value]
+    if not values:
+        return "", 0
+    winner = _most_common(values)
+    return winner, values.count(winner)
+
+
 def _keep_existing_proposal_status(new_prop: dict[str, Any], existing: list[dict[str, Any]]) -> dict[str, Any]:
     for prop in existing:
         if prop.get("id") == new_prop["id"]:
@@ -992,7 +1138,7 @@ def _keep_existing_proposal_status(new_prop: dict[str, Any], existing: list[dict
 
 def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool) -> dict[str, Any]:
     ranked = sorted(items, key=lambda s: s["scores"]["creator_evolution"], reverse=True)
-    edge_count = max(1, min(5, (len(ranked) + 3) // 4))
+    edge_count = max(2 if len(ranked) >= 3 else 1, min(5, (len(ranked) + 3) // 4))
     winners = ranked[:edge_count]
     losers = ranked[-edge_count:] if len(ranked) > edge_count else []
     winner_features = [_format_features(item["text"]) for item in winners]
@@ -1008,6 +1154,19 @@ def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool)
     avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in items]), 2)
     winner_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in winners]), 2)
     loser_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in losers]), 2)
+    score_delta = round(winner_avg_score - loser_avg_score, 2)
+    topic_diversity = _topic_diversity(items)
+    winner_topic_diversity = _topic_diversity(winners)
+    confidence_notes: list[str] = []
+    if not mature_only:
+        confidence_notes.append("provisional tweets only")
+    if len(items) < 3:
+        confidence_notes.append("needs at least 3 mature examples")
+    if topic_diversity < 2 or winner_topic_diversity < 2:
+        confidence_notes.append("needs winning evidence across at least 2 topic/team buckets")
+    if score_delta < 0.35:
+        confidence_notes.append("winner/loser score gap is too small")
+    confidence_active = mature_only and len(items) >= 3 and topic_diversity >= 2 and winner_topic_diversity >= 2 and score_delta >= 0.35
     traits = [
         f"{char_lo}-{char_hi} chars among current {fmt} winners" if char_lo and char_hi else "",
         f"median {sentence_median:g} sentence(s)" if sentence_median else "",
@@ -1030,6 +1189,12 @@ def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool)
         "avg_score": avg_score,
         "winner_avg_score": winner_avg_score,
         "loser_avg_score": loser_avg_score,
+        "score_delta": score_delta,
+        "topic_diversity": topic_diversity,
+        "winner_topic_diversity": winner_topic_diversity,
+        "winner_topics": _topic_list(winners),
+        "confidence_active": confidence_active,
+        "confidence_notes": confidence_notes,
         "learned_char_range": [char_lo, char_hi],
         "median_sentence_count": sentence_median,
         "median_line_breaks": line_break_median,
@@ -1066,13 +1231,15 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "status": "empty",
             "sample_size": 0,
+            "confidence_active": False,
+            "confidence_notes": ["no scored tweets available"],
             "traits": [],
             "avoid_traits": [],
             "winner_ids": [],
             "loser_ids": [],
         }
     ranked = sorted(pool, key=lambda s: s["scores"]["creator_evolution"], reverse=True)
-    edge_count = max(1, min(8, (len(ranked) + 3) // 4))
+    edge_count = max(2 if len(ranked) >= 8 else 1, min(8, (len(ranked) + 3) // 4))
     winners = ranked[:edge_count]
     losers = ranked[-edge_count:] if len(ranked) > edge_count else []
     winner_features = [_voice_features(item["text"]) for item in winners]
@@ -1121,11 +1288,38 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
             if len(weak_terms) >= 4:
                 break
         avoid_traits.append("weak recurring language: " + ", ".join(weak_terms))
+    winner_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in winners]), 2)
+    loser_avg_score = round(_avg([float(i["scores"]["creator_evolution"]) for i in losers]), 2)
+    score_delta = round(winner_avg_score - loser_avg_score, 2)
+    topic_diversity = _topic_diversity(pool)
+    winner_topic_diversity = _topic_diversity(winners)
+    dominant_opening, dominant_opening_count = _dominant_first_words(winners)
+    dominance_pct = round(dominant_opening_count / max(len(winners), 1) * 100)
+    confidence_notes: list[str] = []
+    if not mature:
+        confidence_notes.append("provisional tweets only")
+    if len(pool) < 8:
+        confidence_notes.append("needs at least 8 mature examples")
+    if topic_diversity < 2 or winner_topic_diversity < 2:
+        confidence_notes.append("needs winning evidence across at least 2 topic/team buckets")
+    if score_delta < 0.35:
+        confidence_notes.append("winner/loser score gap is too small")
+    if dominance_pct >= 70 and len(winners) >= 3:
+        confidence_notes.append(f"winner openers over-repeat '{dominant_opening}'")
+    confidence_active = bool(mature) and len(pool) >= 8 and topic_diversity >= 2 and winner_topic_diversity >= 2 and score_delta >= 0.35 and not (dominance_pct >= 70 and len(winners) >= 3)
     return {
         "status": "mature" if mature else "provisional",
         "sample_size": len(pool),
-        "winner_avg_score": round(_avg([float(i["scores"]["creator_evolution"]) for i in winners]), 2),
-        "loser_avg_score": round(_avg([float(i["scores"]["creator_evolution"]) for i in losers]), 2),
+        "winner_avg_score": winner_avg_score,
+        "loser_avg_score": loser_avg_score,
+        "score_delta": score_delta,
+        "topic_diversity": topic_diversity,
+        "winner_topic_diversity": winner_topic_diversity,
+        "winner_topics": _topic_list(winners),
+        "dominant_winner_opening": dominant_opening,
+        "dominant_winner_opening_pct": dominance_pct,
+        "confidence_active": confidence_active,
+        "confidence_notes": confidence_notes,
         "common_opening_style": opening,
         "common_target_frame": target,
         "common_ending": ending,
@@ -1217,28 +1411,32 @@ def propose_rules(scores: list[dict[str, Any]], existing: list[dict[str, Any]] |
 
     proposals: list[dict[str, Any]] = []
     formats = summary.get("format_summary", [])
+    format_profiles = summary.get("format_profiles", {}) or {}
     if formats:
         best = formats[0]
-        evidence = summary.get("winner_ids", [])[:4]
-        rule = f"Start Creator Evolution drafts in {best['format']} unless the user's requested format says otherwise."
-        proposals.append({
-            "id": _proposal_id(rule, evidence),
-            "status": "pending",
-            "created_at": iso_now(now),
-            "rule": rule,
-            "reason": f"{best['format']} is currently the strongest mature cohort by normalized score.",
-            "evidence_tweet_ids": evidence,
-            "sample_size": best["count"],
-            "before_after": {
-                "before": "Default to old Creator Studio structure regardless of current performance.",
-                "after": f"Open with {best['format']} pacing when no explicit format is chosen.",
-            },
-        })
+        best_profile = format_profiles.get(best.get("format", "")) if isinstance(format_profiles, dict) else None
+        if isinstance(best_profile, dict) and best_profile.get("confidence_active") is True:
+            evidence = summary.get("winner_ids", [])[:4]
+            rule = f"Start Creator Evolution drafts in {best['format']} unless the user's requested format says otherwise."
+            proposals.append({
+                "id": _proposal_id(rule, evidence),
+                "status": "pending",
+                "created_at": iso_now(now),
+                "rule": rule,
+                "reason": f"{best['format']} is currently the strongest mature cohort by normalized score with confident/diverse evidence.",
+                "evidence_tweet_ids": evidence,
+                "sample_size": best["count"],
+                "before_after": {
+                    "before": "Default to old Creator Studio structure regardless of current performance.",
+                    "after": f"Open with {best['format']} pacing when no explicit format is chosen.",
+                },
+            })
 
-    format_profiles = summary.get("format_profiles", {}) or {}
     for fmt, profile in format_profiles.items():
         sample_size = int(profile.get("sample_size", 0) or 0)
         if sample_size < 3:
+            continue
+        if profile.get("confidence_active") is not True:
             continue
         char_range = profile.get("learned_char_range", [0, 0])
         try:
@@ -1345,7 +1543,7 @@ def propose_rules(scores: list[dict[str, Any]], existing: list[dict[str, Any]] |
 
     voice_profile = summary.get("voice_profile", {}) or {}
     voice_traits = [str(t) for t in voice_profile.get("traits", []) if str(t).strip()]
-    if int(voice_profile.get("sample_size", 0) or 0) >= 8 and voice_traits:
+    if int(voice_profile.get("sample_size", 0) or 0) >= 8 and voice_traits and voice_profile.get("confidence_active") is True:
         evidence = list(voice_profile.get("winner_ids", []) or [])[:4]
         learned_summary = "; ".join(voice_traits[:4])
         rule = f"For Creator Evolution voice, follow the learned winning voice profile: {learned_summary}."
@@ -1647,6 +1845,8 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
         return ""
     if _safe_int(profile.get("sample_size", 0)) < 3:
         return ""
+    if profile.get("confidence_active") is not True:
+        return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     weak_traits = [str(t) for t in profile.get("weak_traits", []) if str(t).strip()]
     lines = [
@@ -1666,6 +1866,8 @@ def voice_learning_text(state: dict[str, Any] | None) -> str:
     if str(profile.get("status", "")).lower() != "mature":
         return ""
     if _safe_int(profile.get("sample_size", 0)) < 8:
+        return ""
+    if profile.get("confidence_active") is not True:
         return ""
     traits = [str(t) for t in profile.get("traits", []) if str(t).strip()]
     avoid_traits = [str(t) for t in profile.get("avoid_traits", []) if str(t).strip()]
@@ -1731,7 +1933,7 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {format_learning or "- No mature learned profile for this selected format yet. Use the static format behavior until enough real posts mature."}
-Mature metric-derived profiles are allowed input alongside approved rules. When a mature learned format profile exists, it overrides the preferred static target range while the hard validator bounds still apply.
+Mature metric-derived profiles are allowed input alongside approved rules as calibration only. When a confident learned format profile exists, use it to tune pacing inside the selected format while the static guardrails and hard validator bounds still apply.
 
 PERSONALITY LANE:
 {lane}
