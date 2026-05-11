@@ -29,6 +29,7 @@ EMOTION_LANES = (
     "Annoyed",
     "Fired-Up",
     "Skeptical",
+    "Critical",
     "Celebratory",
     "Deadpan",
     "Sarcastic",
@@ -64,6 +65,12 @@ LANE_RECIPES = {
         "do": "Expose the assumption underneath the popular take and make the reader sit with it.",
         "avoid": "Cynicism for its own sake, prediction cosplay, and generic contrarian framing.",
         "ending": "A quiet pressure point, not a dunk.",
+    },
+    "Critical": {
+        "target": "Clear diagnosis. Firm, specific, and accountability-minded without becoming rage bait.",
+        "do": "Name the decision, pattern, or process problem and explain the consequence in plain language.",
+        "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, and generic 'this is bad' framing.",
+        "ending": "A sharp consequence line that makes the diagnosis feel unavoidable.",
     },
     "Celebratory": {
         "target": "Happy without becoming generic hype. Specific joy beats generic excitement.",

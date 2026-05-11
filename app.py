@@ -91,6 +91,7 @@ CE_COMPAT_DEFAULTS = {
         "Annoyed",
         "Fired-Up",
         "Skeptical",
+        "Critical",
         "Celebratory",
         "Deadpan",
         "Sarcastic",

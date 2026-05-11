@@ -494,6 +494,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(skeptical["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
 
+    def test_critical_lane_is_distinct_from_skeptical(self):
+        self.assertIn("Critical", ce.EMOTION_LANES)
+        critical = ce.lane_recipe("Critical")
+        skeptical = ce.lane_recipe("Skeptical")
+
+        self.assertIn("diagnosis", critical["target"].lower())
+        self.assertIn("accountability", critical["target"].lower())
+        self.assertNotEqual(critical["target"], skeptical["target"])
+
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
             _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),
