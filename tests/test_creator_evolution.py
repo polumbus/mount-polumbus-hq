@@ -503,6 +503,61 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("accountability", critical["target"].lower())
         self.assertNotEqual(critical["target"], skeptical["target"])
 
+    def test_promo_lane_is_video_cliffhanger_mode(self):
+        self.assertIn("Promo", ce.EMOTION_LANES)
+        recipe = ce.lane_recipe("Promo")
+        prompt = ce.build_generation_prompt(
+            "Video title: Why the Avs goalie switch changes the whole series.",
+            "Normal Tweet",
+            "Promo",
+            ce.initial_state(),
+        )
+
+        self.assertIn("missing third act", recipe["target"])
+        self.assertIn("one unresolved tension", recipe["target"])
+        self.assertIn("No question bait", prompt)
+        self.assertIn("PROMO VOICE - VIDEO CLICK TENSION MODE", prompt)
+        self.assertIn("LEARNED FORMAT PROFILE", prompt)
+        self.assertIn("LEARNED VOICE PROFILE", prompt)
+
+    def test_promo_quality_gate_blocks_youtube_clickbait(self):
+        bad = "New video is live. You won't believe what I found. Watch until the end: https://youtu.be/test"
+        report = ce.draft_quality_report(bad, "Normal Tweet", "Promo")
+
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("clickbait" in issue.lower() for issue in report["issues"]))
+        self.assertTrue(any("attached distribution context" in issue for issue in report["issues"]))
+
+    def test_promo_quality_gate_blocks_generic_video_tease(self):
+        generic = (
+            "This video is about the Broncos offense and how things are changing for next season. "
+            "There is a lot to talk about and the most interesting part is what happens next..."
+        )
+        report = ce.draft_quality_report(generic, "Normal Tweet", "Promo")
+
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("specific sports tension" in issue for issue in report["issues"]))
+
+    def test_promo_specificity_does_not_match_substrings(self):
+        vague = (
+            "The online state of the Broncos conversation looks simple until the whole timeline "
+            "starts treating the same vague offseason mood like the answer everyone missed..."
+        )
+        report = ce.draft_quality_report(vague, "Normal Tweet", "Promo")
+
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("specific sports tension" in issue for issue in report["issues"]))
+
+    def test_promo_quality_gate_accepts_honest_video_tension(self):
+        good = (
+            "The Avs goalie switch looks like a simple matchup call until you isolate the one sequence "
+            "that forced the bench into it. The box score points one direction. The film points somewhere more uncomfortable..."
+        )
+        report = ce.draft_quality_report(good, "Normal Tweet", "Promo")
+
+        self.assertTrue(report["ok"], report)
+        self.assertFalse(any("cliffhanger" in warning.lower() for warning in report["warnings"]))
+
     def test_format_evolution_rule_updates_are_approval_gated(self):
         tweets = [
             _tweet(23, "The Broncos plan looks boring until you remember boring is usually how this league hides the thing it actually believes. The fun version is rarely the one front offices choose...", hours_ago=90, views=15000, likes=300, replies=85, reposts=44),

@@ -92,6 +92,7 @@ CE_COMPAT_DEFAULTS = {
         "Fired-Up",
         "Skeptical",
         "Critical",
+        "Promo",
         "Celebratory",
         "Deadpan",
         "Sarcastic",
@@ -8276,7 +8277,42 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
     clean = str(text or "").strip()
     lower = clean.lower()
+    tail = lower[-160:]
     char_count = len(clean)
+    promo_clickbait_terms = (
+        "you won't believe", "you wont believe", "watch until the end", "must watch", "watch now",
+        "new video is live", "new video", "new episode is live", "link below", "link in bio",
+        "smash", "full breakdown here", "full breakdown", "full video", "go check it out",
+        "like and subscribe", "subscribe", "comment below", "just dropped", "premiere",
+        "shocking", "crazy reveal", "this changes everything", "insane ending",
+        "will blow your mind", "click here",
+    )
+    promo_cliffhanger_markers = (
+        "...", "but", "until", "before", "right before", "the part nobody", "the part that changes",
+        "what happens next", "where it gets interesting", "that's where", "the problem is",
+        "the question is", "points somewhere else", "points somewhere more uncomfortable",
+        "where the whole argument flips", "where the video gets weird", "missing third act",
+    )
+    promo_specific_tension_terms = (
+        "decision", "stat", "film", "clip", "box score", "sequence", "forced", "switch",
+        "pressure", "contradiction", "assumption", "rotation", "bench", "protection",
+        "scheme", "matchup", "roster", "goalie", "quarterback", "line", "series",
+    )
+    promo_generic_frames = (
+        "this video is about", "there is a lot to talk about", "things are changing",
+        "what happens next", "a lot going on", "you need to see",
+    )
+    promo_clickbait_hits = [phrase for phrase in promo_clickbait_terms if phrase in lower]
+    promo_specific_hits = [
+        term
+        for term in promo_specific_tension_terms
+        if (
+            term in lower
+            if " " in term
+            else re.search(rf"\b{re.escape(term)}\b", lower)
+        )
+    ]
+    promo_has_specific_tension = len(promo_specific_hits) >= 2 and not any(frame in lower for frame in promo_generic_frames)
     if _ce_pulse_meta_language(clean):
         return {
             "ok": False,
@@ -8315,6 +8351,17 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                     local_warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
                 if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
                     local_issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
+                if lane == "Promo":
+                    if promo_clickbait_hits:
+                        local_issues.append("Promo cannot use cheap clickbait phrasing: " + ", ".join(promo_clickbait_hits[:3]))
+                    if "http://" in lower or "https://" in lower:
+                        local_issues.append("Promo should treat video links as attached distribution context, not naked prose.")
+                    if clean.rstrip().endswith("?"):
+                        local_issues.append("Promo should end with a declarative cliffhanger, not a direct question.")
+                    if not promo_has_specific_tension:
+                        local_issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
+                    if not any(marker in tail for marker in promo_cliffhanger_markers):
+                        local_warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
                 if local_issues or local_warnings:
                     report = dict(report)
                     existing_issues = list(report.get("issues", []) or [])
@@ -8385,6 +8432,17 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
         issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
+    if lane == "Promo":
+        if promo_clickbait_hits:
+            issues.append("Promo cannot use cheap clickbait phrasing: " + ", ".join(promo_clickbait_hits[:3]))
+        if "http://" in lower or "https://" in lower:
+            issues.append("Promo should treat video links as attached distribution context, not naked prose.")
+        if clean.rstrip().endswith("?"):
+            issues.append("Promo should end with a declarative cliffhanger, not a direct question.")
+        if not promo_has_specific_tension:
+            issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
+        if not any(marker in tail for marker in promo_cliffhanger_markers):
+            warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
 
     penalty = len(issues) * 25 + len(warnings) * 8
     return {

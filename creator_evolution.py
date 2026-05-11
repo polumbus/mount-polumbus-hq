@@ -30,6 +30,7 @@ EMOTION_LANES = (
     "Fired-Up",
     "Skeptical",
     "Critical",
+    "Promo",
     "Celebratory",
     "Deadpan",
     "Sarcastic",
@@ -71,6 +72,27 @@ LANE_RECIPES = {
         "do": "Name the decision, pattern, or process problem and explain the consequence in plain language.",
         "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, and generic 'this is bad' framing.",
         "ending": "A sharp consequence line that makes the diagnosis feel unavoidable.",
+    },
+    "Promo": {
+        "text": """PROMO VOICE - VIDEO CLICK TENSION MODE:
+PROMO VOICE RULES:
+- Sell the unresolved tension in the video, not the existence of the video.
+- Make the video feel like the missing third act, not an upload announcement.
+- Start from one specific sports contradiction, decision, stat, film tell, or fan assumption.
+- Tease the turn without revealing the payoff. The post should stop one beat before the answer.
+- Preserve Creator Evolution voice: funny, pointed, conversational, phone-written, and specific.
+- Use declarative open loops, not direct engagement questions.
+- No question bait.
+- No fake urgency, no "you won't believe," no "watch until the end," no "link in bio," no hashtags, no generic CTA.
+- If a link is supplied, treat it as attached distribution context. Do not beg for clicks or paste a naked URL unless explicitly requested.
+- Punchy: one compact tension beat, no setup, no question closer.
+- Normal: specific setup -> tension turn -> cliffhanger ending.
+- Long: short setup, stakes, contrast, then stop before the reveal.
+- Thread: each segment advances the tension; final segment points at the unresolved reveal without baiting replies.""",
+        "target": "A human sports take that makes the video feel like the missing third act. The post should create curiosity around one unresolved tension, not advertise the upload.",
+        "do": "Open with the exact pressure point from the video, name the contradiction or uncomfortable stake, tease the turn before the answer, and make the viewer feel the clip/video resolves what the post refuses to finish.",
+        "avoid": "Generic marketing, 'new video is up', 'watch now', 'link below', 'you won't believe', fake urgency, hashtags, naked URLs, recap summaries, thumbnail-copy language, creator-speak, and giving away the final reveal.",
+        "ending": "A declarative cliffhanger tied to the video subject. Stop one beat before the answer. No generic question closer.",
     },
     "Celebratory": {
         "target": "Happy without becoming generic hype. Specific joy beats generic excitement.",
@@ -484,6 +506,116 @@ def engagement_bait_hits(text: str) -> list[str]:
     return [phrase for phrase in ENGAGEMENT_BAIT_PHRASES if phrase in tail]
 
 
+PROMO_CLICKBAIT_PHRASES = (
+    "you won't believe",
+    "you wont believe",
+    "watch until the end",
+    "must watch",
+    "watch now",
+    "new video is live",
+    "new video",
+    "new episode is live",
+    "link below",
+    "link in bio",
+    "smash",
+    "full breakdown here",
+    "full breakdown",
+    "full video",
+    "go check it out",
+    "like and subscribe",
+    "subscribe",
+    "comment below",
+    "just dropped",
+    "premiere",
+    "shocking",
+    "crazy reveal",
+    "this changes everything",
+    "insane ending",
+    "will blow your mind",
+    "click here",
+)
+
+PROMO_CLIFFHANGER_MARKERS = (
+    "...",
+    "but",
+    "until",
+    "before",
+    "right before",
+    "the part nobody",
+    "the part that changes",
+    "what happens next",
+    "where it gets interesting",
+    "that's where",
+    "the problem is",
+    "the question is",
+    "points somewhere else",
+    "points somewhere more uncomfortable",
+    "where the whole argument flips",
+    "where the video gets weird",
+    "missing third act",
+)
+
+PROMO_SPECIFIC_TENSION_TERMS = (
+    "decision",
+    "stat",
+    "film",
+    "clip",
+    "box score",
+    "sequence",
+    "forced",
+    "switch",
+    "pressure",
+    "contradiction",
+    "assumption",
+    "rotation",
+    "bench",
+    "protection",
+    "scheme",
+    "matchup",
+    "roster",
+    "goalie",
+    "quarterback",
+    "line",
+    "series",
+)
+
+PROMO_GENERIC_FRAMES = (
+    "this video is about",
+    "there is a lot to talk about",
+    "things are changing",
+    "what happens next",
+    "a lot going on",
+    "you need to see",
+)
+
+
+def promo_clickbait_hits(text: str) -> list[str]:
+    lower = text.lower()
+    return [phrase for phrase in PROMO_CLICKBAIT_PHRASES if phrase in lower]
+
+
+def has_promo_cliffhanger(text: str) -> bool:
+    lower = text.lower().strip()
+    tail = lower[-160:]
+    return any(marker in tail for marker in PROMO_CLIFFHANGER_MARKERS)
+
+
+def has_promo_specific_tension(text: str) -> bool:
+    lower = text.lower()
+    if any(frame in lower for frame in PROMO_GENERIC_FRAMES):
+        return False
+    hits = [
+        term
+        for term in PROMO_SPECIFIC_TENSION_TERMS
+        if (
+            term in lower
+            if " " in term
+            else re.search(rf"\b{re.escape(term)}\b", lower)
+        )
+    ]
+    return len(hits) >= 2
+
+
 def cadence_hits(text: str) -> list[str]:
     lower = text.lower()
     hits = [phrase for phrase in LINKEDIN_CADENCE_PHRASES if phrase in lower]
@@ -579,6 +711,18 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         warnings.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
         issues.append("Skeptical should feel like doubt, not certainty or prediction cosplay.")
+    if lane == "Promo":
+        clickbait = promo_clickbait_hits(text)
+        if clickbait:
+            issues.append("Promo cannot use cheap clickbait phrasing: " + ", ".join(clickbait[:3]))
+        if "http://" in lower or "https://" in lower:
+            issues.append("Promo should treat video links as attached distribution context, not naked prose.")
+        if text.rstrip().endswith("?"):
+            issues.append("Promo should end with a declarative cliffhanger, not a direct question.")
+        if not has_promo_specific_tension(text):
+            issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
+        if not has_promo_cliffhanger(text):
+            warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
 
     penalty = len(issues) * 25 + len(warnings) * 8
     score = max(0, min(100, 100 - penalty))
@@ -1600,6 +1744,7 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - If the selected format is Normal Tweet, do not use the old three-stacked-line template. Prefer one compact paragraph or one intentional break only.
+- If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
