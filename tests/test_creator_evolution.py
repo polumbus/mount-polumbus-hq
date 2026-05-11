@@ -1722,6 +1722,8 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertIn("Vary the ending type", app_text)
         self.assertIn("Ellipsis is a strong Tyler ending, but it must not be the only ending", app_text)
+        self.assertIn("The final line must create response pressure", app_text)
+        self.assertIn("alluded question without a question mark", app_text)
         self.assertIn("Every format has flexibility inside its shape", app_text)
         self.assertIn("same punchline rhythm every time", app_text)
         self.assertIn("reusable article skeleton", app_text)

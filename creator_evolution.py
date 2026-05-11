@@ -133,7 +133,7 @@ FORMAT_RECIPES = {
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
         "structure": "Preferred shape is two or three natural sentences, then one intentional line break, then one final statement that invites engagement without asking a direct question. Strong one-paragraph versions are allowed when they sound more natural.",
-        "must": "Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. Ellipsis endings are allowed and often good, but rotate with period-ending consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.",
+        "must": "Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. The final line must create response pressure through a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait. Ellipsis endings are allowed and often good, but rotate with hard-period tension lines.",
         "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or ending every option with ellipsis.",
     },
     "Long Tweet": {
@@ -1994,7 +1994,8 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - If the selected format is Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
-- Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period consequence lines, contrast lines, prediction/tension lines, and understated walk-offs.
+- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
+- Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
 - Sound like a real person posting from their phone, not a content strategy assistant.
