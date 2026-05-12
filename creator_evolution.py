@@ -281,6 +281,7 @@ COMEDIC_FAKE_MARKERS = (
     "feels like front office for",
     "very soothing stuff",
     "cool",
+    "very calm behavior",
 )
 
 COMEDIC_RANDOM_ANALOGY_TERMS = (
@@ -340,6 +341,8 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "decoration",
     "bubble wrap",
     "wellness check",
+    "wifi password",
+    "wi-fi password",
     "allergic",
     "family heirloom",
     "family property",
@@ -418,6 +421,10 @@ COMEDIC_ANALYSIS_DRIFT = (
     "said a lot without saying anything",
     "where the honesty lives",
     "honesty lives",
+    "tells the truth",
+    "actual meaning",
+    "the giveaway",
+    "nothing was really",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -456,6 +463,12 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "bench math stays",
     "rotation math is doing",
     "doing cardio",
+    "musical chairs",
+    "second unit keeps making",
+    "timeout checks in",
+    "hearing footsteps",
+    "team hearing footsteps",
+    "crease is doing",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -2304,7 +2317,10 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- A good Comedic tweet has a visible laugh turn: calm claim -> behavior that gives it away, fan coping -> obvious sports reality, or public plan -> embarrassing game consequence.\n"
         "- The punchline should be a sentence a normal fan could say out loud, not a poetic object line. Bad: 'The transaction wire talks.' Bad: 'QB3 is where the honesty lives.' Bad: 'Bench math stays employed.'\n"
         "- Use human bluntness over clever phrasing. If the funniest version is simply 'that is not depth, that is insurance,' use that instead of a metaphor.\n"
-        "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
+        "- Do not add a detached short tagline after the tweet. The punchline belongs inside the real sentence, not as a slogan under it.\n"
+        "- Short human comparisons are allowed only when they make the denial funnier immediately. They must be one quick turn, not a whole analogy. No recycled office, haunted, legal, bureaucracy, dating-app, or random-household bits.\n"
+        "- Prefer one compact paragraph for Comedic Normal unless the final line is genuinely funnier than the paragraph version.\n"
+        "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, or object-personality crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
         "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"
@@ -2327,9 +2343,9 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
         "- Mechanic targets only, not reusable lines: pressure reveal, sports-logic flip, fan-coping roast, or absurdly plain sports consequence.\n"
         "\nCOMEDIC CALIBRATION BAR, DO NOT COPY THESE WORDS:\n"
-        "- Broncos injury trust mechanism: A team that truly trusts QB1 does not treat QB3 like emotional support.\n"
-        "- Nuggets rotation mechanism: If the non-Jokic minutes keep turning leads into panic, that is not a bench issue anymore, that is the whole offseason wearing a fake mustache.\n"
-        "- Avs goalie mechanism: Changing goalies after one loss is how a crease turns into a group project five minutes before puck drop.\n"
+        "- Broncos injury trust mechanism: If another quarterback walks in after all the calm updates, that is not depth, that is ankle insurance.\n"
+        "- Nuggets rotation mechanism: If Jokic sits and everyone immediately starts looking for an adult, the offseason already has its first suspect.\n"
+        "- Avs goalie mechanism: Switching goalies after one loss is not a plan holding steady, it is the hot hand getting put on probation.\n"
         "- The examples above show pressure, turn, and laugh density only. Do not reuse their images, objects, or exact phrasing.\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
@@ -2338,6 +2354,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
         "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
         "- The final beat should usually be 8 words or fewer. If it needs more room, it probably is explaining the joke instead of landing it.\n"
+        "- Do not use a separate short final-line slogan unless that line is the clearest joke in the whole draft. If it reads like a caption, fold the punchline back into the sentence above.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
     final_line_rule = (
