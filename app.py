@@ -8674,6 +8674,7 @@ Previous rejected JSON:
 {json.dumps(data, ensure_ascii=False)[:3500]}
 
 Rewrite all 3 options so each one passes the selected format and lane quality gates.
+If the selected lane is Comedic and format is Normal Tweet, at most one option may use a blank-line final beat. Put the joke inside the paragraph for the other options.
 Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """
     raw = _call_creator_evolution_ai(
@@ -10206,7 +10207,7 @@ def _creator_evolution_system_prompt(lane: str) -> str:
     if lane == "Comedic":
         normal_tweet_rule = (
             "- For Normal Tweet in Comedic, prefer one compact paragraph or two tight sentences. "
-            "Do not force a separate final-line response-pressure beat."
+            "Do not force a separate final-line response-pressure beat. Across three options, at most one may use a blank-line final beat."
         )
         final_line_rule = (
             "- The final sentence must be the joke or funniest implication, not generic response pressure, "

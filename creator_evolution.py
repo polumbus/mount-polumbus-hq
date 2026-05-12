@@ -520,7 +520,6 @@ COMEDIC_OBJECT_AGENCY_SUBJECTS = (
     "update",
     "backup plan",
     "plan",
-    "trust",
     "speech",
     "hot hand",
     "crease",
@@ -1235,7 +1234,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             specificity_count = _specificity_signal_count(text)
             if len(profanity_terms) > 1 or specificity_count <= 3:
                 issues.append("Comedic profanity is replacing the joke instead of seasoning a sports-specific punchline: " + ", ".join(profanity_terms[:4]))
-        if fmt == "Normal Tweet" and final_words > 8:
+        if fmt == "Normal Tweet" and final_words > 12:
             issues.append("Comedic final beat should be a short punchline, not an explained closer.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
@@ -2427,6 +2426,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Do not add a detached short tagline after the tweet. The punchline belongs inside the real sentence, not as a slogan under it.\n"
         "- Short human comparisons are allowed only when they make the denial funnier immediately. They must be one quick turn, not a whole analogy. No recycled office, haunted, legal, bureaucracy, dating-app, or random-household bits.\n"
         "- Prefer one compact paragraph for Comedic Normal unless the final line is genuinely funnier than the paragraph version.\n"
+        "- Across the 3 Normal Tweet options, at most one may use a blank-line final beat. The other options should land the joke inside a compact paragraph so they do not all look like the same AI template.\n"
         "- If an option sounds like a normal Witty Edge tweet, rewrite it with a more human comic turn before returning JSON.\n"
         "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, or object-personality crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
@@ -2464,7 +2464,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Because the selected lane is Comedic, ignore any generic instruction below that asks for response pressure, debate bait, consequence framing, or a dramatic analytical ending.\n"
         "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
         "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
-        "- The final beat should usually be 8 words or fewer. If it needs more room, it probably is explaining the joke instead of landing it.\n"
+        "- The final beat should usually be 12 words or fewer. If it needs more room, it probably is explaining the joke instead of landing it.\n"
         "- Do not use a separate short final-line slogan unless that line is the clearest joke in the whole draft. If it reads like a caption, fold the punchline back into the sentence above.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
