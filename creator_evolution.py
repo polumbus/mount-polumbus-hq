@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "Joke-first commentary that finds the actual funny part of the topic. Funny, sharp, slightly unfiltered, but not angry, cruel, or random.",
-        "do": "Name the real absurd detail, then use one joke engine: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut. The joke must come from the topic reality.",
-        "avoid": "Witty analysis, consequence lectures, debate bait, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, and safe ChatGPT cleverness.",
-        "ending": "A short light punchline or walk-off. Funny first, not mad. The final beat is the laugh, not a summary.",
+        "target": "Real sports comedy with a punchline. The post should make the reader laugh because the actual situation is absurd, not because the wording sounds clever.",
+        "do": "Name the exact sports absurdity, keep the setup short, then use one joke engine: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut. The joke must come from the topic reality.",
+        "avoid": "Witty analysis, consequence lectures, debate bait, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, fake-serious filler, and safe ChatGPT cleverness.",
+        "ending": "A short punchline or walk-off that changes the angle. Funny first, not mad. No summary, no lesson, no explained closer.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -302,13 +302,20 @@ COMEDIC_ANALYSIS_DRIFT = (
     "the real tell is",
     "truth shows up",
     "public words are cheap",
+    "talk is cheap",
     "backup reps tell the truth",
     "depth chart tells the truth",
     "depth chart truth hits different",
     "that tells you everything",
     "this is where it gets interesting",
+    "where it gets interesting",
     "the conversation gets real",
+    "conversation gets uncomfortable",
     "the plan gets exposed",
+    "press conference with vibes",
+    "real press conference",
+    "this is where it gets real",
+    "that is where this gets real",
 )
 
 
@@ -886,8 +893,22 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Sarcastic lane should not use generic sarcastic openers.")
         if risky:
             issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risky[:4]))
-    if lane == "Comedic" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
-        issues.append("Comedic should be funny through the sports read, not meme-caption energy.")
+    if lane == "Comedic":
+        fake_markers = _phrase_hits(lower, COMEDIC_FAKE_MARKERS)
+        random_terms = _phrase_hits(lower, COMEDIC_RANDOM_ANALOGY_TERMS)
+        angry_terms = _phrase_hits(lower, COMEDIC_ANGRY_CLOSERS)
+        analysis_terms = _phrase_hits(lower, COMEDIC_ANALYSIS_DRIFT)
+        final_words = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
+        if fake_markers or _has_emoji(text):
+            issues.append("Comedic should be funny through the topic, not meme-caption energy: " + ", ".join(fake_markers[:4] or ["emoji"]))
+        if random_terms:
+            issues.append("Comedic joke drifted into random analogy instead of topic reality: " + ", ".join(random_terms[:4]))
+        if angry_terms:
+            issues.append("Comedic should be funny first, not angry or accusatory: " + ", ".join(angry_terms[:4]))
+        if analysis_terms:
+            issues.append("Comedic should not collapse into Witty Edge analysis: " + ", ".join(analysis_terms[:4]))
+        if fmt == "Normal Tweet" and len(non_empty_lines) > 1 and final_words > 12:
+            issues.append("Comedic final beat should be a short punchline, not an explained closer.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
@@ -936,7 +957,7 @@ def _option_signature(text: str) -> tuple[str, str, str]:
     return first_words, line_skeleton, frame
 
 
-def _option_set_findings(data: dict[str, Any]) -> dict[str, list[str]]:
+def _option_set_findings(data: dict[str, Any], fmt: str | None = None) -> dict[str, list[str]]:
     options = {
         option_key: str(data.get(option_key) or "").strip()
         for option_key in ("option1", "option2", "option3")
@@ -961,7 +982,14 @@ def _option_set_findings(data: dict[str, Any]) -> dict[str, list[str]]:
     for key, (first_words, skeleton, frame) in signatures.items():
         if first_words and first_word_counts.get(first_words, 0) >= 2:
             findings[key].append("Generated options repeat the same opener; each option needs a distinct first move.")
-        if skeleton and skeleton_counts.get(skeleton, 0) == len(options) and len(options) >= 3:
+        skeleton_line_count = len(skeleton.split("-")) if skeleton else 0
+        if (
+            fmt == "Normal Tweet"
+            and skeleton
+            and skeleton_line_count >= 2
+            and skeleton_counts.get(skeleton, 0) == len(options)
+            and len(options) >= 3
+        ):
             findings[key].append("Generated options repeat the same line-break skeleton; vary the structure across options.")
         if frame and frame_counts.get(frame, 0) >= 2:
             findings[key].append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")
@@ -978,7 +1006,7 @@ def _option_set_findings(data: dict[str, Any]) -> dict[str, list[str]]:
 
 def validate_generation_options(data: dict[str, Any], fmt: str, lane: str) -> dict[str, dict[str, Any]]:
     reports: dict[str, dict[str, Any]] = {}
-    option_set_findings = _option_set_findings(data)
+    option_set_findings = _option_set_findings(data, fmt)
     for option_key in ("option1", "option2", "option3"):
         if data.get(option_key):
             report = draft_quality_report(str(data[option_key]), fmt, lane)
@@ -2050,15 +2078,23 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     comedic_contract = (
         "\nCOMEDIC LANE HARD RULES:\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
-        "- Funny first. Not clever analysis, not debate pressure, not angry indictment.\n"
-        "- Before writing, privately map: actual topic absurdity -> joke engine -> punchline. If that map is weak, rewrite.\n"
-        "- Every draft needs an actual joke mechanic: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut.\n"
+        "- Funny first. Not clever analysis, not debate pressure, not angry indictment, not a consequence lecture.\n"
+        "- Before writing, privately map: actual topic absurdity -> joke target -> setup -> turn -> punchline. If that map is weak, rewrite.\n"
+        "- Every draft needs an actual joke mechanic: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, fake-serious understatement, or playful undercut.\n"
         "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons, no decorative metaphor extensions.\n"
+        "- Good comedy here is a sports truth with a hard turn. Setup short, punchline shorter.\n"
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
-        "- Good Comedic examples of the target shape: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.'\n"
+        "- Reject fake-deep lines like 'press conference with vibes,' 'that is the real press conference,' 'talk is cheap,' or 'the conversation gets uncomfortable.' Those are not jokes.\n"
+        "- Target shape examples: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.' / 'That bench shift came with paperwork.'\n"
+    ) if lane == "Comedic" else ""
+    comedic_voice_contract = (
+        "\nCOMEDIC OVERRIDE:\n"
+        "- Because the selected lane is Comedic, ignore any generic instruction below that asks for response pressure, debate bait, consequence framing, or a dramatic analytical ending.\n"
+        "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
+        "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
     return f"""{opening}
 
@@ -2093,12 +2129,14 @@ LEARNED VOICE PROFILE:
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 - Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
+- Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - If the selected format is Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
 - The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
 - Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
+- If the selected lane is Comedic, default personality becomes joke-first sports comedy, not Witty Edge.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
 - Prefer declarative open loops over literal question bait.
@@ -2116,9 +2154,11 @@ QUALITY GATE:
 - Reject generic engagement bait endings like "thoughts?" or "what do you think?"
 - Heated lanes can attack a decision, excuse, pattern, or media narrative; they cannot harass a person.
 - If the lane is Deadpan, underplay it. No exclamation points, no winking, no explanation.
+- If the lane is Comedic, reject any draft that is mainly Witty Edge analysis with a cute ending. It needs a visible joke mechanic and a real punchline.
 
 HIDDEN SELF-CHECK BEFORE FINAL JSON:
 Would this sound normal if posted directly from a phone by a funny, witty, sports-obsessed human? If not, rewrite it before returning.
+{comedic_voice_contract}
 
 Return ONLY JSON:
 {{

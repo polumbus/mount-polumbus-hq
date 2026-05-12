@@ -8161,6 +8161,7 @@ SOURCE MATERIAL:
 
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
 Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
+Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
 For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
 The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
 Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
@@ -8422,8 +8423,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                     local_risk_hits = [term for term in local_risk_terms if term in lower]
                     if local_risk_hits:
                         local_issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(local_risk_hits[:4]))
-                if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
-                    local_issues.append("Amused should be dry and observational, not meme-caption energy.")
+                if lane == "Comedic" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving", "so unserious", "very normal")):
+                    local_issues.append("Comedic should be funny through the topic, not meme-caption energy.")
                 if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
                     local_issues.append("Celebratory works better when the joy is specific instead of generic hype.")
                 if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
@@ -8524,8 +8525,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
             issues.append("Sarcastic lane should not use generic sarcastic openers.")
         if risk_hits:
             issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risk_hits[:4]))
-    if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
-        issues.append("Amused should be dry and observational, not meme-caption energy.")
+    if lane == "Comedic" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving", "so unserious", "very normal")):
+        issues.append("Comedic should be funny through the topic, not meme-caption energy.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
@@ -8610,7 +8611,14 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
             set_issues: list[str] = []
             if opener and opener_counts.get(opener, 0) >= 2:
                 set_issues.append("Generated options repeat the same opener; each option needs a distinct first move.")
-            if skeleton and skeleton_counts.get(skeleton, 0) == len(option_texts) and len(option_texts) >= 3:
+            skeleton_line_count = len(skeleton.split("-")) if skeleton else 0
+            if (
+                fmt == "Normal Tweet"
+                and skeleton
+                and skeleton_line_count >= 2
+                and skeleton_counts.get(skeleton, 0) == len(option_texts)
+                and len(option_texts) >= 3
+            ):
                 set_issues.append("Generated options repeat the same line-break skeleton; vary the structure across options.")
             if frame and frame_counts.get(frame, 0) >= 2:
                 set_issues.append(f"Generated options repeat generic frame '{frame}'; replace it with source-specific wording.")

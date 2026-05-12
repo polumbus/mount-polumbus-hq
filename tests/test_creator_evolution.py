@@ -502,6 +502,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         random_comedy = ce.draft_quality_report("The Nuggets bench turned into a group project with HR paperwork.", "Punchy Tweet", "Comedic")
         angry_comedy = ce.draft_quality_report("The public line was cute. That is where the bullshit ends.", "Punchy Tweet", "Comedic")
         analysis_comedy = ce.draft_quality_report("Bo Nix looks fine now. The real tell is when backup reps tell the truth.", "Punchy Tweet", "Comedic")
+        fake_deep_comedy = ce.draft_quality_report("The Nuggets keep saying everything is on the table. Otherwise this is just a press conference with vibes.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -509,10 +510,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(random_comedy["ok"])
         self.assertFalse(angry_comedy["ok"])
         self.assertFalse(analysis_comedy["ok"])
+        self.assertFalse(fake_deep_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
         self.assertTrue(any("witty edge analysis" in issue.lower() for issue in analysis_comedy["issues"]))
+        self.assertTrue(any("witty edge analysis" in issue.lower() for issue in fake_deep_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -522,6 +525,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("COMEDIC LANE HARD RULES", prompt)
         self.assertIn("actual joke mechanic", prompt)
         self.assertIn("topic reality", prompt)
+        self.assertIn("COMEDIC OVERRIDE", prompt)
+        self.assertIn("press conference with vibes", prompt)
 
     def test_critical_lane_is_distinct_from_skeptical(self):
         self.assertIn("Critical", ce.EMOTION_LANES)
@@ -1666,6 +1671,27 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(report)
         self.assertTrue(all(not item["ok"] for item in report.values()))
         self.assertTrue(any("same opener" in " ".join(item["issues"]) for item in report.values()))
+
+    def test_option_set_validation_blocks_repeated_normal_tweet_line_skeleton(self):
+        data = {
+            "option1": "Bo Nix being ready for camp is the easy headline. The harder Broncos tell is how much protection they still build into the quarterback room.\n\nThe roster math will say it first.",
+            "option2": "The Nuggets bench problem keeps getting treated like weather. But the rotation choices are starting to make that excuse look way too comfortable.\n\nThe minutes usually tell on the plan.",
+            "option3": "The Avs goalie answer can sound settled in a press conference. One rough period is usually enough to show whether the room believes it.\n\nThat is where calm gets expensive.",
+        }
+        report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
+
+        self.assertTrue(all(not item["ok"] for item in report.values()))
+        self.assertTrue(any("line-break skeleton" in " ".join(item["issues"]) for item in report.values()))
+
+    def test_option_set_validation_allows_single_line_punchy_options(self):
+        data = {
+            "option1": "Broncos camp keeps making the quiet roster answer feel loud.",
+            "option2": "Bo Nix being ready is not the same as the team acting relaxed.",
+            "option3": "That quarterback room is about to say the part nobody will.",
+        }
+        report = ce.validate_generation_options(data, "Punchy Tweet", "Witty Edge")
+
+        self.assertTrue(all(item["ok"] for item in report.values()))
 
     def test_option_set_validation_keeps_ellipsis_from_being_the_only_ending(self):
         data = {
