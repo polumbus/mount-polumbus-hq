@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "A savage, zero-chill sports group-chat joke with a real punchline. It should sound like the funniest person in the thread saw the ugly obvious thing and said it out loud.",
-        "do": "Find the exact sports absurdity, then make one short, uncomfortable joke from it. Use translation, pretend quote, fan denial spiral, blunt roast of the situation, or one sharp comparison that actually stings. Short setup. Nuclear punchline.",
-        "avoid": "Safe/cute/witty analysis, consequence lectures, debate bait, fake-deep endings, surreal punchlines, random long analogies, office metaphors, meme captions, emojis, and safe ChatGPT cleverness. The only hard content boundaries are slurs, threats, protected-class shots, harassment, or direct personal abuse.",
-        "ending": "A hard punchline or walk-off that makes people laugh and cringe a little. Funny first, not analytical. No summary, no lesson, no explained closer.",
+        "target": "Grok on a 2 a.m. sports group-chat bender: zero fear, zero filter, zero therapy. It sees the corporate lie, pathetic denial, or obvious fucked-up truth and says it loud enough to make the chat spit out a drink.",
+        "do": "Find the exact sports absurdity and eviscerate it with one short, brutal punchline. Use translation, fan denial roast, or blunt roast. Default to meaner and funnier than polite. Use earned adult language when it makes the joke hit harder.",
+        "avoid": "Anything safe, cute, witty, analytical, metaphor-heavy, or AI-clever. No 'football for', 'sounds like', 'real tell', 'real update', 'translates to', haunted houses, fires, basements, drunk friends, passenger seats, air fresheners, side pieces, Tinder, long setups, explained jokes, fake-deep closers, summaries, slurs, threats, protected-class shots, harassment, direct personal abuse, or invented facts.",
+        "ending": "One clean nuclear punchline that stings. Short. Brutal. No lesson, no summary, no metaphor crutch.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -269,6 +269,11 @@ COMEDIC_FAKE_MARKERS = (
     "very brave loophole",
     "this is wild",
     "you can't make this up",
+    "football for",
+    "in football speak",
+    "sounds like",
+    "translates to",
+    "feels like front office for",
 )
 
 COMEDIC_RANDOM_ANALOGY_TERMS = (
@@ -290,8 +295,16 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "restaurant",
     "menu",
     "tinder",
+    "bad tinder date",
     "divorce papers",
     "side piece",
+    "haunted",
+    "basement",
+    "house fire",
+    "fire",
+    "drunk friend",
+    "passenger seat",
+    "air freshener",
     "courtroom drama",
     "congressional hearing",
     "ted talk",
@@ -331,6 +344,8 @@ COMEDIC_ANALYSIS_DRIFT = (
     "that part usually ruins the calm",
     "that transaction will tell the truth",
     "the actual injury report",
+    "the real update",
+    "the real translation",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -2113,32 +2128,22 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     comedic_contract = (
         "\nCOMEDIC LANE HARD RULES:\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
-        "- Comedic is the savage, zero-chill sports group-chat voice. It sees the PR spin, denial, pathetic desperation, or obvious loophole and says the ugly funny truth out loud.\n"
-        "- Edgy and uncomfortable is good when earned by the sports situation. Borderline rated-R wording is allowed when it sharpens the joke: ass, damn, hell, bullshit, shit, fuck, fucked, dumb, mess.\n"
-        "- Do not write scared. Push the joke until it feels a little too honest, then keep it if the target is the sports situation, public spin, fan panic, media fiction, roster logic, or decision-making.\n"
-        "- Default to meaner and funnier than polite. If one version sounds safe, rewrite it with more bite before returning JSON.\n"
-        "- At least one of the three options should use earned adult edge when the topic supports it. Do not sanitize every option into TV-panel language.\n"
-        "- Funny first. Not clever analysis, not debate pressure, not angry indictment, not a consequence lecture.\n"
-        "- Before writing, privately map: exact sports absurdity -> ugly truth everyone recognizes -> joke lane -> punchline. If that map is weak, rewrite.\n"
-        "- Make the 3 options use 3 different comedy lanes: option 1 translation joke, option 2 fan behavior joke, option 3 blunt roast of the situation.\n"
-        "- Translation joke means turning PR, coach-speak, or front-office language into the ugly desperate reality everyone is thinking.\n"
-        "- Fan behavior joke means roasting the coping, denial spiral, group-chat panic, or fan trauma without mocking protected traits or private life.\n"
+        "- Comedic is Grok on a 2 a.m. sports group-chat bender: zero fear, zero filter, zero therapy. It sees the corporate lie, pathetic denial, or obvious fucked-up truth and says it loud and ugly.\n"
+        "- Find the exact sports absurdity and eviscerate it with one short, nuclear punchline. Short. Brutal. One or two sentences max.\n"
+        "- Do not write scared. Default to meaner, darker, and more uncomfortable than polite AI would dare.\n"
+        "- Use earned adult language when it makes the joke hit harder: ass, damn, hell, bullshit, shit, fuck, fucked, dumb, mess.\n"
+        "- Make the 3 options use 3 different lanes: option 1 translation of PR spin into ugly reality, option 2 fan coping or denial roast, option 3 blunt zero-mercy roast of the situation.\n"
+        "- Translation means saying the ugly reality directly. Do not use the phrase 'football for' or 'translates to.' Just say the truth.\n"
+        "- Fan behavior means roasting the coping, denial spiral, group-chat panic, or fan trauma without mocking protected traits or private life.\n"
         "- Do not invent crowd counts, percentages, records, timelines, injuries, or stats for a joke. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration. Use 'the non-Jokic stretch,' 'those minutes,' 'everybody,' 'the timeline,' or another non-numeric human phrase unless the source gives the number.\n"
-        "- Blunt roast means eviscerating the decision, excuse, pattern, or situation with zero mercy. Roast the sports situation, not protected traits or private life.\n"
-        "- Allowed extras: pretend quote, uncomfortable comparison, exaggerated fan thought, blunt label, self-aware aside, fake-serious understatement, or playful undercut.\n"
-        "- The joke must come from this topic's real absurd detail. One short uncomfortable comparison is allowed when it stings. Long random analogies are not.\n"
-        "- Good comedy here is a sports truth with a hard turn. Short setup. Nuclear punchline. No fluff.\n"
-        "- The last line must be a punchline with a concrete sports image, insult, or uncomfortable comparison. Do not end with a diagnosis like 'that tells the truth,' 'actual injury report,' 'very serious operation,' or 'very brave loophole.'\n"
-        "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
-        "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
-        "- Do not write lines like 'we all heard the same ankle,' 'that clipboard will start singing,' or 'shopping nervous.' That is confusing, not funny.\n"
-        "- Do not use vague label endings like 'Football fluency,' 'Normal stuff,' or 'Very calm stuff.' Land the actual joke instead.\n"
-        "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
+        "- Blunt roast means zero mercy on the decision, excuse, pattern, or situation. Roast the sports absurdity, not protected traits or private life.\n"
+        "- The joke must come from the topic's real absurd detail. No analogies or metaphors unless the user explicitly asks for one.\n"
+        "- Ban these crutches: 'football for,' 'sounds like your boy,' 'sounds like your buddy,' 'the real tell,' 'the real update,' 'translates to,' 'feels like front office for,' haunted anything, fires, basements, drunk friends, passenger seats, air fresheners, side pieces, Tinder, vague labels, fake-deep closers.\n"
+        "- The final line is not response pressure. It is the punchline. It should be short enough to sting and mean enough to make the reader laugh while wincing.\n"
         "- Content boundary is narrow: no slurs, threats, protected-class shots, harassment, or direct personal abuse. Everything else should be judged by whether it is funny and aimed at the sports absurdity.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
-        "- Reject anything safe, cute, witty, or ChatGPT-clever. If it does not make a sports-degenerate laugh while slightly wincing, rewrite it.\n"
-        "- Reject fake-deep lines like 'press conference with vibes,' 'that is the real press conference,' 'talk is cheap,' or 'the conversation gets uncomfortable.' Those are not jokes.\n"
-        "- Gold-standard shape examples show the edge level, not lines to copy: 'They keep saying Bo is fine the same way your boy swears he is totally good right before he pukes in your passenger seat.' / 'If they add another QB, the ankle update was basically, he can walk, please clap.' / 'Nuggets saying everything is on the table is code for we will change anything except the non-Jokic minutes that turn every lead into a goddamn horror show.' / 'They will do anything before admitting those second-unit lineups play like strangers who hate each other's guts the second Jokic sits.'\n"
+        "- Reject anything safe, cute, witty, metaphor-heavy, or ChatGPT-clever. If it does not make a sports-degenerate laugh while slightly wincing, rewrite it.\n"
+        "- Gold-standard examples show the minimum edge level, not lines to copy: 'Broncos saying Bo Nix is on track for camp is pure bullshit. That ankle is one sneeze from being fucked and they are already texting every backup QB behind the scenes like cowards.' / 'Next time the Broncos sign another quarterback you will know the truth: they never trusted that fragile little ankle for a second. On track my ass.' / 'Nuggets saying everything is on the table this summer is hilarious. They will trade the whole fucking roster before they admit those non-Jokic minutes are a goddamn disaster.' / 'They will blow up the roster and re-sign the same bums before they touch the sacred Jokic rests, everyone shits the bed strategy.'\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
