@@ -3,7 +3,9 @@
 
 This script imports creator_evolution.py from two git refs, builds prompts for
 the same concept/format/voice, and prints comparable prompt evidence. It does
-not call AI providers, write app state, sync tweets, post, or mutate profiles.
+not write app state, sync tweets, post, or mutate profiles. By default it also
+does not call AI providers. Use --generate-examples to make an explicit,
+read-only AI call for side-by-side preference testing.
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -154,6 +158,234 @@ def _compare_records(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _prompt_for_example(prompt: str) -> str:
+    return (
+        "Use the exact prompt below. Do not explain. Return only the JSON object "
+        "requested by the prompt.\n\n"
+        f"{prompt}"
+    )
+
+
+def _call_claude_for_examples(prompt: str, timeout: int) -> str:
+    env = dict(os.environ)
+    # Keep the harness outside the app runtime and avoid accidental tool use.
+    env["CLAUDE_CODE_SIMPLE"] = "1"
+    claude_bin = shutil.which("claude") or "/home/polfam/.npm-global/bin/claude"
+    result = subprocess.run(
+        [
+            claude_bin,
+            "--print",
+            "--no-session-persistence",
+            "--permission-mode",
+            "dontAsk",
+            "--tools",
+            "",
+            "--max-budget-usd",
+            "0.25",
+            _prompt_for_example(prompt),
+        ],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        env=env,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"claude example generation failed: {detail[:500]}")
+    return result.stdout.strip()
+
+
+def _call_codex_for_examples(prompt: str, timeout: int, model: str) -> str:
+    codex_bin = shutil.which("codex") or "/home/polfam/.npm-global/bin/codex"
+    result = subprocess.run(
+        [
+            codex_bin,
+            "-a",
+            "never",
+            "-m",
+            model,
+            "exec",
+            "--ephemeral",
+            "--sandbox",
+            "read-only",
+            "-C",
+            str(Path.cwd()),
+            "-",
+        ],
+        input=_prompt_for_example(prompt),
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"codex example generation failed: {detail[:500]}")
+    return result.stdout.strip()
+
+
+def _call_ai_for_examples(prompt: str, timeout: int, provider: str, model: str) -> tuple[str, str]:
+    provider = (provider or "auto").strip().lower()
+    errors = []
+    if provider in {"auto", "claude"}:
+        try:
+            return "claude", _call_claude_for_examples(prompt, timeout)
+        except Exception as exc:
+            errors.append(str(exc))
+            if provider == "claude":
+                raise
+    if provider in {"auto", "codex"}:
+        try:
+            return "codex", _call_codex_for_examples(prompt, timeout, model)
+        except Exception as exc:
+            errors.append(str(exc))
+            if provider == "codex":
+                raise
+    raise RuntimeError(" | ".join(errors) or f"Unsupported AI provider: {provider}")
+
+
+def _extract_options(raw: str) -> list[str]:
+    text = (raw or "").strip()
+    if not text:
+        return []
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(text[start : end + 1])
+            options = []
+            for key in ("option1", "option2", "option3"):
+                value = str(data.get(key, "")).strip()
+                if value:
+                    options.append(value)
+            return options
+        except Exception:
+            pass
+    return [text]
+
+
+def _render_rule_delta(record: dict[str, Any]) -> str:
+    old = record["old"]
+    new = record["new"]
+    lines = []
+    sections = [
+        ("Format rules", "format_recipe_text"),
+        ("Lane rules", "lane_recipe_text"),
+        ("Voice contract", "voice_contract"),
+        ("Quality gate", "quality_gate"),
+    ]
+    for title, key in sections:
+        if old.get(key) == new.get(key):
+            continue
+        lines.append(f"### {title}")
+        lines.append("")
+        lines.append("OLD")
+        lines.append("```text")
+        lines.append(str(old.get(key, "")).strip())
+        lines.append("```")
+        lines.append("")
+        lines.append("NEW")
+        lines.append("```text")
+        lines.append(str(new.get(key, "")).strip())
+        lines.append("```")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _render_study_cards(
+    output: dict[str, Any],
+    *,
+    include_rules: bool,
+    generate_examples: bool,
+    timeout: int,
+    provider: str,
+    model: str,
+) -> str:
+    lines = [
+        "# Creator Evolution Old/New Preference Harness",
+        "",
+        f"Read-only: {output['read_only']}",
+        f"Mutates app state: {output['mutates_app_state']}",
+        f"Posts to X: {output['posts_to_x']}",
+        f"Calls AI: {generate_examples}",
+        f"Old ref: {output['old_ref']}",
+        f"New ref: {output['new_ref']}",
+        f"Format: {output['format']}",
+        "",
+        "How to use this:",
+        "1. Read OLD A and NEW B for each card.",
+        "2. Pick `old`, `new`, `mix`, or `neither`.",
+        "3. Say which specific lines or rule changes you like or hate.",
+        "",
+        "Concept:",
+        "```text",
+        output["concept"],
+        "```",
+        "",
+    ]
+    for idx, record in enumerate(output["records"], 1):
+        old = record["old"]
+        new = record["new"]
+        lines.extend(
+            [
+                f"## Card {idx}: {record['lane']} / {output['format']}",
+                "",
+                f"Old prompt hash: `{old['prompt_sha1']}`",
+                f"New prompt hash: `{new['prompt_sha1']}`",
+                "",
+            ]
+        )
+        if include_rules:
+            delta = _render_rule_delta(record)
+            if delta:
+                lines.append(delta)
+                lines.append("")
+        if generate_examples:
+            for label, side in (("OLD A", old), ("NEW B", new)):
+                lines.append(f"### {label} Examples")
+                try:
+                    used_provider, raw = _call_ai_for_examples(side["full_prompt"], timeout, provider, model)
+                    examples = _extract_options(raw)
+                    lines.append(f"_Generated by `{used_provider}` from the exact {label} prompt._")
+                    lines.append("")
+                    if examples:
+                        for opt_idx, example in enumerate(examples, 1):
+                            lines.append(f"{opt_idx}. {example}")
+                    else:
+                        lines.append("_No examples returned._")
+                    side["example_raw"] = raw
+                    side["examples"] = examples
+                except Exception as exc:
+                    lines.append(f"_Example generation failed: {exc}_")
+                lines.append("")
+        else:
+            lines.extend(
+                [
+                    "### OLD A Prompt",
+                    "```text",
+                    old["full_prompt"],
+                    "```",
+                    "",
+                    "### NEW B Prompt",
+                    "```text",
+                    new["full_prompt"],
+                    "```",
+                    "",
+                ]
+            )
+        lines.extend(
+            [
+                "Preference question:",
+                f"For {record['lane']}, choose `old`, `new`, `mix`, or `neither`, then name the exact line/rule/example that drove the choice.",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare old/new Creator Evolution prompt systems without mutating app state.")
     parser.add_argument("--repo", default=".", help="Repo root. Defaults to current directory.")
@@ -163,6 +395,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--concept", default=DEFAULT_CONCEPT)
     parser.add_argument("--lane", action="append", dest="lanes", help="Lane to compare. Repeatable. Defaults to all lanes.")
     parser.add_argument("--include-full-prompts", action="store_true", help="Include full prompt text. Off by default to keep output readable.")
+    parser.add_argument("--study-cards", action="store_true", help="Print human-readable Old/New preference cards instead of JSON.")
+    parser.add_argument("--include-rules", action="store_true", help="Include exact changed rule sections in study-card output.")
+    parser.add_argument("--generate-examples", action="store_true", help="Explicitly call an AI CLI to generate Old/New examples from exact prompts.")
+    parser.add_argument("--ai-timeout", type=int, default=90, help="Timeout per example-generation call.")
+    parser.add_argument("--ai-provider", choices=["auto", "claude", "codex"], default="auto", help="Read-only example backend.")
+    parser.add_argument("--codex-model", default="gpt-5.4", help="Codex model for --ai-provider codex or auto fallback.")
     return parser.parse_args()
 
 
@@ -189,7 +427,7 @@ def main() -> int:
         old_record = _prompt_record("old", args.old_ref, old_module, args.concept, old_format, old_lane)
         new_record = _prompt_record("new", args.new_ref, new_module, args.concept, new_format, new_lane)
         comparisons.append(_compare_records(old_record, new_record))
-        if not args.include_full_prompts:
+        if not args.include_full_prompts and not args.study_cards and not args.generate_examples:
             old_record.pop("full_prompt", None)
             new_record.pop("full_prompt", None)
         records.append({"lane": new_lane, "old": old_record, "new": new_record})
@@ -197,7 +435,7 @@ def main() -> int:
     output = {
         "read_only": True,
         "mutates_app_state": False,
-        "calls_ai": False,
+        "calls_ai": bool(args.generate_examples),
         "posts_to_x": False,
         "old_ref": args.old_ref,
         "new_ref": args.new_ref,
@@ -206,7 +444,20 @@ def main() -> int:
         "comparisons": comparisons,
         "records": records,
     }
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    if args.study_cards:
+        print(
+            _render_study_cards(
+                output,
+                include_rules=args.include_rules,
+                generate_examples=args.generate_examples,
+                timeout=args.ai_timeout,
+                provider=args.ai_provider,
+                model=args.codex_model,
+            ),
+            end="",
+        )
+    else:
+        print(json.dumps(output, indent=2, ensure_ascii=False))
     return 0
 
 
