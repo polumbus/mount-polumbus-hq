@@ -11993,6 +11993,17 @@ def page_voice_tuner():
         return
     state["phase"] = "feedback_round"
     active_index = max(0, min(int(state.get("feedback_index", 0) or 0), len(concepts) - 1))
+    saved_lane = _ce_normalize_lane(state.get("voice_tuner_lane", ""))
+    if saved_lane:
+        for idx, concept in enumerate(concepts):
+            if _ce_normalize_lane(concept.get("lane")) == saved_lane:
+                active_index = idx
+                state["feedback_index"] = idx
+                break
+    if state.pop("_force_voice_tuner_widget_sync", False):
+        st.session_state["ce_voice_tuner_lane"] = _ce_normalize_lane(state.get("voice_tuner_lane", _ce_default_lane()))
+        st.session_state["ce_voice_tuner_format"] = _normalize_tweet_format(state.get("voice_tuner_format", CANONICAL_TWEET_DEFAULT_FORMAT))
+        _save_ce_testing_state(state)
     item = dict(concepts[active_index])
 
     top_cols = st.columns([2.2, 1, 1])
@@ -12106,7 +12117,15 @@ def page_voice_tuner():
                         "provider": provider,
                         "at": datetime.now().isoformat(timespec="seconds"),
                     }
-                state["feedback_index"] = min(active_index + 1, len(concepts) - 1)
+                next_index = (active_index + 1) % len(concepts) if concepts else active_index
+                state["feedback_index"] = next_index
+                if concepts:
+                    next_item = concepts[next_index]
+                    next_lane = _ce_normalize_lane(next_item.get("lane", item["lane"]))
+                    next_format = _normalize_tweet_format(next_item.get("format", item["format"]))
+                    state["voice_tuner_lane"] = next_lane
+                    state["voice_tuner_format"] = next_format
+                    state["_force_voice_tuner_widget_sync"] = True
                 _save_ce_testing_state(state)
                 st.rerun()
     with st.expander("Current Voice Tuner prompt overlay", expanded=False):
