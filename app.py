@@ -108,6 +108,17 @@ CE_COMPAT_DEFAULTS = {
 
 CE_AI_PROVIDER_OPTIONS = ("ChatGPT", "Grok")
 CE_AI_PROVIDER_DEFAULT = "ChatGPT"
+CE_TESTING_STATE_FILENAME = "creator_evolution_testing_lab.json"
+CE_TESTING_SESSION_DEFAULT = {
+    "version": 1,
+    "phase": "model_round",
+    "concept_index": 0,
+    "feedback_index": 0,
+    "model_preferences": {},
+    "prompt_preferences": {},
+    "feedback": [],
+    "generations": {},
+}
 for _ce_attr, _ce_default in CE_COMPAT_DEFAULTS.items():
     if not hasattr(ce, _ce_attr):
         setattr(ce, _ce_attr, _ce_default)
@@ -3334,6 +3345,7 @@ _owner_podcast_icon = ""
 _owner_podcast_panel = ""
 _owner_creator_evolution_icon = ""
 _owner_creator_evolution_panel = ""
+_owner_testing_panel = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
 _owner_gameday_icon = ""
@@ -3353,7 +3365,12 @@ if is_owner():
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 19V5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M4 16c3-5 7-5 10-2 2 2 4 2 6-1" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 7h6v6" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Creator Evolution
       </a>"""
+    _owner_testing_panel = f"""<a href="/?{_tok_qp}page=Testing" class="mp-panel-item {_act('Testing')}" target="_self">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 6v12a2 2 0 002 2h6a2 2 0 002-2V6" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M9 11h6M10 15h4" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Testing
+      </a>"""
     _nav_pages.insert(1, "Creator Evolution")
+    _nav_pages.insert(2, "Testing")
     _nav_pages.insert(9, "10/10 Audit")
     _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}{_podcast_run_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
       <div class="mp-active-pip"></div>
@@ -3540,6 +3557,7 @@ _sidebar_html = f"""
         Creator Studio
       </a>
       {_owner_creator_evolution_panel}
+      {_owner_testing_panel}
       <a href="/?{_tok_qp}page=Raw+Thoughts" class="mp-panel-item {_act('Raw Thoughts')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#6B8AAA" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Raw Thoughts
@@ -10342,10 +10360,21 @@ def _ce_capture_ai_error(raw_text: str) -> bool:
     return True
 
 
-def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeout_seconds: int = 35) -> str:
+def _call_creator_evolution_ai_for_provider(
+    prompt: str,
+    lane: str,
+    max_tokens: int,
+    *,
+    provider: str,
+    timeout_seconds: int = 35,
+    system_suffix: str = "",
+    strict_chatgpt: bool = False,
+) -> str:
     started = time.monotonic()
-    provider = _ce_selected_ai_provider()
+    provider = _ce_normalize_ai_provider(provider)
     system_prompt = _creator_evolution_system_prompt(lane)
+    if system_suffix.strip():
+        system_prompt = f"{system_prompt.rstrip()}\n\n{system_suffix.strip()}\n"
     if provider == "Grok":
         _ai_failure_chain_start()
         try:
@@ -10365,6 +10394,20 @@ def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeo
             _record_ai_failure("grok_api_key", e)
             _append_debug_event("creator_evolution", "error", f"grok_api_key {e}", {"model": _ce_grok_model(), "lane": lane})
             raw = f"AI unavailable — grok_api_key {e}"
+    elif strict_chatgpt:
+        _ai_failure_chain_start()
+        try:
+            raw = call_chatgpt_oauth(prompt, system_prompt)
+            st.session_state["_ai_last_route"] = "chatgpt_oauth"
+            st.session_state["_ai_last_provider"] = "chatgpt"
+            st.session_state["_ai_last_source"] = "creator_evolution_testing_direct"
+            st.session_state["_ai_last_model"] = "chatgpt_oauth"
+            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+            _append_debug_event("creator_evolution", "ok", "chatgpt_oauth_testing", {"lane": lane})
+        except Exception as e:
+            _record_ai_failure("chatgpt_oauth", e)
+            _append_debug_event("creator_evolution", "error", f"chatgpt_oauth_testing {e}", {"lane": lane})
+            raw = f"AI unavailable — chatgpt_oauth {e}"
     else:
         raw = call_claude(
             prompt,
@@ -10381,6 +10424,16 @@ def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeo
             {"elapsed_seconds": round(elapsed, 1), "lane": lane, "max_tokens": max_tokens, "provider": provider},
         )
     return raw
+
+
+def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeout_seconds: int = 35) -> str:
+    return _call_creator_evolution_ai_for_provider(
+        prompt,
+        lane,
+        max_tokens,
+        provider=_ce_selected_ai_provider(),
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def _run_ce_ai(action, tweet_text, fmt, lane):
@@ -11561,6 +11614,301 @@ def _render_creator_evolution_provider_switch():
             </div>""",
             unsafe_allow_html=True,
         )
+
+
+def _ce_testing_default_state() -> dict:
+    return json.loads(json.dumps(CE_TESTING_SESSION_DEFAULT))
+
+
+def _ce_testing_state() -> dict:
+    state = load_json(CE_TESTING_STATE_FILENAME, _ce_testing_default_state())
+    if not isinstance(state, dict):
+        state = _ce_testing_default_state()
+    default = _ce_testing_default_state()
+    for key, value in default.items():
+        state.setdefault(key, value)
+    state["version"] = 1
+    return state
+
+
+def _save_ce_testing_state(state: dict) -> None:
+    state["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    save_json(CE_TESTING_STATE_FILENAME, state)
+
+
+def _ce_testing_reset() -> dict:
+    state = _ce_testing_default_state()
+    state["created_at"] = datetime.now().isoformat(timespec="seconds")
+    _save_ce_testing_state(state)
+    return state
+
+
+def _ce_testing_concepts() -> list[dict]:
+    path = Path("scripts/creator_evolution_harness_concepts.json")
+    concepts = {}
+    if path.exists():
+        try:
+            concepts = json.loads(path.read_text())
+        except Exception:
+            concepts = {}
+    voice_concepts = concepts.get("voice_concepts") if isinstance(concepts, dict) else {}
+    if not isinstance(voice_concepts, dict) or not voice_concepts:
+        voice_concepts = {
+            "Witty Edge": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
+            "Skeptical": "The Broncos keep saying the roster is more competitive now, but training camp will show whether that is real depth or just more average players fighting for the same spots.",
+            "Critical": "Sean Payton keeps saying competition matters, but camp will show which Broncos players actually respond when reputation stops protecting roster spots.",
+            "Promo": "Bo Nix may be on track for training camp, but there is one more QB decision coming that will show how much the Broncos really trust the ankle.",
+            "Comedic": "The Nuggets say everything is on the table this summer, but nobody knows if that actually includes changing the non-Jokic minutes that keep wrecking games.",
+        }
+    ordered_lanes = [lane for lane in _ce_emotion_lanes() if lane in voice_concepts]
+    if not ordered_lanes:
+        ordered_lanes = list(voice_concepts)
+    return [
+        {
+            "id": re.sub(r"[^a-z0-9]+", "_", lane.lower()).strip("_") or f"concept_{idx}",
+            "lane": lane,
+            "format": CANONICAL_TWEET_DEFAULT_FORMAT,
+            "concept": str(voice_concepts[lane]).strip(),
+        }
+        for idx, lane in enumerate(ordered_lanes, 1)
+        if str(voice_concepts.get(lane, "")).strip()
+    ]
+
+
+def _ce_testing_overlay_text(state: dict) -> str:
+    feedback = state.get("feedback", []) if isinstance(state, dict) else []
+    lines = [
+        "CREATOR EVOLUTION TESTING COPY OVERRIDES:",
+        "These rules apply only on the TESTING page. They do not change baseline Creator Evolution.",
+        "Preserve the current Creator Evolution voice, format, learning profiles, stat integrity, and quality gates unless a testing note explicitly adjusts them.",
+    ]
+    clean_feedback = []
+    for item in feedback:
+        if isinstance(item, dict):
+            text = str(item.get("text", "")).strip()
+            lane = str(item.get("lane", "")).strip()
+            if text:
+                clean_feedback.append(f"{lane}: {text}" if lane else text)
+        elif str(item).strip():
+            clean_feedback.append(str(item).strip())
+    if clean_feedback:
+        lines.append("Apply this live testing feedback:")
+        lines.extend(f"- {text}" for text in clean_feedback[-20:])
+    else:
+        lines.append("No testing feedback has been added yet, so the testing prompt should match baseline behavior.")
+    return "\n".join(lines)
+
+
+def _ce_testing_max_tokens(fmt: str) -> int:
+    return 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700
+
+
+def _ce_testing_generate(
+    item: dict,
+    *,
+    provider: str,
+    testing_copy: bool,
+) -> dict:
+    fmt = _normalize_tweet_format(item.get("format") or CANONICAL_TWEET_DEFAULT_FORMAT)
+    lane = _ce_normalize_lane(item.get("lane") or _ce_default_lane())
+    concept = str(item.get("concept", "")).strip()
+    state = _creator_evolution_state()
+    prompt = _ce_build_generation_prompt(concept, fmt, lane, state, action="testing")
+    lab_state = _ce_testing_state()
+    overlay = _ce_testing_overlay_text(lab_state) if testing_copy else ""
+    raw = _call_creator_evolution_ai_for_provider(
+        prompt,
+        lane,
+        _ce_testing_max_tokens(fmt),
+        provider=provider,
+        timeout_seconds=45,
+        system_suffix=overlay,
+        strict_chatgpt=True,
+    )
+    parsed = _parse_banger_json(raw or "")
+    options = []
+    if parsed:
+        for idx in [1, 2, 3]:
+            value = _sanitize_output(str(parsed.get(f"option{idx}", "") or "").strip())
+            if value:
+                options.append(value)
+    elif raw:
+        options = [_sanitize_output(str(raw).strip())]
+    status = "ok"
+    if _ce_capture_ai_error(raw or ""):
+        status = "error"
+        st.session_state.pop("ce_error", None)
+    return {
+        "status": status,
+        "provider": provider,
+        "testing_copy": testing_copy,
+        "lane": lane,
+        "format": fmt,
+        "concept": concept,
+        "raw": raw,
+        "options": options,
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def _ce_testing_generation_key(item: dict, *parts: str) -> str:
+    return "|".join([str(item.get("id", "concept")), *parts])
+
+
+def _render_ce_testing_output_card(title: str, result: dict) -> None:
+    status = str(result.get("status", "missing"))
+    provider = str(result.get("provider", ""))
+    st.markdown(f"**{title}**")
+    st.caption(f"{provider} | {status} | {result.get('generated_at', 'not generated')}")
+    options = result.get("options") if isinstance(result, dict) else []
+    if not options:
+        st.info("No output generated yet.")
+        return
+    for idx, text in enumerate(options[:3], 1):
+        st.markdown(
+            f"""<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;margin:8px 0;background:rgba(255,255,255,0.035);">
+            <div style="font-size:10px;color:rgba(255,255,255,0.34);font-weight:800;letter-spacing:1px;margin-bottom:6px;">OPTION {idx}</div>
+            <div style="font-size:14px;line-height:1.55;color:rgba(255,255,255,0.90);white-space:pre-wrap;">{html.escape(str(text))}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+
+def page_testing():
+    if not is_owner():
+        st.warning("Owner access required.")
+        return
+    st.markdown('<div class="main-header">TESTING</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Creator Evolution sandbox. Baseline stays locked; testing feedback only changes this copy.</div>', unsafe_allow_html=True)
+
+    concepts = _ce_testing_concepts()
+    state = _ce_testing_state()
+    if not concepts:
+        st.error("No testing concepts are available.")
+        return
+    phase = state.get("phase", "model_round")
+    is_model_round = phase == "model_round"
+    active_index_key = "concept_index" if is_model_round else "feedback_index"
+    active_index = max(0, min(int(state.get(active_index_key, 0) or 0), len(concepts) - 1))
+    item = concepts[active_index]
+    progress_label = "Model Round" if is_model_round else "Prompt Feedback Round"
+
+    top_cols = st.columns([2.2, 1, 1])
+    with top_cols[0]:
+        st.markdown(f"**{progress_label}: Concept {active_index + 1} of {len(concepts)}**")
+        st.caption(f"Voice: {item['lane']} | Format: {item['format']} | ID: {item['id']}")
+    with top_cols[1]:
+        if st.button("Reset Testing Lab", use_container_width=True):
+            _ce_testing_reset()
+            st.rerun()
+    with top_cols[2]:
+        if is_model_round and len(state.get("model_preferences", {})) >= len(concepts):
+            if st.button("Start Feedback Round", type="primary", use_container_width=True):
+                state["phase"] = "feedback_round"
+                state["feedback_index"] = 0
+                _save_ce_testing_state(state)
+                st.rerun()
+
+    st.markdown(
+        f"""<div style="border:1px solid rgba(45,212,191,0.22);background:rgba(45,212,191,0.06);border-radius:14px;padding:14px;margin:12px 0;">
+        <div style="font-size:10px;color:#2DD4BF;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Concept To Test</div>
+        <div style="font-size:17px;line-height:1.45;color:rgba(255,255,255,0.92);">{html.escape(item['concept'])}</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    generations = state.setdefault("generations", {})
+    if is_model_round:
+        st.markdown("### Round 1: Choose The Better Model")
+        st.caption("This round uses the current baseline prompt for both models. No feedback is applied yet.")
+        gen_key = _ce_testing_generation_key(item, "model_round")
+        existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
+        if st.button("Generate ChatGPT vs Grok", type="primary", use_container_width=True):
+            with st.spinner("Generating baseline outputs from ChatGPT and Grok..."):
+                existing = {
+                    "chatgpt": _ce_testing_generate(item, provider="ChatGPT", testing_copy=False),
+                    "grok": _ce_testing_generate(item, provider="Grok", testing_copy=False),
+                }
+                generations[gen_key] = existing
+                _save_ce_testing_state(state)
+            st.rerun()
+        col_a, col_b = st.columns(2)
+        with col_a:
+            _render_ce_testing_output_card("ChatGPT Baseline", existing.get("chatgpt", {}))
+        with col_b:
+            _render_ce_testing_output_card("Grok Baseline", existing.get("grok", {}))
+        pref_cols = st.columns(4)
+        choices = [("ChatGPT wins", "ChatGPT"), ("Grok wins", "Grok"), ("Tie", "Tie"), ("Neither", "Neither")]
+        for col, (label, value) in zip(pref_cols, choices):
+            with col:
+                if st.button(label, key=f"ce_test_model_pref_{item['id']}_{value}", use_container_width=True):
+                    state.setdefault("model_preferences", {})[item["id"]] = {
+                        "choice": value,
+                        "lane": item["lane"],
+                        "concept": item["concept"],
+                        "at": datetime.now().isoformat(timespec="seconds"),
+                    }
+                    state["concept_index"] = min(active_index + 1, len(concepts) - 1)
+                    if active_index + 1 >= len(concepts):
+                        state["phase"] = "feedback_round"
+                        state["feedback_index"] = 0
+                    _save_ce_testing_state(state)
+                    st.rerun()
+    else:
+        st.markdown("### Round 2: Baseline vs Testing Copy")
+        st.caption("Feedback below is added only to the TESTING prompt overlay. Baseline Creator Evolution is not changed.")
+        model_pref = (state.get("model_preferences", {}).get(item["id"], {}) or {}).get("choice", "ChatGPT")
+        provider = model_pref if model_pref in CE_AI_PROVIDER_OPTIONS else "ChatGPT"
+        st.caption(f"Using model for this concept: {provider}")
+        gen_key = _ce_testing_generation_key(item, "feedback_round", provider, hashlib.sha1(_ce_testing_overlay_text(state).encode()).hexdigest()[:8])
+        existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
+        if st.button("Generate Baseline vs Testing", type="primary", use_container_width=True):
+            with st.spinner("Generating baseline and testing-copy outputs..."):
+                existing = {
+                    "baseline": _ce_testing_generate(item, provider=provider, testing_copy=False),
+                    "testing": _ce_testing_generate(item, provider=provider, testing_copy=True),
+                }
+                generations[gen_key] = existing
+                _save_ce_testing_state(state)
+            st.rerun()
+        col_a, col_b = st.columns(2)
+        with col_a:
+            _render_ce_testing_output_card("Baseline Current Creator Evolution", existing.get("baseline", {}))
+        with col_b:
+            _render_ce_testing_output_card("Testing Copy With Feedback Overlay", existing.get("testing", {}))
+        with st.form(f"ce_testing_feedback_{item['id']}"):
+            feedback = st.text_area(
+                "Feedback to wire into the testing prompt only",
+                placeholder="Example: make the final sentence shorter and more direct, less over-explained, more consequence.",
+                height=100,
+            )
+            submitted = st.form_submit_button("Apply Feedback To Testing Prompt", type="primary", use_container_width=True)
+        if submitted and feedback.strip():
+            state.setdefault("feedback", []).append({
+                "lane": item["lane"],
+                "concept_id": item["id"],
+                "text": feedback.strip(),
+                "at": datetime.now().isoformat(timespec="seconds"),
+            })
+            _save_ce_testing_state(state)
+            st.rerun()
+        result_cols = st.columns(4)
+        result_choices = [("Baseline wins", "Baseline"), ("Testing wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
+        for col, (label, value) in zip(result_cols, result_choices):
+            with col:
+                if st.button(label, key=f"ce_test_prompt_pref_{item['id']}_{value}", use_container_width=True):
+                    if value != "Next":
+                        state.setdefault("prompt_preferences", {})[item["id"]] = {
+                            "choice": value,
+                            "lane": item["lane"],
+                            "concept": item["concept"],
+                            "at": datetime.now().isoformat(timespec="seconds"),
+                        }
+                    state["feedback_index"] = min(active_index + 1, len(concepts) - 1)
+                    _save_ce_testing_state(state)
+                    st.rerun()
+        with st.expander("Current testing prompt overlay", expanded=False):
+            st.text(_ce_testing_overlay_text(state))
 
 
 @st.fragment
@@ -19033,6 +19381,7 @@ page_map = {
 }
 if is_owner():
     page_map["Creator Evolution"] = page_creator_evolution
+    page_map["Testing"] = page_testing
 if is_owner():
     page_map["Podcast"] = page_podcast
 if is_owner():
@@ -19128,6 +19477,7 @@ finally:
 _auto_sync_pages = {
     "Creator Studio",
     "Creator Evolution",
+    "Testing",
     "Content Coach",
     "Article Writer",
     "Post History",
