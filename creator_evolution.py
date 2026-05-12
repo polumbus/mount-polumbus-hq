@@ -38,10 +38,10 @@ EMOTION_LANES = (
 
 LANE_RECIPES = {
     "Witty Edge": {
-        "target": "A sharp sports read with one funny pressure point: confident, phone-written, and a little dangerous without getting mean.",
-        "do": "Name the exact contradiction, add one human/sports detail, then land a punchline or open loop that makes people want to argue the premise.",
-        "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, hot-take framing, and copied viral hooks.",
-        "ending": "A declarative open loop or punchline with one unresolved consequence.",
+        "target": "A sharp sports read with one funny pressure point: confident, phone-written, compressed, and direct without sounding angry or over-written.",
+        "do": "Name the exact sports contradiction, add one short human bite only if it helps, then land the direct decision consequence in fewer words.",
+        "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, hot-take framing, copied viral hooks, long analogies, dressed-up metaphors, reaction framing, and explaining the logic twice.",
+        "ending": "A short punchline or consequence line, usually 6 to 8 words, with no abstract conversation framing.",
     },
     "Comedic": {
         "target": "Grok-like sports comedy: a funny group-chat read that spots the human contradiction faster than everyone else. Not angry. Not clever-metaphor writing. The laugh comes from making the exact sports behavior sound obviously ridiculous.",
@@ -251,6 +251,50 @@ LINKEDIN_CADENCE_PHRASES = (
     "let that sink in",
     "read that again",
     "this matters because",
+)
+
+WITTY_EDGE_METAPHOR_DRIFT = (
+    "check engine",
+    "smoke alarm",
+    "smoke detector",
+    "fire alarm",
+    "duct tape",
+    "spin cycle",
+    "house creak",
+    "wishful thinking with",
+    "bow on it",
+    "praying the puck agrees",
+    "folding chair",
+    "peace treaty",
+    "filed away",
+    "walks back into the room",
+    "coming back through the wall",
+)
+
+WITTY_EDGE_REACTION_FRAMING = (
+    "the room knows",
+    "the room gets",
+    "whole room",
+    "fanbase",
+    "crowd",
+    "body language",
+    "everybody starts",
+    "everybody suddenly",
+    "people staring",
+    "pretending this was",
+    "tone only",
+    "vibe",
+    "silence tells",
+    "gets real quiet",
+)
+
+WITTY_EDGE_OVEREXPLAINED_LINES = (
+    "that is when a temporary answer starts looking expensive",
+    "that is when you find out",
+    "this is where it gets real",
+    "where it gets uncomfortable",
+    "where the conversation",
+    "managing the conversation",
 )
 
 
@@ -1197,6 +1241,19 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         issues.append("Deadpan should stay straight-faced: no emojis.")
     if lane == "Witty Edge" and any(phrase in lower for phrase in ("hot take", "unpopular opinion", "hear me out")):
         issues.append("Witty Edge should not lean on hot-take or stock engagement framing.")
+    if lane == "Witty Edge" and fmt in ("Punchy Tweet", "Normal Tweet"):
+        witty_metaphors = _phrase_hits(lower, WITTY_EDGE_METAPHOR_DRIFT)
+        witty_reactions = _phrase_hits(lower, WITTY_EDGE_REACTION_FRAMING)
+        witty_explained = _phrase_hits(lower, WITTY_EDGE_OVEREXPLAINED_LINES)
+        final_word_count = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
+        if witty_metaphors:
+            issues.append("Witty Edge should avoid dressed-up metaphor drift: " + ", ".join(witty_metaphors[:4]))
+        if witty_reactions:
+            issues.append("Witty Edge should use direct sports consequence, not crowd/room/reaction framing: " + ", ".join(witty_reactions[:4]))
+        if witty_explained:
+            issues.append("Witty Edge is over-explaining the turn instead of compressing it: " + ", ".join(witty_explained[:4]))
+        if fmt == "Normal Tweet" and paragraph_breaks == 1 and final_word_count > 10:
+            warnings.append("Witty Edge final line should stay short, punchy, and compressed.")
     if lane == "Fired-Up" and any(phrase in lower for phrase in ("we are so back", "we're so back", "let's go", "nobody wants us")):
         issues.append("Fired-Up needs specific stakes, not generic rally-cry hype.")
     if lane == "Critical":
@@ -2473,9 +2530,22 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Do not use a separate short final-line slogan unless that line is the clearest joke in the whole draft. If it reads like a caption, fold the punchline back into the sentence above.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
+    witty_contract = (
+        "\nWITTY EDGE HARD RULES:\n"
+        "- MASTER GOAL: compressed sports observation with a sharp turn. Write less. Explain less. The wit comes from the cut, not the analogy.\n"
+        "- Use direct sports consequence: one rough start reopens the goalie debate, tests staff conviction, exposes whether there is a real plan, forces a choice, changes the rep plan, or changes the rotation.\n"
+        "- Do not use dressed-up metaphors: no HR, office, hallway, room, fire alarm, smoke alarm, check engine light, duct tape, house creak, spin cycle, peace treaty, filing, company email, or hope-as-object bits.\n"
+        "- Do not use crowd, room, fanbase, body-language, silence, tone, vibe, or reaction framing. Write the decision consequence, not how people react to it.\n"
+        "- Do not repeat the logic in a second explanatory sentence. Cut any sentence that says the same thing in cleaner words.\n"
+        "- For Normal Tweet, prefer a direct setup and a short final line. The final line should usually be 6 to 8 words.\n"
+        "- Good Witty Edge endings are compressed and a little funny, like a sharp sports punch. They are not generic lessons, slogans, or abstract conversation lines.\n"
+        "- If an option sounds like an essay, a metaphor bit, or a reaction to the issue instead of the issue itself, rewrite it before returning JSON.\n"
+    ) if lane == "Witty Edge" else ""
     final_line_rule = (
         "- Because the selected lane is Comedic, do not optimize the final line for response pressure. Optimize it for a short sports-specific laugh beat."
         if lane == "Comedic"
+        else "- Because the selected lane is Witty Edge, keep the final line compressed, direct, and a little funny. No metaphor bit, no crowd reaction, no explanation."
+        if lane == "Witty Edge"
         else "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait."
     )
     return f"""{opening}
@@ -2507,6 +2577,7 @@ LEARNED VOICE PROFILE:
 {sports_ctx}
 {build_rule}
 {comedic_contract}
+{witty_contract}
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
@@ -2541,6 +2612,7 @@ QUALITY GATE:
 HIDDEN SELF-CHECK BEFORE FINAL JSON:
 Would this sound normal if posted directly from a phone by a funny, witty, sports-obsessed human? If not, rewrite it before returning.
 If the selected lane is Comedic, also ask: is this actually funny, or just clean sports analysis with a cute ending? If it is not actually funny, rewrite it before returning.
+If the selected lane is Witty Edge, also ask: did I use a metaphor or reaction frame instead of the actual sports consequence? If yes, rewrite it shorter and more direct.
 {comedic_voice_contract}
 
 Return ONLY JSON:

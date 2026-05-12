@@ -1705,12 +1705,30 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
         witty = ce.draft_quality_report("Hot take: Broncos camp is where this roster gets interesting.", "Punchy Tweet", "Witty Edge")
+        witty_metaphor = ce.draft_quality_report(
+            "The Avs goalie spot sounds settled until the next ugly start hits like a smoke alarm.",
+            "Punchy Tweet",
+            "Witty Edge",
+        )
+        witty_reaction = ce.draft_quality_report(
+            "The Avs goalie spot sounds settled until one ugly start and the whole room gets real quiet.",
+            "Punchy Tweet",
+            "Witty Edge",
+        )
+        witty_direct = ce.draft_quality_report(
+            "The Avs goalie spot sounds settled until the next ugly start forces an actual decision.",
+            "Punchy Tweet",
+            "Witty Edge",
+        )
         fired = ce.draft_quality_report("Let's go. The Avs are so back and nobody wants us now.", "Punchy Tweet", "Fired-Up")
         critical = ce.draft_quality_report("Fire everyone. This Broncos plan is trash?", "Punchy Tweet", "Critical")
         celebratory = ce.draft_quality_report("Let's go. Massive Nuggets win. We are so back.", "Punchy Tweet", "Celebratory")
         deadpan = ce.draft_quality_report("The Avs changed goalies again 😂", "Punchy Tweet", "Deadpan")
 
         self.assertFalse(witty["ok"])
+        self.assertFalse(witty_metaphor["ok"])
+        self.assertFalse(witty_reaction["ok"])
+        self.assertTrue(witty_direct["ok"])
         self.assertFalse(fired["ok"])
         self.assertFalse(critical["ok"])
         self.assertFalse(celebratory["ok"])
