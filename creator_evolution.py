@@ -350,6 +350,7 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "offseason meeting",
     "huge language",
     "stays employed",
+    "same time tomorrow",
 )
 
 COMEDIC_PROFANITY_TERMS = (
@@ -425,6 +426,7 @@ COMEDIC_ANALYSIS_DRIFT = (
     "actual meaning",
     "the giveaway",
     "nothing was really",
+    "funniest part",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -469,6 +471,11 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "hearing footsteps",
     "team hearing footsteps",
     "crease is doing",
+    "bench unit said",
+    "smoke alarm",
+    "fighting for custody",
+    "custody of the crease",
+    "panic in goalie pads",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -2304,6 +2311,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- FAILURE MODES TO AVOID: angry ranting, swear-word comedy, quirky metaphor comedy, fake-deep analysis, and punchlines that need explanation.\n"
         "- SOLUTION: identify the public claim, identify the private behavior that contradicts it, identify the exact sports mechanism, then make that contrast sound stupidly obvious in one clean line.\n"
         "- HARD STANDARD: If the draft would not make a sports group chat smirk without needing a swear word, it is not Comedic yet.\n"
+        "- PRIVATE WORKFLOW: Before choosing the final 3 options, invent at least 8 possible joke turns. Throw away the safe, analytical, slogan-like, and merely clever ones. Return only the 3 with the clearest sports contradiction and real laugh beat.\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
         "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay or clever writing cosplay.\n"
         "- The joke must come from the exact sports absurdity in the source: injury trust, QB room behavior, rotation math, non-Jokic minutes, fan coping, coach logic, roster incentives, public messaging, or media framing.\n"
@@ -2314,12 +2322,14 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
         "- Comedy density matters. Cut the setup until only the contradiction and the laugh beat remain.\n"
+        "- Do not settle for the first clean version. Clean is not enough. The line needs a turn that makes the reader think 'that is exactly what this is.'\n"
         "- A good Comedic tweet has a visible laugh turn: calm claim -> behavior that gives it away, fan coping -> obvious sports reality, or public plan -> embarrassing game consequence.\n"
         "- The punchline should be a sentence a normal fan could say out loud, not a poetic object line. Bad: 'The transaction wire talks.' Bad: 'QB3 is where the honesty lives.' Bad: 'Bench math stays employed.'\n"
         "- Use human bluntness over clever phrasing. If the funniest version is simply 'that is not depth, that is insurance,' use that instead of a metaphor.\n"
         "- Do not add a detached short tagline after the tweet. The punchline belongs inside the real sentence, not as a slogan under it.\n"
         "- Short human comparisons are allowed only when they make the denial funnier immediately. They must be one quick turn, not a whole analogy. No recycled office, haunted, legal, bureaucracy, dating-app, or random-household bits.\n"
         "- Prefer one compact paragraph for Comedic Normal unless the final line is genuinely funnier than the paragraph version.\n"
+        "- If an option sounds like a normal Witty Edge tweet, rewrite it with a more human comic turn before returning JSON.\n"
         "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, or object-personality crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
@@ -2424,6 +2434,7 @@ QUALITY GATE:
 
 HIDDEN SELF-CHECK BEFORE FINAL JSON:
 Would this sound normal if posted directly from a phone by a funny, witty, sports-obsessed human? If not, rewrite it before returning.
+If the selected lane is Comedic, also ask: is this actually funny, or just clean sports analysis with a cute ending? If it is not actually funny, rewrite it before returning.
 {comedic_voice_contract}
 
 Return ONLY JSON:
