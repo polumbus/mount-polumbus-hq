@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "Real sports comedy with a punchline. The post should make the reader laugh because the actual situation is absurd, not because the wording sounds clever.",
-        "do": "Name the exact sports absurdity, keep the setup short, then use one plain-language joke engine: translation, pretend quote, obvious contradiction, exaggerated fan thought, blunt label, or playful undercut. The joke must come from the topic reality.",
-        "avoid": "Witty analysis, consequence lectures, debate bait, metaphor jokes, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, fake-serious filler, and safe ChatGPT cleverness.",
-        "ending": "A short punchline or walk-off that changes the angle. Funny first, not mad. No summary, no lesson, no explained closer.",
+        "target": "A funny sports post with a real punchline. It should sound like the funniest person in the group chat saw the obvious absurdity and said it plainly.",
+        "do": "Find the exact sports absurdity, then make one clean joke from it. Use translation, pretend quote, fan panic, blunt roast of the situation, or one short relatable comparison. Keep the setup short and let the punchline do the work.",
+        "avoid": "Witty analysis, consequence lectures, debate bait, fake-deep endings, surreal punchlines, random long analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, and safe ChatGPT cleverness.",
+        "ending": "A clear punchline or walk-off. Funny first, not analytical. No summary, no lesson, no explained closer.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -282,7 +282,6 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "lease",
     "restaurant",
     "menu",
-    "check engine",
     "courtroom drama",
     "congressional hearing",
     "ted talk",
@@ -331,6 +330,7 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "shoulder said",
     "the injury spoke",
     "the injury talks",
+    "shopping nervous",
 )
 
 
@@ -2097,19 +2097,23 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "\nCOMEDIC LANE HARD RULES:\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
         "- Funny first. Not clever analysis, not debate pressure, not angry indictment, not a consequence lecture.\n"
-        "- Before writing, privately map: actual topic absurdity -> joke target -> setup -> turn -> punchline. If that map is weak, rewrite.\n"
-        "- Every draft needs an actual plain-language joke mechanic: translation, pretend quote, obvious contradiction, exaggerated fan thought, blunt label, self-aware aside, fake-serious understatement, or playful undercut.\n"
-        "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons, no decorative metaphor extensions.\n"
-        "- Prefer direct sports jokes over metaphor jokes. The best Comedic output usually sounds like a funny fan translating what the team is really saying.\n"
+        "- Before writing, privately map: actual topic absurdity -> why fans recognize it -> clean joke turn -> punchline. If that map is weak, rewrite.\n"
+        "- Make the 3 options use 3 different comedy lanes: option 1 translation joke, option 2 fan behavior joke, option 3 blunt roast of the situation.\n"
+        "- Translation joke means saying what the team/player/media line really means in normal human words.\n"
+        "- Fan behavior joke means making the fan panic or group-chat reaction the funny part without mocking the audience.\n"
+        "- Do not invent crowd counts, percentages, records, timelines, injuries, or stats for a joke. Use 'half the fanbase,' 'everybody,' 'the timeline,' or another non-numeric human phrase unless the source gives the number.\n"
+        "- Blunt roast means lightly roasting the decision, excuse, pattern, or situation. Do not roast protected traits or private life.\n"
+        "- Every draft needs an actual joke mechanic: translation, pretend quote, obvious contradiction, exaggerated fan thought, blunt label, short relatable comparison, self-aware aside, fake-serious understatement, or playful undercut.\n"
+        "- The joke must come from this topic's real absurd detail. Short relatable comparisons are allowed when instantly clear. Long random analogies are not.\n"
         "- Good comedy here is a sports truth with a hard turn. Setup short, punchline shorter.\n"
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
-        "- Do not write lines like 'we all heard the same ankle' or 'that clipboard will start singing.' That is confusing, not funny.\n"
+        "- Do not write lines like 'we all heard the same ankle,' 'that clipboard will start singing,' or 'shopping nervous.' That is confusing, not funny.\n"
         "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
         "- Reject fake-deep lines like 'press conference with vibes,' 'that is the real press conference,' 'talk is cheap,' or 'the conversation gets uncomfortable.' Those are not jokes.\n"
-        "- Target shape examples: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.' / 'If they add another QB, the translation is simple, Bo is fine, but you stand over there in a helmet just in case.'\n"
+        "- Target shape examples: 'If they add another QB, the translation is simple, Bo is fine, but stand over there in pads in case he is not.' / 'Jokic is one playoff run away from charging babysitting rates.' / 'The Avs goalie discourse needs one soft goal before everyone becomes a crease expert with couch credentials.'\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
