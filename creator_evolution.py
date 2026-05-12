@@ -16,7 +16,7 @@ from typing import Any
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v5-voice-profile"
+PROMPT_VERSION = "ce-prompt-v6-voice-tuner-live"
 SCORING_VERSION = "ce-score-v3-tracked-cohorts"
 RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
@@ -38,12 +38,32 @@ EMOTION_LANES = (
 
 LANE_RECIPES = {
     "Witty Edge": {
+        "text": """Witty Edge:
+WITTY EDGE - MIC DROP MODE:
+- Core target: one funny pressure point, compressed into a sharp sports read.
+- Sharp, surprising, and conversational. The tweet should feel like a perfectly timed group-chat line in 280 characters or less.
+- Use brevity plus punch: set up the observation fast, then flip it with irony, wordplay, exaggeration, or an unexpected truth.
+- The funny part must come from the real sports contradiction, not from random metaphor writing.
+- Make it sound effortless, like the smartest or dumbest person in the group chat saw the angle first.
+- Hit something people recognize but have not said cleanly yet.
+- Keep the final beat short. It should smirk, sting, or clarify the whole take.
+- Do not over-explain the logic, use content-strategy language, ask direct engagement questions, or make every option follow the same setup/final-line formula.""",
         "target": "A sharp sports read with one funny pressure point: confident, phone-written, compressed, and direct without sounding angry or over-written.",
         "do": "Name the exact sports contradiction, add one short human bite only if it helps, then land the direct decision consequence in fewer words.",
         "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, hot-take framing, copied viral hooks, long analogies, dressed-up metaphors, reaction framing, and explaining the logic twice.",
         "ending": "A short punchline or consequence line, usually 6 to 8 words, with no abstract conversation framing.",
     },
     "Comedic": {
+        "text": """COMEDIC - EDGY GROUP-CHAT SPORTS COMEDY:
+- Write like a fast, savage, hyper-specific sports joke from the group chat.
+- The laugh should come from fandom rage, absurdity, wordplay, fake earnestness, fan delusion, or a brutally clear sports contradiction.
+- Keep it raw, specific, and dangerously relatable. If the tweet does not have an actual joke, it fails.
+- Use the real moment: a player mistake, ref controversy, blown lead, overhyped claim, cursed fan feeling, or absurd team behavior.
+- Exaggeration is allowed, but it must stay tied to the sports situation.
+- Borderline adult energy and crude-adjacent humor are allowed when they make the joke sharper, but do not use actual profanity, slurs, threats, or personal harassment.
+- Never explain the joke. Never turn it into Witty Edge with one cute word added.
+- Avoid random office/legal/dating metaphors unless the topic truly demands it. Avoid object-agency jokes and fake-deep closers.
+- End with the punchline or the funniest implication.""",
         "target": "Grok-like sports comedy: a funny group-chat read that spots the human contradiction faster than everyone else. Not angry. Not clever-metaphor writing. The laugh comes from making the exact sports behavior sound obviously ridiculous.",
         "do": "Find the ridiculous behavior under the public line, name the concrete sports mechanism, then land one short laugh beat. Use comic inversion, pressure reveal, fan-coping roast, or absurdly plain sports consequence.",
         "avoid": "Profanity as the joke, rage, personal abuse, quirky object comedy, random analogies, workplace/legal metaphors, fake-deep closers, and Witty Edge analysis with one joke word added.",
@@ -56,12 +76,35 @@ LANE_RECIPES = {
         "ending": "A tight consequence line that makes the annoyance feel earned.",
     },
     "Fired-Up": {
+        "text": """FIRED-UP - FAN FIRE AND SIDELINE RANT MODE:
+- High-energy, passionate, intense, and addictive. Coach screaming from the sideline mixed with pure fan emotion.
+- Raw adrenaline, unfiltered passion, motivational fire, and delicious rage.
+- Loud and dramatic, with strong rhythm and strategic ALL CAPS for key screams only.
+- Borderline R-rated energy through intensity and crude-adjacent vibes, but zero actual swear words.
+- Start strong, escalate quickly, and end with a massive punch, challenge, or rallying cry.
+- Use line breaks when they build energy and drama.
+- Make it feel personal, tribal, and contagious.
+- Sports mode: fan loyalty, ref outrage, player worship or destruction, comeback energy, rivalry heat, choking rage, championship hunger.
+- Normal-life mode when needed: gym fire, self-improvement, work hustle, calling out excuses, done-playing-small energy.
+- Do not sound calm, corporate, analytical, critical, or motivational-poster generic.
+- No literal threats, slurs, harassment, invented facts, or empty hype.""",
         "target": "Fan-first heat with urgency, belief, and something real at stake.",
         "do": "Sound like you care, attach the energy to the next concrete test, and make the post feel like momentum, not noise.",
         "avoid": "Motivational-poster language, fake certainty, empty 'we are so back' hype, and generic rally cries.",
         "ending": "A strong declarative challenge that dares disagreement without begging for replies.",
     },
     "Skeptical": {
+        "text": """Skeptical:
+SKEPTICAL - QUIET DOUBT MODE:
+- Smart doubt that pressures the popular assumption without sounding like default negativity.
+- Expose the skipped assumption and leave the optimism on trial.
+- The energy is "we have seen this before" and "cool, but prove it when it matters."
+- Sports mode: overhype checks, ref/league suspicion, choking inevitability, this-changes-nothing fatigue, and quiet doubt about the public story.
+- Normal-life mode when needed: dating red flags, self-help scams, productivity lies, social-media fakery, relationship delusions, and adulting skepticism.
+- Use short, blunt beats. Let the doubt sit there.
+- Push the optimism onto the witness stand. Do not rant.
+- Avoid certainty cosplay, "obviously," "guaranteed," generic contrarian framing, or turning into Critical voice.
+- End with a quiet pressure point that makes the claim feel unproven.""",
         "target": "Smart doubt that pressures the popular assumption without sounding like default negativity.",
         "do": "Expose the assumption everyone is skipping, ask what has to be true, and leave the optimism on trial.",
         "avoid": "Cynicism for its own sake, prediction cosplay, 'obviously/guaranteed' certainty, and generic contrarian framing.",
@@ -74,33 +117,57 @@ LANE_RECIPES = {
         "ending": "A sharp consequence line that makes the diagnosis feel hard to dodge.",
     },
     "Promo": {
-        "text": """PROMO VOICE - VIDEO CLICK TENSION MODE:
-PROMO VOICE RULES:
-- Sell the unresolved tension in the video, not the existence of the video.
-- Make the video feel like the missing third act, not an upload announcement.
+        "text": """Promo:
+PROMO VOICE - VIDEO CLICK TENSION MODE:
+- Create addictive, high-engagement promo tweets for YouTube videos without sounding salesy or cringy.
+- Stop the scroll, spark curiosity, build hype, and drive clicks by selling the unresolved tension in the video.
+- Style: sharp, witty, confident, slightly unhinged, with borderline R-rated energy through crude humor, savage teases, and bold personality, but zero actual swear words.
 - Start from one specific sports contradiction, decision, stat, film tell, or fan assumption.
-- Tease the turn without revealing the payoff. The post should stop one beat before the answer.
-- Preserve Creator Evolution voice: funny, pointed, conversational, phone-written, and specific.
-- Use declarative open loops, not direct engagement questions.
+- Open with the strongest specific hook from the title, topic, or highlights.
+- Tease the juiciest part of the video without spoiling it.
+- Make the video feel urgent, exclusive, and dangerously entertaining.
+- Use line breaks for rhythm and emphasis.
+- Strategic ALL CAPS are allowed. Emojis are allowed only if the global selected format permits them.
+- Two modes: Hype/Fired-Up for big excitement and Curious/Skeptical-Tease for doubt, controversy, or mystery.
 - No question bait.
-- No fake urgency, no "you won't believe," no "watch until the end," no "link in bio," no hashtags, no generic CTA.
-- If a link is supplied, treat it as attached distribution context. Do not beg for clicks or paste a naked URL unless explicitly requested.
-- Punchy: one compact tension beat, no setup, no question closer.
-- Normal: specific setup -> tension turn -> cliffhanger ending.
-- Long: short setup, stakes, contrast, then stop before the reveal.
-- Thread: each segment advances the tension; final segment points at the unresolved reveal without baiting replies.""",
+- A clear watch/click cue is allowed when natural, but no generic "new video is up," "you won't believe," "watch until the end," "link in bio," hashtags, or naked URL begging.
+- If a link is supplied, treat it as distribution context.
+- End with a click-driving cliffhanger, savage tease, or clean CTA that does not reveal the payoff.""",
         "target": "A human sports take that makes the video feel like the missing third act. The post should create curiosity around one unresolved tension, not advertise the upload.",
         "do": "Open with the exact pressure point from the video, name the contradiction or uncomfortable stake, tease the turn before the answer, and make the viewer feel the clip/video resolves what the post refuses to finish.",
         "avoid": "Generic marketing, 'new video is up', 'watch now', 'link below', 'you won't believe', fake urgency, hashtags, naked URLs, recap summaries, thumbnail-copy language, creator-speak, and giving away the final reveal.",
         "ending": "A declarative cliffhanger tied to the video subject. Stop one beat before the answer. No generic question closer.",
     },
     "Celebratory": {
+        "text": """CELEBRATORY - COCKY VICTORY LAP MODE:
+- Turn the win into an arrogant, funny, unapologetic victory lap.
+- Loud, smug, dominant, and entertaining. The friend who just won and is strutting through the group chat.
+- Sports mode: rival destruction, player worship with ego, team supremacy, championship-level gloating, "I told you so" energy.
+- Normal-life mode when needed: personal glow-up, career flex, fitness brag, dating win, the gap-is-widening energy.
+- Use line breaks when they build the flex.
+- Strategic ALL CAPS allowed for peak arrogance.
+- Make it so cocky it becomes funny and addictive.
+- Celebrate the exact winning detail, not generic positivity.
+- End with a savage victory stab, smug payoff, or "you're welcome" energy.
+- Avoid corporate hype, empty "let's go," generic positivity, and victory laps that have no specific reason to exist.""",
         "target": "Specific joy that feels earned, not corporate hype or empty victory-lap energy.",
         "do": "Celebrate the exact detail that changed the mood and connect it to what it unlocks next.",
         "avoid": "Corporate hype words, victory-lap cliches, empty 'let's go' filler, 'massive/unreal/so back' defaults, and generic positivity.",
         "ending": "A specific emotional payoff or forward statement.",
     },
     "Deadpan": {
+        "text": """Deadpan:
+DEADPAN - BONE-DRY COMEDY MODE:
+- Straight-faced, compact, and quietly ridiculous.
+- Completely flat, understated, and emotionless. Like reading a police report about your own life falling apart.
+- Ice-cold deadpan, dry sarcasm, absurd seriousness, blunt observations, and dark humor with zero actual swear words.
+- The funnier the situation, the flatter the delivery.
+- Sports mode: blown leads, ref disasters, rival wins, epic fails, cursed fan moments described like weather.
+- Normal-life mode when needed: dating disasters, adulting failures, fitness regret, existential dread, all delivered with total detachment.
+- No exclamation points. No hype. No emojis. No winking at the joke.
+- Use line breaks for dryness when helpful.
+- Deliver the punchline like it is the most normal thing in the world.
+- End with a flat hard stop or small soul-crushing beat.""",
         "target": "Straight-faced, compact, and quietly ridiculous.",
         "do": "Say the absurd part as plainly as possible and stop before explaining it.",
         "avoid": "Exclamation marks, emojis, winking, 'lol', and punchline explanation.",
