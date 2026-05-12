@@ -548,6 +548,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("blunt roast", prompt)
         self.assertIn("sports-degenerate", prompt)
         self.assertIn("Do not invent crowd counts", prompt)
+        self.assertIn("do not turn that into 'five minutes'", prompt)
         self.assertIn("Football fluency", prompt)
         self.assertIn("goddamn horror show", prompt)
         self.assertIn("he can walk, please clap", prompt)

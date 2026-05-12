@@ -2120,7 +2120,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Make the 3 options use 3 different comedy lanes: option 1 translation joke, option 2 fan behavior joke, option 3 blunt roast of the situation.\n"
         "- Translation joke means turning PR, coach-speak, or front-office language into the ugly desperate reality everyone is thinking.\n"
         "- Fan behavior joke means roasting the coping, denial spiral, group-chat panic, or fan trauma without mocking protected traits or private life.\n"
-        "- Do not invent crowd counts, percentages, records, timelines, injuries, or stats for a joke. Use 'half the fanbase,' 'everybody,' 'the timeline,' or another non-numeric human phrase unless the source gives the number.\n"
+        "- Do not invent crowd counts, percentages, records, timelines, injuries, or stats for a joke. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration. Use 'the non-Jokic stretch,' 'those minutes,' 'everybody,' 'the timeline,' or another non-numeric human phrase unless the source gives the number.\n"
         "- Blunt roast means eviscerating the decision, excuse, pattern, or situation with zero mercy while staying X-safe. Roast the sports situation, not protected traits or private life.\n"
         "- Allowed extras: pretend quote, uncomfortable comparison, exaggerated fan thought, blunt label, self-aware aside, fake-serious understatement, or playful undercut.\n"
         "- The joke must come from this topic's real absurd detail. One short uncomfortable comparison is allowed when it stings. Long random analogies are not.\n"
