@@ -79,22 +79,27 @@ def _paste_card(records: dict, args: argparse.Namespace) -> str:
     variants = [("OLD A", records["old"]), ("NEW B", records["new"]), ("EVOLVING C", records["evolving"])]
     selected = [item for item in variants if args.variant == "all" or item[0].lower().startswith(args.variant)]
     lines = [
-        "GROK.COM CREATOR EVOLUTION MATCHING HARNESS",
+        "RUN THIS CREATOR EVOLUTION TEST NOW",
         "",
-        "Purpose: generate the Grok side of the same Creator Evolution test Codex is running.",
-        "Rules for Grok:",
-        "- Use each exact prompt below.",
+        "You are not setting up a harness. You are running the test immediately.",
+        "Generate the Grok side of the same Creator Evolution test Codex is running.",
+        "Execution rules:",
+        "- Run each exact prompt section below now.",
         "- Do not explain your reasoning.",
         "- For each section, return only the JSON object requested by that section's prompt.",
         "- Do not merge OLD, NEW, and EVOLVING rules together.",
-        "- Do not add extra commentary before or after the JSON.",
+        "- Do not say you are ready.",
+        "- Do not ask for the next concept.",
+        "- Do not add setup commentary.",
+        "- Output exactly three labeled JSON objects unless this card only contains one section.",
+        "- Use labels exactly: OLD A, NEW B, EVOLVING C.",
         "",
         f"Voice: {records['lane']}",
         f"Format: {records['format']}",
         f"Example index for user display after generation: {example_index}",
         f"Concept: {records['concept']}",
         "",
-        "After Grok replies, compare option{example_index} from each generated JSON against the Codex card for the same lane, format, concept, session, and example index.",
+        f"After you generate all sections, the user will compare option{example_index} from each JSON against the Codex card.",
         "",
     ]
     feedback = records.get("overlay", {}).get("feedback", [])
@@ -117,6 +122,18 @@ def _paste_card(records: dict, args: argparse.Namespace) -> str:
                 "",
             ]
         )
+    lines.extend(
+        [
+            "=" * 72,
+            "FINAL OUTPUT INSTRUCTION",
+            "=" * 72,
+            "Run the sections above now.",
+            "Return only the labeled JSON objects.",
+            "Do not say the harness is ready.",
+            "Do not wait for another message.",
+            "",
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
