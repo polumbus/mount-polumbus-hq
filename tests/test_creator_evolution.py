@@ -124,6 +124,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_show_pulse", app_text)
         self.assertIn("ce_pulse", app_text)
         self.assertIn("ce_whats_hot", app_text)
+        self.assertIn("CE_AI_PROVIDER_OPTIONS", app_text)
+        self.assertIn('"Grok"', app_text)
+        self.assertIn("def _call_grok_api_key", app_text)
+        self.assertIn("XAI_API_KEY", app_text)
+        self.assertIn("creator_evolution_provider_switch", app_text)
         self.assertIn("CE_COMPAT_DEFAULTS", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
@@ -138,6 +143,11 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
         self.assertIn("_ce_build_generation_prompt", ce_runner)
+        ce_ai = app_text.split("def _call_creator_evolution_ai", 1)[1].split("def _run_ce_ai", 1)[0]
+        self.assertIn("_ce_selected_ai_provider", ce_ai)
+        self.assertIn("_call_grok_api_key", ce_ai)
+        self.assertIn("call_claude", ce_ai)
+        self.assertIn('st.session_state["_ai_last_route"] = "grok_api_key"', ce_ai)
         self.assertNotIn("ce.build_generation_prompt(", ce_runner)
         self.assertNotIn("_generate_build_data", ce_runner)
         self.assertNotIn("_hall_of_fame_reference_block", ce_runner)

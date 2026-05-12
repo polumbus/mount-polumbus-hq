@@ -105,6 +105,9 @@ CE_COMPAT_DEFAULTS = {
         "estimated_cost_per_1000_tweets": 0.15,
     },
 }
+
+CE_AI_PROVIDER_OPTIONS = ("ChatGPT", "Grok")
+CE_AI_PROVIDER_DEFAULT = "ChatGPT"
 for _ce_attr, _ce_default in CE_COMPAT_DEFAULTS.items():
     if not hasattr(ce, _ce_attr):
         setattr(ce, _ce_attr, _ce_default)
@@ -844,6 +847,21 @@ def _streamlit_api_key_routes_enabled() -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _ce_normalize_ai_provider(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"grok", "xai", "x.ai"}:
+        return "Grok"
+    return CE_AI_PROVIDER_DEFAULT
+
+
+def _ce_selected_ai_provider() -> str:
+    return _ce_normalize_ai_provider(st.session_state.get("ce_ai_provider", CE_AI_PROVIDER_DEFAULT))
+
+
+def _ce_grok_model() -> str:
+    return _secret_or_env("XAI_MODEL", "GROK_MODEL") or "grok-4.20-reasoning"
+
+
 def _streamlit_ai_profile_status() -> dict:
     """Non-secret provider profile snapshot for owner diagnostics."""
     api_key_enabled = _streamlit_api_key_routes_enabled()
@@ -854,6 +872,9 @@ def _streamlit_ai_profile_status() -> dict:
         "api_key_routes_enabled": api_key_enabled,
         "anthropic_api_key_present": bool(_secret_or_env("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")),
         "openai_api_key_present": bool(_secret_or_env("OPENAI_API_KEY")),
+        "grok_api_key_present": bool(_secret_or_env("XAI_API_KEY", "GROK_API_KEY")),
+        "creator_evolution_provider": _ce_selected_ai_provider(),
+        "creator_evolution_grok_model": _ce_grok_model(),
         "last_route": last_route or "no AI call yet",
         "last_provider": st.session_state.get("_ai_last_provider", "unknown"),
         "last_source": st.session_state.get("_ai_last_source", "unknown"),
@@ -1245,6 +1266,43 @@ def _call_openai_api_key(prompt: str, system: str, max_tokens: int, timeout: int
     if text:
         return text
     raise Exception(f"OpenAI API returned empty text: {str(data)[:240]}")
+
+
+def _call_grok_api_key(prompt: str, system: str, max_tokens: int, timeout: int = 60) -> str:
+    """Creator Evolution-only Grok route using xAI's OpenAI-compatible API."""
+    import urllib.request
+
+    api_key = _secret_or_env("XAI_API_KEY", "GROK_API_KEY")
+    if not api_key:
+        raise Exception("No XAI_API_KEY or GROK_API_KEY configured")
+    model = _ce_grok_model()
+    body = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system or ""},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.85,
+        "stream": False,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.x.ai/v1/chat/completions",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    for choice in (data or {}).get("choices", []):
+        message = choice.get("message") if isinstance(choice, dict) else {}
+        text = (message or {}).get("content")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+    raise Exception(f"Grok API returned empty text: {str(data)[:240]}")
 
 
 def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
@@ -10286,19 +10344,41 @@ def _ce_capture_ai_error(raw_text: str) -> bool:
 
 def _call_creator_evolution_ai(prompt: str, lane: str, max_tokens: int, *, timeout_seconds: int = 35) -> str:
     started = time.monotonic()
-    raw = call_claude(
-        prompt,
-        system=_creator_evolution_system_prompt(lane),
-        max_tokens=max_tokens,
-        timeout_seconds=timeout_seconds,
-    )
+    provider = _ce_selected_ai_provider()
+    system_prompt = _creator_evolution_system_prompt(lane)
+    if provider == "Grok":
+        _ai_failure_chain_start()
+        try:
+            raw = _call_grok_api_key(prompt, system_prompt, max_tokens, timeout=timeout_seconds)
+            st.session_state["_ai_last_route"] = "grok_api_key"
+            st.session_state["_ai_last_provider"] = "grok"
+            st.session_state["_ai_last_source"] = "creator_evolution_provider_switch"
+            st.session_state["_ai_last_model"] = _ce_grok_model()
+            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+            _append_debug_event("creator_evolution", "ok", "grok_api_key", {"model": _ce_grok_model(), "lane": lane})
+        except urllib.error.HTTPError as e:
+            detail = f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}"
+            _record_ai_failure("grok_api_key", detail)
+            _append_debug_event("creator_evolution", "error", f"grok_api_key {detail}", {"model": _ce_grok_model(), "lane": lane})
+            raw = f"AI unavailable — grok_api_key {detail}"
+        except Exception as e:
+            _record_ai_failure("grok_api_key", e)
+            _append_debug_event("creator_evolution", "error", f"grok_api_key {e}", {"model": _ce_grok_model(), "lane": lane})
+            raw = f"AI unavailable — grok_api_key {e}"
+    else:
+        raw = call_claude(
+            prompt,
+            system=system_prompt,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
     elapsed = time.monotonic() - started
     if elapsed > timeout_seconds + 5:
         _append_debug_event(
             "creator_evolution",
             "warn",
             "slow AI call",
-            {"elapsed_seconds": round(elapsed, 1), "lane": lane, "max_tokens": max_tokens},
+            {"elapsed_seconds": round(elapsed, 1), "lane": lane, "max_tokens": max_tokens, "provider": provider},
         )
     return raw
 
@@ -11449,6 +11529,40 @@ def _ce_clear_pulse_state(clear_nonce: bool = False) -> None:
         st.session_state["_ce_pulse_draft_nonce"] = 0
 
 
+def _render_creator_evolution_provider_switch():
+    provider = _ce_selected_ai_provider()
+    if st.session_state.get("ce_ai_provider") != provider:
+        st.session_state["ce_ai_provider"] = provider
+    model = _ce_grok_model()
+    provider_index = CE_AI_PROVIDER_OPTIONS.index(provider) if provider in CE_AI_PROVIDER_OPTIONS else 0
+    left, right = st.columns([1.1, 2.4])
+    with left:
+        st.markdown(
+            '<div style="font-size:9px;font-weight:800;letter-spacing:1.4px;color:#3a5070;text-transform:uppercase;margin-bottom:5px;">AI Provider</div>',
+            unsafe_allow_html=True,
+        )
+        st.radio(
+            "Creator Evolution AI provider",
+            CE_AI_PROVIDER_OPTIONS,
+            index=provider_index,
+            key="ce_ai_provider",
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+    with right:
+        selected = _ce_selected_ai_provider()
+        route = "Grok API via XAI_API_KEY/GROK_API_KEY" if selected == "Grok" else "Root app ChatGPT/OAuth/proxy route"
+        key_state = "ready" if _secret_or_env("XAI_API_KEY", "GROK_API_KEY") else "missing key"
+        detail = f"{route} | model {model} | {key_state}" if selected == "Grok" else route
+        st.markdown(
+            f"""<div style="border:1px solid rgba(45,212,191,0.18);background:rgba(45,212,191,0.055);border-radius:12px;padding:10px 12px;margin-top:2px;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.72);font-weight:700;">Creator Evolution is using {html.escape(selected)}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.42);margin-top:3px;">{html.escape(detail)}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+
 @st.fragment
 def _render_creator_evolution_editor():
     spacer_l, center, spacer_r = st.columns([0.5, 4, 0.5])
@@ -11612,8 +11726,12 @@ def page_creator_evolution():
         st.session_state["ce_format"] = CANONICAL_TWEET_DEFAULT_FORMAT
     if "ce_lane" not in st.session_state:
         st.session_state["ce_lane"] = _ce_default_lane()
+    if "ce_ai_provider" not in st.session_state:
+        st.session_state["ce_ai_provider"] = CE_AI_PROVIDER_DEFAULT
 
     state = _creator_evolution_state()
+    _render_creator_evolution_provider_switch()
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
     _render_creator_evolution_learning_panel(state)
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
     _render_creator_evolution_editor()
@@ -15514,6 +15632,7 @@ def page_debug_console():
 
     st.markdown("### Creator Evolution Control Plane")
     ce_rows = [
+        {"surface": "AI provider switch", "status": ai_profile.get("creator_evolution_provider", "ChatGPT"), "detail": "Creator Evolution-only; ChatGPT keeps root OAuth/proxy route, Grok uses xAI API only when selected"},
         {"surface": "Build", "status": "tracked", "detail": "uses shared Creator Evolution prompt builder"},
         {"surface": "Go Viral", "status": "tracked", "detail": "uses call_claude route profile"},
         {"surface": "Repurpose", "status": "tracked", "detail": "uses call_claude route profile"},
@@ -15567,7 +15686,8 @@ def page_debug_console():
     ai_rows = [
         {"item": "Expected root profile", "value": ai_profile.get("profile", ""), "notes": ai_profile.get("expected", "")},
         {"item": "API-key AI routes enabled", "value": str(ai_profile.get("api_key_routes_enabled")), "notes": "must be false unless intentionally testing website-style API keys"},
-        {"item": "API keys present", "value": f"Anthropic={ai_profile.get('anthropic_api_key_present')} OpenAI={ai_profile.get('openai_api_key_present')}", "notes": "presence only; values hidden"},
+        {"item": "API keys present", "value": f"Anthropic={ai_profile.get('anthropic_api_key_present')} OpenAI={ai_profile.get('openai_api_key_present')} Grok={ai_profile.get('grok_api_key_present')}", "notes": "presence only; values hidden"},
+        {"item": "Creator Evolution provider", "value": ai_profile.get("creator_evolution_provider", "ChatGPT"), "notes": f"Grok model={ai_profile.get('creator_evolution_grok_model', '')}"},
         {"item": "Primary model", "value": st.session_state.get("_ai_last_model", "claude-sonnet-4-6"), "notes": "default app model"},
         {"item": "Last route used", "value": st.session_state.get("_ai_last_route", "no AI call yet"), "notes": st.session_state.get("_ai_last_provider", "")},
         {"item": "Last route source", "value": st.session_state.get("_ai_last_source", "unknown"), "notes": st.session_state.get("_ai_last_at", "")},
