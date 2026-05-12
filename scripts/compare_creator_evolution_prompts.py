@@ -11,10 +11,12 @@ read-only AI call for side-by-side preference testing.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +33,8 @@ DEFAULT_CONCEPT = (
     "hoping it settles itself."
 )
 DEFAULT_FORMAT = "Normal Tweet"
+DEFAULT_SESSION = "default"
+HARNESS_STATE_ROOT = ".harness/prompt_evolution"
 DEFAULT_LANES = [
     "Witty Edge",
     "Amused",
@@ -43,6 +47,134 @@ DEFAULT_LANES = [
     "Deadpan",
     "Sarcastic",
 ]
+
+
+def _slug(value: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(value or "").strip()).strip("-").lower()
+    return slug or DEFAULT_SESSION
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _state_paths(repo: Path, session: str) -> dict[str, Path]:
+    root = repo / HARNESS_STATE_ROOT / _slug(session)
+    return {
+        "root": root,
+        "overlay": root / "evolving_overlay.json",
+        "feedback": root / "feedback_rounds.jsonl",
+        "generations": root / "generations.jsonl",
+        "export_md": root / "final_export.md",
+        "export_json": root / "final_export.json",
+    }
+
+
+def _empty_overlay(session: str) -> dict[str, Any]:
+    return {
+        "version": 1,
+        "session": _slug(session),
+        "read_only_live_app": True,
+        "not_applied_live": True,
+        "created_at": _utc_now(),
+        "updated_at": _utc_now(),
+        "feedback": [],
+    }
+
+
+def _load_overlay(repo: Path, session: str) -> dict[str, Any]:
+    path = _state_paths(repo, session)["overlay"]
+    if not path.exists():
+        return _empty_overlay(session)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        data = _empty_overlay(session)
+    data.setdefault("version", 1)
+    data.setdefault("session", _slug(session))
+    data.setdefault("read_only_live_app", True)
+    data.setdefault("not_applied_live", True)
+    data.setdefault("feedback", [])
+    return data
+
+
+def _save_overlay(repo: Path, session: str, overlay: dict[str, Any]) -> None:
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    overlay["updated_at"] = _utc_now()
+    paths["overlay"].write_text(json.dumps(overlay, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _append_feedback(repo: Path, session: str, text: str, scope: str) -> dict[str, Any]:
+    overlay = _load_overlay(repo, session)
+    item = {
+        "id": f"fb_{len(overlay.get('feedback', [])) + 1:03d}",
+        "created_at": _utc_now(),
+        "scope": scope,
+        "text": str(text or "").strip(),
+    }
+    if not item["text"]:
+        return overlay
+    overlay.setdefault("feedback", []).append(item)
+    _save_overlay(repo, session, overlay)
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    with paths["feedback"].open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+    return overlay
+
+
+def _reset_overlay(repo: Path, session: str) -> dict[str, Any]:
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    overlay = _empty_overlay(session)
+    paths["overlay"].write_text(json.dumps(overlay, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    paths["feedback"].write_text("", encoding="utf-8")
+    paths["generations"].write_text("", encoding="utf-8")
+    return overlay
+
+
+def _feedback_lines(overlay: dict[str, Any], scope: str | None = None) -> list[str]:
+    lines = []
+    for item in overlay.get("feedback", []):
+        if scope and item.get("scope") not in {scope, "general"}:
+            continue
+        text = str(item.get("text", "")).strip()
+        if text:
+            lines.append(text)
+    return lines
+
+
+def _overlay_text(overlay: dict[str, Any]) -> str:
+    if not _feedback_lines(overlay):
+        return ""
+    sections = [
+        ("GENERAL", _feedback_lines(overlay, "general")),
+        ("FORMAT", _feedback_lines(overlay, "format")),
+        ("VOICE", _feedback_lines(overlay, "voice")),
+        ("QUALITY", _feedback_lines(overlay, "quality")),
+    ]
+    lines = [
+        "EVOLVING HARNESS SANDBOX OVERRIDES:",
+        "These temporary rules apply only to the Evolving C candidate in this harness.",
+        "They are not approved Creator Evolution rules and are not applied live.",
+    ]
+    for title, values in sections:
+        if not values:
+            continue
+        lines.append(f"{title} FEEDBACK:")
+        lines.extend(f"- {value}" for value in values)
+    return "\n".join(lines)
+
+
+def _apply_evolving_overlay(prompt: str, overlay: dict[str, Any]) -> str:
+    block = _overlay_text(overlay)
+    if not block:
+        return prompt
+    marker = "\nHIDDEN SELF-CHECK BEFORE FINAL JSON:"
+    if marker in prompt:
+        return prompt.replace(marker, f"\n{block}\n{marker}", 1)
+    return f"{prompt.rstrip()}\n\n{block}\n"
 
 
 def _git_show(repo: Path, ref: str, file_path: str) -> str:
@@ -118,10 +250,21 @@ def _normalize_format(module: Any, fmt: str) -> str:
     return clean
 
 
-def _prompt_record(label: str, ref: str, module: Any, concept: str, fmt: str, lane: str) -> dict[str, Any]:
+def _prompt_record(
+    label: str,
+    ref: str,
+    module: Any,
+    concept: str,
+    fmt: str,
+    lane: str,
+    *,
+    overlay: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     lane = _normalize_lane(module, lane)
     fmt = _normalize_format(module, fmt)
     prompt = _build_prompt(module, concept, fmt, lane)
+    if overlay is not None:
+        prompt = _apply_evolving_overlay(prompt, overlay)
     lane_recipe_text = ""
     if hasattr(module, "lane_recipe_text"):
         lane_recipe_text = str(module.lane_recipe_text(lane))
@@ -143,6 +286,7 @@ def _prompt_record(label: str, ref: str, module: Any, concept: str, fmt: str, la
         "lane_behavior": _section(prompt, "LANE BEHAVIOR", ["LEARNED VOICE PROFILE", "CURRENT PERFORMANCE SUMMARY"]),
         "voice_contract": _section(prompt, "CREATOR EVOLUTION VOICE CONTRACT", ["QUALITY GATE"]),
         "quality_gate": _section(prompt, "QUALITY GATE", ["HIDDEN SELF-CHECK BEFORE FINAL JSON"]),
+        "evolving_overlay": _overlay_text(overlay or {}),
         "full_prompt": prompt,
     }
 
@@ -305,20 +449,21 @@ def _render_study_cards(
     model: str,
 ) -> str:
     lines = [
-        "# Creator Evolution Old/New Preference Harness",
+        "# Creator Evolution Prompt Lab",
         "",
         f"Read-only: {output['read_only']}",
         f"Mutates app state: {output['mutates_app_state']}",
         f"Posts to X: {output['posts_to_x']}",
         f"Calls AI: {generate_examples}",
+        f"Session: {output.get('session', DEFAULT_SESSION)}",
         f"Old ref: {output['old_ref']}",
         f"New ref: {output['new_ref']}",
         f"Format: {output['format']}",
         "",
         "How to use this:",
-        "1. Read OLD A and NEW B for each card.",
-        "2. Pick `old`, `new`, `mix`, or `neither`.",
-        "3. Say which specific lines or rule changes you like or hate.",
+        "1. Compare OLD A, NEW B, and EVOLVING C.",
+        "2. Pick `old`, `new`, `evolving`, `mix`, or `neither`.",
+        "3. Give one short feedback note to improve Evolving C, then rerun.",
         "",
         "Concept:",
         "```text",
@@ -326,15 +471,27 @@ def _render_study_cards(
         "```",
         "",
     ]
+    overlay = output.get("evolving_overlay", {})
+    feedback = overlay.get("feedback", []) if isinstance(overlay, dict) else []
+    if feedback:
+        lines.append("Active Evolving feedback:")
+        for item in feedback:
+            lines.append(f"- [{item.get('scope', 'general')}] {item.get('text', '')}")
+        lines.append("")
+    else:
+        lines.append("Active Evolving feedback: none. Evolving C starts identical to New B.")
+        lines.append("")
     for idx, record in enumerate(output["records"], 1):
         old = record["old"]
         new = record["new"]
+        evolving = record.get("evolving")
         lines.extend(
             [
                 f"## Card {idx}: {record['lane']} / {output['format']}",
                 "",
                 f"Old prompt hash: `{old['prompt_sha1']}`",
                 f"New prompt hash: `{new['prompt_sha1']}`",
+                f"Evolving prompt hash: `{evolving['prompt_sha1'] if evolving else 'not built'}`",
                 "",
             ]
         )
@@ -344,7 +501,10 @@ def _render_study_cards(
                 lines.append(delta)
                 lines.append("")
         if generate_examples:
-            for label, side in (("OLD A", old), ("NEW B", new)):
+            variants = [("OLD A", old), ("NEW B", new)]
+            if evolving:
+                variants.append(("EVOLVING C", evolving))
+            for label, side in variants:
                 lines.append(f"### {label} Examples")
                 try:
                     used_provider, raw = _call_ai_for_examples(side["full_prompt"], timeout, provider, model)
@@ -362,28 +522,103 @@ def _render_study_cards(
                     lines.append(f"_Example generation failed: {exc}_")
                 lines.append("")
         else:
-            lines.extend(
-                [
-                    "### OLD A Prompt",
-                    "```text",
-                    old["full_prompt"],
-                    "```",
-                    "",
-                    "### NEW B Prompt",
-                    "```text",
-                    new["full_prompt"],
-                    "```",
-                    "",
-                ]
-            )
+            lines.extend(["Prompt examples were not generated. Use `--generate-examples` to compare tweets.", ""])
+            if include_rules:
+                lines.extend(
+                    [
+                        "### Evolving C Sandbox Overlay",
+                        "```text",
+                        evolving.get("evolving_overlay", "") if evolving else "",
+                        "```",
+                        "",
+                    ]
+                )
         lines.extend(
             [
                 "Preference question:",
-                f"For {record['lane']}, choose `old`, `new`, `mix`, or `neither`, then name the exact line/rule/example that drove the choice.",
+                f"For {record['lane']}, choose `old`, `new`, `evolving`, `mix`, or `neither`, then give one short feedback note for Evolving C.",
                 "",
             ]
         )
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _write_generation_log(repo: Path, session: str, output: dict[str, Any]) -> None:
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    event = {
+        "created_at": _utc_now(),
+        "concept": output.get("concept"),
+        "format": output.get("format"),
+        "old_ref": output.get("old_ref"),
+        "new_ref": output.get("new_ref"),
+        "records": [
+            {
+                "lane": record.get("lane"),
+                "old_prompt_sha1": record.get("old", {}).get("prompt_sha1"),
+                "new_prompt_sha1": record.get("new", {}).get("prompt_sha1"),
+                "evolving_prompt_sha1": record.get("evolving", {}).get("prompt_sha1"),
+                "old_examples": record.get("old", {}).get("examples", []),
+                "new_examples": record.get("new", {}).get("examples", []),
+                "evolving_examples": record.get("evolving", {}).get("examples", []),
+            }
+            for record in output.get("records", [])
+        ],
+    }
+    with paths["generations"].open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _export_proposal(repo: Path, session: str, output: dict[str, Any]) -> dict[str, str]:
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    overlay = output.get("evolving_overlay", {})
+    feedback = overlay.get("feedback", []) if isinstance(overlay, dict) else []
+    proposal = {
+        "version": 1,
+        "created_at": _utc_now(),
+        "session": _slug(session),
+        "not_applied_live": True,
+        "read_only_live_app": True,
+        "old_ref": output.get("old_ref"),
+        "new_ref": output.get("new_ref"),
+        "format": output.get("format"),
+        "concept": output.get("concept"),
+        "feedback": feedback,
+        "prompt_hashes": [
+            {
+                "lane": record.get("lane"),
+                "old": record.get("old", {}).get("prompt_sha1"),
+                "new": record.get("new", {}).get("prompt_sha1"),
+                "evolving": record.get("evolving", {}).get("prompt_sha1"),
+            }
+            for record in output.get("records", [])
+        ],
+        "proposed_overlay_text": _overlay_text(overlay if isinstance(overlay, dict) else {}),
+    }
+    paths["export_json"].write_text(json.dumps(proposal, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    md = [
+        "# Creator Evolution Prompt Lab Export",
+        "",
+        "Status: proposal only. Not applied live.",
+        f"Session: `{_slug(session)}`",
+        f"Old ref: `{output.get('old_ref')}`",
+        f"New ref: `{output.get('new_ref')}`",
+        f"Format: `{output.get('format')}`",
+        "",
+        "## Feedback",
+    ]
+    if feedback:
+        for item in feedback:
+            md.append(f"- `{item.get('scope', 'general')}`: {item.get('text', '')}")
+    else:
+        md.append("- No Evolving feedback yet.")
+    md.extend(["", "## Proposed Harness Overlay", "```text", proposal["proposed_overlay_text"], "```", ""])
+    md.append("## Prompt Hashes")
+    for item in proposal["prompt_hashes"]:
+        md.append(f"- {item['lane']}: old `{item['old']}`, new `{item['new']}`, evolving `{item['evolving']}`")
+    paths["export_md"].write_text("\n".join(md).rstrip() + "\n", encoding="utf-8")
+    return {"json": str(paths["export_json"]), "markdown": str(paths["export_md"])}
 
 
 def parse_args() -> argparse.Namespace:
@@ -394,6 +629,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--format", default=DEFAULT_FORMAT)
     parser.add_argument("--concept", default=DEFAULT_CONCEPT)
     parser.add_argument("--lane", action="append", dest="lanes", help="Lane to compare. Repeatable. Defaults to all lanes.")
+    parser.add_argument("--session", default=DEFAULT_SESSION, help="Harness-only Evolving session name.")
+    parser.add_argument("--feedback", action="append", default=[], help="Add a harness-only feedback note to Evolving C before running.")
+    parser.add_argument("--feedback-scope", choices=["general", "format", "voice", "quality"], default="general")
+    parser.add_argument("--reset-evolving", action="store_true", help="Clear harness-only Evolving feedback for this session before running.")
+    parser.add_argument("--export-proposal", action="store_true", help="Write final_export.md/json proposal files for this harness session.")
     parser.add_argument("--include-full-prompts", action="store_true", help="Include full prompt text. Off by default to keep output readable.")
     parser.add_argument("--study-cards", action="store_true", help="Print human-readable Old/New preference cards instead of JSON.")
     parser.add_argument("--include-rules", action="store_true", help="Include exact changed rule sections in study-card output.")
@@ -408,6 +648,13 @@ def main() -> int:
     args = parse_args()
     repo = Path(args.repo).resolve()
     lanes = args.lanes or DEFAULT_LANES
+    session = _slug(args.session)
+    if args.reset_evolving:
+        overlay = _reset_overlay(repo, session)
+    else:
+        overlay = _load_overlay(repo, session)
+    for feedback in args.feedback:
+        overlay = _append_feedback(repo, session, feedback, args.feedback_scope)
     old_source = _git_show(repo, args.old_ref, "creator_evolution.py")
     new_source = _git_show(repo, args.new_ref, "creator_evolution.py")
     old_module = _load_module_from_source(old_source, "creator_evolution_old_compare")
@@ -426,21 +673,34 @@ def main() -> int:
             raise RuntimeError(f"Format resolves differently between refs: {args.format!r} -> old={old_format!r}, new={new_format!r}")
         old_record = _prompt_record("old", args.old_ref, old_module, args.concept, old_format, old_lane)
         new_record = _prompt_record("new", args.new_ref, new_module, args.concept, new_format, new_lane)
+        evolving_record = _prompt_record(
+            "evolving",
+            f"{args.new_ref}+harness-overlay:{session}",
+            new_module,
+            args.concept,
+            new_format,
+            new_lane,
+            overlay=overlay,
+        )
         comparisons.append(_compare_records(old_record, new_record))
         if not args.include_full_prompts and not args.study_cards and not args.generate_examples:
             old_record.pop("full_prompt", None)
             new_record.pop("full_prompt", None)
-        records.append({"lane": new_lane, "old": old_record, "new": new_record})
+            evolving_record.pop("full_prompt", None)
+        records.append({"lane": new_lane, "old": old_record, "new": new_record, "evolving": evolving_record})
 
     output = {
         "read_only": True,
         "mutates_app_state": False,
         "calls_ai": bool(args.generate_examples),
         "posts_to_x": False,
+        "session": session,
+        "harness_state_root": str(_state_paths(repo, session)["root"]),
         "old_ref": args.old_ref,
         "new_ref": args.new_ref,
         "format": _normalize_format(new_module, args.format),
         "concept": args.concept,
+        "evolving_overlay": overlay,
         "comparisons": comparisons,
         "records": records,
     }
@@ -458,6 +718,11 @@ def main() -> int:
         )
     else:
         print(json.dumps(output, indent=2, ensure_ascii=False))
+    if args.generate_examples:
+        _write_generation_log(repo, session, output)
+    if args.export_proposal:
+        paths = _export_proposal(repo, session, output)
+        print(f"\nExported proposal: {paths['markdown']} and {paths['json']}", file=sys.stderr)
     return 0
 
 

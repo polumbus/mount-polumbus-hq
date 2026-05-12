@@ -8,6 +8,7 @@ __pycache__/
 .claude/
 .codex
 .codex_cleanup/
+.harness/
 proxy.log
 
 # Local restore/screenshot/tutorial artifacts
