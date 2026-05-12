@@ -111,7 +111,7 @@ CE_AI_PROVIDER_DEFAULT = "ChatGPT"
 CE_TESTING_STATE_FILENAME = "creator_evolution_testing_lab.json"
 CE_TESTING_SESSION_DEFAULT = {
     "version": 1,
-    "phase": "model_round",
+    "phase": "feedback_round",
     "concept_index": 0,
     "feedback_index": 0,
     "model_preferences": {},
@@ -3345,7 +3345,7 @@ _owner_podcast_icon = ""
 _owner_podcast_panel = ""
 _owner_creator_evolution_icon = ""
 _owner_creator_evolution_panel = ""
-_owner_testing_panel = ""
+_owner_voice_tuner_panel = ""
 _owner_signals_icon = ""
 _owner_signals_panel = ""
 _owner_gameday_icon = ""
@@ -3365,12 +3365,12 @@ if is_owner():
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 19V5" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M4 16c3-5 7-5 10-2 2 2 4 2 6-1" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 7h6v6" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Creator Evolution
       </a>"""
-    _owner_testing_panel = f"""<a href="/?{_tok_qp}page=Testing" class="mp-panel-item {_act('Testing')}" target="_self">
+    _owner_voice_tuner_panel = f"""<a href="/?{_tok_qp}page=Voice+Tuner" class="mp-panel-item {_act('Voice Tuner')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 6v12a2 2 0 002 2h6a2 2 0 002-2V6" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/><path d="M9 11h6M10 15h4" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Testing
+        Voice Tuner
       </a>"""
     _nav_pages.insert(1, "Creator Evolution")
-    _nav_pages.insert(2, "Testing")
+    _nav_pages.insert(2, "Voice Tuner")
     _nav_pages.insert(9, "10/10 Audit")
     _owner_podcast_icon = f"""<a href="/?{_tok_qp}{_podcast_state_qp}{_podcast_run_qp}page=Podcast" class="mp-ico {_act('Podcast')}" target="_self">
       <div class="mp-active-pip"></div>
@@ -3557,7 +3557,7 @@ _sidebar_html = f"""
         Creator Studio
       </a>
       {_owner_creator_evolution_panel}
-      {_owner_testing_panel}
+      {_owner_voice_tuner_panel}
       <a href="/?{_tok_qp}page=Raw+Thoughts" class="mp-panel-item {_act('Raw Thoughts')}" target="_self">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#6B8AAA" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#6B8AAA" stroke-width="1.5" stroke-linecap="round"/></svg>
         Raw Thoughts
@@ -11679,7 +11679,7 @@ def _ce_testing_overlay_text(state: dict) -> str:
     feedback = state.get("feedback", []) if isinstance(state, dict) else []
     lines = [
         "CREATOR EVOLUTION TESTING COPY OVERRIDES:",
-        "These rules apply only on the TESTING page. They do not change baseline Creator Evolution.",
+        "These rules apply only on the Voice Tuner page. They do not change baseline Creator Evolution.",
         "Preserve the current Creator Evolution voice, format, learning profiles, stat integrity, and quality gates unless a testing note explicitly adjusts them.",
     ]
     clean_feedback = []
@@ -11774,40 +11774,42 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
         )
 
 
-def page_testing():
+def page_voice_tuner():
     if not is_owner():
         st.warning("Owner access required.")
         return
-    st.markdown('<div class="main-header">TESTING</div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Creator Evolution sandbox. Baseline stays locked; testing feedback only changes this copy.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">VOICE TUNER</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Permanent Creator Evolution sandbox. Baseline stays locked; live feedback only changes this tuning copy.</div>', unsafe_allow_html=True)
 
     concepts = _ce_testing_concepts()
     state = _ce_testing_state()
     if not concepts:
         st.error("No testing concepts are available.")
         return
-    phase = state.get("phase", "model_round")
-    is_model_round = phase == "model_round"
-    active_index_key = "concept_index" if is_model_round else "feedback_index"
-    active_index = max(0, min(int(state.get(active_index_key, 0) or 0), len(concepts) - 1))
+    state["phase"] = "feedback_round"
+    active_index = max(0, min(int(state.get("feedback_index", 0) or 0), len(concepts) - 1))
     item = concepts[active_index]
-    progress_label = "Model Round" if is_model_round else "Prompt Feedback Round"
 
     top_cols = st.columns([2.2, 1, 1])
     with top_cols[0]:
-        st.markdown(f"**{progress_label}: Concept {active_index + 1} of {len(concepts)}**")
+        st.markdown(f"**Prompt Tuning: Concept {active_index + 1} of {len(concepts)}**")
         st.caption(f"Voice: {item['lane']} | Format: {item['format']} | ID: {item['id']}")
     with top_cols[1]:
-        if st.button("Reset Testing Lab", use_container_width=True):
+        if st.button("Reset Voice Tuner", use_container_width=True):
             _ce_testing_reset()
             st.rerun()
     with top_cols[2]:
-        if is_model_round and len(state.get("model_preferences", {})) >= len(concepts):
-            if st.button("Start Feedback Round", type="primary", use_container_width=True):
-                state["phase"] = "feedback_round"
-                state["feedback_index"] = 0
-                _save_ce_testing_state(state)
-                st.rerun()
+        provider = st.selectbox(
+            "Model",
+            CE_AI_PROVIDER_OPTIONS,
+            index=CE_AI_PROVIDER_OPTIONS.index(state.get("voice_tuner_provider", CE_AI_PROVIDER_DEFAULT))
+            if state.get("voice_tuner_provider", CE_AI_PROVIDER_DEFAULT) in CE_AI_PROVIDER_OPTIONS
+            else 0,
+            key="ce_voice_tuner_provider",
+        )
+        if provider != state.get("voice_tuner_provider"):
+            state["voice_tuner_provider"] = provider
+            _save_ce_testing_state(state)
 
     st.markdown(
         f"""<div style="border:1px solid rgba(45,212,191,0.22);background:rgba(45,212,191,0.06);border-radius:14px;padding:14px;margin:12px 0;">
@@ -11818,97 +11820,67 @@ def page_testing():
     )
 
     generations = state.setdefault("generations", {})
-    if is_model_round:
-        st.markdown("### Round 1: Choose The Better Model")
-        st.caption("This round uses the current baseline prompt for both models. No feedback is applied yet.")
-        gen_key = _ce_testing_generation_key(item, "model_round")
-        existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
-        if st.button("Generate ChatGPT vs Grok", type="primary", use_container_width=True):
-            with st.spinner("Generating baseline outputs from ChatGPT and Grok..."):
-                existing = {
-                    "chatgpt": _ce_testing_generate(item, provider="ChatGPT", testing_copy=False),
-                    "grok": _ce_testing_generate(item, provider="Grok", testing_copy=False),
-                }
-                generations[gen_key] = existing
-                _save_ce_testing_state(state)
-            st.rerun()
-        col_a, col_b = st.columns(2)
-        with col_a:
-            _render_ce_testing_output_card("ChatGPT Baseline", existing.get("chatgpt", {}))
-        with col_b:
-            _render_ce_testing_output_card("Grok Baseline", existing.get("grok", {}))
-        pref_cols = st.columns(4)
-        choices = [("ChatGPT wins", "ChatGPT"), ("Grok wins", "Grok"), ("Tie", "Tie"), ("Neither", "Neither")]
-        for col, (label, value) in zip(pref_cols, choices):
-            with col:
-                if st.button(label, key=f"ce_test_model_pref_{item['id']}_{value}", use_container_width=True):
-                    state.setdefault("model_preferences", {})[item["id"]] = {
+    st.markdown("### Baseline vs Tuned Copy")
+    st.caption("Feedback below is added only to the Voice Tuner prompt overlay. Baseline Creator Evolution is not changed.")
+    st.caption(f"Using model for this concept: {provider}")
+    gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state).encode()).hexdigest()[:8])
+    existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
+    if st.button("Generate Baseline vs Tuned Copy", type="primary", use_container_width=True):
+        with st.spinner("Generating baseline and tuned-copy outputs..."):
+            existing = {
+                "baseline": _ce_testing_generate(item, provider=provider, testing_copy=False),
+                "testing": _ce_testing_generate(item, provider=provider, testing_copy=True),
+            }
+            generations[gen_key] = existing
+            _save_ce_testing_state(state)
+        st.rerun()
+    col_a, col_b = st.columns(2)
+    with col_a:
+        _render_ce_testing_output_card("Baseline Current Creator Evolution", existing.get("baseline", {}))
+    with col_b:
+        _render_ce_testing_output_card("Tuned Copy With Feedback Overlay", existing.get("testing", {}))
+
+    feedback_key = f"ce_voice_tuner_feedback_{item['id']}"
+    with st.form(f"ce_voice_tuner_feedback_form_{item['id']}", clear_on_submit=True):
+        feedback = st.text_area(
+            "Feedback to wire into the tuned prompt only",
+            placeholder="Example: make the final sentence shorter and more direct, less over-explained, more consequence.",
+            height=100,
+            key=feedback_key,
+        )
+        submitted = st.form_submit_button("Apply Feedback To Tuned Prompt", type="primary", use_container_width=True)
+    if submitted and feedback.strip():
+        state.setdefault("feedback", []).append({
+            "lane": item["lane"],
+            "concept_id": item["id"],
+            "text": feedback.strip(),
+            "at": datetime.now().isoformat(timespec="seconds"),
+        })
+        _save_ce_testing_state(state)
+        st.toast("Feedback applied to Voice Tuner.")
+        st.rerun()
+    result_cols = st.columns(4)
+    result_choices = [("Baseline wins", "Baseline"), ("Tuned wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
+    for col, (label, value) in zip(result_cols, result_choices):
+        with col:
+            if st.button(label, key=f"ce_voice_tuner_pref_{item['id']}_{value}", use_container_width=True):
+                if value != "Next":
+                    state.setdefault("prompt_preferences", {})[item["id"]] = {
                         "choice": value,
                         "lane": item["lane"],
                         "concept": item["concept"],
+                        "provider": provider,
                         "at": datetime.now().isoformat(timespec="seconds"),
                     }
-                    state["concept_index"] = min(active_index + 1, len(concepts) - 1)
-                    if active_index + 1 >= len(concepts):
-                        state["phase"] = "feedback_round"
-                        state["feedback_index"] = 0
-                    _save_ce_testing_state(state)
-                    st.rerun()
-    else:
-        st.markdown("### Round 2: Baseline vs Testing Copy")
-        st.caption("Feedback below is added only to the TESTING prompt overlay. Baseline Creator Evolution is not changed.")
-        model_pref = (state.get("model_preferences", {}).get(item["id"], {}) or {}).get("choice", "ChatGPT")
-        provider = model_pref if model_pref in CE_AI_PROVIDER_OPTIONS else "ChatGPT"
-        st.caption(f"Using model for this concept: {provider}")
-        gen_key = _ce_testing_generation_key(item, "feedback_round", provider, hashlib.sha1(_ce_testing_overlay_text(state).encode()).hexdigest()[:8])
-        existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
-        if st.button("Generate Baseline vs Testing", type="primary", use_container_width=True):
-            with st.spinner("Generating baseline and testing-copy outputs..."):
-                existing = {
-                    "baseline": _ce_testing_generate(item, provider=provider, testing_copy=False),
-                    "testing": _ce_testing_generate(item, provider=provider, testing_copy=True),
-                }
-                generations[gen_key] = existing
+                state["feedback_index"] = min(active_index + 1, len(concepts) - 1)
                 _save_ce_testing_state(state)
-            st.rerun()
-        col_a, col_b = st.columns(2)
-        with col_a:
-            _render_ce_testing_output_card("Baseline Current Creator Evolution", existing.get("baseline", {}))
-        with col_b:
-            _render_ce_testing_output_card("Testing Copy With Feedback Overlay", existing.get("testing", {}))
-        with st.form(f"ce_testing_feedback_{item['id']}"):
-            feedback = st.text_area(
-                "Feedback to wire into the testing prompt only",
-                placeholder="Example: make the final sentence shorter and more direct, less over-explained, more consequence.",
-                height=100,
-            )
-            submitted = st.form_submit_button("Apply Feedback To Testing Prompt", type="primary", use_container_width=True)
-        if submitted and feedback.strip():
-            state.setdefault("feedback", []).append({
-                "lane": item["lane"],
-                "concept_id": item["id"],
-                "text": feedback.strip(),
-                "at": datetime.now().isoformat(timespec="seconds"),
-            })
-            _save_ce_testing_state(state)
-            st.rerun()
-        result_cols = st.columns(4)
-        result_choices = [("Baseline wins", "Baseline"), ("Testing wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
-        for col, (label, value) in zip(result_cols, result_choices):
-            with col:
-                if st.button(label, key=f"ce_test_prompt_pref_{item['id']}_{value}", use_container_width=True):
-                    if value != "Next":
-                        state.setdefault("prompt_preferences", {})[item["id"]] = {
-                            "choice": value,
-                            "lane": item["lane"],
-                            "concept": item["concept"],
-                            "at": datetime.now().isoformat(timespec="seconds"),
-                        }
-                    state["feedback_index"] = min(active_index + 1, len(concepts) - 1)
-                    _save_ce_testing_state(state)
-                    st.rerun()
-        with st.expander("Current testing prompt overlay", expanded=False):
-            st.text(_ce_testing_overlay_text(state))
+                st.rerun()
+    with st.expander("Current Voice Tuner prompt overlay", expanded=False):
+        st.text(_ce_testing_overlay_text(state))
+
+
+def page_testing():
+    page_voice_tuner()
 
 
 @st.fragment
@@ -19381,6 +19353,7 @@ page_map = {
 }
 if is_owner():
     page_map["Creator Evolution"] = page_creator_evolution
+    page_map["Voice Tuner"] = page_voice_tuner
     page_map["Testing"] = page_testing
 if is_owner():
     page_map["Podcast"] = page_podcast
@@ -19477,7 +19450,7 @@ finally:
 _auto_sync_pages = {
     "Creator Studio",
     "Creator Evolution",
-    "Testing",
+    "Voice Tuner",
     "Content Coach",
     "Article Writer",
     "Post History",
