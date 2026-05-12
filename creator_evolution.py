@@ -1208,6 +1208,56 @@ def _comedic_slogan_closer_hit(text: str) -> str:
     return ""
 
 
+def repair_generated_text_for_format(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> str:
+    """Deterministically repair fixable format mistakes before quality gates run."""
+    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    fmt = fmt or "Normal Tweet"
+    lane = normalize_lane(lane)
+    if not text:
+        return ""
+
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)
+
+    if fmt == "Punchy Tweet":
+        return re.sub(r"\s+", " ", text).strip()
+
+    if fmt == "Normal Tweet":
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", text) if part.strip()]
+        if not paragraphs:
+            paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(paragraphs) <= 1:
+            return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+        joined_paragraphs: list[str] = []
+        for paragraph in paragraphs:
+            joined_paragraphs.append(re.sub(r"\s*\n\s*", " ", paragraph).strip())
+
+        if len(joined_paragraphs) == 2:
+            return "\n\n".join(joined_paragraphs).strip()
+
+        final = joined_paragraphs[-1]
+        opening = " ".join(joined_paragraphs[:-1]).strip()
+        return f"{opening}\n\n{final}".strip()
+
+    if fmt == "Long Tweet":
+        text = text.replace("---TWEET---", " ")
+        return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    if fmt == "Thread":
+        segments = [seg.strip() for seg in text.split("---TWEET---") if seg.strip()]
+        if not segments:
+            return re.sub(r"\n{3,}", "\n\n", text).strip()
+        cleaned = [re.sub(r"\n{3,}", "\n\n", seg).strip() for seg in segments]
+        return "\n\n---TWEET---\n\n".join(cleaned).strip()
+
+    if fmt == "Article":
+        text = text.replace("---TWEET---", "\n\n")
+        return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
@@ -1469,9 +1519,8 @@ def validate_generation_options(data: dict[str, Any], fmt: str, lane: str) -> di
             set_issues = option_set_findings.get(option_key, [])
             if set_issues:
                 report = dict(report)
-                report["issues"] = list(dict.fromkeys(list(report.get("issues", []) or []) + set_issues))
-                report["ok"] = False
-                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 25))
+                report["warnings"] = list(dict.fromkeys(list(report.get("warnings", []) or []) + set_issues))
+                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 8))
             reports[option_key] = report
     return reports
 

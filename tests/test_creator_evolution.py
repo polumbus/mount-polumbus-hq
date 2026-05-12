@@ -278,6 +278,32 @@ class CreatorEvolutionTests(unittest.TestCase):
         ])
         self.assertTrue(ce.draft_quality_report(thread, "Thread", "Witty Edge")["ok"])
 
+    def test_generated_text_repair_fixes_normal_tweet_blank_lines_before_gates(self):
+        raw = (
+            "The Broncos keep saying this roster is deeper than last year.\n\n\n"
+            "Training camp is where that stops being a slogan and starts turning into real decisions about who actually belongs.\n\n\n"
+            "The depth chart gets honest fast..."
+        )
+        repaired = ce.repair_generated_text_for_format(raw, "Normal Tweet", "Witty Edge")
+        self.assertLessEqual(len(re.findall(r"\n\s*\n", repaired)), 1)
+        self.assertNotIn("multiple blank-line", " ".join(ce.draft_quality_report(repaired, "Normal Tweet", "Witty Edge")["issues"]))
+
+    def test_generated_text_repair_fixes_punchy_line_breaks_before_gates(self):
+        raw = "Payton is not handing out comfort reps anymore.\nCamp just got a lot less ceremonial."
+        repaired = ce.repair_generated_text_for_format(raw, "Punchy Tweet", "Witty Edge")
+        self.assertNotIn("\n", repaired)
+        self.assertNotIn("  ", repaired)
+
+    def test_option_set_structure_repetition_warns_without_blocking_all_drafts(self):
+        data = {
+            "option1": "The Broncos keep saying the roster is deeper than last year. Camp is where that stops being theory and starts deciding which safe names actually survive.\n\nThe cut line will tell on them...",
+            "option2": "The Avs keep saying the crease is settled for this run. The next tough start is where that stops being a talking point and starts changing the room.\n\nThe bench will answer fast...",
+            "option3": "The Nuggets keep saying everything is on the table this summer. Those bench minutes are still the pressure point that turns every plan into damage control.\n\nThat is where summer gets honest...",
+        }
+        report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
+        self.assertTrue(all(item["ok"] for item in report.values()))
+        self.assertTrue(any("line-break skeleton" in " ".join(item["warnings"]) for item in report.values()))
+
     def test_format_evolution_learns_profiles_from_mature_tweets(self):
         tweets = [
             _tweet(20, "The Broncos keep acting like the boring roster answer is a side quest, but every real signal keeps pointing back to the same uncomfortable plan. That is usually where this league tells on itself...", hours_ago=90, views=14000, likes=320, replies=80, reposts=45),
@@ -1569,6 +1595,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('setattr(ce, "lane_recipe_text", _ce_lane_recipe_text)', app_text)
         self.assertNotIn("ce.lane_recipe_text(", app_text)
         self.assertIn("def _ce_validate_generation_options", app_text)
+        self.assertIn("def _ce_prepare_generated_option", app_text)
+        self.assertIn('getattr(ce, "repair_generated_text_for_format", None)', app_text)
+        self.assertIn("data[option_key] = _ce_prepare_generated_option", app_text)
+        self.assertIn("repaired[option_key] = _ce_prepare_generated_option", app_text)
+        self.assertIn("required_passing = 3", app_text)
+        self.assertIn('repair_attempts = 12 if lane == "Comedic" else 4', app_text)
         self.assertNotIn("ce.validate_generation_options(", app_text)
         self.assertIn("def _ce_initial_state", app_text)
         self.assertIn("def _ce_refresh_state", app_text)

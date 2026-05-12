@@ -4364,6 +4364,18 @@ def _sanitize_output(text: str) -> str:
     return text
 
 
+def _ce_prepare_generated_option(text: str, fmt: str, lane: str) -> str:
+    """Apply deterministic repairs for fixable model formatting before gates run."""
+    cleaned = _sanitize_output(str(text or ""))
+    repairer = getattr(ce, "repair_generated_text_for_format", None)
+    if callable(repairer):
+        try:
+            cleaned = repairer(cleaned, fmt, lane)
+        except Exception:
+            pass
+    return str(cleaned or "").strip()
+
+
 def _parse_banger_json(raw):
     """Robust parser for banger/build/rewrite JSON — handles literal newlines in tweet strings."""
     clean = raw.strip()
@@ -8707,9 +8719,8 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
                 set_issues.append("Generated options all end with ellipsis; keep ellipsis available but vary at least one ending type.")
             if set_issues:
                 report = dict(reports.get(option_key, {}))
-                report["issues"] = list(dict.fromkeys(list(report.get("issues", []) or []) + set_issues))
-                report["ok"] = False
-                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 25))
+                report["warnings"] = list(dict.fromkeys(list(report.get("warnings", []) or []) + set_issues))
+                report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(set_issues) * 8))
                 reports[option_key] = report
     return reports
 
@@ -8791,7 +8802,7 @@ Return ONLY corrected JSON with option1, option1_pattern, option2, option2_patte
         return None, quality_report, []
     for option_key in ["option1", "option2", "option3"]:
         if repaired.get(option_key):
-            repaired[option_key] = _sanitize_output(repaired[option_key]).strip()
+            repaired[option_key] = _ce_prepare_generated_option(repaired[option_key], fmt, lane)
     repaired_quality = _ce_validate_generation_options(repaired, fmt, lane)
     return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
 
@@ -10508,13 +10519,13 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
     if data and data.get("option1"):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
-                data[option_key] = _sanitize_output(data[option_key]).strip()
+                data[option_key] = _ce_prepare_generated_option(data[option_key], fmt, lane)
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
         if lane == "Comedic":
             passing = _ce_clean_comedic_option_ids(data, quality_report)
-        required_passing = 3 if lane == "Comedic" else 1
-        repair_attempts = 12 if lane == "Comedic" else 1
+        required_passing = 3
+        repair_attempts = 12 if lane == "Comedic" else 4
         passing_pool: list[tuple[str, str, str]] = []
 
         def _collect_passing_options(source_data: dict, source_passing: list[str]) -> None:
@@ -11663,6 +11674,166 @@ def _ce_testing_reset() -> dict:
     return state
 
 
+CE_MONETIZATION_OPTIMIZED_AB_RULES = """OPTION B MONETIZATION-OPTIMIZED CREATOR EVOLUTION RULES:
+These rules apply only to Option B inside Voice Tuner. Option A must remain the current baseline rules.
+For Option B, the selected format block and selected voice lane block below override conflicting baseline format or lane wording, while preserving fact integrity, source preservation, learned Creator Evolution profiles, approved rules, no hashtags, no links unless supplied, no invented facts, and no polished punctuation.
+
+Punchy Tweet Format Block (Monetization-Optimized):
+Punchy Tweet format rules (mandatory):
+- Target 70-155 characters, hard max 160.
+- Exactly 1 or 2 sentences. Zero line breaks. Must feel raw and phone-typed.
+- One sharp, complete reaction with visible tension, contradiction, bold observation, or sports hot take designed to spark immediate replies and quote-tweets.
+- Must create strong natural curiosity or unresolved tension that makes people want to reply or repost to agree/disagree.
+- Vary openings and endings across the 3 options to maximize different emotional triggers.
+- Must sound like Tyler wrote it today in the selected voice lane: raw, human, phone-typed, with high reply-baiting energy.
+- Repair rules: Automatically remove any line breaks or extra whitespace.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style with natural dry wit or irony that creates maximum reply pressure and shareability. Prioritize open loops and hot takes that drive engagement, retweets, and quote-tweets. No corporate tone, no hashtags, no links, no over-explaining.
+- Output only the tweet text inside the JSON fields.
+
+Normal Tweet Format Block (Monetization-Optimized):
+Normal Tweet format rules (mandatory):
+- Target 161-260 characters preferred. Hard validator tolerance: 140-280 characters.
+- Structure: Usually two or three natural sentences, then one intentional line break, then one strong final statement, OR a smooth single-paragraph version when it flows better. Choose the shape that best creates reply pressure.
+- Final line must create maximum response pressure through dramatic ending, implied open loop with no question mark, bold declarative argument, consequence, or quote-tweet bait. Rotate ellipsis and hard-period endings.
+- Must vary structure and final-line type across the 3 options to hit different engagement triggers: tribal emotion, controversy, relatability.
+- Must sound like Tyler wrote it today in the selected voice lane with raw, phone-typed energy that drives replies and reposts.
+- Repair rules: Collapse extra whitespace. Allow at most one intentional line break. Fix any direct questions or multiple blank lines automatically.
+- Grok voice directive: Write in your signature witty, truth-seeking, natural conversational style. Engineer every option for high monetization upside: unresolved tension, shareable hot takes, and reply/quote-tweet fuel. No corporate polish, no hashtags, no links, no over-explaining.
+- Output only the tweet text inside the JSON fields.
+
+Long Tweet Format Block (Monetization-Optimized):
+Long Tweet format rules (mandatory):
+- Target: 261-700 characters preferred. Hard validator range: strictly 260-900 characters.
+- Core structure: Strong opening take, 2-3 tight evidence/contrast beats, then one memorable closing turn engineered for maximum reply and repost potential. Vary the final turn: consequence, sharp irony, unresolved tension, or clean walk-off, to create debate or tribal energy.
+- Must earn the length by building escalating tension that rewards extra reading and drives quote-tweets.
+- Must vary flow and closing style across options to hit different virality angles.
+- Must sound like Tyler wrote it today in the selected voice lane: raw, human, phone-typed with high engagement payoff.
+- Repair rules: Automatically remove any ---TWEET--- separators, collapse extra whitespace, and normalize line breaks.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Build escalating tension and unresolved stakes that maximize replies, reposts, and quote-tweets. Favor natural dry humor or bold observation for viral lift. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet text inside the JSON fields.
+
+Thread Format Block (Monetization-Optimized):
+Thread format rules (mandatory):
+- Target: Exactly 4-7 tweets.
+- Each tweet segment must stand alone, stay under 280 characters, and be engineered for cumulative engagement. Each segment adds reply/quote fuel.
+- Structure: Separate every tweet with exactly "---TWEET---" on its own line.
+- Tweet 1 must hook with maximum tension. Middle tweets escalate or reframe to build debate energy. Final tweet lands a memorable takeaway that leaves strong open-loop reply pressure.
+- Vary the overall thread arc by topic and voice lane to create different virality paths.
+- Must sound like Tyler wrote it today in the selected voice lane: raw, phone-typed, with escalating monetization power across the thread.
+- Repair rules: Preserve ---TWEET--- separators exactly. Automatically normalize whitespace and ensure every segment stays under 280 characters.
+- Grok voice directive: Write every segment in your signature sharp, witty, maximally truth-seeking style. Engineer the entire thread for maximum replies, reposts, and quote-tweets through escalating tension and tribal sports energy. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the full thread with separators inside the JSON fields.
+
+Article Format Block (Monetization-Optimized):
+Article format rules (mandatory):
+- Target: 900-1,500 words preferred. Hard validator minimum: at least 1,800 characters.
+- Structure: Catchy headline engineered for clicks/shares, sharp intro, 3-5 section headings, concrete examples, and a memorable closing take designed to drive replies and quote-tweets.
+- Must build a clear argument with escalating tension that rewards full reading and sparks debate.
+- Must sound like Tyler wrote it today in the selected voice lane: raw, human, authoritative, with high monetization payoff.
+- Repair rules: Automatically remove any ---TWEET--- separators, normalize paragraphs and whitespace, and ensure the piece meets the 1,800-character validator floor.
+- Grok voice directive: Write in your signature maximally truth-seeking, witty, insightful style. Engineer the entire article for virality: unresolved stakes, tribal emotion, and closing tension that drives replies, reposts, and bookmarks. No invented facts, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the full article text including headline and section headings inside the JSON fields.
+
+Witty Edge Voice Lane Block (Monetization-Optimized):
+Witty Edge voice lane rules (mandatory when selected):
+- Compressed sports observation with a razor-sharp turn engineered for instant reply and quote-tweet virality.
+- Wit must come from the exact cut and direct sports consequence that creates debate or tribal agreement.
+- Must preserve core claim and source details while maximizing shareability.
+- Must sound like Tyler wrote it today: raw, phone-typed, concise with high engagement lift.
+- Repair rules: Automatically trim any over-explaining while keeping the sharp, reply-baiting turn intact.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Prioritize the cleanest cut that creates maximum reply pressure and quote-tweet fuel. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Comedic Voice Lane Block (Monetization-Optimized):
+Comedic voice lane rules (mandatory when selected):
+- Joke-first sports comedy engineered to be genuinely funny and highly shareable: pressure reveal, sports-logic flip, or fan-coping roast.
+- Must land the joke in a way that drives replies and reposts through relatability or group laughter.
+- Must preserve core claim and source details while sharpening viral humor.
+- Must sound like Tyler wrote it today: raw, phone-typed, with strong engagement payoff.
+- Repair rules: Automatically strip any profanity, anger drift, or non-absurdity jokes while preserving the core humor that maximizes shares and replies.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the comedy create maximum reply and repost energy from concise, insightful observation with dry humor or irreverence. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Annoyed Voice Lane Block (Monetization-Optimized):
+Annoyed voice lane rules (mandatory when selected):
+- Express clear frustration at a sports decision or pattern in a way that channels shared irritation into replies and quote-tweets.
+- Attack the choice or logic, never a person, to fuel tribal venting and engagement.
+- Must preserve core claim and source details while sharpening annoyed energy for virality.
+- Must sound like Tyler wrote it today: raw, phone-typed, blunt, with high reply-baiting frustration.
+- Repair rules: Automatically strip any toxicity or personal attacks while preserving the core annoyed point that drives engagement.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the annoyance create maximum reply and quote-tweet pressure through dry irritation and bold contradiction. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Fired-Up Voice Lane Block (Monetization-Optimized):
+Fired-Up voice lane rules (mandatory when selected):
+- High-energy fan fire engineered to be contagious and drive massive replies, reposts, and tribal energy.
+- Strategic ALL CAPS allowed for emphasis on stakes that spark passion and shares.
+- Must preserve core claim and source details while amplifying viral passion.
+- Must sound like Tyler wrote it today: raw, phone-typed, fired-up with high monetization upside.
+- Repair rules: Automatically strip any profanity, empty hype, or threats while preserving the passionate core that maximizes engagement.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the fired-up energy create maximum replies and reposts through bold intensity and irreverence. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Skeptical Voice Lane Block (Monetization-Optimized):
+Skeptical voice lane rules (mandatory when selected):
+- Quiet doubt engineered to expose assumptions and spark debate/replies by leaving optimism on trial.
+- Use short, blunt beats that invite people to push back or pile on.
+- Must preserve core claim and source details while maximizing reply pressure.
+- Must sound like Tyler wrote it today: raw, phone-typed, measured skepticism with high engagement lift.
+- Repair rules: Automatically strip any over-certainty while preserving the core doubt that drives replies.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let skepticism create maximum reply and quote-tweet fuel through dry bluntness. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Critical Voice Lane Block (Monetization-Optimized):
+Critical voice lane rules (mandatory when selected):
+- Sharp, analytical criticism engineered to fuel debate, replies, and quote-tweets by attacking decisions or patterns with precision.
+- Must preserve core claim and source details while sharpening critique for virality.
+- Must sound like Tyler wrote it today: raw, phone-typed, direct, with high engagement payoff.
+- Repair rules: Automatically strip any toxicity or over-explaining while preserving the core critical point that drives replies.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the criticism create maximum reply and repost energy through bold contradiction. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Promo Voice Lane Block (Monetization-Optimized):
+Promo voice lane rules (mandatory when selected):
+- Video click-tension mode engineered to build maximum curiosity and click desire that drives replies and reposts.
+- Sell unresolved tension that makes people want to engage and share the tease.
+- Must preserve core claim and source details while sharpening promo energy for virality.
+- Must sound like Tyler wrote it today: raw, phone-typed, intriguing with high monetization lift.
+- Repair rules: Automatically strip any salesy or generic clickbait language while preserving the core tension that maximizes engagement.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the promo tension create maximum replies and reposts through natural intrigue. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Celebratory Voice Lane Block (Monetization-Optimized):
+Celebratory voice lane rules (mandatory when selected):
+- Cocky victory lap engineered to be loud, smug, and dominant in a way that drives tribal replies, reposts, and quote-tweets.
+- Celebrate the exact winning detail to spark group celebration or debate.
+- Must preserve core claim and source details while amplifying celebration for virality.
+- Must sound like Tyler wrote it today: raw, phone-typed, smug confidence with high engagement upside.
+- Repair rules: Automatically strip any generic positivity while preserving the core celebratory point that maximizes shares.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the celebration create maximum reply and repost energy through bold smugness or dry humor. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Deadpan Voice Lane Block (Monetization-Optimized):
+Deadpan voice lane rules (mandatory when selected):
+- Bone-dry comedy engineered to be straight-faced and compact so the absurdity lands hard and drives replies through surprise or relatability.
+- Must preserve core claim and source details while sharpening deadpan delivery for viral lift.
+- Must sound like Tyler wrote it today: raw, phone-typed, flat delivery with high engagement payoff.
+- Repair rules: Automatically strip any hype or emojis while preserving the core deadpan point that maximizes shares and replies.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the deadpan humor create maximum reply pressure through completely flat, emotionless observation. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+
+Sarcastic Voice Lane Block (Monetization-Optimized):
+Sarcastic voice lane rules (mandatory when selected):
+- Dry humor, Cultural Leap for positive or Implied Real Story for negative, engineered to reveal sports truth in a way that sparks replies and quote-tweets.
+- Never explain. Sarcasm must land with maximum debate or agreement energy.
+- Must preserve core claim and source details while sharpening sarcastic edge for virality.
+- Must sound like Tyler wrote it today: raw, phone-typed, understated sarcasm with high monetization upside.
+- Repair rules: Automatically strip any explanatory language while preserving the core sarcastic truth that drives engagement.
+- Grok voice directive: Write in your signature sharp, witty, maximally truth-seeking style. Let the sarcasm create maximum reply and quote-tweet fuel through dry humor or irreverence. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
+- Output only the tweet/article text inside the JSON fields.
+"""
+
+
 def _ce_testing_concepts() -> list[dict]:
     path = Path("scripts/creator_evolution_harness_concepts.json")
     concepts = {}
@@ -11698,9 +11869,11 @@ def _ce_testing_concepts() -> list[dict]:
 def _ce_testing_overlay_text(state: dict) -> str:
     feedback = state.get("feedback", []) if isinstance(state, dict) else []
     lines = [
-        "CREATOR EVOLUTION TESTING COPY OVERRIDES:",
-        "These rules apply only on the Voice Tuner page. They do not change baseline Creator Evolution.",
-        "Preserve the current Creator Evolution voice, format, learning profiles, stat integrity, and quality gates unless a testing note explicitly adjusts them.",
+        "CREATOR EVOLUTION OPTION B OVERRIDES:",
+        "These rules apply only to Option B on the Voice Tuner page. They do not change Option A or live Creator Evolution.",
+        "Option A is the current baseline. Option B is the monetization-optimized rule set below.",
+        "Preserve Creator Evolution learning profiles, approved rules, source preservation, stat integrity, and quality gates unless the Option B rules explicitly adjust wording or structure.",
+        CE_MONETIZATION_OPTIMIZED_AB_RULES,
     ]
     clean_feedback = []
     for item in feedback:
@@ -11712,10 +11885,10 @@ def _ce_testing_overlay_text(state: dict) -> str:
         elif str(item).strip():
             clean_feedback.append(str(item).strip())
     if clean_feedback:
-        lines.append("Apply this live testing feedback:")
+        lines.append("Apply this live testing feedback after the Option B rules:")
         lines.extend(f"- {text}" for text in clean_feedback[-20:])
     else:
-        lines.append("No testing feedback has been added yet, so the testing prompt should match baseline behavior.")
+        lines.append("No extra testing feedback has been added yet. Option B should use only the monetization-optimized rules above.")
     return "\n".join(lines)
 
 
@@ -11729,8 +11902,8 @@ def _ce_testing_generate(
     provider: str,
     testing_copy: bool,
 ) -> dict:
-    fmt = _normalize_tweet_format(item.get("format") or CANONICAL_TWEET_DEFAULT_FORMAT)
-    lane = _ce_normalize_lane(item.get("lane") or _ce_default_lane())
+    fmt = _normalize_tweet_format(item.get("format") or st.session_state.get("ce_voice_tuner_format") or CANONICAL_TWEET_DEFAULT_FORMAT)
+    lane = _ce_normalize_lane(item.get("lane") or st.session_state.get("ce_voice_tuner_lane") or _ce_default_lane())
     concept = str(item.get("concept", "")).strip()
     state = _creator_evolution_state()
     prompt = _ce_build_generation_prompt(concept, fmt, lane, state, action="testing")
@@ -11749,11 +11922,11 @@ def _ce_testing_generate(
     options = []
     if parsed:
         for idx in [1, 2, 3]:
-            value = _sanitize_output(str(parsed.get(f"option{idx}", "") or "").strip())
+            value = _ce_prepare_generated_option(str(parsed.get(f"option{idx}", "") or ""), fmt, lane)
             if value:
                 options.append(value)
     elif raw:
-        options = [_sanitize_output(str(raw).strip())]
+        options = [_ce_prepare_generated_option(str(raw), fmt, lane)]
     status = "ok"
     if _ce_capture_ai_error(raw or ""):
         status = "error"
@@ -11808,12 +11981,12 @@ def page_voice_tuner():
         return
     state["phase"] = "feedback_round"
     active_index = max(0, min(int(state.get("feedback_index", 0) or 0), len(concepts) - 1))
-    item = concepts[active_index]
+    item = dict(concepts[active_index])
 
     top_cols = st.columns([2.2, 1, 1])
     with top_cols[0]:
-        st.markdown(f"**Prompt Tuning: Concept {active_index + 1} of {len(concepts)}**")
-        st.caption(f"Voice: {item['lane']} | Format: {item['format']} | ID: {item['id']}")
+        st.markdown(f"**Option A vs Option B: Concept {active_index + 1} of {len(concepts)}**")
+        st.caption(f"ID: {item['id']}")
     with top_cols[1]:
         if st.button("Reset Voice Tuner", use_container_width=True):
             _ce_testing_reset()
@@ -11831,6 +12004,34 @@ def page_voice_tuner():
             state["voice_tuner_provider"] = provider
             _save_ce_testing_state(state)
 
+    control_cols = st.columns(2)
+    with control_cols[0]:
+        fmt_opts = _tweet_format_options()
+        selected_fmt = st.selectbox(
+            "Format To Test",
+            fmt_opts,
+            index=fmt_opts.index(state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)))
+            if state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)) in fmt_opts
+            else 0,
+            key="ce_voice_tuner_format",
+        )
+    with control_cols[1]:
+        lane_opts = list(_ce_emotion_lanes())
+        selected_lane = st.selectbox(
+            "Voice To Test",
+            lane_opts,
+            index=lane_opts.index(state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())))
+            if state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())) in lane_opts
+            else 0,
+            key="ce_voice_tuner_lane",
+        )
+    if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane"):
+        state["voice_tuner_format"] = selected_fmt
+        state["voice_tuner_lane"] = selected_lane
+        _save_ce_testing_state(state)
+    item["format"] = selected_fmt
+    item["lane"] = selected_lane
+
     st.markdown(
         f"""<div style="border:1px solid rgba(45,212,191,0.22);background:rgba(45,212,191,0.06);border-radius:14px;padding:14px;margin:12px 0;">
         <div style="font-size:10px;color:#2DD4BF;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Concept To Test</div>
@@ -11841,8 +12042,8 @@ def page_voice_tuner():
 
     generations = state.setdefault("generations", {})
     st.markdown("### Baseline vs Tuned Copy")
-    st.caption("Feedback below is added only to the Voice Tuner prompt overlay. Baseline Creator Evolution is not changed.")
-    st.caption(f"Using model for this concept: {provider}")
+    st.caption("Option A uses current Creator Evolution rules. Option B uses the monetization-optimized rules you supplied plus any feedback below. Live Creator Evolution is not changed.")
+    st.caption(f"Using model for this concept: {provider} | Voice: {selected_lane} | Format: {selected_fmt}")
     gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state).encode()).hexdigest()[:8])
     existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
     if st.button("Generate Baseline vs Tuned Copy", type="primary", use_container_width=True):
@@ -11856,15 +12057,15 @@ def page_voice_tuner():
         st.rerun()
     col_a, col_b = st.columns(2)
     with col_a:
-        _render_ce_testing_output_card("Baseline Current Creator Evolution", existing.get("baseline", {}))
+        _render_ce_testing_output_card("Option A: Current Rules", existing.get("baseline", {}))
     with col_b:
-        _render_ce_testing_output_card("Tuned Copy With Feedback Overlay", existing.get("testing", {}))
+        _render_ce_testing_output_card("Option B: Monetization Rules", existing.get("testing", {}))
 
     feedback_key = f"ce_voice_tuner_feedback_{item['id']}"
     with st.form(f"ce_voice_tuner_feedback_form_{item['id']}", clear_on_submit=True):
         feedback = st.text_area(
             "Feedback to wire into the tuned prompt only",
-            placeholder="Example: make the final sentence shorter and more direct, less over-explained, more consequence.",
+            placeholder="Example: Option B is too salesy. Make the final sentence shorter and more direct, less over-explained, more consequence.",
             height=100,
             key=feedback_key,
         )
@@ -11880,7 +12081,7 @@ def page_voice_tuner():
         st.toast("Feedback applied to Voice Tuner.")
         st.rerun()
     result_cols = st.columns(4)
-    result_choices = [("Baseline wins", "Baseline"), ("Tuned wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
+    result_choices = [("Option A wins", "Baseline"), ("Option B wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
     for col, (label, value) in zip(result_cols, result_choices):
         with col:
             if st.button(label, key=f"ce_voice_tuner_pref_{item['id']}_{value}", use_container_width=True):
