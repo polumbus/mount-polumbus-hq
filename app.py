@@ -873,6 +873,10 @@ def _ce_grok_model() -> str:
     return _secret_or_env("XAI_MODEL", "GROK_MODEL") or "grok-4-fast-non-reasoning"
 
 
+def _ce_grok_key_present() -> bool:
+    return bool(_secret_or_env("XAI_API_KEY", "GROK_API_KEY"))
+
+
 def _streamlit_ai_profile_status() -> dict:
     """Non-secret provider profile snapshot for owner diagnostics."""
     api_key_enabled = _streamlit_api_key_routes_enabled()
@@ -883,7 +887,7 @@ def _streamlit_ai_profile_status() -> dict:
         "api_key_routes_enabled": api_key_enabled,
         "anthropic_api_key_present": bool(_secret_or_env("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")),
         "openai_api_key_present": bool(_secret_or_env("OPENAI_API_KEY")),
-        "grok_api_key_present": bool(_secret_or_env("XAI_API_KEY", "GROK_API_KEY")),
+        "grok_api_key_present": _ce_grok_key_present(),
         "creator_evolution_provider": _ce_selected_ai_provider(),
         "creator_evolution_grok_model": _ce_grok_model(),
         "last_route": last_route or "no AI call yet",
@@ -10376,24 +10380,40 @@ def _call_creator_evolution_ai_for_provider(
     if system_suffix.strip():
         system_prompt = f"{system_prompt.rstrip()}\n\n{system_suffix.strip()}\n"
     if provider == "Grok":
-        _ai_failure_chain_start()
-        try:
-            raw = _call_grok_api_key(prompt, system_prompt, max_tokens, timeout=timeout_seconds)
-            st.session_state["_ai_last_route"] = "grok_api_key"
-            st.session_state["_ai_last_provider"] = "grok"
-            st.session_state["_ai_last_source"] = "creator_evolution_provider_switch"
-            st.session_state["_ai_last_model"] = _ce_grok_model()
-            st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
-            _append_debug_event("creator_evolution", "ok", "grok_api_key", {"model": _ce_grok_model(), "lane": lane})
-        except urllib.error.HTTPError as e:
-            detail = f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}"
-            _record_ai_failure("grok_api_key", detail)
-            _append_debug_event("creator_evolution", "error", f"grok_api_key {detail}", {"model": _ce_grok_model(), "lane": lane})
-            raw = f"AI unavailable — grok_api_key {detail}"
-        except Exception as e:
-            _record_ai_failure("grok_api_key", e)
-            _append_debug_event("creator_evolution", "error", f"grok_api_key {e}", {"model": _ce_grok_model(), "lane": lane})
-            raw = f"AI unavailable — grok_api_key {e}"
+        if not _ce_grok_key_present():
+            _append_debug_event(
+                "creator_evolution",
+                "warn",
+                "grok missing key; using fallback route",
+                {"lane": lane, "model": _ce_grok_model()},
+            )
+            raw = call_claude(
+                prompt,
+                system=system_prompt,
+                max_tokens=max_tokens,
+                timeout_seconds=timeout_seconds,
+            )
+            st.session_state["_ai_last_provider"] = "chatgpt_fallback_for_grok"
+            st.session_state["_ai_last_source"] = "creator_evolution_grok_missing_key_fallback"
+        else:
+            _ai_failure_chain_start()
+            try:
+                raw = _call_grok_api_key(prompt, system_prompt, max_tokens, timeout=timeout_seconds)
+                st.session_state["_ai_last_route"] = "grok_api_key"
+                st.session_state["_ai_last_provider"] = "grok"
+                st.session_state["_ai_last_source"] = "creator_evolution_provider_switch"
+                st.session_state["_ai_last_model"] = _ce_grok_model()
+                st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+                _append_debug_event("creator_evolution", "ok", "grok_api_key", {"model": _ce_grok_model(), "lane": lane})
+            except urllib.error.HTTPError as e:
+                detail = f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:240]}"
+                _record_ai_failure("grok_api_key", detail)
+                _append_debug_event("creator_evolution", "error", f"grok_api_key {detail}", {"model": _ce_grok_model(), "lane": lane})
+                raw = f"AI unavailable — grok_api_key {detail}"
+            except Exception as e:
+                _record_ai_failure("grok_api_key", e)
+                _append_debug_event("creator_evolution", "error", f"grok_api_key {e}", {"model": _ce_grok_model(), "lane": lane})
+                raw = f"AI unavailable — grok_api_key {e}"
     elif strict_chatgpt:
         _ai_failure_chain_start()
         try:
@@ -11605,7 +11625,7 @@ def _render_creator_evolution_provider_switch():
     with right:
         selected = _ce_selected_ai_provider()
         route = "Grok API via XAI_API_KEY/GROK_API_KEY" if selected == "Grok" else "Root app ChatGPT/OAuth/proxy route"
-        key_state = "ready" if _secret_or_env("XAI_API_KEY", "GROK_API_KEY") else "missing key"
+        key_state = "ready" if _ce_grok_key_present() else "missing key, using ChatGPT/OAuth fallback"
         detail = f"{route} | model {model} | {key_state}" if selected == "Grok" else route
         st.markdown(
             f"""<div style="border:1px solid rgba(45,212,191,0.18);background:rgba(45,212,191,0.055);border-radius:12px;padding:10px 12px;margin-top:2px;">

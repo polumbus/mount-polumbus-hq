@@ -119,6 +119,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('"Creator Evolution"', app_text)
         self.assertIn("page_creator_evolution", app_text)
         self.assertIn('CE_AI_PROVIDER_DEFAULT = "Grok"', app_text)
+        self.assertIn("creator_evolution_grok_missing_key_fallback", app_text)
+        self.assertIn("missing key, using ChatGPT/OAuth fallback", app_text)
         self.assertIn('"Voice Tuner"', app_text)
         self.assertIn("page_voice_tuner", app_text)
         self.assertIn("page_testing", app_text)
