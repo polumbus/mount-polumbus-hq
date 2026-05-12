@@ -54,26 +54,32 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
     data = _sanitize_options(app._parse_banger_json(raw or "") or {})
     quality = app._ce_validate_generation_options(data, fmt, lane) if data else {}
     passing = _passing_ids(quality)
-    repaired = None
-    repaired_quality = None
-    repaired_passing = []
+    repairs = []
     final_data = data
     final_quality = quality
     final_passing = passing
-    if len(passing) < 3:
+    for _attempt in range(3):
+        if len(final_passing) >= 3:
+            break
         repaired, repaired_quality, repaired_passing = app._ce_repair_failed_generation(
             prompt,
-            data,
-            quality,
+            final_data,
+            final_quality,
             fmt,
             lane,
             700,
             timeout_seconds=timeout,
         )
-        if repaired:
-            final_data = repaired
-            final_quality = repaired_quality or {}
-            final_passing = repaired_passing or []
+        if not repaired:
+            break
+        repairs.append({
+            "drafts": {k: repaired.get(k, "") for k in ("option1", "option2", "option3")},
+            "passing": repaired_passing,
+            "quality": repaired_quality,
+        })
+        final_data = repaired
+        final_quality = repaired_quality or {}
+        final_passing = repaired_passing or []
     return {
         "topic": name,
         "concept": concept,
@@ -82,12 +88,9 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
             "passing": passing,
             "quality": quality,
         },
-        "repair_used": bool(repaired),
-        "repaired": {
-            "drafts": {k: (repaired or {}).get(k, "") for k in ("option1", "option2", "option3")},
-            "passing": repaired_passing,
-            "quality": repaired_quality,
-        } if repaired else None,
+        "repair_used": bool(repairs),
+        "repairs": repairs,
+        "repaired": repairs[-1] if repairs else None,
         "final": {
             "drafts": {k: final_data.get(k, "") for k in ("option1", "option2", "option3")},
             "passing": final_passing,

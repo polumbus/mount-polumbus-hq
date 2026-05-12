@@ -10336,7 +10336,10 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
         required_passing = 3 if lane == "Comedic" else 1
-        if len(passing) < 3:
+        repair_attempts = 3 if lane == "Comedic" else 1
+        for _repair_attempt in range(repair_attempts):
+            if len(passing) >= 3:
+                break
             repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
                 prompt,
                 data,
@@ -10349,6 +10352,9 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 data = repaired
                 quality_report = repaired_quality
                 passing = repaired_passing
+                continue
+            if not repaired:
+                break
         if len(passing) < required_passing:
             failure_summary = _ce_quality_failure_summary(quality_report)
             st.session_state["ce_error"] = (

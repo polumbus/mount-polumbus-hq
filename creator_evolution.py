@@ -549,9 +549,6 @@ COMEDIC_OBJECT_AGENCY_VERBS = (
     "write",
     "writes",
     "writing",
-    "report",
-    "reports",
-    "reporting",
     "sweat",
     "sweats",
     "sweating",
@@ -1234,8 +1231,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             specificity_count = _specificity_signal_count(text)
             if len(profanity_terms) > 1 or specificity_count <= 3:
                 issues.append("Comedic profanity is replacing the joke instead of seasoning a sports-specific punchline: " + ", ".join(profanity_terms[:4]))
-        if fmt == "Normal Tweet" and final_words > 12:
-            issues.append("Comedic final beat should be a short punchline, not an explained closer.")
+        if fmt == "Normal Tweet" and final_words > 18:
+            warnings.append("Comedic final beat is getting long; make sure it lands as a joke, not an explanation.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
