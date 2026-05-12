@@ -107,7 +107,7 @@ CE_COMPAT_DEFAULTS = {
 }
 
 CE_AI_PROVIDER_OPTIONS = ("ChatGPT", "Grok")
-CE_AI_PROVIDER_DEFAULT = "ChatGPT"
+CE_AI_PROVIDER_DEFAULT = "Grok"
 CE_TESTING_STATE_FILENAME = "creator_evolution_testing_lab.json"
 CE_TESTING_SESSION_DEFAULT = {
     "version": 1,
