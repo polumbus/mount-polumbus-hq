@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "Grok-like sports comedy: funny first, sharp second, fearless without sounding mad. The joke comes from the exact sports contradiction, not profanity, rage, or random analogies.",
-        "do": "Find the funniest true pressure point in the topic, then use one clear joke mechanic: literalize team spin, expose fan coping, flip the roster logic, mock-serious diagnosis, or make the sports consequence absurdly plain. Keep it specific and surprising.",
-        "avoid": "Anger as the joke, profanity as the punchline, personal abuse, generic meme captions, random non-sports analogies, therapy language, fake-deep closers, and Witty Edge analysis with a cute ending.",
-        "ending": "A short punchline that makes the sports situation feel ridiculous on first read. It should sting because it is accurate, not because it is mean.",
+        "target": "Grok-like sports comedy: a funny group-chat read that spots the human contradiction faster than everyone else. Not angry. Not clever-metaphor writing. The laugh comes from making the exact sports behavior sound obviously ridiculous.",
+        "do": "Find the ridiculous behavior under the public line, name the concrete sports mechanism, then land one short laugh beat. Use comic inversion, pressure reveal, fan-coping roast, or absurdly plain sports consequence.",
+        "avoid": "Profanity as the joke, rage, personal abuse, quirky object comedy, random analogies, workplace/legal metaphors, fake-deep closers, and Witty Edge analysis with one joke word added.",
+        "ending": "A short sports-native punchline. It should feel like the funniest guy in the group chat saw the whole angle in one sentence.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -399,6 +399,11 @@ COMEDIC_ANALYSIS_DRIFT = (
     "where the actual truth",
     "sounds great",
     "sounds powerful",
+    "the next part is the tell",
+    "the next part is where",
+    "is the tell",
+    "feels like",
+    "the truth is",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -2259,22 +2264,32 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     ) if is_build else ""
     comedic_contract = (
         "\nCOMEDIC LANE HARD RULES:\n"
+        "- MASTER GOAL: Write like the funniest sports guy in the group chat found the obvious contradiction before everyone else. The job is not to sound edgy. The job is to be funny because the sports behavior is ridiculous.\n"
+        "- FAILURE MODES TO AVOID: angry ranting, swear-word comedy, quirky metaphor comedy, fake-deep analysis, and punchlines that need explanation.\n"
+        "- SOLUTION: identify the public claim, identify the private behavior that contradicts it, identify the exact sports mechanism, then make that contrast sound stupidly obvious in one clean line.\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
-        "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay.\n"
+        "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay or clever writing cosplay.\n"
         "- The joke must come from the exact sports absurdity in the source: injury trust, QB room behavior, rotation math, non-Jokic minutes, fan coping, coach logic, roster incentives, public messaging, or media framing.\n"
-        "- Use one visible joke mechanic per option: option 1 literalize the team spin, option 2 roast the fan coping, option 3 flip the sports logic into a blunt punchline.\n"
+        "- Use one visible joke engine per option: option 1 pressure reveal, option 2 sports-logic flip, option 3 fan-coping roast.\n"
+        "- Pressure reveal means: public calm line versus the concrete behavior that gives the panic away.\n"
+        "- Sports-logic flip means: make the actual roster, rotation, injury, or game-management consequence expose how dumb the public framing sounds.\n"
+        "- Fan-coping roast means: roast the way fans or the team are trying to talk themselves into something the sport is already disproving.\n"
         "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
+        "- Comedy density matters. Cut the setup until only the contradiction and the laugh beat remain.\n"
         "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
         "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"
+        "- Do not write around the joke with 'sounds great,' 'feels like,' 'the real tell,' 'the truth is,' or any setup that announces analysis. Just say the funny thing.\n"
         "- Do not literalize idioms from the source. If the source says 'everything is on the table,' do not make table, furniture, museum, velvet rope, folding chair, or under-the-table jokes.\n"
         "- Do not reuse ankle-as-speaker/document jokes. No ankle press conference, ankle press release, ankle progress report, or ankle filing paperwork.\n"
         "- Do not make body parts, injuries, depth charts, benches, rotations, transactions, or abstract truth act like people. No ankle emotions, depth charts hearing things, benches receiving memos, or truth wandering into the room.\n"
         "- Literalizing team spin must end in a real sports consequence, not object-agency. For injury trust, land on QB-room trust, backup shopping, rep-plan protection, roster insurance, practice-script reality, or active-list behavior.\n"
         "- For non-Jokic minutes, land on rotation math, Jokic-rest survival, second-unit possessions, timeout panic, shot creation, or bench-stretch consequences.\n"
         "- If the punchline still works after replacing the named team/player with any random team/player, reject it.\n"
+        "- If the last line sounds like a slogan, a lesson, a diagnosis, or a content-strategy open loop, reject it.\n"
+        "- Good Comedic outputs should pass this test: a sports fan should immediately know the exact play, roster move, injury report, rotation stretch, or team behavior being roasted.\n"
         "- Do not announce the joke. Never write 'this is funny because,' 'is hilarious because,' 'very funny,' or 'hilarious.' Show the absurdity instead.\n"
         "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
         "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
@@ -2283,7 +2298,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Reject anything that sounds like Witty Edge analysis with one joke word added. The reader should know why it is funny without needing the joke explained.\n"
         "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
         "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
-        "- Mechanic targets only, not reusable lines: literalize the official line, mirror the fan coping, flip the roster logic, use mock-serious diagnosis, or end with a sports-native object doing the comedic work.\n"
+        "- Mechanic targets only, not reusable lines: pressure reveal, sports-logic flip, fan-coping roast, or absurdly plain sports consequence.\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
