@@ -318,6 +318,21 @@ COMEDIC_ANALYSIS_DRIFT = (
     "that is where this gets real",
 )
 
+COMEDIC_NONSENSE_PUNCHLINES = (
+    "heard the same ankle",
+    "clipboard will start singing",
+    "clipboard starts singing",
+    "clipboard is singing",
+    "ankle starts talking",
+    "ankle is talking",
+    "ankle said",
+    "knee said",
+    "hamstring said",
+    "shoulder said",
+    "the injury spoke",
+    "the injury talks",
+)
+
 
 LANE_ALIASES = {
     "Amused": "Comedic",
@@ -898,6 +913,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         random_terms = _phrase_hits(lower, COMEDIC_RANDOM_ANALOGY_TERMS)
         angry_terms = _phrase_hits(lower, COMEDIC_ANGRY_CLOSERS)
         analysis_terms = _phrase_hits(lower, COMEDIC_ANALYSIS_DRIFT)
+        nonsense_terms = _phrase_hits(lower, COMEDIC_NONSENSE_PUNCHLINES)
         final_words = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
         if fake_markers or _has_emoji(text):
             issues.append("Comedic should be funny through the topic, not meme-caption energy: " + ", ".join(fake_markers[:4] or ["emoji"]))
@@ -907,6 +923,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Comedic should be funny first, not angry or accusatory: " + ", ".join(angry_terms[:4]))
         if analysis_terms:
             issues.append("Comedic should not collapse into Witty Edge analysis: " + ", ".join(analysis_terms[:4]))
+        if nonsense_terms:
+            issues.append("Comedic punchline is confusing or surreal instead of funny: " + ", ".join(nonsense_terms[:4]))
         if fmt == "Normal Tweet" and len(non_empty_lines) > 1 and final_words > 12:
             issues.append("Comedic final beat should be a short punchline, not an explained closer.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
@@ -2084,6 +2102,8 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons, no decorative metaphor extensions.\n"
         "- Good comedy here is a sports truth with a hard turn. Setup short, punchline shorter.\n"
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
+        "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
+        "- Do not write lines like 'we all heard the same ankle' or 'that clipboard will start singing.' That is confusing, not funny.\n"
         "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
@@ -2094,6 +2114,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "\nCOMEDIC OVERRIDE:\n"
         "- Because the selected lane is Comedic, ignore any generic instruction below that asks for response pressure, debate bait, consequence framing, or a dramatic analytical ending.\n"
         "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
+        "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
     return f"""{opening}
