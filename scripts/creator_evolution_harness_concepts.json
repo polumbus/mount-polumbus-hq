@@ -2,15 +2,15 @@
   "version": 1,
   "default_format": "Normal Tweet",
   "voice_concepts": {
-    "Witty Edge": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
-    "Comedic": "The Nuggets say everything is on the table this summer, but nobody knows if that actually includes changing the non-Jokic minutes that keep wrecking games.",
-    "Annoyed": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
-    "Fired-Up": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
+    "Witty Edge": "The Broncos keep saying this roster finally has real depth, but the first surprise cut will tell us whether that is actual competition or just a nicer way to describe average.",
+    "Comedic": "The Nuggets keep promising the bench will be fixed, but the non-Jokic minutes still look like five strangers trying to split a dinner bill with no calculator.",
+    "Annoyed": "The Avs keep acting like the goalie conversation is settled, but one shaky start turns the whole thing back into the same exhausting argument.",
+    "Fired-Up": "The Broncos finally have camp pressure at every position, and this is where the roster either gets tougher or proves the whole offseason was just talk.",
     "Skeptical": "The Broncos keep saying the roster is more competitive now, but training camp will show whether that is real depth or just more average players fighting for the same spots.",
     "Critical": "Sean Payton keeps saying competition matters, but camp will show which Broncos players actually respond when reputation stops protecting roster spots.",
     "Promo": "Bo Nix may be on track for training camp, but there is one more QB decision coming that will show how much the Broncos really trust the ankle.",
-    "Celebratory": "The Avalanche finally got the kind of response game that makes the whole series feel different.",
-    "Deadpan": "The Rockies keep calling it a development year, then every road series reminds everyone the lineup still cannot handle left-handed pitching.",
+    "Celebratory": "The Avalanche finally got the kind of response game that makes the whole series feel like it just tilted back toward Colorado.",
+    "Deadpan": "The Rockies keep calling it a development year, then every road series politely reminds everyone the lineup still cannot hit left-handed pitching.",
     "Sarcastic": "The Broncos say every job is open, which is always a very comforting thing to hear right before veterans realize the depth chart stopped caring about their resume."
   },
   "format_concepts": {

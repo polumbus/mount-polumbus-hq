@@ -10,12 +10,17 @@ import hashlib
 import itertools
 import concurrent.futures
 import traceback
+import sys
 import requests
 import tomli
 import urllib.error
 import urllib.parse
 from datetime import datetime, timedelta, date, timezone
 from pathlib import Path
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) in sys.path:
+    sys.path.remove(str(APP_DIR))
+sys.path.insert(0, str(APP_DIR))
 import podcast_tracker
 import podcast_remote_store
 import podcast_store
@@ -11866,6 +11871,13 @@ def _ce_testing_concepts() -> list[dict]:
     ]
 
 
+def _ce_testing_item_for_voice(concepts: list[dict], selected_lane: str, fallback: dict) -> dict:
+    for concept in concepts:
+        if _ce_normalize_lane(concept.get("lane")) == selected_lane:
+            return dict(concept)
+    return dict(fallback)
+
+
 def _ce_testing_overlay_text(state: dict) -> str:
     feedback = state.get("feedback", []) if isinstance(state, dict) else []
     lines = [
@@ -12029,6 +12041,7 @@ def page_voice_tuner():
         state["voice_tuner_format"] = selected_fmt
         state["voice_tuner_lane"] = selected_lane
         _save_ce_testing_state(state)
+    item = _ce_testing_item_for_voice(concepts, selected_lane, item)
     item["format"] = selected_fmt
     item["lane"] = selected_lane
 
