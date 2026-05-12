@@ -10336,7 +10336,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
         required_passing = 3 if lane == "Comedic" else 1
-        repair_attempts = 3 if lane == "Comedic" else 1
+        repair_attempts = 5 if lane == "Comedic" else 1
         for _repair_attempt in range(repair_attempts):
             if len(passing) >= 3:
                 break

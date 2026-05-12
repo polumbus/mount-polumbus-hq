@@ -58,7 +58,10 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
     final_data = data
     final_quality = quality
     final_passing = passing
-    for _attempt in range(3):
+    best_data = final_data
+    best_quality = final_quality
+    best_passing = final_passing
+    for _attempt in range(5):
         if len(final_passing) >= 3:
             break
         repaired, repaired_quality, repaired_passing = app._ce_repair_failed_generation(
@@ -77,9 +80,13 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
             "passing": repaired_passing,
             "quality": repaired_quality,
         })
-        final_data = repaired
-        final_quality = repaired_quality or {}
-        final_passing = repaired_passing or []
+        if len(repaired_passing or []) >= len(best_passing):
+            best_data = repaired
+            best_quality = repaired_quality or {}
+            best_passing = repaired_passing or []
+        final_data = best_data
+        final_quality = best_quality
+        final_passing = best_passing
     return {
         "topic": name,
         "concept": concept,
