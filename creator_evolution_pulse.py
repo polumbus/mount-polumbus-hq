@@ -1208,7 +1208,7 @@ def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
     if safety < 7:
         return "Skeptical"
     if _contains_any(lower, ("absurd", "weird", "funny")):
-        return "Amused"
+        return "Comedic"
     if _contains_any(lower, ("final", "win", "clutch")):
         return "Celebratory"
     if _contains_any(lower, ("refs", "excuse", "mistake", "problem")):

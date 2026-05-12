@@ -499,11 +499,29 @@ class CreatorEvolutionTests(unittest.TestCase):
         sarcastic = ce.draft_quality_report("Turns out that guy is a total loser.", "Punchy Tweet", "Sarcastic")
         amused = ce.draft_quality_report("This lineup is so unserious lol 😂", "Punchy Tweet", "Comedic")
         skeptical = ce.draft_quality_report("Obviously this is guaranteed to fail. Book it.", "Punchy Tweet", "Skeptical")
+        random_comedy = ce.draft_quality_report("The Nuggets bench turned into a group project with HR paperwork.", "Punchy Tweet", "Comedic")
+        angry_comedy = ce.draft_quality_report("The public line was cute. That is where the bullshit ends.", "Punchy Tweet", "Comedic")
+        analysis_comedy = ce.draft_quality_report("Bo Nix looks fine now. The real tell is when backup reps tell the truth.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
         self.assertFalse(skeptical["ok"])
+        self.assertFalse(random_comedy["ok"])
+        self.assertFalse(angry_comedy["ok"])
+        self.assertFalse(analysis_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
+        self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
+        self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
+        self.assertTrue(any("witty edge analysis" in issue.lower() for issue in analysis_comedy["issues"]))
+
+    def test_comedic_lane_is_canonical_with_amused_alias(self):
+        self.assertIn("Comedic", ce.EMOTION_LANES)
+        self.assertNotIn("Amused", ce.EMOTION_LANES)
+        self.assertEqual(ce.normalize_lane("Amused"), "Comedic")
+        prompt = ce.build_generation_prompt("The Nuggets bench turned a lead into panic.", "Normal Tweet", "Comedic", ce.initial_state())
+        self.assertIn("COMEDIC LANE HARD RULES", prompt)
+        self.assertIn("actual joke mechanic", prompt)
+        self.assertIn("topic reality", prompt)
 
     def test_critical_lane_is_distinct_from_skeptical(self):
         self.assertIn("Critical", ce.EMOTION_LANES)
@@ -1590,7 +1608,7 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_each_voice_has_a_passing_engagement_fixture(self):
         fixtures = {
             "Witty Edge": "Broncos roster math is doing that thing where the boring answer starts looking like the dangerous one...",
-            "Comedic": "The Avs goalie conversation went from calm to courtroom drama in about four minutes. Very normal playoff hobby...",
+            "Comedic": "Jokic dragged the bench through another shift and nobody even offered him babysitting money.",
             "Annoyed": "The Nuggets keep treating the bench problem like it is weather. At some point the pattern becomes the plan...",
             "Fired-Up": "MacKinnon shifts change the whole temperature of a series. Colorado has the lever sitting right there...",
             "Skeptical": "Bo Nix being ready for camp and being trusted at camp are two different Broncos conversations...",

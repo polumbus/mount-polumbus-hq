@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "Actually funny sports commentary: sharp, conversational, borderline adult without getting cruel, and built to make people laugh.",
-        "do": "Find the ridiculous part, exaggerate it just enough, use a clean comedic turn, and land a short punchline that sounds posted from a phone.",
-        "avoid": "ChatGPT-safe cleverness, long setups, over-explained jokes, meme captions, emojis, slurs, harassment, and generic 'lol this is wild' reactions.",
-        "ending": "A short comedic walk-off, usually 3-8 words, that leaves the joke hanging without explaining it.",
+        "target": "Joke-first commentary that finds the actual funny part of the topic. Funny, sharp, slightly unfiltered, but not angry, cruel, or random.",
+        "do": "Name the real absurd detail, then use one joke engine: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut. The joke must come from the topic reality.",
+        "avoid": "Witty analysis, consequence lectures, debate bait, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, and safe ChatGPT cleverness.",
+        "ending": "A short light punchline or walk-off. Funny first, not mad. The final beat is the laugh, not a summary.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -251,6 +251,64 @@ LINKEDIN_CADENCE_PHRASES = (
     "let that sink in",
     "read that again",
     "this matters because",
+)
+
+
+COMEDIC_FAKE_MARKERS = (
+    "lol",
+    "lmao",
+    "it's giving",
+    "so unserious",
+    "very normal",
+    "this is wild",
+    "you can't make this up",
+)
+
+COMEDIC_RANDOM_ANALOGY_TERMS = (
+    "hr",
+    "meeting",
+    "email",
+    "calendar invite",
+    "performance review",
+    "paperwork",
+    "office",
+    "group project",
+    "kitchen",
+    "raccoon",
+    "bucket",
+    "smoke alarm",
+    "smoke detector",
+    "ceiling leak",
+    "lease",
+    "restaurant",
+    "menu",
+    "check engine",
+    "courtroom drama",
+    "congressional hearing",
+    "ted talk",
+)
+
+COMEDIC_ANGRY_CLOSERS = (
+    "bullshit ends",
+    "exposed",
+    "got caught",
+    "caught lying",
+    "lying through",
+    "dragged to hell",
+    "everybody knows it",
+)
+
+COMEDIC_ANALYSIS_DRIFT = (
+    "the real tell is",
+    "truth shows up",
+    "public words are cheap",
+    "backup reps tell the truth",
+    "depth chart tells the truth",
+    "depth chart truth hits different",
+    "that tells you everything",
+    "this is where it gets interesting",
+    "the conversation gets real",
+    "the plan gets exposed",
 )
 
 
@@ -694,6 +752,24 @@ def polished_punctuation_hits(text: str) -> list[str]:
         ("brackets", r"[\[\]{}]"),
     )
     return [label for label, pattern in checks if re.search(pattern, clean)]
+
+
+def _final_sentence(text: str) -> str:
+    clean = str(text or "").replace("---TWEET---", " ").strip()
+    parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", clean) if part.strip()]
+    return parts[-1] if parts else clean
+
+
+def _phrase_hits(lower: str, phrases: tuple[str, ...]) -> list[str]:
+    hits = []
+    for phrase in phrases:
+        phrase_lower = phrase.lower()
+        if re.fullmatch(r"[a-z0-9']+", phrase_lower):
+            if re.search(rf"\b{re.escape(phrase_lower)}\b", lower):
+                hits.append(phrase)
+        elif phrase_lower in lower:
+            hits.append(phrase)
+    return hits
 
 
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
@@ -1971,6 +2047,15 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Extract the strongest take and write from scratch; do not simply rephrase the form fields.\n"
         "- Each option should be a different angle or structure, not three small edits of the same draft.\n"
     ) if is_build else ""
+    comedic_contract = (
+        "\nCOMEDIC LANE HARD RULES:\n"
+        "- Funny first. Not clever analysis, not debate pressure, not angry indictment.\n"
+        "- Every draft needs an actual joke mechanic: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut.\n"
+        "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons.\n"
+        "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
+        "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
+        "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
+    ) if lane == "Comedic" else ""
     return f"""{opening}
 
 {source_label}:
@@ -1999,6 +2084,7 @@ LEARNED VOICE PROFILE:
 {live_stats_block}
 {sports_ctx}
 {build_rule}
+{comedic_contract}
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.

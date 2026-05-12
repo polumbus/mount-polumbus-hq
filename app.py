@@ -87,7 +87,7 @@ CE_COMPAT_DEFAULTS = {
     "DEFAULT_LANE": "Witty Edge",
     "EMOTION_LANES": (
         "Witty Edge",
-        "Amused",
+        "Comedic",
         "Annoyed",
         "Fired-Up",
         "Skeptical",
@@ -7781,8 +7781,16 @@ def _ce_emotion_lanes() -> tuple[str, ...]:
 
 
 def _ce_normalize_lane(lane: str | None) -> str:
+    normalizer = getattr(ce, "normalize_lane", None)
+    if callable(normalizer):
+        try:
+            return str(normalizer(lane) or _ce_default_lane())
+        except Exception:
+            pass
     lanes = _ce_emotion_lanes()
     lane = str(lane or "").strip()
+    if lane == "Amused" and "Comedic" in lanes:
+        lane = "Comedic"
     return lane if lane in lanes else _ce_default_lane()
 
 
