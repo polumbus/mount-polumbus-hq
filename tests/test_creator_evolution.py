@@ -504,6 +504,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         analysis_comedy = ce.draft_quality_report("Bo Nix looks fine now. The real tell is when backup reps tell the truth.", "Punchy Tweet", "Comedic")
         fake_deep_comedy = ce.draft_quality_report("The Nuggets keep saying everything is on the table. Otherwise this is just a press conference with vibes.", "Punchy Tweet", "Comedic")
         nonsense_comedy = ce.draft_quality_report("Bo Nix is on track, sure. If a random camp arm appears by lunch, we all heard the same ankle.", "Punchy Tweet", "Comedic")
+        label_comedy = ce.draft_quality_report("The Broncos added a quarterback after saying Bo is fine. Football fluency.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -513,12 +514,14 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(analysis_comedy["ok"])
         self.assertFalse(fake_deep_comedy["ok"])
         self.assertFalse(nonsense_comedy["ok"])
+        self.assertFalse(label_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
         self.assertTrue(any("witty edge analysis" in issue.lower() for issue in analysis_comedy["issues"]))
         self.assertTrue(any("witty edge analysis" in issue.lower() for issue in fake_deep_comedy["issues"]))
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in nonsense_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in label_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -536,6 +539,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("blunt roast", prompt)
         self.assertIn("couch credentials", prompt)
         self.assertIn("Do not invent crowd counts", prompt)
+        self.assertIn("Football fluency", prompt)
 
     def test_critical_lane_is_distinct_from_skeptical(self):
         self.assertIn("Critical", ce.EMOTION_LANES)

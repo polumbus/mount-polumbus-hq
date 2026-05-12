@@ -260,6 +260,9 @@ COMEDIC_FAKE_MARKERS = (
     "it's giving",
     "so unserious",
     "very normal",
+    "normal stuff",
+    "normal little",
+    "very calm stuff",
     "this is wild",
     "you can't make this up",
 )
@@ -331,6 +334,7 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "the injury spoke",
     "the injury talks",
     "shopping nervous",
+    "football fluency",
 )
 
 
@@ -2109,6 +2113,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
         "- Do not write lines like 'we all heard the same ankle,' 'that clipboard will start singing,' or 'shopping nervous.' That is confusing, not funny.\n"
+        "- Do not use vague label endings like 'Football fluency,' 'Normal stuff,' or 'Very calm stuff.' Land the actual joke instead.\n"
         "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
