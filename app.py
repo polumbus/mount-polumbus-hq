@@ -10316,6 +10316,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
+        required_passing = 3 if lane == "Comedic" else 1
         if len(passing) < 3:
             repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
                 prompt,
@@ -10325,11 +10326,11 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 lane,
                 max_tokens,
             )
-            if repaired and len(repaired_passing) >= max(1, len(passing)):
+            if repaired and len(repaired_passing) >= max(required_passing, len(passing)):
                 data = repaired
                 quality_report = repaired_quality
                 passing = repaired_passing
-        if not passing:
+        if len(passing) < required_passing:
             failure_summary = _ce_quality_failure_summary(quality_report)
             st.session_state["ce_error"] = (
                 "Creator Evolution rejected every generated draft for quality/safety. "
