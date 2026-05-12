@@ -870,7 +870,7 @@ def _ce_selected_ai_provider() -> str:
 
 
 def _ce_grok_model() -> str:
-    return _secret_or_env("XAI_MODEL", "GROK_MODEL") or "grok-4.20-reasoning"
+    return _secret_or_env("XAI_MODEL", "GROK_MODEL") or "grok-4-fast-non-reasoning"
 
 
 def _streamlit_ai_profile_status() -> dict:
