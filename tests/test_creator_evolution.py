@@ -47,6 +47,38 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("TYLER'S HALL OF FAME DATA", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
 
+    def test_source_preservation_relaxes_for_transformational_lanes(self):
+        standard = ce.build_generation_prompt(
+            "The Broncos keep saying this roster is deeper, but camp will show if that is real.",
+            "Normal Tweet",
+            "Witty Edge",
+            None,
+        )
+        comedic = ce.build_generation_prompt(
+            "The Nuggets say everything is on the table, but the non-Jokic minutes keep wrecking games.",
+            "Normal Tweet",
+            "Comedic",
+            None,
+        )
+        critical = ce.build_generation_prompt(
+            "Sean Payton keeps saying competition matters, but camp will show who actually responds.",
+            "Normal Tweet",
+            "Critical",
+            None,
+        )
+        sarcastic = ce.build_generation_prompt(
+            "The Broncos say every job is open, which sounds comfortable for veterans.",
+            "Normal Tweet",
+            "Sarcastic",
+            None,
+        )
+
+        self.assertIn("Voice is a filter, not a reset button", standard)
+        self.assertIn("Source freedom for this lane", comedic)
+        self.assertIn("substantially restructure", critical)
+        self.assertIn("stronger diagnosis, sarcastic turn, or real joke", sarcastic)
+        self.assertNotIn("Voice is a filter, not a reset button", comedic)
+
     def test_build_prompt_uses_structured_source_material_without_hof(self):
         state = ce.refresh_state(None, [
             _tweet(1, "The best Broncos posts lately all leave the uncomfortable part hanging...", hours_ago=90, views=9000, likes=180, replies=30, reposts=18),

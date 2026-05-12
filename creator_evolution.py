@@ -16,7 +16,7 @@ from typing import Any
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v7-preserve-source"
+PROMPT_VERSION = "ce-prompt-v8-flex-source-by-lane"
 SCORING_VERSION = "ce-score-v3-tracked-cohorts"
 RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
@@ -2615,6 +2615,18 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         if lane == "Witty Edge"
         else "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait."
     )
+    if lane in {"Critical", "Sarcastic", "Comedic"}:
+        source_preservation_rule = (
+            "- Source freedom for this lane: keep the user's core subject, claim, and factual context, but you may substantially restructure, sharpen, reorder, compress, or reframe the wording to make the selected voice actually work.\n"
+            "- Do not preserve weak phrasing just because it was in the original tweet. For Critical, Sarcastic, and Comedic, the voice may replace the surface wording when a stronger diagnosis, sarcastic turn, or real joke requires it.\n"
+            "- Even with extra freedom, do not drift to a different topic, invent facts, drop essential named teams or players, or reverse the user's stance."
+        )
+    else:
+        source_preservation_rule = (
+            "- Preserve the user's original tweet idea. Unless the input is a structured Build Mode brief, keep the same core claim, subject, stance, and sequence of thought. Improve the wording with the selected voice instead of replacing the tweet with a new angle.\n"
+            "- Keep the majority of the user's original context visible. Do not drop named teams, players, decisions, stakes, caveats, or the main \"what I am saying\" just to make the voice louder or cleaner.\n"
+            "- Voice is a filter, not a reset button. The selected voice should sharpen, compress, punch up, or clarify the user's tweet while still feeling recognizably based on the tweet they gave you."
+        )
     return f"""{opening}
 
 {source_label}:
@@ -2648,9 +2660,7 @@ LEARNED VOICE PROFILE:
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
-- Preserve the user's original tweet idea. Unless the input is a structured Build Mode brief, keep the same core claim, subject, stance, and sequence of thought. Improve the wording with the selected voice instead of replacing the tweet with a new angle.
-- Keep the majority of the user's original context visible. Do not drop named teams, players, decisions, stakes, caveats, or the main "what I am saying" just to make the voice louder or cleaner.
-- Voice is a filter, not a reset button. The selected voice should sharpen, compress, punch up, or clarify the user's tweet while still feeling recognizably based on the tweet they gave you.
+{source_preservation_rule}
 - Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
 - Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
