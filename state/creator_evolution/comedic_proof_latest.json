@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-12T04:53:30Z",
+  "created_at": "2026-05-12T05:02:08Z",
   "required_passing_per_topic": 3,
   "ok": true,
   "results": [
@@ -8,9 +8,293 @@
       "concept": "The Broncos keep saying Bo Nix is on track for camp, but the next quarterback roster move will show whether they actually trust the ankle or are just trying to sound calm.",
       "initial": {
         "drafts": {
-          "option1": "Every Broncos update on Bo Nix is the same. On track, feels good, everything is fine.\n\nCool. Then the next QB they add tells me what that ankle actually looks like.",
-          "option2": "Saying Bo Nix is on track for camp is free. Carrying only the current QB room is expensive.\nIf we go shopping for another arm, that is not “depth”. That is “we do not trust the ankle yet.”",
-          "option3": "Broncos fans are gonna treat “Bo is on track” like it is a diagnosis. I am watching the QB transaction like it is the X ray.\n\nNothing says confidence like signing another passer."
+          "option1": "They keep telling us Bo Nix is on track for camp. Cool. The second we add another quarterback, that is the whole story.\n\nThat is not competition, that is ankle insurance.",
+          "option2": "Bo Nix can be on track and we can still act like we believe it. But the next QB move is the lie detector.\n\nIf you trust the ankle, you do not go QB shopping.",
+          "option3": "Every fan is doing the same thing right now. Hearing on track and picturing Week 1. Meanwhile the front office is staring at the QB room like it is a math problem.\n\nNothing says calm like a sudden QB3."
+        },
+        "passing": [],
+        "quality": {
+          "option1": {
+            "ok": false,
+            "score": 25,
+            "issues": [
+              "Comedic should be funny through the topic, not meme-caption energy: cool",
+              "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is not competition, that is ankle insurance.",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 170,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": false,
+            "score": 50,
+            "issues": [
+              "Comedic is using object-agency instead of a sports-specific joke: ankle + do",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 157,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": false,
+            "score": 50,
+            "issues": [
+              "Comedic joke drifted into random analogy instead of topic reality: office",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 201,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "repair_used": true,
+      "repairs": [
+        {
+          "drafts": {
+            "option1": "We keep hearing Bo Nix is on track for camp. Sure. But the minute we add another QB, the calm update turns into a receipt.\n\nNothing screams confidence like emergency depth chart shopping.",
+            "option2": "On track is easy to say in May. Trust shows up when you set the QB reps and you decide if QB3 is a real job or a clipboard internship. If they sign a vet, we all know what practice looked like.",
+            "option3": "Broncos fans hear on track and start shopping for playoff tickets. The front office hears on track and starts counting how many ankles are allowed in one QB room. The next quarterback move is gonna be the tell."
+          },
+          "passing": [
+            "2"
+          ],
+          "quality": {
+            "option1": {
+              "ok": false,
+              "score": 75,
+              "issues": [
+                "Comedic punchline is confusing or surreal instead of funny: calm update"
+              ],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 187,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option2": {
+              "ok": true,
+              "score": 100,
+              "issues": [],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 193,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option3": {
+              "ok": false,
+              "score": 50,
+              "issues": [
+                "Comedic joke drifted into random analogy instead of topic reality: office",
+                "Comedic should not collapse into Witty Edge analysis: the tell"
+              ],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 210,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            }
+          }
+        },
+        {
+          "drafts": {
+            "option1": "We keep getting the calm Bo Nix update, on track for camp. Cool. The next QB roster move is gonna be the real medical report. If we start collecting quarterbacks like shopping carts, that ankle is still a topic.",
+            "option2": "On track means nothing until the reps get written. If Bo is truly fine, QB2 is a backup, not a bodyguard. The minute we sign another arm, we all know how much trust is in that ankle.",
+            "option3": "Broncos fans hear on track and start planning the parade route. The building hears on track and keeps a vet QB on speed dial. If another quarterback walks in, we just got the honest update."
+          },
+          "passing": [
+            "2",
+            "3"
+          ],
+          "quality": {
+            "option1": {
+              "ok": false,
+              "score": 75,
+              "issues": [
+                "Comedic should be funny through the topic, not meme-caption energy: cool"
+              ],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 211,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option2": {
+              "ok": true,
+              "score": 100,
+              "issues": [],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 182,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option3": {
+              "ok": true,
+              "score": 100,
+              "issues": [],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 189,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            }
+          }
+        }
+      ],
+      "repaired": {
+        "drafts": {
+          "option1": "We keep getting the calm Bo Nix update, on track for camp. Cool. The next QB roster move is gonna be the real medical report. If we start collecting quarterbacks like shopping carts, that ankle is still a topic.",
+          "option2": "On track means nothing until the reps get written. If Bo is truly fine, QB2 is a backup, not a bodyguard. The minute we sign another arm, we all know how much trust is in that ankle.",
+          "option3": "Broncos fans hear on track and start planning the parade route. The building hears on track and keeps a vet QB on speed dial. If another quarterback walks in, we just got the honest update."
+        },
+        "passing": [
+          "2",
+          "3"
+        ],
+        "quality": {
+          "option1": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Comedic should be funny through the topic, not meme-caption energy: cool"
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 211,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 182,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 189,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "final": {
+        "drafts": {
+          "option1": "On track is easy to say in May. Trust shows up when you set the QB reps and you decide if QB3 is a real job or a clipboard internship. If they sign a vet, we all know what practice looked like.",
+          "option2": "On track means nothing until the reps get written. If Bo is truly fine, QB2 is a backup, not a bodyguard. The minute we sign another arm, we all know how much trust is in that ankle.",
+          "option3": "Broncos fans hear on track and start planning the parade route. The building hears on track and keeps a vet QB on speed dial. If another quarterback walks in, we just got the honest update."
+        },
+        "passing": [
+          "option1",
+          "option2",
+          "option3"
+        ],
+        "quality": {
+          "option1": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 193,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 182,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 189,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "topic": "nuggets",
+      "concept": "The Nuggets say everything is on the table this summer, but nobody knows if that actually includes changing the non-Jokic minutes that keep wrecking games.",
+      "initial": {
+        "drafts": {
+          "option1": "Nuggets say everything is on the table this summer. Cool. Let me know when that includes the part where Jokic sits and the score turns into a crime scene.\n\nFix the non Jokic minutes or stop selling us “options.”",
+          "option2": "Everything is on the table, except the only math that matters. When Jokic rests we do cardio, take bad shots, then call it “learning.”\n\nThat is not a roster plan, that is a countdown timer.",
+          "option3": "Fans are already talking themselves into “internal growth” like we did not watch the same movie all year. Jokic sits, the offense forgets how to get a shot, and we start praying for timeouts.\n\nThat is the bench identity."
         },
         "passing": [],
         "quality": {
@@ -29,26 +313,10 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 164,
+            "char_count": 211,
             "prompt_version": "ce-prompt-v5-voice-profile"
           },
           "option2": {
-            "ok": false,
-            "score": 50,
-            "issues": [
-              "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is “we do not trust the ankle yet.”",
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 188,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
             "ok": false,
             "score": 75,
             "issues": [
@@ -60,7 +328,23 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 178,
+            "char_count": 189,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": false,
+            "score": 50,
+            "issues": [
+              "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is the bench identity.",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 220,
             "prompt_version": "ce-prompt-v5-voice-profile"
           }
         }
@@ -69,34 +353,17 @@
       "repairs": [
         {
           "drafts": {
-            "option1": "Broncos keep saying Bo Nix is on track for camp. That is nice. The first time we bring in another QB for extra reps, that is the roster admitting the ankle is still a maybe.",
-            "option2": "On track is a great vibe. But camp is math. If Bo is truly fine, we do not need extra arms eating reps. The next QB roster move will be the loudest quiet update we get.",
-            "option3": "Everybody is acting like the words on track heal ankles. Watch what we do with QB2 and QB3 instead.\n\nNothing screams calm like shopping for quarterbacks."
+            "option1": "Nuggets keep saying everything is on the table this summer. I believe them. I just need to see one person mention the non Jokic minutes without whispering like it is a family secret.\n\nThose possessions are the real trade block.",
+            "option2": "Everything is on the table, cool. Start with the rotation where Jokic sits and we immediately act like shot creation is an optional feature. Same opponents, same swing, different quotes.",
+            "option3": "Fans are already doing the summer thing where the bench magically gets better because we all thought really hard about it. Then Jokic rests, the offense turns into contested jumpers, and we call it normal."
           },
           "passing": [
             "1",
-            "2",
             "3"
           ],
           "quality": {
             "option1": {
               "ok": true,
-              "score": 84,
-              "issues": [],
-              "warnings": [
-                "Hedging weakens the human read; make the take cleaner or funnier.",
-                "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
-              ],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 173,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
               "score": 100,
               "issues": [],
               "warnings": [],
@@ -105,7 +372,23 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 168,
+              "char_count": 227,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option2": {
+              "ok": false,
+              "score": 50,
+              "issues": [
+                "Comedic should be funny through the topic, not meme-caption energy: cool",
+                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: same opponents, same swing, different quotes."
+              ],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 186,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option3": {
@@ -118,230 +401,54 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 153,
+              "char_count": 205,
               "prompt_version": "ce-prompt-v5-voice-profile"
             }
           }
-        }
-      ],
-      "repaired": {
-        "drafts": {
-          "option1": "Broncos keep saying Bo Nix is on track for camp. That is nice. The first time we bring in another QB for extra reps, that is the roster admitting the ankle is still a maybe.",
-          "option2": "On track is a great vibe. But camp is math. If Bo is truly fine, we do not need extra arms eating reps. The next QB roster move will be the loudest quiet update we get.",
-          "option3": "Everybody is acting like the words on track heal ankles. Watch what we do with QB2 and QB3 instead.\n\nNothing screams calm like shopping for quarterbacks."
         },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 84,
-            "issues": [],
-            "warnings": [
-              "Hedging weakens the human read; make the take cleaner or funnier.",
-              "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
-            ],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 173,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 168,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 153,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "final": {
-        "drafts": {
-          "option1": "Broncos keep saying Bo Nix is on track for camp. That is nice. The first time we bring in another QB for extra reps, that is the roster admitting the ankle is still a maybe.",
-          "option2": "On track is a great vibe. But camp is math. If Bo is truly fine, we do not need extra arms eating reps. The next QB roster move will be the loudest quiet update we get.",
-          "option3": "Everybody is acting like the words on track heal ankles. Watch what we do with QB2 and QB3 instead.\n\nNothing screams calm like shopping for quarterbacks."
-        },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 84,
-            "issues": [],
-            "warnings": [
-              "Hedging weakens the human read; make the take cleaner or funnier.",
-              "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
-            ],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 173,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 168,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 153,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "ok": true
-    },
-    {
-      "topic": "nuggets",
-      "concept": "The Nuggets say everything is on the table this summer, but nobody knows if that actually includes changing the non-Jokic minutes that keep wrecking games.",
-      "initial": {
-        "drafts": {
-          "option1": "Nuggets keep saying everything is on the table this summer. Cool. Just make sure the table includes the part of the game where Jokic sits and we immediately forget how to score.\n\nThat stretch has been the real GM.",
-          "option2": "If everything is on the table, start with the only thing teams actually target. The non Jokic minutes.\n\nUntil we can survive a Jokic rest, the offseason is just arts and crafts.",
-          "option3": "Every summer we talk ourselves into the bench like it is gonna magically behave. Then Jokic sits, the offense turns into hot potato, and the lead evaporates.\n\nHope is not a rotation."
-        },
-        "passing": [],
-        "quality": {
-          "option1": {
-            "ok": false,
-            "score": 50,
-            "issues": [
-              "Comedic should be funny through the topic, not meme-caption energy: cool",
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 213,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 177,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 182,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "repair_used": true,
-      "repairs": [
         {
           "drafts": {
-            "option1": "Nuggets say everything is on the table this summer. Love it. Just hope that includes the 6 minutes when Jokic sits and we play offense like the controller disconnected. Fix the bench, fix the stress.",
-            "option2": "Everything on the table is fine, but the math is simple. Win the Jokic minutes, survive the non Jokic minutes, cash the W. Right now that second part is where leads go to die.",
-            "option3": "Every summer we convince ourselves the bench is one tweak away. Then Jokic sits, the ball starts sprinting away from the rim, and the timeout comes in like a fire drill.\n\nThat is the real offseason project."
+            "option1": "Nuggets say everything is on the table this summer. Love the ambition. But when Jokic sits we still act surprised the offense turns into 14 seconds of vibes and a bad pullup. That is the real roster crunch.",
+            "option2": "If everything is on the table, start with the non Jokic minutes. Those possessions turn every lead into a group project and nobody knows who is presenting. Fix that, the rest is just summer content.",
+            "option3": "Every summer we talk ourselves into the bench like it is gonna grow up. Then Jokic hits the bench, the ball sticks, and we are staring at the timeout guy like he forgot the password. Same movie, new quotes."
           },
-          "passing": [
-            "1",
-            "2"
-          ],
+          "passing": [],
           "quality": {
             "option1": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
+              "ok": false,
+              "score": 75,
+              "issues": [
+                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is the real roster crunch."
+              ],
               "warnings": [],
               "ai_sounding_hits": [],
               "risk_hits": [],
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 199,
+              "char_count": 206,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
+              "ok": false,
+              "score": 75,
+              "issues": [
+                "Comedic joke drifted into random analogy instead of topic reality: group project"
+              ],
               "warnings": [],
               "ai_sounding_hits": [],
               "risk_hits": [],
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 175,
+              "char_count": 198,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option3": {
               "ok": false,
-              "score": 50,
+              "score": 75,
               "issues": [
-                "Comedic joke drifted into random analogy instead of topic reality: fire",
-                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is the real offseason project."
+                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: same movie, new quotes."
               ],
               "warnings": [],
               "ai_sounding_hits": [],
@@ -356,508 +463,9 @@
         },
         {
           "drafts": {
-            "option1": "Nuggets keep saying everything is on the table this summer. Cool. But if the non Jokic minutes are still the part where the lead immediately starts sweating, we just re arranged the chairs. Fix that stretch first.",
-            "option2": "Everything is on the table until Jokic sits, then we act surprised the offense turns into 9 seconds of dribbling and a tough prayer. It is not a mystery unit, it is the same movie. Change the rotation.",
-            "option3": "We do this every summer. Talk ourselves into the bench being fine, because the starters look great in July. Then the playoffs hit, Jokic rests, and we start bargaining with the scoreboard.\n\nThose minutes are the real trade block."
-          },
-          "passing": [
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": false,
-              "score": 75,
-              "issues": [
-                "Comedic should be funny through the topic, not meme-caption energy: cool"
-              ],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 213,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 201,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 229,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
-          }
-        },
-        {
-          "drafts": {
-            "option1": "Nuggets say everything is on the table this summer. Love it. But if Jokic sits and the lead instantly turns into a timeout and a bad jumper, we did all this talking for nothing. Fix the non Jokic minutes or stop the speeches.",
-            "option2": "Everything is on the table this summer, except the one thing that keeps deciding games. Jokic hits the bench and our offense becomes improv comedy, nobody laughs, then we check back in down 7. That stretch is the offseason.",
-            "option3": "Every summer we swear the bench will be fine. Then the season starts, Jokic sits, and we start calling it a bad stretch like it is weather.\n\nThose are the minutes that keep ending the movie early."
-          },
-          "passing": [
-            "1",
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 225,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 223,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 196,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
-          }
-        }
-      ],
-      "repaired": {
-        "drafts": {
-          "option1": "Nuggets say everything is on the table this summer. Love it. But if Jokic sits and the lead instantly turns into a timeout and a bad jumper, we did all this talking for nothing. Fix the non Jokic minutes or stop the speeches.",
-          "option2": "Everything is on the table this summer, except the one thing that keeps deciding games. Jokic hits the bench and our offense becomes improv comedy, nobody laughs, then we check back in down 7. That stretch is the offseason.",
-          "option3": "Every summer we swear the bench will be fine. Then the season starts, Jokic sits, and we start calling it a bad stretch like it is weather.\n\nThose are the minutes that keep ending the movie early."
-        },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 225,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 223,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 196,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "final": {
-        "drafts": {
-          "option1": "Nuggets say everything is on the table this summer. Love it. But if Jokic sits and the lead instantly turns into a timeout and a bad jumper, we did all this talking for nothing. Fix the non Jokic minutes or stop the speeches.",
-          "option2": "Everything is on the table this summer, except the one thing that keeps deciding games. Jokic hits the bench and our offense becomes improv comedy, nobody laughs, then we check back in down 7. That stretch is the offseason.",
-          "option3": "Every summer we swear the bench will be fine. Then the season starts, Jokic sits, and we start calling it a bad stretch like it is weather.\n\nThose are the minutes that keep ending the movie early."
-        },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 225,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 223,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 196,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "ok": true
-    },
-    {
-      "topic": "avs",
-      "concept": "The Avs are switching goalies after one loss even though the other goalie had been rolling.",
-      "initial": {
-        "drafts": {
-          "option1": "Avs really saw one L and said yeah we are changing goalies. The guy who was rolling gets the classic reward, a seat and a good attitude.\n\nNothing screams confidence like a quick hook in the crease.",
-          "option2": "I love the logic. Win a few, build a groove, then after one loss we hit the goalie shuffle like the puck is gonna forget who’s in net.\n\nHot hand meets quick trigger.",
-          "option3": "Fans will call it depth and matchup stuff. Cool. We are basically treating goalie like a TV remote now, one bad scene and we are smashing the button.\n\nHope the new channel stops odd man rushes."
-        },
-        "passing": [],
-        "quality": {
-          "option1": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 197,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 165,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": false,
-            "score": 50,
-            "issues": [
-              "Comedic should be funny through the topic, not meme-caption energy: cool",
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 193,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "repair_used": true,
-      "repairs": [
-        {
-          "drafts": {
-            "option1": "Avs switch goalies after one loss like the crease is a rental car. Dude was rolling, then one bump and we are back at the counter reading the fine print. Apparently the hot hand comes with a return policy.",
-            "option2": "Goalie was rolling, we lose once, and the solution is to swap him out. Love that logic. Instead of tightening up in front, we just rotate the guy who has to erase all of it. Easy fix, different mask.",
-            "option3": "Avs fans are gonna sell it as smart load management. Sure. Nothing says we believe in our goalie like a one game leash.\n\nIf you are rolling, keep your bag packed."
-          },
-          "passing": [
-            "1",
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 205,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 199,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 162,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
-          }
-        }
-      ],
-      "repaired": {
-        "drafts": {
-          "option1": "Avs switch goalies after one loss like the crease is a rental car. Dude was rolling, then one bump and we are back at the counter reading the fine print. Apparently the hot hand comes with a return policy.",
-          "option2": "Goalie was rolling, we lose once, and the solution is to swap him out. Love that logic. Instead of tightening up in front, we just rotate the guy who has to erase all of it. Easy fix, different mask.",
-          "option3": "Avs fans are gonna sell it as smart load management. Sure. Nothing says we believe in our goalie like a one game leash.\n\nIf you are rolling, keep your bag packed."
-        },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 205,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 199,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 162,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "final": {
-        "drafts": {
-          "option1": "Avs switch goalies after one loss like the crease is a rental car. Dude was rolling, then one bump and we are back at the counter reading the fine print. Apparently the hot hand comes with a return policy.",
-          "option2": "Goalie was rolling, we lose once, and the solution is to swap him out. Love that logic. Instead of tightening up in front, we just rotate the guy who has to erase all of it. Easy fix, different mask.",
-          "option3": "Avs fans are gonna sell it as smart load management. Sure. Nothing says we believe in our goalie like a one game leash.\n\nIf you are rolling, keep your bag packed."
-        },
-        "passing": [
-          "1",
-          "2",
-          "3"
-        ],
-        "quality": {
-          "option1": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 205,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 199,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": true,
-            "score": 100,
-            "issues": [],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 162,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "ok": true
-    },
-    {
-      "topic": "rockies",
-      "concept": "The Rockies keep calling this a development year, but every road series turns into another reminder that the lineup cannot handle left-handed pitching.",
-      "initial": {
-        "drafts": {
-          "option1": "Every road trip is the same movie. Rockies call it a development year, then a lefty shows up and our lineup starts developing excuses.\n\nApparently the lesson is swing early, miss often.",
-          "option2": "Rockies saying development year while sending this lineup to face lefties is like giving rookies a pop quiz every night. Same result, same weak contact, same sad box score.\n\nLefties have it on beginner mode.",
-          "option3": "I respect the optimism. We keep calling it development year like the bats are gonna learn lefties through exposure therapy.\n\nRoad series, lefty starter, and suddenly we are right back to bunt thoughts."
-        },
-        "passing": [],
-        "quality": {
-          "option1": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 185,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option2": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 207,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          },
-          "option3": {
-            "ok": false,
-            "score": 75,
-            "issues": [
-              "Generated options repeat the same line-break skeleton; vary the structure across options."
-            ],
-            "warnings": [],
-            "ai_sounding_hits": [],
-            "risk_hits": [],
-            "engagement_bait_hits": [],
-            "cadence_hits": [],
-            "polished_punctuation_hits": [],
-            "char_count": 201,
-            "prompt_version": "ce-prompt-v5-voice-profile"
-          }
-        }
-      },
-      "repair_used": true,
-      "repairs": [
-        {
-          "drafts": {
-            "option1": "Rockies keep selling development year, then we hit the road and a lefty takes the mound. Suddenly the lineup is in the learn by striking out program. Coors can’t tutor you in Seattle.",
-            "option2": "If it’s a development year, cool. But why does every road series turn into a live BP session for the opposing lefty. We’re not developing hitters, we’re developing his confidence.",
-            "option3": "Rockies fans calling it development year is elite coping. The second a road lefty starts, we’re all bargaining like, maybe this one only throws 92.\n\nThen it’s 8 punchouts and a quiet flight home."
+            "option1": "Nuggets say everything is on the table this summer. Awesome. Just once I want the “non Jokic minutes” mentioned out loud without everyone suddenly staring at their shoes.\n\nThat stretch has ruined more nights than bad shooting.",
+            "option2": "Everything is on the table, cool. But if the plan is still Jokic sits and we play offense like it is a charity event, we are just rearranging deck chairs. The bench unit cannot be a survival drill again.",
+            "option3": "Summer in Denver is hilarious. We talk ourselves into the bench like it is going to level up from vibes and altitude. Then Jokic gets his first rest and it turns into a live scrimmage with no adults."
           },
           "passing": [
             "1",
@@ -874,7 +482,7 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 183,
+              "char_count": 226,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option2": {
@@ -883,62 +491,6 @@
               "issues": [
                 "Comedic should be funny through the topic, not meme-caption energy: cool"
               ],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 179,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 92,
-              "issues": [],
-              "warnings": [
-                "Hedging weakens the human read; make the take cleaner or funnier."
-              ],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 195,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
-          }
-        },
-        {
-          "drafts": {
-            "option1": "Calling it a development year is fine. But every road series vs a lefty turns into the same pop quiz and we keep writing our name at the top and turning it in blank. That is not development, that is a matchup problem.",
-            "option2": "Rockies say development year, then a road lefty shows up and we start developing his pitch count. It’s like the lineup has a team rule, do not make him throw a stressful inning. Quick outs, quicker game.",
-            "option3": "Development year is the new blanket. Every road lefty takes the mound and we all pull it up to our chin like, just get it to the bullpen.\n\nThen we’re down 3 nothing before the bullpen even stretches."
-          },
-          "passing": [
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": false,
-              "score": 75,
-              "issues": [
-                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is not development, that is a matchup problem."
-              ],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 217,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
               "warnings": [],
               "ai_sounding_hits": [],
               "risk_hits": [],
@@ -962,124 +514,183 @@
               "prompt_version": "ce-prompt-v5-voice-profile"
             }
           }
+        }
+      ],
+      "repaired": {
+        "drafts": {
+          "option1": "Nuggets say everything is on the table this summer. Awesome. Just once I want the “non Jokic minutes” mentioned out loud without everyone suddenly staring at their shoes.\n\nThat stretch has ruined more nights than bad shooting.",
+          "option2": "Everything is on the table, cool. But if the plan is still Jokic sits and we play offense like it is a charity event, we are just rearranging deck chairs. The bench unit cannot be a survival drill again.",
+          "option3": "Summer in Denver is hilarious. We talk ourselves into the bench like it is going to level up from vibes and altitude. Then Jokic gets his first rest and it turns into a live scrimmage with no adults."
         },
-        {
-          "drafts": {
-            "option1": "They keep calling it a development year, cool. Then we go on the road, see a lefty, and the lineup turns into a hitting clinic where everyone already paid and nobody wants to swing. Three pitches, three outs, repeat.",
-            "option2": "Development year is supposed to mean learning. Against lefties on the road, we learn the same lesson every night, do not let that guy work. We turn his toughest inning into a quick jog back to the dugout.",
-            "option3": "Rockies fans packing for a road series like, maybe we dodge the lefties this time. Then the starter comes out throwing from the other side and we start practicing our best contact, with the bat still on our shoulder.\n\nThat’s not patience, that’s surrender."
+        "passing": [
+          "1",
+          "3"
+        ],
+        "quality": {
+          "option1": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 226,
+            "prompt_version": "ce-prompt-v5-voice-profile"
           },
-          "passing": [
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": false,
-              "score": 75,
-              "issues": [
-                "Comedic should be funny through the topic, not meme-caption energy: cool"
-              ],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 216,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 204,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 92,
-              "issues": [],
-              "warnings": [
-                "Hedging weakens the human read; make the take cleaner or funnier."
-              ],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 256,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
-          }
-        },
-        {
-          "drafts": {
-            "option1": "They sell us on development year, then we hit the road and see a lefty and suddenly the plan is survival. Three at bats, three guesses, and we are back in the dugout before the pitcher breaks a sweat. That is not growth.",
-            "option2": "Calling it a development year is funny because lefties are still the final exam and we keep showing up without a pencil. Road series turns into free pitch counts for the other guy. He is basically on cruise control.",
-            "option3": "Rockies fans on a road trip talking themselves into good at bats, then the probables list shows a lefty and everybody starts practicing their best take.\n\nNothing develops like staring at strike three."
+          "option2": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Comedic should be funny through the topic, not meme-caption energy: cool"
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 203,
+            "prompt_version": "ce-prompt-v5-voice-profile"
           },
-          "passing": [
-            "2",
-            "3"
-          ],
-          "quality": {
-            "option1": {
-              "ok": false,
-              "score": 75,
-              "issues": [
-                "Comedic final beat sounds like an AI slogan/tagline instead of a human joke: that is not growth."
-              ],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 220,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option2": {
-              "ok": true,
-              "score": 100,
-              "issues": [],
-              "warnings": [],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 215,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            },
-            "option3": {
-              "ok": true,
-              "score": 84,
-              "issues": [],
-              "warnings": [
-                "Normal Tweet usually works best when the first paragraph is two or three sentences."
-              ],
-              "ai_sounding_hits": [],
-              "risk_hits": [],
-              "engagement_bait_hits": [],
-              "cadence_hits": [],
-              "polished_punctuation_hits": [],
-              "char_count": 200,
-              "prompt_version": "ce-prompt-v5-voice-profile"
-            }
+          "option3": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 199,
+            "prompt_version": "ce-prompt-v5-voice-profile"
           }
+        }
+      },
+      "final": {
+        "drafts": {
+          "option1": "Nuggets keep saying everything is on the table this summer. I believe them. I just need to see one person mention the non Jokic minutes without whispering like it is a family secret.\n\nThose possessions are the real trade block.",
+          "option2": "Fans are already doing the summer thing where the bench magically gets better because we all thought really hard about it. Then Jokic rests, the offense turns into contested jumpers, and we call it normal.",
+          "option3": "Nuggets say everything is on the table this summer. Awesome. Just once I want the “non Jokic minutes” mentioned out loud without everyone suddenly staring at their shoes.\n\nThat stretch has ruined more nights than bad shooting."
         },
+        "passing": [
+          "option1",
+          "option2",
+          "option3"
+        ],
+        "quality": {
+          "option1": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 227,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 205,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 226,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "topic": "avs",
+      "concept": "The Avs are switching goalies after one loss even though the other goalie had been rolling.",
+      "initial": {
+        "drafts": {
+          "option1": "Avs lose one game and the crease turns into a revolving door. The guy who was rolling gets parked like he missed a meeting.\n\nNothing says we trust our goalie like yanking him after one L.",
+          "option2": "So the hot goalie is rolling, you take one loss, and the fix is changing goalies. That is not a plan, that is vibes.\n\nYou cannot manage a playoff crease like a fantasy lineup.",
+          "option3": "Avs fans are gonna talk themselves into the goalie switch like its 4D chess. It is just panic after one bad night.\n\nWe are doing the most at the most important position."
+        },
+        "passing": [],
+        "quality": {
+          "option1": {
+            "ok": false,
+            "score": 50,
+            "issues": [
+              "Comedic joke drifted into random analogy instead of topic reality: meeting",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 187,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 175,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 169,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "repair_used": true,
+      "repairs": [
         {
           "drafts": {
-            "option1": "Rockies keep saying development year, then we get on the road and a lefty shows up and the bats go quiet. Same swings, same weak contact, same fast inning. Apparently the big lesson is how to jog back to the dugout.",
-            "option2": "If this is a development year, left handed pitching is the pop quiz we keep failing in the first 10 minutes. Road series turns into free confidence for the other guy. We are basically running his bullpen session for him.",
-            "option3": "Every road trip is the same. We talk ourselves into progress, then the probables list says LHP and the lineup starts looking like it forgot its homework.\n\nNothing says growth like a 3 pitch strikeout."
+            "option1": "Avs lose one game and we immediately go full goalie roulette. The guy who was rolling gets treated like the problem. Nothing screams calm confidence like a crease change after one L.",
+            "option2": "If your goalie is rolling, one loss is supposed to be a bad night, not a new starter. You cant manage the crease like its a bullpen where everybody gets a turn. Pick a guy, let him cook.",
+            "option3": "The Avs are switching goalies after one loss even though the other guy was rolling. We are calling it matchup stuff like the puck cares about our explanation.\n\nThe crease is not a suggestion box."
           },
           "passing": [
             "1",
@@ -1097,7 +708,7 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 215,
+              "char_count": 182,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option2": {
@@ -1110,7 +721,7 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 220,
+              "char_count": 186,
               "prompt_version": "ce-prompt-v5-voice-profile"
             },
             "option3": {
@@ -1123,7 +734,7 @@
               "engagement_bait_hits": [],
               "cadence_hits": [],
               "polished_punctuation_hits": [],
-              "char_count": 200,
+              "char_count": 195,
               "prompt_version": "ce-prompt-v5-voice-profile"
             }
           }
@@ -1131,9 +742,9 @@
       ],
       "repaired": {
         "drafts": {
-          "option1": "Rockies keep saying development year, then we get on the road and a lefty shows up and the bats go quiet. Same swings, same weak contact, same fast inning. Apparently the big lesson is how to jog back to the dugout.",
-          "option2": "If this is a development year, left handed pitching is the pop quiz we keep failing in the first 10 minutes. Road series turns into free confidence for the other guy. We are basically running his bullpen session for him.",
-          "option3": "Every road trip is the same. We talk ourselves into progress, then the probables list says LHP and the lineup starts looking like it forgot its homework.\n\nNothing says growth like a 3 pitch strikeout."
+          "option1": "Avs lose one game and we immediately go full goalie roulette. The guy who was rolling gets treated like the problem. Nothing screams calm confidence like a crease change after one L.",
+          "option2": "If your goalie is rolling, one loss is supposed to be a bad night, not a new starter. You cant manage the crease like its a bullpen where everybody gets a turn. Pick a guy, let him cook.",
+          "option3": "The Avs are switching goalies after one loss even though the other guy was rolling. We are calling it matchup stuff like the puck cares about our explanation.\n\nThe crease is not a suggestion box."
         },
         "passing": [
           "1",
@@ -1151,7 +762,7 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 215,
+            "char_count": 182,
             "prompt_version": "ce-prompt-v5-voice-profile"
           },
           "option2": {
@@ -1164,7 +775,7 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 220,
+            "char_count": 186,
             "prompt_version": "ce-prompt-v5-voice-profile"
           },
           "option3": {
@@ -1177,16 +788,188 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 200,
+            "char_count": 195,
             "prompt_version": "ce-prompt-v5-voice-profile"
           }
         }
       },
       "final": {
         "drafts": {
-          "option1": "Rockies keep saying development year, then we get on the road and a lefty shows up and the bats go quiet. Same swings, same weak contact, same fast inning. Apparently the big lesson is how to jog back to the dugout.",
-          "option2": "If this is a development year, left handed pitching is the pop quiz we keep failing in the first 10 minutes. Road series turns into free confidence for the other guy. We are basically running his bullpen session for him.",
-          "option3": "Every road trip is the same. We talk ourselves into progress, then the probables list says LHP and the lineup starts looking like it forgot its homework.\n\nNothing says growth like a 3 pitch strikeout."
+          "option1": "Avs lose one game and we immediately go full goalie roulette. The guy who was rolling gets treated like the problem. Nothing screams calm confidence like a crease change after one L.",
+          "option2": "If your goalie is rolling, one loss is supposed to be a bad night, not a new starter. You cant manage the crease like its a bullpen where everybody gets a turn. Pick a guy, let him cook.",
+          "option3": "The Avs are switching goalies after one loss even though the other guy was rolling. We are calling it matchup stuff like the puck cares about our explanation.\n\nThe crease is not a suggestion box."
+        },
+        "passing": [
+          "option1",
+          "option2",
+          "option3"
+        ],
+        "quality": {
+          "option1": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 182,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 186,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 195,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "topic": "rockies",
+      "concept": "The Rockies keep calling this a development year, but every road series turns into another reminder that the lineup cannot handle left-handed pitching.",
+      "initial": {
+        "drafts": {
+          "option1": "Rockies keep calling it a development year, then we hit the road and a lefty shows up and the bats go silent. Same movie, different city.\n\nAt some point you gotta develop the ability to hit the guy throwing it.",
+          "option2": "If this is a development year, can we develop a plan for left handed pitching. Every road series feels like the lineup is surprised the ball breaks.\n\nScouting report stays undefeated.",
+          "option3": "Rockies fans doing the annual math. It is a development year, Coors will fix it, just wait for the homestand.\n\nThen a lefty starts and we are back to hoping for a wild pitch RBI."
+        },
+        "passing": [],
+        "quality": {
+          "option1": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 210,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": false,
+            "score": 50,
+            "issues": [
+              "Comedic should not collapse into Witty Edge analysis: feels like",
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 183,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": false,
+            "score": 75,
+            "issues": [
+              "Generated options repeat the same line-break skeleton; vary the structure across options."
+            ],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 178,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "repair_used": true,
+      "repairs": [
+        {
+          "drafts": {
+            "option1": "They keep calling it a development year, then we go on the road and a lefty starts. The lineup looks like they just learned that is allowed. \n\nNothing develops faster than an 0 for the series.",
+            "option2": "Development year is fine. But every road series vs a lefty turns into live batting practice for their bullpen. The at bats get shorter, the swings get bigger, and the scoreboard does the coaching.",
+            "option3": "Rockies fan coping is elite. It is a development year, Coors will wake the bats up, just get back home. Then a lefty shows up on the road and we are all praying for a bloop and a couple walks."
+          },
+          "passing": [
+            "1",
+            "2",
+            "3"
+          ],
+          "quality": {
+            "option1": {
+              "ok": true,
+              "score": 100,
+              "issues": [],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 192,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option2": {
+              "ok": true,
+              "score": 100,
+              "issues": [],
+              "warnings": [],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 196,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            },
+            "option3": {
+              "ok": true,
+              "score": 92,
+              "issues": [],
+              "warnings": [
+                "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
+              ],
+              "ai_sounding_hits": [],
+              "risk_hits": [],
+              "engagement_bait_hits": [],
+              "cadence_hits": [],
+              "polished_punctuation_hits": [],
+              "char_count": 192,
+              "prompt_version": "ce-prompt-v5-voice-profile"
+            }
+          }
+        }
+      ],
+      "repaired": {
+        "drafts": {
+          "option1": "They keep calling it a development year, then we go on the road and a lefty starts. The lineup looks like they just learned that is allowed. \n\nNothing develops faster than an 0 for the series.",
+          "option2": "Development year is fine. But every road series vs a lefty turns into live batting practice for their bullpen. The at bats get shorter, the swings get bigger, and the scoreboard does the coaching.",
+          "option3": "Rockies fan coping is elite. It is a development year, Coors will wake the bats up, just get back home. Then a lefty shows up on the road and we are all praying for a bloop and a couple walks."
         },
         "passing": [
           "1",
@@ -1204,7 +987,7 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 215,
+            "char_count": 192,
             "prompt_version": "ce-prompt-v5-voice-profile"
           },
           "option2": {
@@ -1217,10 +1000,39 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 220,
+            "char_count": 196,
             "prompt_version": "ce-prompt-v5-voice-profile"
           },
           "option3": {
+            "ok": true,
+            "score": 92,
+            "issues": [],
+            "warnings": [
+              "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
+            ],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 192,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          }
+        }
+      },
+      "final": {
+        "drafts": {
+          "option1": "They keep calling it a development year, then we go on the road and a lefty starts. The lineup looks like they just learned that is allowed. \n\nNothing develops faster than an 0 for the series.",
+          "option2": "Development year is fine. But every road series vs a lefty turns into live batting practice for their bullpen. The at bats get shorter, the swings get bigger, and the scoreboard does the coaching.",
+          "option3": "Rockies fan coping is elite. It is a development year, Coors will wake the bats up, just get back home. Then a lefty shows up on the road and we are all praying for a bloop and a couple walks."
+        },
+        "passing": [
+          "option1",
+          "option2",
+          "option3"
+        ],
+        "quality": {
+          "option1": {
             "ok": true,
             "score": 100,
             "issues": [],
@@ -1230,7 +1042,35 @@
             "engagement_bait_hits": [],
             "cadence_hits": [],
             "polished_punctuation_hits": [],
-            "char_count": 200,
+            "char_count": 192,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option2": {
+            "ok": true,
+            "score": 100,
+            "issues": [],
+            "warnings": [],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 196,
+            "prompt_version": "ce-prompt-v5-voice-profile"
+          },
+          "option3": {
+            "ok": true,
+            "score": 92,
+            "issues": [],
+            "warnings": [
+              "Comedic final beat is getting long; make sure it lands as a joke, not an explanation."
+            ],
+            "ai_sounding_hits": [],
+            "risk_hits": [],
+            "engagement_bait_hits": [],
+            "cadence_hits": [],
+            "polished_punctuation_hits": [],
+            "char_count": 192,
             "prompt_version": "ce-prompt-v5-voice-profile"
           }
         }

@@ -10337,8 +10337,20 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         passing = _ce_passing_option_ids(data, quality_report)
         required_passing = 3 if lane == "Comedic" else 1
         repair_attempts = 5 if lane == "Comedic" else 1
+        passing_pool: list[tuple[str, str, str]] = []
+
+        def _collect_passing_options(source_data: dict, source_passing: list[str]) -> None:
+            seen = {text for _, text, _ in passing_pool}
+            for source_idx in source_passing:
+                source_key = f"option{source_idx}"
+                text = str(source_data.get(source_key, "") or "").strip()
+                if text and text not in seen:
+                    passing_pool.append((source_idx, text, str(source_data.get(f"{source_key}_pattern", "") or "")))
+                    seen.add(text)
+
+        _collect_passing_options(data, passing)
         for _repair_attempt in range(repair_attempts):
-            if len(passing) >= 3:
+            if len(passing_pool) >= required_passing:
                 break
             repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
                 prompt,
@@ -10348,6 +10360,18 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 lane,
                 max_tokens,
             )
+            if repaired:
+                _collect_passing_options(repaired, repaired_passing)
+            if lane == "Comedic" and len(passing_pool) >= required_passing:
+                data = {}
+                for target_idx, (_, text, pattern) in enumerate(passing_pool[:3], 1):
+                    data[f"option{target_idx}"] = text
+                    data[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
+                data["pick"] = "1"
+                data["pick_reason"] = "Selected from passing Comedic drafts collected across repair attempts."
+                quality_report = _ce_validate_generation_options(data, fmt, lane)
+                passing = _ce_passing_option_ids(data, quality_report)
+                break
             if repaired and len(repaired_passing) >= max(required_passing, len(passing)):
                 data = repaired
                 quality_report = repaired_quality

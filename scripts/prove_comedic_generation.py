@@ -58,11 +58,23 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
     final_data = data
     final_quality = quality
     final_passing = passing
+    passing_pool: list[tuple[str, str, str]] = []
+
+    def collect(source_data: dict, source_passing: list[str]) -> None:
+        seen = {text for _, text, _ in passing_pool}
+        for source_idx in source_passing:
+            key = f"option{source_idx}"
+            text = str(source_data.get(key, "") or "").strip()
+            if text and text not in seen:
+                passing_pool.append((source_idx, text, str(source_data.get(f"{key}_pattern", "") or "")))
+                seen.add(text)
+
+    collect(data, passing)
     best_data = final_data
     best_quality = final_quality
     best_passing = final_passing
     for _attempt in range(5):
-        if len(final_passing) >= 3:
+        if len(passing_pool) >= 3:
             break
         repaired, repaired_quality, repaired_passing = app._ce_repair_failed_generation(
             prompt,
@@ -80,6 +92,17 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
             "passing": repaired_passing,
             "quality": repaired_quality,
         })
+        collect(repaired, repaired_passing or [])
+        if len(passing_pool) >= 3:
+            final_data = {}
+            for target_idx, (_, text, pattern) in enumerate(passing_pool[:3], 1):
+                final_data[f"option{target_idx}"] = text
+                final_data[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
+            final_data["pick"] = "1"
+            final_data["pick_reason"] = "Selected from passing Comedic drafts collected across repair attempts."
+            final_quality = app._ce_validate_generation_options(final_data, fmt, lane)
+            final_passing = _passing_ids(final_quality)
+            break
         if len(repaired_passing or []) >= len(best_passing):
             best_data = repaired
             best_quality = repaired_quality or {}
