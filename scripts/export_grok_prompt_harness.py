@@ -100,6 +100,8 @@ def _paste_card(records: dict, args: argparse.Namespace) -> str:
         f"Concept: {records['concept']}",
         "",
         f"After you generate all sections, the user will compare option{example_index} from each JSON against the Codex card.",
+        "The Codex harness will track two choices after the round: which prompt option won and which model won.",
+        "Do not ask the user for those choices. Just generate the JSON so the user can compare.",
         "",
     ]
     feedback = records.get("overlay", {}).get("feedback", [])

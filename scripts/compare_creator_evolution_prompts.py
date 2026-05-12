@@ -65,6 +65,7 @@ def _state_paths(repo: Path, session: str) -> dict[str, Path]:
         "overlay": root / "evolving_overlay.json",
         "feedback": root / "feedback_rounds.jsonl",
         "generations": root / "generations.jsonl",
+        "preferences": root / "preferences.jsonl",
         "export_md": root / "final_export.md",
         "export_json": root / "final_export.json",
     }
@@ -131,7 +132,39 @@ def _reset_overlay(repo: Path, session: str) -> dict[str, Any]:
     paths["overlay"].write_text(json.dumps(overlay, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     paths["feedback"].write_text("", encoding="utf-8")
     paths["generations"].write_text("", encoding="utf-8")
+    paths["preferences"].write_text("", encoding="utf-8")
     return overlay
+
+
+def _append_preference(
+    repo: Path,
+    session: str,
+    *,
+    lane: str,
+    fmt: str,
+    concept: str,
+    example_index: int,
+    option_preference: str,
+    model_preference: str,
+    note: str,
+) -> dict[str, Any]:
+    paths = _state_paths(repo, session)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    existing_count = len(paths["preferences"].read_text(encoding="utf-8").splitlines()) if paths["preferences"].exists() else 0
+    item = {
+        "id": f"pref_{existing_count + 1:03d}",
+        "created_at": _utc_now(),
+        "lane": lane,
+        "format": fmt,
+        "concept": concept,
+        "example_index": int(example_index or 1),
+        "option_preference": option_preference,
+        "model_preference": model_preference,
+        "note": str(note or "").strip(),
+    }
+    with paths["preferences"].open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+    return item
 
 
 def _feedback_lines(overlay: dict[str, Any], scope: str | None = None) -> list[str]:
@@ -469,8 +502,9 @@ def _render_study_cards(
         "",
         "How to use this:",
         f"1. Compare one tweet at a time: example {example_index} of 3.",
-        "2. Pick `old`, `new`, `evolving`, `mix`, or `neither`.",
-        "3. Give one short feedback note to improve Evolving C, then rerun this example or move to the next one.",
+        "2. Pick option preference: `old`, `new`, `evolving`, `mix`, or `neither`.",
+        "3. Pick model preference when Grok is also running: `chatgpt`, `grok`, `tie`, `mix`, or `neither`.",
+        "4. Give one short feedback note to improve Evolving C, then rerun this example or move to the next one.",
         "",
         "Concept:",
         "```text",
@@ -547,7 +581,7 @@ def _render_study_cards(
         lines.extend(
             [
                 "Preference question:",
-                f"For {record['lane']}, choose `old`, `new`, `evolving`, `mix`, or `neither`, then give one short feedback note for Evolving C.",
+                f"For {record['lane']}, choose option preference `old`, `new`, `evolving`, `mix`, or `neither`; model preference `chatgpt`, `grok`, `tie`, `mix`, or `neither`; then give one short feedback note for Evolving C.",
                 "",
             ]
         )
@@ -654,6 +688,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ai-timeout", type=int, default=90, help="Timeout per example-generation call.")
     parser.add_argument("--ai-provider", choices=["auto", "claude", "codex"], default="auto", help="Read-only example backend.")
     parser.add_argument("--codex-model", default="gpt-5.4", help="Codex model for --ai-provider codex or auto fallback.")
+    parser.add_argument("--record-preference", action="store_true", help="Append this round's option/model preference to preferences.jsonl and exit before generation.")
+    parser.add_argument("--option-preference", choices=["old", "new", "evolving", "mix", "neither"], default="", help="Preferred prompt option for --record-preference.")
+    parser.add_argument("--model-preference", choices=["chatgpt", "grok", "tie", "mix", "neither"], default="", help="Preferred model for --record-preference.")
+    parser.add_argument("--preference-note", default="", help="Optional note for --record-preference.")
     return parser.parse_args()
 
 
@@ -668,6 +706,22 @@ def main() -> int:
         overlay = _load_overlay(repo, session)
     for feedback in args.feedback:
         overlay = _append_feedback(repo, session, feedback, args.feedback_scope)
+    if args.record_preference:
+        if not args.option_preference or not args.model_preference:
+            raise SystemExit("--record-preference requires --option-preference and --model-preference")
+        item = _append_preference(
+            repo,
+            session,
+            lane=(args.lanes or [DEFAULT_LANES[0]])[0],
+            fmt=args.format,
+            concept=args.concept,
+            example_index=args.example_index,
+            option_preference=args.option_preference,
+            model_preference=args.model_preference,
+            note=args.preference_note,
+        )
+        print(json.dumps(item, indent=2, ensure_ascii=False))
+        return 0
     old_source = _git_show(repo, args.old_ref, "creator_evolution.py")
     new_source = _git_show(repo, args.new_ref, "creator_evolution.py")
     old_module = _load_module_from_source(old_source, "creator_evolution_old_compare")
