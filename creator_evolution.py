@@ -2049,12 +2049,16 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     ) if is_build else ""
     comedic_contract = (
         "\nCOMEDIC LANE HARD RULES:\n"
+        "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
         "- Funny first. Not clever analysis, not debate pressure, not angry indictment.\n"
+        "- Before writing, privately map: actual topic absurdity -> joke engine -> punchline. If that map is weak, rewrite.\n"
         "- Every draft needs an actual joke mechanic: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut.\n"
-        "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons.\n"
+        "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons, no decorative metaphor extensions.\n"
+        "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The final line is not response pressure. It is the laugh beat. Keep it short, topical, and slightly under-explained.\n"
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
+        "- Good Comedic examples of the target shape: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.'\n"
     ) if lane == "Comedic" else ""
     return f"""{opening}
 
