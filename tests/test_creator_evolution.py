@@ -516,6 +516,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         copied_comedy = ce.draft_quality_report("If another arm shows up, that ankle just held its own press conference.", "Punchy Tweet", "Comedic")
         table_comedy = ce.draft_quality_report("The Nuggets table has a velvet rope around the non Jokic minutes. Great table though.", "Punchy Tweet", "Comedic")
         press_release_comedy = ce.draft_quality_report("If another arm walks in, that ankle filed its own press release.", "Punchy Tweet", "Comedic")
+        transaction_wire_comedy = ce.draft_quality_report("Teams that feel great about QB1 do not go backup shopping in May. The transaction wire talks.", "Punchy Tweet", "Comedic")
+        qb3_honesty_comedy = ce.draft_quality_report("The Broncos say Bo is fine. QB3 is where the honesty lives.", "Punchy Tweet", "Comedic")
+        bench_math_comedy = ce.draft_quality_report("If those minutes survive untouched, nothing actually changed. Bench math stays employed.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -537,6 +540,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(copied_comedy["ok"])
         self.assertFalse(table_comedy["ok"])
         self.assertFalse(press_release_comedy["ok"])
+        self.assertFalse(transaction_wire_comedy["ok"])
+        self.assertFalse(qb3_honesty_comedy["ok"])
+        self.assertFalse(bench_math_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
@@ -555,6 +561,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in copied_comedy["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in table_comedy["issues"]))
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in press_release_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in transaction_wire_comedy["issues"]))
+        self.assertTrue(any("witty edge analysis" in issue.lower() or "confusing or surreal" in issue.lower() for issue in qb3_honesty_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in bench_math_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -563,8 +572,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         prompt = ce.build_generation_prompt("The Nuggets bench turned a lead into panic.", "Normal Tweet", "Comedic", ce.initial_state())
         self.assertIn("COMEDIC LANE HARD RULES", prompt)
         self.assertIn("MASTER GOAL", prompt)
+        self.assertIn("HARD STANDARD", prompt)
         self.assertIn("joke engine", prompt)
         self.assertIn("exact sports absurdity", prompt)
+        self.assertIn("COMEDIC CALIBRATION BAR", prompt)
         self.assertIn("COMEDIC OVERRIDE", prompt)
         self.assertIn("funny first", prompt.lower())
         self.assertIn("sports-specific", prompt)
@@ -586,6 +597,16 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Ban anger-only closers", prompt)
         self.assertIn("do not copy any phrase", prompt.lower())
         self.assertIn("Mechanic targets only", prompt)
+
+    def test_comedic_lane_accepts_sports_specific_jokes(self):
+        examples = [
+            "If the Broncos add another quarterback after saying Bo is fine, that is not depth. That is ankle insurance with a helmet.",
+            "The Nuggets can call everything open for debate, but Jokic sitting still turns the offense into a lost and found box.",
+            "Changing goalies after one loss is how the Avs turn one bad night into a crease problem.",
+        ]
+        for text in examples:
+            with self.subTest(text=text):
+                self.assertTrue(ce.draft_quality_report(text, "Punchy Tweet", "Comedic")["ok"])
 
     def test_critical_lane_is_distinct_from_skeptical(self):
         self.assertIn("Critical", ce.EMOTION_LANES)

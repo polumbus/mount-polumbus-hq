@@ -279,6 +279,8 @@ COMEDIC_FAKE_MARKERS = (
     "sounds like",
     "translates to",
     "feels like front office for",
+    "very soothing stuff",
+    "cool",
 )
 
 COMEDIC_RANDOM_ANALOGY_TERMS = (
@@ -332,11 +334,19 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "senior staff",
     "diplomatic immunity",
     "team protection",
+    "protected historic site",
+    "public-facing",
+    "breathing exercises",
+    "decoration",
+    "bubble wrap",
+    "wellness check",
     "allergic",
     "family heirloom",
+    "family property",
     "same memo",
     "offseason meeting",
     "huge language",
+    "stays employed",
 )
 
 COMEDIC_PROFANITY_TERMS = (
@@ -402,8 +412,12 @@ COMEDIC_ANALYSIS_DRIFT = (
     "the next part is the tell",
     "the next part is where",
     "is the tell",
+    "the tell",
     "feels like",
     "the truth is",
+    "said a lot without saying anything",
+    "where the honesty lives",
+    "honesty lives",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -436,6 +450,12 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "can hear the limp",
     "soothing voices",
     "truth usually wanders",
+    "transaction wire talks",
+    "wire talks",
+    "qb3 is where",
+    "bench math stays",
+    "rotation math is doing",
+    "doing cardio",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -448,6 +468,9 @@ COMEDIC_OBJECT_AGENCY_SUBJECTS = (
     "roster",
     "rotation",
     "transaction",
+    "transaction wire",
+    "qb3",
+    "bench math",
 )
 
 COMEDIC_OBJECT_AGENCY_VERBS = (
@@ -2267,6 +2290,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- MASTER GOAL: Write like the funniest sports guy in the group chat found the obvious contradiction before everyone else. The job is not to sound edgy. The job is to be funny because the sports behavior is ridiculous.\n"
         "- FAILURE MODES TO AVOID: angry ranting, swear-word comedy, quirky metaphor comedy, fake-deep analysis, and punchlines that need explanation.\n"
         "- SOLUTION: identify the public claim, identify the private behavior that contradicts it, identify the exact sports mechanism, then make that contrast sound stupidly obvious in one clean line.\n"
+        "- HARD STANDARD: If the draft would not make a sports group chat smirk without needing a swear word, it is not Comedic yet.\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
         "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay or clever writing cosplay.\n"
         "- The joke must come from the exact sports absurdity in the source: injury trust, QB room behavior, rotation math, non-Jokic minutes, fan coping, coach logic, roster incentives, public messaging, or media framing.\n"
@@ -2277,6 +2301,9 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
         "- Comedy density matters. Cut the setup until only the contradiction and the laugh beat remain.\n"
+        "- A good Comedic tweet has a visible laugh turn: calm claim -> behavior that gives it away, fan coping -> obvious sports reality, or public plan -> embarrassing game consequence.\n"
+        "- The punchline should be a sentence a normal fan could say out loud, not a poetic object line. Bad: 'The transaction wire talks.' Bad: 'QB3 is where the honesty lives.' Bad: 'Bench math stays employed.'\n"
+        "- Use human bluntness over clever phrasing. If the funniest version is simply 'that is not depth, that is insurance,' use that instead of a metaphor.\n"
         "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
@@ -2299,6 +2326,11 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
         "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
         "- Mechanic targets only, not reusable lines: pressure reveal, sports-logic flip, fan-coping roast, or absurdly plain sports consequence.\n"
+        "\nCOMEDIC CALIBRATION BAR, DO NOT COPY THESE WORDS:\n"
+        "- Broncos injury trust mechanism: A team that truly trusts QB1 does not treat QB3 like emotional support.\n"
+        "- Nuggets rotation mechanism: If the non-Jokic minutes keep turning leads into panic, that is not a bench issue anymore, that is the whole offseason wearing a fake mustache.\n"
+        "- Avs goalie mechanism: Changing goalies after one loss is how a crease turns into a group project five minutes before puck drop.\n"
+        "- The examples above show pressure, turn, and laugh density only. Do not reuse their images, objects, or exact phrasing.\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
