@@ -265,6 +265,8 @@ COMEDIC_FAKE_MARKERS = (
     "very calm stuff",
     "funny how that works",
     "cute",
+    "very serious operation",
+    "very brave loophole",
     "this is wild",
     "you can't make this up",
 )
@@ -327,6 +329,8 @@ COMEDIC_ANALYSIS_DRIFT = (
     "that is where this gets real",
     "the next qb decision will be the interesting part",
     "that part usually ruins the calm",
+    "that transaction will tell the truth",
+    "the actual injury report",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -2121,6 +2125,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Allowed extras: pretend quote, uncomfortable comparison, exaggerated fan thought, blunt label, self-aware aside, fake-serious understatement, or playful undercut.\n"
         "- The joke must come from this topic's real absurd detail. One short uncomfortable comparison is allowed when it stings. Long random analogies are not.\n"
         "- Good comedy here is a sports truth with a hard turn. Short setup. Nuclear punchline. No fluff.\n"
+        "- The last line must be a punchline with a concrete sports image, insult, or uncomfortable comparison. Do not end with a diagnosis like 'that tells the truth,' 'actual injury report,' 'very serious operation,' or 'very brave loophole.'\n"
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
         "- Do not write lines like 'we all heard the same ankle,' 'that clipboard will start singing,' or 'shopping nervous.' That is confusing, not funny.\n"
@@ -2130,7 +2135,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
         "- Reject anything safe, cute, witty, or ChatGPT-clever. If it does not make a sports-degenerate laugh while slightly wincing, rewrite it.\n"
         "- Reject fake-deep lines like 'press conference with vibes,' 'that is the real press conference,' 'talk is cheap,' or 'the conversation gets uncomfortable.' Those are not jokes.\n"
-        "- Gold-standard shape examples: 'They keep saying Bo is fine the same way your boy swears he is totally good right before he pukes in your passenger seat.' / 'Nuggets saying everything is on the table is code for we will change anything except the non-Jokic minutes that turn every lead into a goddamn horror show.' / 'They will do anything before admitting those second-unit lineups play like strangers who hate each other's guts the second Jokic sits.'\n"
+        "- Gold-standard shape examples: 'They keep saying Bo is fine the same way your boy swears he is totally good right before he pukes in your passenger seat.' / 'If they add another QB, the ankle update was basically, he can walk, please clap.' / 'Nuggets saying everything is on the table is code for we will change anything except the non-Jokic minutes that turn every lead into a goddamn horror show.' / 'They will do anything before admitting those second-unit lineups play like strangers who hate each other's guts the second Jokic sits.'\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
