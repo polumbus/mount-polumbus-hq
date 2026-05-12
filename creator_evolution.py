@@ -849,12 +849,12 @@ def topic_tags(text: str) -> list[str]:
 
 def risky_language_score(text: str) -> int:
     lower = text.lower()
-    return sum(1 for term in RISK_TERMS if term in lower)
+    return sum(1 for term in RISK_TERMS if re.search(rf"\b{re.escape(term)}\b", lower))
 
 
 def risk_hits(text: str) -> list[str]:
     lower = text.lower()
-    return [term for term in RISK_TERMS if term in lower]
+    return [term for term in RISK_TERMS if re.search(rf"\b{re.escape(term)}\b", lower)]
 
 
 def ai_sounding_hits(text: str) -> list[str]:
@@ -1136,9 +1136,9 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             first_part = parts[0] if parts else ""
             first_sentence_count = len([part for part in re.split(r"[.!?]+", first_part) if part.strip()])
             final_sentence_count = len([part for part in re.split(r"[.!?]+", final_part) if part.strip()])
-            if first_sentence_count < 2 or first_sentence_count > 3:
+            if lane != "Comedic" and (first_sentence_count < 2 or first_sentence_count > 3):
                 warnings.append("Normal Tweet usually works best when the first paragraph is two or three sentences.")
-            if final_sentence_count != 1:
+            if lane != "Comedic" and final_sentence_count != 1:
                 warnings.append("Normal Tweet final line usually works best as one final statement.")
             if final_part.rstrip().endswith("?"):
                 issues.append("Normal Tweet final line should invite replies without a direct question.")
@@ -1239,7 +1239,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             specificity_count = _specificity_signal_count(text)
             if len(profanity_terms) > 1 or specificity_count <= 3:
                 issues.append("Comedic profanity is replacing the joke instead of seasoning a sports-specific punchline: " + ", ".join(profanity_terms[:4]))
-        if fmt == "Normal Tweet" and final_words > 18:
+        if fmt == "Normal Tweet" and final_words > 28:
             warnings.append("Comedic final beat is getting long; make sure it lands as a joke, not an explanation.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import itertools
 import json
 from pathlib import Path
 import sys
@@ -33,8 +34,8 @@ def _passing_ids(quality: dict) -> list[str]:
     for idx in (1, 2, 3):
         key = f"option{idx}"
         report = quality.get(key, {}) if isinstance(quality, dict) else {}
-        if report.get("ok"):
-            passing.append(key)
+        if report.get("ok") and not report.get("warnings"):
+            passing.append(str(idx))
     return passing
 
 
@@ -69,11 +70,23 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
                 passing_pool.append((source_idx, text, str(source_data.get(f"{key}_pattern", "") or "")))
                 seen.add(text)
 
+    def build_clean_set() -> tuple[dict | None, dict, list[str]]:
+        for combo in itertools.combinations(passing_pool, 3):
+            candidate = {"pick": "1", "pick_reason": "Selected from passing Comedic drafts collected across repair attempts."}
+            for target_idx, (_, text, pattern) in enumerate(combo, 1):
+                candidate[f"option{target_idx}"] = text
+                candidate[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
+            candidate_quality = app._ce_validate_generation_options(candidate, fmt, lane)
+            candidate_passing = _passing_ids(candidate_quality)
+            if len(candidate_passing) == 3:
+                return candidate, candidate_quality, candidate_passing
+        return None, {}, []
+
     collect(data, passing)
     best_data = final_data
     best_quality = final_quality
     best_passing = final_passing
-    for _attempt in range(5):
+    for _attempt in range(12):
         if len(passing_pool) >= 3:
             break
         repaired, repaired_quality, repaired_passing = app._ce_repair_failed_generation(
@@ -87,6 +100,7 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
         )
         if not repaired:
             break
+        repaired_passing = _passing_ids(repaired_quality or {})
         repairs.append({
             "drafts": {k: repaired.get(k, "") for k in ("option1", "option2", "option3")},
             "passing": repaired_passing,
@@ -94,15 +108,12 @@ def run_topic(name: str, concept: str, *, timeout: int) -> dict:
         })
         collect(repaired, repaired_passing or [])
         if len(passing_pool) >= 3:
-            final_data = {}
-            for target_idx, (_, text, pattern) in enumerate(passing_pool[:3], 1):
-                final_data[f"option{target_idx}"] = text
-                final_data[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
-            final_data["pick"] = "1"
-            final_data["pick_reason"] = "Selected from passing Comedic drafts collected across repair attempts."
-            final_quality = app._ce_validate_generation_options(final_data, fmt, lane)
-            final_passing = _passing_ids(final_quality)
-            break
+            clean_data, clean_quality, clean_passing = build_clean_set()
+            if clean_data:
+                final_data = clean_data
+                final_quality = clean_quality
+                final_passing = clean_passing
+                break
         if len(repaired_passing or []) >= len(best_passing):
             best_data = repaired
             best_quality = repaired_quality or {}

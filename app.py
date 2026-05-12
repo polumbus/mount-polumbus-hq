@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 import hashlib
+import itertools
 import concurrent.futures
 import traceback
 import requests
@@ -8643,6 +8644,16 @@ def _ce_passing_option_ids(data: dict, quality_report: dict) -> list[str]:
     return passing
 
 
+def _ce_clean_comedic_option_ids(data: dict, quality_report: dict) -> list[str]:
+    passing: list[str] = []
+    for idx in [1, 2, 3]:
+        option_key = f"option{idx}"
+        report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
+        if data.get(option_key) and report.get("ok") and not report.get("warnings"):
+            passing.append(str(idx))
+    return passing
+
+
 def _ce_quality_failure_summary(quality_report: dict, limit: int = 5) -> str:
     reasons: list[str] = []
     for option_key in ("option1", "option2", "option3"):
@@ -8662,6 +8673,17 @@ def _ce_repair_failed_generation(original_prompt: str, data: dict, quality_repor
                                  fmt: str, lane: str, max_tokens: int,
                                  timeout_seconds: int = 30) -> tuple[dict | None, dict, list[str]]:
     failure_summary = _ce_quality_failure_summary(quality_report, limit=8)
+    comedic_repair_rules = ""
+    if lane == "Comedic":
+        comedic_repair_rules = """
+COMEDIC REPAIR RULES:
+- Rewrite with sports-native jokes only. Do not use random analogy comedy.
+- Do not use meme/AI setup words like "cool", "very serious", "real tell", "real update", or "where the honesty lives".
+- Do not use banned stock comparisons like group project, bucket, rental car, return policy, pop quiz, homework, Tinder, passenger seat, office, legal, haunted, fire, or basement.
+- Do not end with a slogan, lesson, summary, or fake-deep label like "that is the real roster move."
+- The punchline must be concrete to the sport: roster room, rotation, bench minutes, goalie crease, road lineup, matchup, reps, or decision pressure.
+- Make all 3 options clean enough to pass with zero warnings.
+"""
     repair_prompt = f"""{original_prompt}
 
 REPAIR REQUIRED:
@@ -8675,6 +8697,7 @@ Previous rejected JSON:
 
 Rewrite all 3 options so each one passes the selected format and lane quality gates.
 If the selected lane is Comedic and format is Normal Tweet, at most one option may use a blank-line final beat. Put the joke inside the paragraph for the other options.
+{comedic_repair_rules}
 Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """
     raw = _call_creator_evolution_ai(
@@ -10335,8 +10358,10 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 data[option_key] = _sanitize_output(data[option_key]).strip()
         quality_report = _ce_validate_generation_options(data, fmt, lane)
         passing = _ce_passing_option_ids(data, quality_report)
+        if lane == "Comedic":
+            passing = _ce_clean_comedic_option_ids(data, quality_report)
         required_passing = 3 if lane == "Comedic" else 1
-        repair_attempts = 5 if lane == "Comedic" else 1
+        repair_attempts = 12 if lane == "Comedic" else 1
         passing_pool: list[tuple[str, str, str]] = []
 
         def _collect_passing_options(source_data: dict, source_passing: list[str]) -> None:
@@ -10348,9 +10373,28 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                     passing_pool.append((source_idx, text, str(source_data.get(f"{source_key}_pattern", "") or "")))
                     seen.add(text)
 
+        def _build_clean_comedic_set() -> tuple[dict | None, dict, list[str]]:
+            for combo in itertools.combinations(passing_pool, 3):
+                candidate = {"pick": "1", "pick_reason": "Selected from passing Comedic drafts collected across repair attempts."}
+                for target_idx, (_, text, pattern) in enumerate(combo, 1):
+                    candidate[f"option{target_idx}"] = text
+                    candidate[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
+                candidate_quality = _ce_validate_generation_options(candidate, fmt, lane)
+                candidate_passing = _ce_clean_comedic_option_ids(candidate, candidate_quality)
+                if len(candidate_passing) == 3:
+                    return candidate, candidate_quality, candidate_passing
+            return None, {}, []
+
         _collect_passing_options(data, passing)
         for _repair_attempt in range(repair_attempts):
             if len(passing_pool) >= required_passing:
+                clean_data, clean_quality, clean_passing = _build_clean_comedic_set()
+                if clean_data:
+                    data = clean_data
+                    quality_report = clean_quality
+                    passing = clean_passing
+                    break
+            if len(passing) >= required_passing:
                 break
             repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
                 prompt,
@@ -10360,18 +10404,17 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 lane,
                 max_tokens,
             )
+            if lane == "Comedic":
+                repaired_passing = _ce_clean_comedic_option_ids(repaired or {}, repaired_quality or {})
             if repaired:
                 _collect_passing_options(repaired, repaired_passing)
             if lane == "Comedic" and len(passing_pool) >= required_passing:
-                data = {}
-                for target_idx, (_, text, pattern) in enumerate(passing_pool[:3], 1):
-                    data[f"option{target_idx}"] = text
-                    data[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
-                data["pick"] = "1"
-                data["pick_reason"] = "Selected from passing Comedic drafts collected across repair attempts."
-                quality_report = _ce_validate_generation_options(data, fmt, lane)
-                passing = _ce_passing_option_ids(data, quality_report)
-                break
+                clean_data, clean_quality, clean_passing = _build_clean_comedic_set()
+                if clean_data:
+                    data = clean_data
+                    quality_report = clean_quality
+                    passing = clean_passing
+                    break
             if repaired and len(repaired_passing) >= max(required_passing, len(passing)):
                 data = repaired
                 quality_report = repaired_quality
