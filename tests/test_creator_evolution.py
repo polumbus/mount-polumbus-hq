@@ -526,11 +526,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(ce.normalize_lane("Amused"), "Comedic")
         prompt = ce.build_generation_prompt("The Nuggets bench turned a lead into panic.", "Normal Tweet", "Comedic", ce.initial_state())
         self.assertIn("COMEDIC LANE HARD RULES", prompt)
-        self.assertIn("actual joke mechanic", prompt)
+        self.assertIn("joke mechanic", prompt)
         self.assertIn("topic reality", prompt)
         self.assertIn("COMEDIC OVERRIDE", prompt)
         self.assertIn("press conference with vibes", prompt)
         self.assertIn("we all heard the same ankle", prompt)
+        self.assertIn("plain-language joke mechanic", prompt)
+        self.assertIn("the translation is simple", prompt)
 
     def test_critical_lane_is_distinct_from_skeptical(self):
         self.assertIn("Critical", ce.EMOTION_LANES)

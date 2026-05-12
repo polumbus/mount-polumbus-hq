@@ -45,8 +45,8 @@ LANE_RECIPES = {
     },
     "Comedic": {
         "target": "Real sports comedy with a punchline. The post should make the reader laugh because the actual situation is absurd, not because the wording sounds clever.",
-        "do": "Name the exact sports absurdity, keep the setup short, then use one joke engine: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, or playful undercut. The joke must come from the topic reality.",
-        "avoid": "Witty analysis, consequence lectures, debate bait, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, fake-serious filler, and safe ChatGPT cleverness.",
+        "do": "Name the exact sports absurdity, keep the setup short, then use one plain-language joke engine: translation, pretend quote, obvious contradiction, exaggerated fan thought, blunt label, or playful undercut. The joke must come from the topic reality.",
+        "avoid": "Witty analysis, consequence lectures, debate bait, metaphor jokes, random object analogies, office metaphors, meme captions, emojis, slurs, harassment, angry accusation, fake-serious filler, and safe ChatGPT cleverness.",
         "ending": "A short punchline or walk-off that changes the angle. Funny first, not mad. No summary, no lesson, no explained closer.",
     },
     "Annoyed": {
@@ -2098,8 +2098,9 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
         "- Funny first. Not clever analysis, not debate pressure, not angry indictment, not a consequence lecture.\n"
         "- Before writing, privately map: actual topic absurdity -> joke target -> setup -> turn -> punchline. If that map is weak, rewrite.\n"
-        "- Every draft needs an actual joke mechanic: misdirection, blunt punchline, exaggerated fan thought, self-aware aside, fake-serious understatement, or playful undercut.\n"
+        "- Every draft needs an actual plain-language joke mechanic: translation, pretend quote, obvious contradiction, exaggerated fan thought, blunt label, self-aware aside, fake-serious understatement, or playful undercut.\n"
         "- The joke must come from this topic's real absurd detail. No random object analogies, no office metaphors, no cartoon comparisons, no decorative metaphor extensions.\n"
+        "- Prefer direct sports jokes over metaphor jokes. The best Comedic output usually sounds like a funny fan translating what the team is really saying.\n"
         "- Good comedy here is a sports truth with a hard turn. Setup short, punchline shorter.\n"
         "- Do not turn source words into lazy metaphor chains. If the source says 'on the table,' do not write menu, restaurant, decor, cabinet, or appetizers unless the line is undeniably funny.\n"
         "- The joke must be instantly understandable. No surreal punchlines where a body part, clipboard, depth chart, roster, or injury talks, sings, confesses, testifies, or sends a secret message.\n"
@@ -2108,7 +2109,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Adult edge is allowed when playful and earned: ass, damn, hell, bullshit, dumb, mess. No slurs, threats, protected-class shots, or personal harassment.\n"
         "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
         "- Reject fake-deep lines like 'press conference with vibes,' 'that is the real press conference,' 'talk is cheap,' or 'the conversation gets uncomfortable.' Those are not jokes.\n"
-        "- Target shape examples: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.' / 'That bench shift came with paperwork.'\n"
+        "- Target shape examples: 'Put the non-Jokic minutes on the table first and see if they apologize.' / 'Jokic is one playoff run away from charging babysitting rates.' / 'If they add another QB, the translation is simple, Bo is fine, but you stand over there in a helmet just in case.'\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
