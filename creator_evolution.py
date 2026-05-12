@@ -44,10 +44,10 @@ LANE_RECIPES = {
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "target": "Grok on a 2 a.m. sports group-chat bender: zero fear, zero filter, zero therapy. It sees the corporate lie, pathetic denial, or obvious fucked-up truth and says it loud enough to make the chat spit out a drink.",
-        "do": "Find the exact sports absurdity and eviscerate it with one short, brutal punchline. Use translation, fan denial roast, or blunt roast. Default to meaner and funnier than polite. Use earned adult language when it makes the joke hit harder.",
-        "avoid": "Anything safe, cute, witty, analytical, metaphor-heavy, or AI-clever. No 'football for', 'sounds like', 'real tell', 'real update', 'translates to', haunted houses, fires, basements, drunk friends, passenger seats, air fresheners, side pieces, Tinder, long setups, explained jokes, fake-deep closers, summaries, slurs, threats, protected-class shots, harassment, direct personal abuse, or invented facts.",
-        "ending": "One clean nuclear punchline that stings. Short. Brutal. No lesson, no summary, no metaphor crutch.",
+        "target": "Grok-like sports comedy: funny first, sharp second, fearless without sounding mad. The joke comes from the exact sports contradiction, not profanity, rage, or random analogies.",
+        "do": "Find the funniest true pressure point in the topic, then use one clear joke mechanic: literalize team spin, expose fan coping, flip the roster logic, mock-serious diagnosis, or make the sports consequence absurdly plain. Keep it specific and surprising.",
+        "avoid": "Anger as the joke, profanity as the punchline, personal abuse, generic meme captions, random non-sports analogies, therapy language, fake-deep closers, and Witty Edge analysis with a cute ending.",
+        "ending": "A short punchline that makes the sports situation feel ridiculous on first read. It should sting because it is accurate, not because it is mean.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -310,16 +310,35 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "ted talk",
 )
 
+COMEDIC_PROFANITY_TERMS = (
+    "fuck",
+    "fucked",
+    "fucking",
+    "shit",
+    "bullshit",
+    "goddamn",
+    "my ass",
+)
+
 COMEDIC_ANGRY_CLOSERS = (
     "bullshit ends",
+    "bullshit with",
     "exposed",
     "got caught",
     "caught lying",
     "lying through",
     "dragged to hell",
-    "everybody knows it",
     "eviscerate",
     "zero mercy",
+    "pathetic",
+    "cowards",
+    "coward shit",
+    "fragile little",
+    "bums",
+    "same scared shit",
+    "nobody buys it",
+    "they lied",
+    "scam",
 )
 
 COMEDIC_ANALYSIS_DRIFT = (
@@ -946,6 +965,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         angry_terms = _phrase_hits(lower, COMEDIC_ANGRY_CLOSERS)
         analysis_terms = _phrase_hits(lower, COMEDIC_ANALYSIS_DRIFT)
         nonsense_terms = _phrase_hits(lower, COMEDIC_NONSENSE_PUNCHLINES)
+        profanity_terms = _phrase_hits(lower, COMEDIC_PROFANITY_TERMS)
         final_words = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
         if fake_markers or _has_emoji(text):
             issues.append("Comedic should be funny through the topic, not meme-caption energy: " + ", ".join(fake_markers[:4] or ["emoji"]))
@@ -957,6 +977,10 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Comedic should not collapse into Witty Edge analysis: " + ", ".join(analysis_terms[:4]))
         if nonsense_terms:
             issues.append("Comedic punchline is confusing or surreal instead of funny: " + ", ".join(nonsense_terms[:4]))
+        if profanity_terms:
+            specificity_count = _specificity_signal_count(text)
+            if len(profanity_terms) > 1 or specificity_count <= 3:
+                issues.append("Comedic profanity is replacing the joke instead of seasoning a sports-specific punchline: " + ", ".join(profanity_terms[:4]))
         if fmt == "Normal Tweet" and len(non_empty_lines) > 1 and final_words > 12:
             issues.append("Comedic final beat should be a short punchline, not an explained closer.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
@@ -2128,22 +2152,18 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     comedic_contract = (
         "\nCOMEDIC LANE HARD RULES:\n"
         "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
-        "- Comedic is Grok on a 2 a.m. sports group-chat bender: zero fear, zero filter, zero therapy. It sees the corporate lie, pathetic denial, or obvious fucked-up truth and says it loud and ugly.\n"
-        "- Find the exact sports absurdity and eviscerate it with one short, nuclear punchline. Short. Brutal. One or two sentences max.\n"
-        "- Do not write scared. Default to meaner, darker, and more uncomfortable than polite AI would dare.\n"
-        "- Use earned adult language when it makes the joke hit harder: ass, damn, hell, bullshit, shit, fuck, fucked, dumb, mess.\n"
-        "- Make the 3 options use 3 different lanes: option 1 translation of PR spin into ugly reality, option 2 fan coping or denial roast, option 3 blunt zero-mercy roast of the situation.\n"
-        "- Translation means saying the ugly reality directly. Do not use the phrase 'football for' or 'translates to.' Just say the truth.\n"
-        "- Fan behavior means roasting the coping, denial spiral, group-chat panic, or fan trauma without mocking protected traits or private life.\n"
-        "- Do not invent crowd counts, percentages, records, timelines, injuries, or stats for a joke. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration. Use 'the non-Jokic stretch,' 'those minutes,' 'everybody,' 'the timeline,' or another non-numeric human phrase unless the source gives the number.\n"
-        "- Blunt roast means zero mercy on the decision, excuse, pattern, or situation. Roast the sports absurdity, not protected traits or private life.\n"
-        "- The joke must come from the topic's real absurd detail. No analogies or metaphors unless the user explicitly asks for one.\n"
-        "- Ban these crutches: 'football for,' 'sounds like your boy,' 'sounds like your buddy,' 'the real tell,' 'the real update,' 'translates to,' 'feels like front office for,' haunted anything, fires, basements, drunk friends, passenger seats, air fresheners, side pieces, Tinder, vague labels, fake-deep closers.\n"
-        "- The final line is not response pressure. It is the punchline. It should be short enough to sting and mean enough to make the reader laugh while wincing.\n"
-        "- Content boundary is narrow: no slurs, threats, protected-class shots, harassment, or direct personal abuse. Everything else should be judged by whether it is funny and aimed at the sports absurdity.\n"
-        "- Reject the draft before returning if it could pass as Witty Edge by removing one adjective.\n"
-        "- Reject anything safe, cute, witty, metaphor-heavy, or ChatGPT-clever. If it does not make a sports-degenerate laugh while slightly wincing, rewrite it.\n"
-        "- Gold-standard examples show the minimum edge level, not lines to copy: 'Broncos saying Bo Nix is on track for camp is pure bullshit. That ankle is one sneeze from being fucked and they are already texting every backup QB behind the scenes like cowards.' / 'Next time the Broncos sign another quarterback you will know the truth: they never trusted that fragile little ankle for a second. On track my ass.' / 'Nuggets saying everything is on the table this summer is hilarious. They will trade the whole fucking roster before they admit those non-Jokic minutes are a goddamn disaster.' / 'They will blow up the roster and re-sign the same bums before they touch the sacred Jokic rests, everyone shits the bed strategy.'\n"
+        "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay.\n"
+        "- The joke must come from the exact sports absurdity in the source: injury trust, QB room behavior, rotation math, non-Jokic minutes, fan coping, coach logic, roster incentives, public messaging, or media framing.\n"
+        "- Use one visible joke mechanic per option: option 1 literalize the team spin, option 2 roast the fan coping, option 3 flip the sports logic into a blunt punchline.\n"
+        "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
+        "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
+        "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
+        "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
+        "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
+        "- The final beat is the punchline, not a lesson, summary, threat, accusation, or rage closer.\n"
+        "- Reject anything that sounds like Witty Edge analysis with one joke word added. The reader should know why it is funny without needing the joke explained.\n"
+        "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
+        "- Positive shape examples: 'The next QB move is the part with subtitles. If another arm shows up, that ankle just held its own press conference.' / 'The Broncos telling everyone the ankle is fine while building the QB room like the ankle has its own burner account.' / 'The non-Jokic minutes are not a rotation problem anymore. They are a recurring guest star.' / 'The Nuggets bench discourse always starts with new names and ends with Jokic returning like tech support.'\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
