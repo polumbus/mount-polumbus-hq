@@ -269,6 +269,11 @@ COMEDIC_FAKE_MARKERS = (
     "very brave loophole",
     "this is wild",
     "you can't make this up",
+    "is very funny because",
+    "is hilarious because",
+    "very funny because",
+    "hilarious because",
+    "department of vibes",
     "football for",
     "in football speak",
     "sounds like",
@@ -302,6 +307,11 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "basement",
     "house fire",
     "fire",
+    "couch",
+    "furniture",
+    "witness protection",
+    "sacred cow",
+    "progress report",
     "drunk friend",
     "passenger seat",
     "air freshener",
@@ -382,6 +392,11 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "the injury talks",
     "shopping nervous",
     "football fluency",
+    "ankle held its own press conference",
+    "ankle just held its own press conference",
+    "ankle just gave a press conference",
+    "ankle gave a press conference",
+    "ankle filed its own progress report",
 )
 
 
@@ -2158,12 +2173,15 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
         "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
+        "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
+        "- Do not announce the joke. Never write 'this is funny because,' 'is hilarious because,' 'very funny,' or 'hilarious.' Show the absurdity instead.\n"
         "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
         "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
         "- The final beat is the punchline, not a lesson, summary, threat, accusation, or rage closer.\n"
         "- Reject anything that sounds like Witty Edge analysis with one joke word added. The reader should know why it is funny without needing the joke explained.\n"
         "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
-        "- Positive shape examples: 'The next QB move is the part with subtitles. If another arm shows up, that ankle just held its own press conference.' / 'The Broncos telling everyone the ankle is fine while building the QB room like the ankle has its own burner account.' / 'The non-Jokic minutes are not a rotation problem anymore. They are a recurring guest star.' / 'The Nuggets bench discourse always starts with new names and ends with Jokic returning like tech support.'\n"
+        "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
+        "- Mechanic targets only, not reusable lines: literalize the official line, mirror the fan coping, flip the roster logic, use mock-serious diagnosis, or end with a sports-native object doing the comedic work.\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
@@ -2172,6 +2190,11 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
+    final_line_rule = (
+        "- Because the selected lane is Comedic, do not optimize the final line for response pressure. Optimize it for a short sports-specific laugh beat."
+        if lane == "Comedic"
+        else "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait."
+    )
     return f"""{opening}
 
 {source_label}:
@@ -2208,7 +2231,7 @@ CREATOR EVOLUTION VOICE CONTRACT:
 - Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
 - If the selected format is Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
-- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
+{final_line_rule}
 - Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
