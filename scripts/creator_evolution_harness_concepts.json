@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "default_format": "Normal Tweet",
+  "voice_concepts": {
+    "Witty Edge": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
+    "Comedic": "The Nuggets say everything is on the table this summer, but nobody knows if that actually includes changing the non-Jokic minutes that keep wrecking games.",
+    "Annoyed": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
+    "Fired-Up": "The Avs keep acting like the goalie situation is settled, but the next tough start will show whether they actually believe that or are just hoping it settles itself.",
+    "Skeptical": "The Broncos keep saying the roster is more competitive now, but training camp will show whether that is real depth or just more average players fighting for the same spots.",
+    "Critical": "Sean Payton keeps saying competition matters, but camp will show which Broncos players actually respond when reputation stops protecting roster spots.",
+    "Promo": "Bo Nix may be on track for training camp, but there is one more QB decision coming that will show how much the Broncos really trust the ankle.",
+    "Celebratory": "The Avalanche finally got the kind of response game that makes the whole series feel different.",
+    "Deadpan": "The Rockies keep calling it a development year, then every road series reminds everyone the lineup still cannot handle left-handed pitching.",
+    "Sarcastic": "The Broncos say every job is open, which is always a very comforting thing to hear right before veterans realize the depth chart stopped caring about their resume."
+  },
+  "format_concepts": {
+    "Punchy Tweet": "The Broncos keep saying camp competition is real, but one surprise cut would make the whole roster message land a lot harder.",
+    "Normal Tweet": "The Broncos keep saying the roster is more competitive now, but training camp will show whether that is real depth or just more average players fighting for the same spots.",
+    "Long Tweet": "Sean Payton keeps raising the pressure on the Broncos roster, and the real story is whether the players who looked safe in May can still justify those jobs when camp gets uncomfortable.",
+    "Thread": "The Broncos are entering camp with more competition than last year, but the real test is whether that pressure creates better football or just a louder depth chart.",
+    "Article": "Sean Payton's latest comments make it clear that Broncos camp is not just about finding starters. It is about finding which players can survive a roster that is finally being asked to prove its depth."
+  },
+  "control_concepts": {
+    "non_denver": "A veteran quarterback keeps saying he is fine with competition, but the next roster move will show whether the team believes him or is already shopping for insurance.",
+    "nuggets_bench": "The Nuggets keep talking about fixing the bench, but the real test is whether they can survive non-Jokic minutes without turning every lead into a problem.",
+    "broncos_payton_pressure": "Sean Payton just made it clear that reputation is not going to protect Broncos players once training camp starts."
+  }
+}
