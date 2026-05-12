@@ -326,6 +326,17 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "courtroom drama",
     "congressional hearing",
     "ted talk",
+    "team statement",
+    "official statement",
+    "memo",
+    "senior staff",
+    "diplomatic immunity",
+    "team protection",
+    "allergic",
+    "family heirloom",
+    "same memo",
+    "offseason meeting",
+    "huge language",
 )
 
 COMEDIC_PROFANITY_TERMS = (
@@ -383,6 +394,11 @@ COMEDIC_ANALYSIS_DRIFT = (
     "the actual injury report",
     "the real update",
     "the real translation",
+    "actual truth",
+    "truth usually",
+    "where the actual truth",
+    "sounds great",
+    "sounds powerful",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -407,6 +423,56 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "ankle filed its own press release",
     "ankle just filed its own press release",
     "ankle filed its own progress report",
+    "ankle upgrades itself",
+    "ankle got its own team statement",
+    "ankle already got its own team statement",
+    "depth chart can hear",
+    "depth charts hate",
+    "can hear the limp",
+    "soothing voices",
+    "truth usually wanders",
+)
+
+COMEDIC_OBJECT_AGENCY_SUBJECTS = (
+    "ankle",
+    "injury",
+    "depth chart",
+    "bench",
+    "minutes",
+    "truth",
+    "roster",
+    "rotation",
+    "transaction",
+)
+
+COMEDIC_OBJECT_AGENCY_VERBS = (
+    "hear",
+    "hears",
+    "hate",
+    "hates",
+    "wander",
+    "wanders",
+    "walk",
+    "walks",
+    "upgrade",
+    "upgrades",
+    "file",
+    "files",
+    "say",
+    "says",
+    "speak",
+    "speaks",
+    "talk",
+    "talks",
+    "receive",
+    "receives",
+    "got its own",
+    "has its own",
+    "get a memo",
+    "got the same memo",
+    "have immunity",
+    "has immunity",
+    "under protection",
 )
 
 
@@ -870,6 +936,20 @@ def _phrase_hits(lower: str, phrases: tuple[str, ...]) -> list[str]:
     return hits
 
 
+def _comedic_object_agency_hits(text: str) -> list[str]:
+    hits: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(text or "").lower()):
+        if not sentence.strip():
+            continue
+        subjects = [s for s in COMEDIC_OBJECT_AGENCY_SUBJECTS if s in sentence]
+        if not subjects:
+            continue
+        verbs = [v for v in COMEDIC_OBJECT_AGENCY_VERBS if re.search(rf"\b{re.escape(v)}\b", sentence)]
+        if subjects and verbs:
+            hits.append(f"{subjects[0]} + {verbs[0]}")
+    return hits
+
+
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
@@ -991,6 +1071,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         analysis_terms = _phrase_hits(lower, COMEDIC_ANALYSIS_DRIFT)
         nonsense_terms = _phrase_hits(lower, COMEDIC_NONSENSE_PUNCHLINES)
         profanity_terms = _phrase_hits(lower, COMEDIC_PROFANITY_TERMS)
+        object_agency_terms = _comedic_object_agency_hits(text)
         final_words = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
         if fake_markers or _has_emoji(text):
             issues.append("Comedic should be funny through the topic, not meme-caption energy: " + ", ".join(fake_markers[:4] or ["emoji"]))
@@ -1002,11 +1083,13 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Comedic should not collapse into Witty Edge analysis: " + ", ".join(analysis_terms[:4]))
         if nonsense_terms:
             issues.append("Comedic punchline is confusing or surreal instead of funny: " + ", ".join(nonsense_terms[:4]))
+        if object_agency_terms:
+            issues.append("Comedic is using object-agency instead of a sports-specific joke: " + ", ".join(object_agency_terms[:4]))
         if profanity_terms:
             specificity_count = _specificity_signal_count(text)
             if len(profanity_terms) > 1 or specificity_count <= 3:
                 issues.append("Comedic profanity is replacing the joke instead of seasoning a sports-specific punchline: " + ", ".join(profanity_terms[:4]))
-        if fmt == "Normal Tweet" and len(non_empty_lines) > 1 and final_words > 12:
+        if fmt == "Normal Tweet" and final_words > 8:
             issues.append("Comedic final beat should be a short punchline, not an explained closer.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
@@ -2183,13 +2266,20 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
         "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
+        "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
+        "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"
         "- Do not literalize idioms from the source. If the source says 'everything is on the table,' do not make table, furniture, museum, velvet rope, folding chair, or under-the-table jokes.\n"
         "- Do not reuse ankle-as-speaker/document jokes. No ankle press conference, ankle press release, ankle progress report, or ankle filing paperwork.\n"
+        "- Do not make body parts, injuries, depth charts, benches, rotations, transactions, or abstract truth act like people. No ankle emotions, depth charts hearing things, benches receiving memos, or truth wandering into the room.\n"
+        "- Literalizing team spin must end in a real sports consequence, not object-agency. For injury trust, land on QB-room trust, backup shopping, rep-plan protection, roster insurance, practice-script reality, or active-list behavior.\n"
+        "- For non-Jokic minutes, land on rotation math, Jokic-rest survival, second-unit possessions, timeout panic, shot creation, or bench-stretch consequences.\n"
+        "- If the punchline still works after replacing the named team/player with any random team/player, reject it.\n"
         "- Do not announce the joke. Never write 'this is funny because,' 'is hilarious because,' 'very funny,' or 'hilarious.' Show the absurdity instead.\n"
         "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
         "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
         "- The final beat is the punchline, not a lesson, summary, threat, accusation, or rage closer.\n"
+        "- The final beat must name or clearly imply a concrete sports mechanism. If the closer could work in politics, office drama, or a sitcom, rewrite it.\n"
         "- Reject anything that sounds like Witty Edge analysis with one joke word added. The reader should know why it is funny without needing the joke explained.\n"
         "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
         "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
@@ -2200,6 +2290,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Because the selected lane is Comedic, ignore any generic instruction below that asks for response pressure, debate bait, consequence framing, or a dramatic analytical ending.\n"
         "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
         "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
+        "- The final beat should usually be 8 words or fewer. If it needs more room, it probably is explaining the joke instead of landing it.\n"
         "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
     ) if lane == "Comedic" else ""
     final_line_rule = (
