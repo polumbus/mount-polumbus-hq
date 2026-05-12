@@ -514,6 +514,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         profanity_only_comedy = ce.draft_quality_report("The Nuggets bench is a fucking disaster.", "Punchy Tweet", "Comedic")
         announcement_comedy = ce.draft_quality_report("The Nuggets saying everything is on the table is very funny because the bench is still weird.", "Punchy Tweet", "Comedic")
         copied_comedy = ce.draft_quality_report("If another arm shows up, that ankle just held its own press conference.", "Punchy Tweet", "Comedic")
+        table_comedy = ce.draft_quality_report("The Nuggets table has a velvet rope around the non Jokic minutes. Great table though.", "Punchy Tweet", "Comedic")
+        press_release_comedy = ce.draft_quality_report("If another arm walks in, that ankle filed its own press release.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -533,6 +535,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(profanity_only_comedy["ok"])
         self.assertFalse(announcement_comedy["ok"])
         self.assertFalse(copied_comedy["ok"])
+        self.assertFalse(table_comedy["ok"])
+        self.assertFalse(press_release_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
@@ -549,6 +553,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("profanity is replacing the joke" in issue.lower() for issue in profanity_only_comedy["issues"]))
         self.assertTrue(any("meme-caption" in issue.lower() for issue in announcement_comedy["issues"]))
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in copied_comedy["issues"]))
+        self.assertTrue(any("random analogy" in issue.lower() for issue in table_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in press_release_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -567,6 +573,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Profanity is optional seasoning", prompt)
         self.assertIn("Edge means sharper comic timing", prompt)
         self.assertIn("Prefer sports-native objects", prompt)
+        self.assertIn("Do not literalize idioms", prompt)
+        self.assertIn("No ankle press conference", prompt)
         self.assertIn("Do not announce the joke", prompt)
         self.assertIn("do not optimize the final line for response pressure", prompt)
         self.assertIn("Do not invent crowd counts", prompt)

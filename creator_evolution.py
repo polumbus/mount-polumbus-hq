@@ -315,6 +315,14 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "drunk friend",
     "passenger seat",
     "air freshener",
+    "weather updates",
+    "ankle resort",
+    "museum exhibit",
+    "velvet rope",
+    "folding chair",
+    "great table",
+    "under it",
+    "table has",
     "courtroom drama",
     "congressional hearing",
     "ted talk",
@@ -396,6 +404,8 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "ankle just held its own press conference",
     "ankle just gave a press conference",
     "ankle gave a press conference",
+    "ankle filed its own press release",
+    "ankle just filed its own press release",
     "ankle filed its own progress report",
 )
 
@@ -2174,6 +2184,8 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
         "- No random analogies unless they are tightly sports-adjacent. No office, dating, haunted house, fire, basement, drunk friend, passenger seat, air freshener, side piece, or Tinder crutches.\n"
         "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
+        "- Do not literalize idioms from the source. If the source says 'everything is on the table,' do not make table, furniture, museum, velvet rope, folding chair, or under-the-table jokes.\n"
+        "- Do not reuse ankle-as-speaker/document jokes. No ankle press conference, ankle press release, ankle progress report, or ankle filing paperwork.\n"
         "- Do not announce the joke. Never write 'this is funny because,' 'is hilarious because,' 'very funny,' or 'hilarious.' Show the absurdity instead.\n"
         "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
         "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
