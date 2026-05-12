@@ -524,6 +524,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         goalie_gear_comedy = ce.draft_quality_report("The Avs can call it matchup stuff all they want, but that is not staying steady. That is panic in goalie gear.", "Normal Tweet", "Comedic")
         split_card_comedy = ce.draft_quality_report("Very peaceful rebuild stuff. That split keeps writing the card.", "Normal Tweet", "Comedic")
         batting_order_comedy = ce.draft_quality_report("When the same script hits every trip, that is not growth. That is batting order denial.", "Normal Tweet", "Comedic")
+        joke_is_comedy = ce.draft_quality_report("If the Broncos add another quarterback after saying Bo is fine, the joke is not the signing. It is pretending everyone is relaxed while buying insurance.", "Punchy Tweet", "Comedic")
+        clean_analysis_comedy = ce.draft_quality_report("The Avs changing goalies after one loss creates pressure. That changes the whole conversation.", "Punchy Tweet", "Comedic")
+        loud_calm_comedy = ce.draft_quality_report("Extra quarterback is a very loud kind of calm.", "Punchy Tweet", "Comedic")
+        answering_questions_comedy = ce.draft_quality_report("The next QB signing walks in and starts answering questions for them.", "Punchy Tweet", "Comedic")
+        group_text_comedy = ce.draft_quality_report("This is a group text where nobody knows who is driving.", "Punchy Tweet", "Comedic")
+        non_actor_ankle_sentence = ce.draft_quality_report("The Broncos say Bo Nix is on track, but the next QB move decides how much they trust the ankle.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -553,6 +559,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(goalie_gear_comedy["ok"])
         self.assertFalse(split_card_comedy["ok"])
         self.assertFalse(batting_order_comedy["ok"])
+        self.assertFalse(joke_is_comedy["ok"])
+        self.assertFalse(clean_analysis_comedy["ok"])
+        self.assertFalse(loud_calm_comedy["ok"])
+        self.assertFalse(answering_questions_comedy["ok"])
+        self.assertFalse(group_text_comedy["ok"])
+        self.assertNotIn("object-agency", " ".join(non_actor_ankle_sentence["issues"]).lower())
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
@@ -579,6 +591,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("slogan/tagline" in issue.lower() or "confusing or surreal" in issue.lower() for issue in goalie_gear_comedy["issues"]))
         self.assertTrue(any("object-agency" in issue.lower() or "confusing or surreal" in issue.lower() for issue in split_card_comedy["issues"]))
         self.assertTrue(any("slogan/tagline" in issue.lower() or "confusing or surreal" in issue.lower() for issue in batting_order_comedy["issues"]))
+        self.assertTrue(any("meme-caption" in issue.lower() for issue in joke_is_comedy["issues"]))
+        self.assertTrue(any("witty edge analysis" in issue.lower() for issue in clean_analysis_comedy["issues"]))
+        self.assertTrue(any("witty edge analysis" in issue.lower() for issue in loud_calm_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in answering_questions_comedy["issues"]))
+        self.assertTrue(any("random analogy" in issue.lower() for issue in group_text_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -616,7 +633,7 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_comedic_lane_accepts_sports_specific_jokes(self):
         examples = [
-            "If the Broncos add another quarterback after saying Bo is fine, the joke is not the signing. It is pretending everyone is relaxed while buying insurance.",
+            "If the Broncos add another quarterback after saying Bo is fine, nobody is calling that a camp body with a straight face.",
             "The Nuggets can call everything open for debate, but Jokic sitting still turns into the part where the offense needs an adult.",
             "Changing goalies after one loss is how the Avs turn a hot hand into a full team trust exercise.",
         ]

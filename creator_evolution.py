@@ -273,6 +273,10 @@ COMEDIC_FAKE_MARKERS = (
     "is hilarious because",
     "very funny because",
     "hilarious because",
+    "the joke is",
+    "the funny part",
+    "funny part",
+    "the funniest outcome",
     "department of vibes",
     "football for",
     "in football speak",
@@ -306,6 +310,8 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "bad tinder date",
     "divorce papers",
     "side piece",
+    "group text",
+    "group chat",
     "haunted",
     "basement",
     "house fire",
@@ -427,6 +433,9 @@ COMEDIC_ANALYSIS_DRIFT = (
     "the giveaway",
     "nothing was really",
     "funniest part",
+    "creates pressure",
+    "very loud kind of calm",
+    "loud kind of calm",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -488,6 +497,7 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "calm was doing",
     "calm update",
     "peaceful rebuild stuff",
+    "answering questions for them",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -1055,12 +1065,16 @@ def _comedic_object_agency_hits(text: str) -> list[str]:
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(text or "").lower()):
         if not sentence.strip():
             continue
-        subjects = [s for s in COMEDIC_OBJECT_AGENCY_SUBJECTS if s in sentence]
-        if not subjects:
-            continue
-        verbs = [v for v in COMEDIC_OBJECT_AGENCY_VERBS if re.search(rf"\b{re.escape(v)}\b", sentence)]
-        if subjects and verbs:
-            hits.append(f"{subjects[0]} + {verbs[0]}")
+        for subject in COMEDIC_OBJECT_AGENCY_SUBJECTS:
+            subject_pattern = rf"\b{re.escape(subject)}\b"
+            if not re.search(subject_pattern, sentence):
+                continue
+            for verb in COMEDIC_OBJECT_AGENCY_VERBS:
+                verb_pattern = rf"\b{re.escape(verb)}\b"
+                # Require the abstract/sports object to be the actor near the verb.
+                if re.search(rf"{subject_pattern}(?:\W+\w+){{0,4}}\W+{verb_pattern}", sentence):
+                    hits.append(f"{subject} + {verb}")
+                    break
     return hits
 
 

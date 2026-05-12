@@ -10203,6 +10203,24 @@ def _creator_evolution_system_prompt(lane: str) -> str:
     _ce_install_lane_recipe_text_compat()
     lane_rules = _ce_lane_recipe_text(lane)
     base_system = build_user_context()
+    if lane == "Comedic":
+        normal_tweet_rule = (
+            "- For Normal Tweet in Comedic, prefer one compact paragraph or two tight sentences. "
+            "Do not force a separate final-line response-pressure beat."
+        )
+        final_line_rule = (
+            "- The final sentence must be the joke or funniest implication, not generic response pressure, "
+            "debate bait, a slogan/tagline, or a dramatic analytical ending."
+        )
+    else:
+        normal_tweet_rule = (
+            "- For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement "
+            "that invites engagement without a direct question. Strong one-paragraph versions are allowed when they sound more natural."
+        )
+        final_line_rule = (
+            "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, "
+            "a declarative argument statement, a consequence line, or quote-tweet bait."
+        )
     return base_system + f"""
 
 You are Creator Evolution for @{handle}.
@@ -10216,8 +10234,8 @@ Active lane behavior:
 Hard boundaries:
 - Do not use Creator Studio's Hall of Fame examples, benchmarks, calibration blocks, hooks, or cached prompt context.
 - Learn only from Creator Evolution's approved real-performance rules plus mature metric-derived profiles.
-- For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Strong one-paragraph versions are allowed when they sound more natural.
-- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
+{normal_tweet_rule}
+{final_line_rule}
 - Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 - Be monetization-safe: heat, annoyance, and argument are allowed; slurs, harassment, invented facts, and cheap rage bait are not.
 - No invented stats, rankings, injuries, roster facts, transaction claims, or current-event claims.
