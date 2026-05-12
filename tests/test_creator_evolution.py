@@ -519,6 +519,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         transaction_wire_comedy = ce.draft_quality_report("Teams that feel great about QB1 do not go backup shopping in May. The transaction wire talks.", "Punchy Tweet", "Comedic")
         qb3_honesty_comedy = ce.draft_quality_report("The Broncos say Bo is fine. QB3 is where the honesty lives.", "Punchy Tweet", "Comedic")
         bench_math_comedy = ce.draft_quality_report("If those minutes survive untouched, nothing actually changed. Bench math stays employed.", "Punchy Tweet", "Comedic")
+        cover_reps_comedy = ce.draft_quality_report("If another arm shows up, that calm was doing a lot of work. That is cover your reps football.", "Normal Tweet", "Comedic")
+        reporting_early_comedy = ce.draft_quality_report("If the next move is another quarterback, that calm update just put on shoulder pads. That is the backup plan reporting early.", "Normal Tweet", "Comedic")
+        goalie_gear_comedy = ce.draft_quality_report("The Avs can call it matchup stuff all they want, but that is not staying steady. That is panic in goalie gear.", "Normal Tweet", "Comedic")
+        split_card_comedy = ce.draft_quality_report("Very peaceful rebuild stuff. That split keeps writing the card.", "Normal Tweet", "Comedic")
+        batting_order_comedy = ce.draft_quality_report("When the same script hits every trip, that is not growth. That is batting order denial.", "Normal Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
         self.assertFalse(amused["ok"])
@@ -543,6 +548,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(transaction_wire_comedy["ok"])
         self.assertFalse(qb3_honesty_comedy["ok"])
         self.assertFalse(bench_math_comedy["ok"])
+        self.assertFalse(cover_reps_comedy["ok"])
+        self.assertFalse(reporting_early_comedy["ok"])
+        self.assertFalse(goalie_gear_comedy["ok"])
+        self.assertFalse(split_card_comedy["ok"])
+        self.assertFalse(batting_order_comedy["ok"])
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
         self.assertTrue(any("angry" in issue.lower() for issue in angry_comedy["issues"]))
@@ -564,6 +574,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in transaction_wire_comedy["issues"]))
         self.assertTrue(any("witty edge analysis" in issue.lower() or "confusing or surreal" in issue.lower() for issue in qb3_honesty_comedy["issues"]))
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in bench_math_comedy["issues"]))
+        self.assertTrue(any("slogan/tagline" in issue.lower() or "confusing or surreal" in issue.lower() for issue in cover_reps_comedy["issues"]))
+        self.assertTrue(any("object-agency" in issue.lower() or "confusing or surreal" in issue.lower() for issue in reporting_early_comedy["issues"]))
+        self.assertTrue(any("slogan/tagline" in issue.lower() or "confusing or surreal" in issue.lower() for issue in goalie_gear_comedy["issues"]))
+        self.assertTrue(any("object-agency" in issue.lower() or "confusing or surreal" in issue.lower() for issue in split_card_comedy["issues"]))
+        self.assertTrue(any("slogan/tagline" in issue.lower() or "confusing or surreal" in issue.lower() for issue in batting_order_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
@@ -584,12 +599,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("sports-logic flip", prompt)
         self.assertIn("Profanity is optional seasoning", prompt)
         self.assertIn("Edge means sharper comic timing", prompt)
-        self.assertIn("Prefer sports-native objects", prompt)
+        self.assertIn("Prefer sports actions and consequences", prompt)
         self.assertIn("sports consequences over metaphor", prompt)
         self.assertIn("Do not literalize idioms", prompt)
         self.assertIn("No ankle press conference", prompt)
         self.assertIn("Do not make body parts", prompt)
         self.assertIn("If the punchline still works", prompt)
+        self.assertIn("No detached final-line label", prompt)
         self.assertIn("Do not announce the joke", prompt)
         self.assertIn("do not optimize the final line for response pressure", prompt)
         self.assertIn("Do not invent crowd counts", prompt)
@@ -600,9 +616,9 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_comedic_lane_accepts_sports_specific_jokes(self):
         examples = [
-            "If the Broncos add another quarterback after saying Bo is fine, that is not depth. That is ankle insurance with a helmet.",
-            "The Nuggets can call everything open for debate, but Jokic sitting still turns the offense into a lost and found box.",
-            "Changing goalies after one loss is how the Avs turn one bad night into a crease problem.",
+            "If the Broncos add another quarterback after saying Bo is fine, the joke is not the signing. It is pretending everyone is relaxed while buying insurance.",
+            "The Nuggets can call everything open for debate, but Jokic sitting still turns into the part where the offense needs an adult.",
+            "Changing goalies after one loss is how the Avs turn a hot hand into a full team trust exercise.",
         ]
         for text in examples:
             with self.subTest(text=text):

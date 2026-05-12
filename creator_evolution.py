@@ -476,6 +476,18 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "fighting for custody",
     "custody of the crease",
     "panic in goalie pads",
+    "panic in goalie gear",
+    "cover your reps football",
+    "backup plan reporting",
+    "put on shoulder pads",
+    "that split keeps writing",
+    "split keeps writing",
+    "batting order denial",
+    "puck to puck trust",
+    "roster speech",
+    "calm was doing",
+    "calm update",
+    "peaceful rebuild stuff",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -490,7 +502,18 @@ COMEDIC_OBJECT_AGENCY_SUBJECTS = (
     "transaction",
     "transaction wire",
     "qb3",
+    "qb4",
     "bench math",
+    "split",
+    "scouting report",
+    "calm",
+    "update",
+    "backup plan",
+    "plan",
+    "trust",
+    "speech",
+    "hot hand",
+    "crease",
 )
 
 COMEDIC_OBJECT_AGENCY_VERBS = (
@@ -514,6 +537,33 @@ COMEDIC_OBJECT_AGENCY_VERBS = (
     "talks",
     "receive",
     "receives",
+    "write",
+    "writes",
+    "writing",
+    "report",
+    "reports",
+    "reporting",
+    "sweat",
+    "sweats",
+    "sweating",
+    "vote",
+    "votes",
+    "breathe",
+    "breathes",
+    "live",
+    "lives",
+    "pretend",
+    "pretends",
+    "bat",
+    "bats",
+    "batting",
+    "doing",
+    "do",
+    "does",
+    "wear",
+    "wears",
+    "put on",
+    "puts on",
     "got its own",
     "has its own",
     "get a memo",
@@ -521,6 +571,22 @@ COMEDIC_OBJECT_AGENCY_VERBS = (
     "have immunity",
     "has immunity",
     "under protection",
+)
+
+COMEDIC_SLOGAN_CLOSER_PREFIXES = (
+    "that is ",
+    "that's ",
+    "same ",
+    "real ",
+    "short ",
+    "qb4 is not",
+    "qb3 is not",
+    "the bench is ",
+    "the depth chart ",
+    "that split ",
+    "the backup plan ",
+    "extra qb ",
+    "so much for ",
 )
 
 
@@ -998,6 +1064,21 @@ def _comedic_object_agency_hits(text: str) -> list[str]:
     return hits
 
 
+def _comedic_slogan_closer_hit(text: str) -> str:
+    final = _final_sentence(text).strip().lower()
+    if not final:
+        return ""
+    final_words = len(re.findall(r"\b[\w']+\b", final))
+    if final_words > 10:
+        return ""
+    for prefix in COMEDIC_SLOGAN_CLOSER_PREFIXES:
+        if final.startswith(prefix):
+            return final
+    if re.fullmatch(r"[a-z0-9 ]+(football|basketball|hockey|denial|panic|trust|math|gear|pads|card|rumor)", final):
+        return final
+    return ""
+
+
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
@@ -1120,6 +1201,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         nonsense_terms = _phrase_hits(lower, COMEDIC_NONSENSE_PUNCHLINES)
         profanity_terms = _phrase_hits(lower, COMEDIC_PROFANITY_TERMS)
         object_agency_terms = _comedic_object_agency_hits(text)
+        slogan_closer = _comedic_slogan_closer_hit(text)
         final_words = len(re.findall(r"\b[\w']+\b", _final_sentence(text)))
         if fake_markers or _has_emoji(text):
             issues.append("Comedic should be funny through the topic, not meme-caption energy: " + ", ".join(fake_markers[:4] or ["emoji"]))
@@ -1133,6 +1215,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Comedic punchline is confusing or surreal instead of funny: " + ", ".join(nonsense_terms[:4]))
         if object_agency_terms:
             issues.append("Comedic is using object-agency instead of a sports-specific joke: " + ", ".join(object_agency_terms[:4]))
+        if slogan_closer:
+            issues.append("Comedic final beat sounds like an AI slogan/tagline instead of a human joke: " + slogan_closer)
         if profanity_terms:
             specificity_count = _specificity_signal_count(text)
             if len(profanity_terms) > 1 or specificity_count <= 3:
@@ -2332,12 +2416,14 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- If an option sounds like a normal Witty Edge tweet, rewrite it with a more human comic turn before returning JSON.\n"
         "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, or object-personality crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
-        "- Prefer sports-native objects and consequences: QB room, rep plan, injury report, rotation, timeout, bench stretch, possession, roster spot, transaction wire, goalie replay, depth chart.\n"
+        "- Prefer sports actions and consequences over sports objects: adding a QB, limiting reps, changing goalies, burning a timeout, surviving non-Jokic possessions, changing a rotation, protecting a roster spot.\n"
         "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"
         "- Do not write around the joke with 'sounds great,' 'feels like,' 'the real tell,' 'the truth is,' or any setup that announces analysis. Just say the funny thing.\n"
         "- Do not literalize idioms from the source. If the source says 'everything is on the table,' do not make table, furniture, museum, velvet rope, folding chair, or under-the-table jokes.\n"
         "- Do not reuse ankle-as-speaker/document jokes. No ankle press conference, ankle press release, ankle progress report, or ankle filing paperwork.\n"
         "- Do not make body parts, injuries, depth charts, benches, rotations, transactions, or abstract truth act like people. No ankle emotions, depth charts hearing things, benches receiving memos, or truth wandering into the room.\n"
+        "- Do not end with abstract-object personification. Depth chart, scouting report, split, calm, update, transaction wire, bench math, speech, plan, trust, rotation, hot hand, and crease cannot sweat, talk, report, write, vote, breathe, live, pretend, wear, or put on pads.\n"
+        "- No detached final-line label unless it is a complete human sentence a fan would actually text. Reject 'That is panic in goalie gear,' 'cover your reps football,' 'batting order denial,' and similar caption lines.\n"
         "- Literalizing team spin must end in a real sports consequence, not object-agency. For injury trust, land on QB-room trust, backup shopping, rep-plan protection, roster insurance, practice-script reality, or active-list behavior.\n"
         "- For non-Jokic minutes, land on rotation math, Jokic-rest survival, second-unit possessions, timeout panic, shot creation, or bench-stretch consequences.\n"
         "- If the punchline still works after replacing the named team/player with any random team/player, reject it.\n"
@@ -2352,11 +2438,12 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
         "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
         "- Mechanic targets only, not reusable lines: pressure reveal, sports-logic flip, fan-coping roast, or absurdly plain sports consequence.\n"
-        "\nCOMEDIC CALIBRATION BAR, DO NOT COPY THESE WORDS:\n"
-        "- Broncos injury trust mechanism: If another quarterback walks in after all the calm updates, that is not depth, that is ankle insurance.\n"
-        "- Nuggets rotation mechanism: If Jokic sits and everyone immediately starts looking for an adult, the offseason already has its first suspect.\n"
-        "- Avs goalie mechanism: Switching goalies after one loss is not a plan holding steady, it is the hot hand getting put on probation.\n"
-        "- The examples above show pressure, turn, and laugh density only. Do not reuse their images, objects, or exact phrasing.\n"
+        "\nCOMEDIC CALIBRATION BAR, MECHANICS ONLY:\n"
+        "- Injury trust: joke from the gap between the calm public update and the team adding real QB insurance.\n"
+        "- Rotation trouble: joke from the gap between big offseason language and the exact stretch where the game keeps falling apart.\n"
+        "- Goalie switch: joke from the gap between claiming stability and changing the crease after one bad night.\n"
+        "- Development excuse: joke from the gap between patient public language and the same matchup flaw showing up every series.\n"
+        "- Do not copy any image, object, or phrase from these mechanics. Turn the current source into a fresh human joke.\n"
     ) if lane == "Comedic" else ""
     comedic_voice_contract = (
         "\nCOMEDIC OVERRIDE:\n"
