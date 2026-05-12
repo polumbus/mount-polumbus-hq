@@ -67,6 +67,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("LANE BEHAVIOR", prompt)
         self.assertIn("Witty Edge:", prompt)
         self.assertIn("TOPIC:", prompt)
+        self.assertIn("Preserve the user's original tweet idea", prompt)
+        self.assertIn("Voice is a filter, not a reset button", prompt)
         self.assertNotIn("HALL OF FAME REFERENCE TWEETS", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
 
