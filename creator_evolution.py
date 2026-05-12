@@ -25,7 +25,7 @@ DEFAULT_WEEKLY_API_BUDGET_USD = 3.00
 DEFAULT_LANE = "Witty Edge"
 EMOTION_LANES = (
     "Witty Edge",
-    "Amused",
+    "Comedic",
     "Annoyed",
     "Fired-Up",
     "Skeptical",
@@ -43,11 +43,11 @@ LANE_RECIPES = {
         "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, hot-take framing, and copied viral hooks.",
         "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
-    "Amused": {
-        "target": "Quietly entertained by the absurdity, like the reader already saw the same weird thing.",
-        "do": "Spot the strange human detail, understate it, and let the gap between normal wording and absurd reality create the joke.",
-        "avoid": "LOL energy, meme captions, obvious punchlines, emoji reactions, and explaining why it is funny.",
-        "ending": "A dry walk-off line that makes the reader finish the joke.",
+    "Comedic": {
+        "target": "Actually funny sports commentary: sharp, conversational, borderline adult without getting cruel, and built to make people laugh.",
+        "do": "Find the ridiculous part, exaggerate it just enough, use a clean comedic turn, and land a short punchline that sounds posted from a phone.",
+        "avoid": "ChatGPT-safe cleverness, long setups, over-explained jokes, meme captions, emojis, slurs, harassment, and generic 'lol this is wild' reactions.",
+        "ending": "A short comedic walk-off, usually 3-8 words, that leaves the joke hanging without explaining it.",
     },
     "Annoyed": {
         "target": "Controlled irritation at a repeat decision, excuse, or pattern, never a pile-on against a person.",
@@ -254,13 +254,24 @@ LINKEDIN_CADENCE_PHRASES = (
 )
 
 
+LANE_ALIASES = {
+    "Amused": "Comedic",
+}
+
+
+def normalize_lane(lane: str) -> str:
+    lane = str(lane or "").strip()
+    lane = LANE_ALIASES.get(lane, lane)
+    return lane if lane in EMOTION_LANES else DEFAULT_LANE
+
+
 def lane_recipe(lane: str) -> dict[str, str]:
-    lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
+    lane = normalize_lane(lane)
     return dict(LANE_RECIPES[lane])
 
 
 def lane_recipe_text(lane: str) -> str:
-    lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
+    lane = normalize_lane(lane)
     recipe = lane_recipe(lane)
     if recipe.get("text"):
         return str(recipe["text"]).strip()
@@ -317,7 +328,7 @@ def budget_preflight_for_mode(mode: str, policy: dict[str, Any] | None = None) -
 
 
 def build_hot_signal_brief(topic: str, seed: str, source: str, why: str, lane: str, fmt: str) -> str:
-    lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
+    lane = normalize_lane(lane)
     topic = str(topic or "Trending angle").strip()
     seed = str(seed or topic).strip()
     source = str(source or "hot feed").strip()
@@ -688,7 +699,7 @@ def polished_punctuation_hits(text: str) -> list[str]:
 def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE) -> dict[str, Any]:
     text = str(text or "").strip()
     fmt = fmt or "Normal Tweet"
-    lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
+    lane = normalize_lane(lane)
     lower = text.lower()
     issues: list[str] = []
     warnings: list[str] = []
@@ -799,8 +810,8 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
             issues.append("Sarcastic lane should not use generic sarcastic openers.")
         if risky:
             issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(risky[:4]))
-    if lane == "Amused" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
-        issues.append("Amused should be dry and observational, not meme-caption energy.")
+    if lane == "Comedic" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving")):
+        issues.append("Comedic should be funny through the sports read, not meme-caption energy.")
     if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
         issues.append("Celebratory works better when the joy is specific instead of generic hype.")
     if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
@@ -1941,7 +1952,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
                             *, action: str = "evolve",
                             live_stats_block: str = "", sports_ctx: str = "") -> str:
     fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
-    lane = lane if lane in EMOTION_LANES else DEFAULT_LANE
+    lane = normalize_lane(lane)
     context = performance_context(state)
     lane_behavior = lane_recipe_text(lane)
     format_behavior = format_recipe_text(fmt)

@@ -497,7 +497,7 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_lane_specific_quality_gates_block_drift(self):
         sarcastic = ce.draft_quality_report("Turns out that guy is a total loser.", "Punchy Tweet", "Sarcastic")
-        amused = ce.draft_quality_report("This lineup is so unserious lol 😂", "Punchy Tweet", "Amused")
+        amused = ce.draft_quality_report("This lineup is so unserious lol 😂", "Punchy Tweet", "Comedic")
         skeptical = ce.draft_quality_report("Obviously this is guaranteed to fail. Book it.", "Punchy Tweet", "Skeptical")
 
         self.assertFalse(sarcastic["ok"])
@@ -1590,7 +1590,7 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_each_voice_has_a_passing_engagement_fixture(self):
         fixtures = {
             "Witty Edge": "Broncos roster math is doing that thing where the boring answer starts looking like the dangerous one...",
-            "Amused": "The Avs goalie conversation went from calm to courtroom drama in about four minutes. Very normal playoff hobby...",
+            "Comedic": "The Avs goalie conversation went from calm to courtroom drama in about four minutes. Very normal playoff hobby...",
             "Annoyed": "The Nuggets keep treating the bench problem like it is weather. At some point the pattern becomes the plan...",
             "Fired-Up": "MacKinnon shifts change the whole temperature of a series. Colorado has the lever sitting right there...",
             "Skeptical": "Bo Nix being ready for camp and being trusted at camp are two different Broncos conversations...",

@@ -37,7 +37,7 @@ DEFAULT_SESSION = "default"
 HARNESS_STATE_ROOT = ".harness/prompt_evolution"
 DEFAULT_LANES = [
     "Witty Edge",
-    "Amused",
+    "Comedic",
     "Annoyed",
     "Fired-Up",
     "Skeptical",
@@ -227,6 +227,10 @@ def _normalize_lane(module: Any, lane: str) -> str:
     if not lanes:
         return lane
     clean = str(lane or "").strip()
+    if clean.lower() == "comedic" and "Comedic" not in lanes and "Amused" in lanes:
+        return "Amused"
+    if clean.lower() == "amused" and "Amused" not in lanes and "Comedic" in lanes:
+        return "Comedic"
     for candidate in lanes:
         if candidate.lower() == clean.lower():
             return candidate
@@ -674,7 +678,8 @@ def main() -> int:
     for lane in lanes:
         old_lane = _normalize_lane(old_module, lane)
         new_lane = _normalize_lane(new_module, lane)
-        if old_lane != new_lane:
+        alias_match = {old_lane, new_lane} == {"Amused", "Comedic"}
+        if old_lane != new_lane and not alias_match:
             raise RuntimeError(f"Lane resolves differently between refs: {lane!r} -> old={old_lane!r}, new={new_lane!r}")
         old_format = _normalize_format(old_module, args.format)
         new_format = _normalize_format(new_module, args.format)
