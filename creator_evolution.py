@@ -306,6 +306,11 @@ COMEDIC_RANDOM_ANALOGY_TERMS = (
     "lease",
     "restaurant",
     "menu",
+    "rental car",
+    "return policy",
+    "pop quiz",
+    "homework",
+    "forgot its homework",
     "tinder",
     "bad tinder date",
     "divorce papers",
@@ -436,6 +441,8 @@ COMEDIC_ANALYSIS_DRIFT = (
     "creates pressure",
     "very loud kind of calm",
     "loud kind of calm",
+    "loudest quiet",
+    "quiet update",
 )
 
 COMEDIC_NONSENSE_PUNCHLINES = (
@@ -498,6 +505,7 @@ COMEDIC_NONSENSE_PUNCHLINES = (
     "calm update",
     "peaceful rebuild stuff",
     "answering questions for them",
+    "improv comedy",
 )
 
 COMEDIC_OBJECT_AGENCY_SUBJECTS = (
@@ -2425,7 +2433,7 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Prefer one compact paragraph for Comedic Normal unless the final line is genuinely funnier than the paragraph version.\n"
         "- Across the 3 Normal Tweet options, at most one may use a blank-line final beat. The other options should land the joke inside a compact paragraph so they do not all look like the same AI template.\n"
         "- If an option sounds like a normal Witty Edge tweet, rewrite it with a more human comic turn before returning JSON.\n"
-        "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, or object-personality crutches.\n"
+        "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, rental car, school-test, homework, or object-personality crutches.\n"
         "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
         "- Prefer sports actions and consequences over sports objects: adding a QB, limiting reps, changing goalies, burning a timeout, surviving non-Jokic possessions, changing a rotation, protecting a roster spot.\n"
         "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"

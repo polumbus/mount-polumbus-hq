@@ -529,6 +529,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         loud_calm_comedy = ce.draft_quality_report("Extra quarterback is a very loud kind of calm.", "Punchy Tweet", "Comedic")
         answering_questions_comedy = ce.draft_quality_report("The next QB signing walks in and starts answering questions for them.", "Punchy Tweet", "Comedic")
         group_text_comedy = ce.draft_quality_report("This is a group text where nobody knows who is driving.", "Punchy Tweet", "Comedic")
+        stock_analogy_comedy = ce.draft_quality_report("The Avs crease is a rental car with a return policy after one loss.", "Punchy Tweet", "Comedic")
+        homework_comedy = ce.draft_quality_report("The Rockies lineup forgot its homework against another road lefty.", "Punchy Tweet", "Comedic")
+        improv_comedy = ce.draft_quality_report("Jokic sits and the offense becomes improv comedy.", "Punchy Tweet", "Comedic")
         non_actor_ankle_sentence = ce.draft_quality_report("The Broncos say Bo Nix is on track, but the next QB move decides how much they trust the ankle.", "Punchy Tweet", "Comedic")
 
         self.assertFalse(sarcastic["ok"])
@@ -564,6 +567,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertFalse(loud_calm_comedy["ok"])
         self.assertFalse(answering_questions_comedy["ok"])
         self.assertFalse(group_text_comedy["ok"])
+        self.assertFalse(stock_analogy_comedy["ok"])
+        self.assertFalse(homework_comedy["ok"])
+        self.assertFalse(improv_comedy["ok"])
         self.assertNotIn("object-agency", " ".join(non_actor_ankle_sentence["issues"]).lower())
         self.assertTrue(any("copy old example" in issue.lower() for issue in sarcastic["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in random_comedy["issues"]))
@@ -596,6 +602,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertTrue(any("witty edge analysis" in issue.lower() for issue in loud_calm_comedy["issues"]))
         self.assertTrue(any("confusing or surreal" in issue.lower() for issue in answering_questions_comedy["issues"]))
         self.assertTrue(any("random analogy" in issue.lower() for issue in group_text_comedy["issues"]))
+        self.assertTrue(any("random analogy" in issue.lower() for issue in stock_analogy_comedy["issues"]))
+        self.assertTrue(any("random analogy" in issue.lower() for issue in homework_comedy["issues"]))
+        self.assertTrue(any("confusing or surreal" in issue.lower() for issue in improv_comedy["issues"]))
 
     def test_comedic_lane_is_canonical_with_amused_alias(self):
         self.assertIn("Comedic", ce.EMOTION_LANES)
