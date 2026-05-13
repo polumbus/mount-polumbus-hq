@@ -804,6 +804,29 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], report)
 
+    def test_promo_fallback_examples_pass_quality_gate(self):
+        examples = [
+            (
+                "Bo Nix is the headline, but ankle ready and ankle trusted are two different Broncos conversations. "
+                "The next QB decision is where the roster says how much trust is actually there.\n\n"
+                "That is the part worth watching before camp..."
+            ),
+            (
+                "The clean version is Bo Nix. The useful version is that ankle ready and ankle trusted are two different "
+                "Broncos conversations. The next QB decision is where the roster says how much trust is actually there "
+                "before the answer gets obvious."
+            ),
+            (
+                "Bo Nix only looks settled from a distance. Up close, ankle ready and ankle trusted are two different "
+                "Broncos conversations, and the next QB decision is where the roster says how much trust is actually there.\n\n"
+                "That is the tension the video is built around..."
+            ),
+        ]
+
+        for text in examples:
+            with self.subTest(text=text):
+                self.assertTrue(ce.draft_quality_report(text, "Normal Tweet", "Promo")["ok"])
+
     def test_validate_generation_options_identifies_all_rejected_promo_drafts(self):
         data = {
             "option1": "New video is live. You won't believe what I found. Watch until the end.",
@@ -1596,6 +1619,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("ce.lane_recipe_text(", app_text)
         self.assertIn("def _ce_validate_generation_options", app_text)
         self.assertIn("def _ce_prepare_generated_option", app_text)
+        self.assertIn("def _ce_promo_fallback_generation", app_text)
+        self.assertIn("fallback_data, fallback_quality, fallback_passing = _ce_promo_fallback_generation", app_text)
         self.assertIn('getattr(ce, "repair_generated_text_for_format", None)', app_text)
         self.assertIn("data[option_key] = _ce_prepare_generated_option", app_text)
         self.assertIn("repaired[option_key] = _ce_prepare_generated_option", app_text)

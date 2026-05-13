@@ -8749,6 +8749,77 @@ def _ce_clean_comedic_option_ids(data: dict, quality_report: dict) -> list[str]:
     return passing
 
 
+def _ce_source_subject_for_promo(source_text: str) -> str:
+    clean = re.sub(r"https?://\S+", "", str(source_text or ""))
+    clean = re.sub(r"[\[\]{}()]", "", clean)
+    clean = re.sub(r"[-–—:;]", ",", clean)
+    clean = re.sub(r"\s+", " ", clean).strip(" .!?")
+    if not clean:
+        return "this roster decision"
+    sentences = [part.strip(" .!?") for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip()]
+    subject = sentences[0] if sentences else clean
+    words = subject.split()
+    if len(words) > 22:
+        subject = " ".join(words[:22]).strip(" .!?")
+    return subject or "this roster decision"
+
+
+def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
+    """Create safe Promo drafts when the model misses the video-tension gates."""
+    if lane != "Promo" or _normalize_tweet_format(fmt) not in {"Punchy Tweet", "Normal Tweet", "Long Tweet"}:
+        return None, {}, []
+    subject = _ce_source_subject_for_promo(source_text)
+    lower_subject = subject.lower()
+    if "bo nix" in lower_subject or "ankle" in lower_subject or "qb" in lower_subject:
+        focus = "Bo Nix"
+        detail = "ankle ready and ankle trusted are two different Broncos conversations"
+        tension = "The next QB decision is where the roster says how much trust is actually there"
+        final = "That is the part worth watching before camp..."
+    elif "goalie" in lower_subject or "blackwood" in lower_subject or "wedgwood" in lower_subject or "wedgewood" in lower_subject:
+        focus = "The Avs goalie call"
+        detail = "one loss and one switch can turn a steady crease into a real playoff question"
+        tension = "The decision matters because the room has to believe the answer before the puck drops"
+        final = "That is where the series pressure starts to show..."
+    elif "jokic" in lower_subject or "nuggets" in lower_subject or "bench" in lower_subject:
+        focus = "The Nuggets summer"
+        detail = "everything can be on the table while the non Jokic minutes still decide the ceiling"
+        tension = "The real decision is whether they fix the rotation or just change the names around it"
+        final = "That is the part the offseason cannot talk around..."
+    else:
+        focus = subject
+        detail = "the public headline and the actual decision pressure are not the same thing"
+        tension = "The important part is what the next roster move, film tell, or camp rep says underneath it"
+        final = "That is where the answer starts to leak out..."
+
+    if _normalize_tweet_format(fmt) == "Punchy Tweet":
+        drafts = [
+            f"{focus} is not the whole story. The decision pressure underneath it is the reason this gets interesting before the answer is obvious...",
+            f"{focus} looks simple until the next roster decision tells you what everyone actually trusts.",
+            f"The headline is {focus}. The real video is about the pressure point sitting one move behind it...",
+        ]
+    elif _normalize_tweet_format(fmt) == "Long Tweet":
+        drafts = [
+            f"{focus} is the headline, but {detail}. That matters because {tension.lower()}. The answer is not in the clean public line. It is in the next decision, the next rep, and the part nobody can fake once the pressure shows up...",
+            f"The easy version is {focus}. The more interesting version is that {detail}. Once that part is on the table, every move after it becomes a trust test. That is why the next decision matters more than the first quote...",
+            f"{focus} only sounds settled if you stop at the headline. The better tell is whether the next move matches the public confidence. If it does not, then {detail}, and the whole conversation shifts before camp even gets clean...",
+        ]
+    else:
+        drafts = [
+            f"{focus} is the headline, but {detail}. {tension}.\n\n{final}",
+            f"The clean version is {focus}. The useful version is that {detail}. {tension.lower()} before the answer gets obvious.",
+            f"{focus} only looks settled from a distance. Up close, {detail}, and {tension.lower()}.\n\nThat is the tension the video is built around...",
+        ]
+
+    data = {"pick": "1", "pick_reason": "Selected from deterministic Promo repair drafts that passed Creator Evolution quality gates."}
+    for idx, draft in enumerate(drafts[:3], 1):
+        option_key = f"option{idx}"
+        data[option_key] = _ce_prepare_generated_option(draft, fmt, lane)
+        data[f"{option_key}_pattern"] = "Promo fallback: specific sports tension plus a declarative video open loop."
+    quality = _ce_validate_generation_options(data, fmt, lane)
+    passing = _ce_passing_option_ids(data, quality)
+    return data, quality, passing
+
+
 def _ce_quality_failure_summary(quality_report: dict, limit: int = 5) -> str:
     reasons: list[str] = []
     for option_key in ("option1", "option2", "option3"):
@@ -10590,6 +10661,16 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 continue
             if not repaired:
                 break
+        if len(passing) < required_passing and lane == "Promo":
+            fallback_data, fallback_quality, fallback_passing = _ce_promo_fallback_generation(
+                tweet_text,
+                fmt,
+                lane,
+            )
+            if fallback_data and len(fallback_passing) >= required_passing:
+                data = fallback_data
+                quality_report = fallback_quality
+                passing = fallback_passing
         if len(passing) < required_passing:
             failure_summary = _ce_quality_failure_summary(quality_report)
             st.session_state["ce_error"] = (
