@@ -15,11 +15,13 @@ test("Vercel Preview public root renders the sales landing and preserves app pre
       name: "A creator operating system for posts that still sound like you.",
     }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Preview the app" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Open the app" }).first()).toHaveAttribute(
     "href",
-    "/?preview=workspace",
+    "/app/creator-studio",
   );
-  await expect(page.getByRole("heading", { name: "Clear packaging with Stripe checkout." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Clear packaging with simple workspace setup." }),
+  ).toBeVisible();
 
   await page.goto("/?preview=workspace");
   await expect(page.getByRole("heading", { name: "Creator Studio" })).toBeVisible();

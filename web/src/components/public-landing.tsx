@@ -60,16 +60,16 @@ export function PublicLanding() {
 
             <div className="mt-9 flex flex-wrap gap-4">
               <Link
-                href="/login"
+                href="/app/onboarding"
                 className="rounded-full bg-[linear-gradient(135deg,#00C8E8_0%,#00F5FF_55%,#7DFAFF_100%)] px-7 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-[#07111C] shadow-[0_0_42px_rgba(45,212,191,0.22)] transition hover:brightness-110"
               >
                 Start workspace setup
               </Link>
               <Link
-                href="/?preview=workspace"
+                href="/app/creator-studio"
                 className="rounded-full border border-white/14 bg-white/[0.035] px-7 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-[#EAF4FF] transition hover:border-[#C49E3C]/50 hover:bg-white/[0.06]"
               >
-                Preview the app
+                Open the app
               </Link>
             </div>
 
@@ -192,7 +192,7 @@ export function PublicLanding() {
               </p>
             </div>
             <Link
-              href="/login"
+              href="/app"
               className="inline-flex w-fit rounded-full border border-[#2DD4BF]/30 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-[#DFFBFF] transition hover:bg-[#0E2B35]"
             >
               Request access
@@ -231,7 +231,7 @@ export function PublicLanding() {
                     <CheckoutButton planSlug={plan.slug} label={plan.primaryCta} />
                   ) : (
                     <Link
-                      href={`/login?plan=${plan.slug}`}
+                      href={`/app/onboarding?plan=${plan.slug}`}
                       className="mt-7 inline-flex rounded-full bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#07111C] transition hover:bg-[#DFFBFF]"
                     >
                       {plan.primaryCta}
@@ -239,7 +239,7 @@ export function PublicLanding() {
                   )
                 ) : (
                   <Link
-                    href="/login?plan=operator"
+                    href="/app/onboarding?plan=operator"
                     className="mt-7 inline-flex rounded-full bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#07111C] transition hover:bg-[#DFFBFF]"
                   >
                     {plan.primaryCta}
@@ -348,13 +348,13 @@ export function PublicLanding() {
             </h2>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Link
-                href="/?preview=workspace"
+                href="/app/creator-studio"
                 className="rounded-full bg-[#F4FAFF] px-7 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-[#07111C] transition hover:bg-[#DFFBFF]"
               >
-                Preview app shell
+                Open app
               </Link>
               <Link
-                href="/login"
+                href="/app/onboarding"
                 className="rounded-full border border-white/14 px-7 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-[#EAF4FF] transition hover:bg-white/[0.06]"
               >
                 Start signup

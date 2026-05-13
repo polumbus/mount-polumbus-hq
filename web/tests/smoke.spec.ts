@@ -43,23 +43,23 @@ test("marketing home loads", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Start workspace setup" }).first()).toHaveAttribute(
     "href",
-    "/login",
+    "/app/onboarding",
   );
   await expect(
     page.getByRole("heading", { name: "Clear packaging with simple workspace setup." }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Start workspace setup" }).nth(1)).toHaveAttribute(
     "href",
-    "/login?plan=starter",
+    "/app/onboarding?plan=starter",
   );
   await expect(
     page.getByRole("heading", {
       name: "The workspace keeps the loop tight from idea to published post.",
     }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Preview the app" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Open the app" }).first()).toHaveAttribute(
     "href",
-    "/?preview=workspace",
+    "/app/creator-studio",
   );
 });
 
