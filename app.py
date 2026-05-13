@@ -10543,7 +10543,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
 
         def _build_clean_comedic_set() -> tuple[dict | None, dict, list[str]]:
             for combo in itertools.combinations(passing_pool, 3):
-                candidate = {"pick": "1", "pick_reason": "Selected from passing Comedic drafts collected across repair attempts."}
+                candidate = {"pick": "1", "pick_reason": f"Selected from passing {lane} drafts collected across repair attempts."}
                 for target_idx, (_, text, pattern) in enumerate(combo, 1):
                     candidate[f"option{target_idx}"] = text
                     candidate[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
