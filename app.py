@@ -1290,33 +1290,32 @@ def _call_openai_api_key(prompt: str, system: str, max_tokens: int, timeout: int
 
 def _call_grok_api_key(prompt: str, system: str, max_tokens: int, timeout: int = 60) -> str:
     """Creator Evolution-only Grok route using xAI's OpenAI-compatible API."""
-    import urllib.request
-
     api_key = _secret_or_env("XAI_API_KEY", "GROK_API_KEY")
     if not api_key:
         raise Exception("No XAI_API_KEY or GROK_API_KEY configured")
     model = _ce_grok_model()
-    body = json.dumps({
+    payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": system or ""},
             {"role": "user", "content": prompt},
         ],
         "max_tokens": max_tokens,
-        "temperature": 0.85,
         "stream": False,
-    }).encode()
-    req = urllib.request.Request(
+    }
+    resp = requests.post(
         "https://api.x.ai/v1/chat/completions",
-        data=body,
+        json=payload,
         headers={
             "Content-Type": "application/json",
+            "Accept": "application/json",
             "Authorization": f"Bearer {api_key}",
         },
-        method="POST",
+        timeout=timeout,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read())
+    if resp.status_code >= 400:
+        raise Exception(f"HTTP {resp.status_code}: {resp.text[:240]}")
+    data = resp.json()
     for choice in (data or {}).get("choices", []):
         message = choice.get("message") if isinstance(choice, dict) else {}
         text = (message or {}).get("content")
