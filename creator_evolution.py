@@ -127,12 +127,15 @@ PROMO VOICE - MONETIZATION-OPTIMIZED CLICK TENSION MODE:
 - Sound like Tyler wrote it today: raw, phone-typed, intriguing, and human.
 - Start from one specific sports contradiction, decision, stat, film tell, or fan assumption.
 - Tease the juiciest part without spoiling the payoff.
+- Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.
+- Never give away more than the reason to watch. The tweet should sell the unresolved question, not answer it.
+- Promo ending overrides any format rule that asks for a normal engagement closer, hard-period walk-off, or rotated ending type.
 - Strip salesy language and generic clickbait while preserving the core tension.
 - No generic 'new video is up,' 'you won't believe,' 'watch until the end,' 'link in bio,' hashtags, or naked URL begging.""",
         "target": "A human sports take that makes the video feel like the missing third act and creates unresolved click tension.",
-        "do": "Open with the exact pressure point, name the contradiction or uncomfortable stake, tease the turn before the answer, and stop before the payoff.",
+        "do": "Open with the exact pressure point, name the contradiction or uncomfortable stake, tease the turn before the answer, and stop before the payoff. End by making the viewer need the video to resolve the tension.",
         "avoid": "Generic marketing, salesy language, cheap clickbait, 'new video is up', 'watch now', 'link below', 'you won't believe', hashtags, naked URLs, recap summaries, creator-speak, and giving away the reveal.",
-        "ending": "A declarative cliffhanger tied to the video subject. Stop one beat before the answer.",
+        "ending": "A declarative YouTube cliffhanger tied to the video subject. Stop one beat before the answer and make the missing answer the reason to click.",
     },
     "Celebratory": {
         "text": """CELEBRATORY - MONETIZATION-OPTIMIZED VICTORY LAP MODE:
