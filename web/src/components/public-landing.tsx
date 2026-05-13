@@ -106,7 +106,7 @@ export function PublicLanding() {
                     </h2>
                   </div>
                   <span className="rounded-full border border-[#2DD4BF]/30 bg-[#0E2B35] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7FE5D6]">
-                    Preview
+                    Website app
                   </span>
                 </div>
 
@@ -341,10 +341,10 @@ export function PublicLanding() {
         <section id="preview" className="mx-auto max-w-7xl px-6 py-16 pb-24">
           <div className="rounded-[42px] border border-[#2DD4BF]/18 bg-[#0E2330]/75 p-8 text-center shadow-[0_30px_120px_rgba(0,0,0,0.25)]">
             <p className="font-display text-base uppercase tracking-[0.34em] text-[#7FE5D6]">
-              Want to inspect the product first?
+              Want to open the product first?
             </p>
             <h2 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold text-[#F4FAFF]">
-              Open the preserved Streamlit-style app preview without entering the signup flow.
+              Open the Post Ascend website app and continue through the real workspace flow.
             </h2>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Link

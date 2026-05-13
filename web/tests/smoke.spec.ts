@@ -54,7 +54,7 @@ test("marketing home loads", async ({ page }) => {
   );
   await expect(
     page.getByRole("heading", {
-      name: "The workspace keeps the loop tight from idea to published post.",
+      name: "Open the Post Ascend website app and continue through the real workspace flow.",
     }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Open the app" }).first()).toHaveAttribute(
