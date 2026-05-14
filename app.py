@@ -1785,7 +1785,10 @@ def _render_post_failure(detail: str, *, prefix: str = "Post failed") -> None:
             unsafe_allow_html=True,
         )
         if clean_detail:
-            st.caption(clean_detail)
+            if "No Twitter cookies available" in clean_detail:
+                st.error("Direct X posting needs a fresh X browser session. Open x.com in Chrome while logged in, then wait for the Post Ascend extension to sync cookies or click its extension popup.")
+            with st.expander("Why direct posting failed", expanded=True):
+                st.code(clean_detail, language="text")
         return
     st.error(f"{prefix}: {detail}")
 

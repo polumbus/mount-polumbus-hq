@@ -82,6 +82,11 @@ def _proxy_api_keys() -> list[str]:
             key = part.strip()
             if key and key not in keys:
                 keys.append(key)
+    # Keep installed Chrome extensions working after proxy-key rotation.
+    # The extension can only sync X cookies if the proxy accepts this legacy key.
+    extension_key = os.environ.get("HQ_EXTENSION_PROXY_KEY", "polumbus_hq_proxy_2026").strip()
+    if extension_key and extension_key not in keys:
+        keys.append(extension_key)
     return keys
 
 
