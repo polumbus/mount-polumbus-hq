@@ -7698,6 +7698,16 @@ def _save_inspo_to_gist(ideas: list, n_tweets: int, n_headlines: int):
         pass
 
 
+def _whats_hot_studio_cache_key(handle: str | None = None) -> str:
+    """Canonical Creator Studio What's Hot discovery cache key."""
+    return json.dumps({
+        "formula_version": _WHATS_HOT_FORMULA_VERSION,
+        "handle": handle or get_current_handle(),
+        "guest": is_guest(),
+        "topics": load_json("topics.json", {}) if is_guest() else {},
+    }, sort_keys=True)
+
+
 def _parse_inspiration_ideas(_raw: str) -> list:
     _clean = (_raw or "").strip()
     if not _clean:
@@ -7869,28 +7879,34 @@ def _run_inspiration_claude(_cache_key: str = ""):
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = None,
                                        fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
-    """Fetch What's Hot signals for Creator Evolution without using Creator Studio generation."""
-    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
-    _raw_ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
+    """Use Creator Studio What's Hot discovery, then attach Creator Evolution build rules."""
+    _studio_cache_key = _cache_key or _whats_hot_studio_cache_key()
+    _raw_ideas, _n_tweets, _n_heads = _load_inspo_from_gist(_studio_cache_key)
+    if not _raw_ideas:
+        _raw_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_studio_cache_key)
+    _raw_ideas = (_raw_ideas or [])[:7]
     _lane = _ce_normalize_lane(lane)
     _fmt = _normalize_tweet_format(fmt)
     _ideas = []
     for _idea in _raw_ideas:
         _topic = (_idea.get("topic") or "Trending angle").strip()
-        _seed = (_idea.get("seed") or _idea.get("hook") or _topic).strip()
+        _hook = (_idea.get("hook") or "").strip()
+        _seed = (_idea.get("seed") or _hook or _topic).strip()
         _why = (_idea.get("why") or "Active conversation signal").strip()
         _source = (_idea.get("source") or "hot feed").strip()
-        _brief = _ce_build_hot_signal_brief(_topic, _seed, _source, _why, _lane, _fmt)
+        _source_material = _hook or _seed
+        _brief = _ce_build_hot_signal_brief(_topic, _source_material, _source, _why, _lane, _fmt)
         _ideas.append({
             "topic": _topic,
             "source": _source,
             "seed": _seed,
+            "hook": _hook,
             "why": _why,
             "brief": _brief,
             "lane": _lane,
             "format": _fmt,
         })
-    return _ideas, len(_all_tweets), len(_rss_headlines)
+    return _ideas, _n_tweets, _n_heads
 
 
 def _ce_pulse_error_decision(message: str = "Pulse could not safely read the live feed.") -> dict:
@@ -9824,13 +9840,7 @@ def _ci_build_dialog():
 def _ci_inspiration_dialog():
     """Show cached ideas — only calls Claude once per open, not on every button click."""
     _inspo_handle = get_current_handle()
-    _inspo_topics = load_json("topics.json", {}) if is_guest() else {}
-    _inspo_cache_key = json.dumps({
-        "formula_version": _WHATS_HOT_FORMULA_VERSION,
-        "handle": _inspo_handle,
-        "guest": is_guest(),
-        "topics": _inspo_topics,
-    }, sort_keys=True)
+    _inspo_cache_key = _whats_hot_studio_cache_key(_inspo_handle)
     if (
         st.session_state.get("inspo_handle") != _inspo_handle
         or st.session_state.get("inspo_formula_version") != _WHATS_HOT_FORMULA_VERSION
@@ -10170,27 +10180,25 @@ def _ce_pulse_dialog():
 
 @st.dialog("What's Hot For Creator Evolution", width="large")
 def _ce_inspiration_dialog():
-    """Creator Evolution hot signals: shared discovery, CE-only generation path."""
+    """Creator Evolution hot signals: Studio discovery, CE-only voice/format build path."""
     _handle = get_current_handle()
     _lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
     _fmt = _normalize_tweet_format(st.session_state.get("ce_format"))
-    _cache_key = json.dumps({
-        "formula_version": _WHATS_HOT_FORMULA_VERSION,
+    _studio_cache_key = _whats_hot_studio_cache_key(_handle)
+    _context_key = json.dumps({
+        "studio_cache_key": _studio_cache_key,
         "prompt_version": _ce_prompt_version(),
-        "handle": _handle,
-        "guest": is_guest(),
         "lane": _lane,
         "format": _fmt,
-        "topics": load_json("topics.json", {}) if is_guest() else {},
     }, sort_keys=True)
-    if st.session_state.get("ce_inspo_context") != _cache_key:
+    if st.session_state.get("ce_inspo_context") != _context_key:
         for _k in ["ce_inspo_ideas", "ce_inspo_meta", "ce_inspo_page"]:
             st.session_state.pop(_k, None)
-        st.session_state["ce_inspo_context"] = _cache_key
+        st.session_state["ce_inspo_context"] = _context_key
 
     if "ce_inspo_ideas" not in st.session_state:
         with st.spinner("Finding hot signals for Creator Evolution..."):
-            _ideas, _n_tweets, _n_heads = _run_creator_evolution_hot_signals(_cache_key, _lane, _fmt)
+            _ideas, _n_tweets, _n_heads = _run_creator_evolution_hot_signals(_studio_cache_key, _lane, _fmt)
         if not _ideas:
             st.error("Couldn't find hot signals right now. Try New Ideas in a minute.")
             return
@@ -10226,6 +10234,7 @@ def _ce_inspiration_dialog():
         _topic = _idea.get("topic", "")
         _source = (_idea.get("source") or "source").lower()
         _seed = _idea.get("seed", "")
+        _hook = _idea.get("hook", "")
         _why = _idea.get("why", "")
         _brief = _idea.get("brief", "")
         _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
@@ -10236,7 +10245,7 @@ def _ce_inspiration_dialog():
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);margin-left:4px;">CE · {html.escape(_lane.upper())}</span>'
               f'</div>'
-              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;">{html.escape(_seed[:260])}</div>'
+              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:280])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
             f'</div>',
             unsafe_allow_html=True,
@@ -10253,7 +10262,7 @@ def _ce_inspiration_dialog():
         with _verify_col:
             if pplx_available() and st.button("Verify", key=f"ce_inspo_verify_{_i}", use_container_width=True):
                 with st.spinner("Checking..."):
-                    _fci = pplx_fact_check(_seed)
+                    _fci = pplx_fact_check(_hook or _seed)
                 if _fci.get("answer"):
                     st.session_state[f"_ce_inspo_v_{_i}"] = _fci
                 else:
@@ -10270,6 +10279,7 @@ def _ce_inspiration_dialog():
 
     def _ce_inspo_regenerate():
         _run_creator_evolution_hot_signals.clear()
+        _run_inspiration_claude.clear()
         st.session_state.pop("ce_inspo_ideas", None)
         st.session_state.pop("ce_inspo_meta", None)
         st.session_state["ce_inspo_page"] = 0

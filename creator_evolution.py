@@ -890,7 +890,7 @@ LANE BEHAVIOR:
 CREATOR EVOLUTION BUILD RULES:
 - Treat this as source material, not as finished copy.
 - Use the Creator Evolution lane behavior above, approved live-performance rules, and the current quality gate.
-- Do not use Creator Studio voice modes, Creator Studio Hall of Fame calibration, or old What's Hot hook formulas.
+- Do not use Creator Studio voice modes or Creator Studio Hall of Fame calibration.
 - Do not invent stats, injuries, transactions, rankings, or current-event claims beyond the source material.
 - Turn the hot signal into a post that sounds like a person reacting in real time, not a content calendar."""
 

@@ -73,6 +73,19 @@ def test_voice_tuner_is_in_mobile_owner_nav():
     assert "Voice Tuner" in mobile_nav
 
 
+def test_creator_evolution_whats_hot_uses_studio_discovery_cache():
+    source = APP.read_text(encoding="utf-8")
+    runner = source[source.index("def _run_creator_evolution_hot_signals") : source.index("def _ce_pulse_error_decision")]
+    dialog = source[source.index("def _ce_inspiration_dialog") : source.index("@st.dialog(\"Creator Studio\"")]
+
+    assert "def _whats_hot_studio_cache_key" in source
+    assert "_load_inspo_from_gist(_studio_cache_key)" in runner
+    assert "_run_inspiration_claude(_studio_cache_key)" in runner
+    assert "len(_all_tweets)" not in runner
+    assert '"studio_cache_key": _studio_cache_key' in dialog
+    assert "_run_creator_evolution_hot_signals(_studio_cache_key, _lane, _fmt)" in dialog
+
+
 if __name__ == "__main__":
     test_streamlit_api_key_routes_are_opt_in_only()
     test_streamlit_oauth_proxy_routes_precede_openai_api_key_fallback()
@@ -81,3 +94,4 @@ if __name__ == "__main__":
     test_streamlit_secret_lookup_has_local_secrets_fallback()
     test_creator_evolution_grok_uses_proxy_when_direct_key_missing()
     test_voice_tuner_is_in_mobile_owner_nav()
+    test_creator_evolution_whats_hot_uses_studio_discovery_cache()
