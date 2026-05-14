@@ -64,6 +64,7 @@ def _load_env_file(path: str) -> None:
 def _bootstrap_proxy_env() -> None:
     for candidate in (
         "/home/polfam/mount_polumbus_hq/.env.local",
+        "/home/polfam/mount_polumbus_hq/.streamlit/secrets.toml",
         "~/.config/openclaw/secrets.env",
     ):
         _load_env_file(candidate)
@@ -1073,6 +1074,45 @@ def _twitterapi_get(path, params):
         return False, str(ex)
 
 
+def _call_grok_api_key(prompt: str, system: str, max_tokens: int, model: str, timeout: int = 60) -> str:
+    api_key = (os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY") or "").strip()
+    if not api_key:
+        raise Exception("No XAI_API_KEY or GROK_API_KEY configured on proxy host")
+    payload = json.dumps(
+        {
+            "model": model or os.environ.get("XAI_MODEL") or os.environ.get("GROK_MODEL") or "grok-4-fast-non-reasoning",
+            "messages": [
+                {"role": "system", "content": system or ""},
+                {"role": "user", "content": prompt or ""},
+            ],
+            "max_tokens": int(max_tokens or 1500),
+            "stream": False,
+        }
+    ).encode()
+    req = urllib.request.Request(
+        "https://api.x.ai/v1/chat/completions",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")[:300]
+        raise Exception(f"HTTP {exc.code}: {body}")
+    for choice in (data or {}).get("choices", []):
+        message = choice.get("message") if isinstance(choice, dict) else {}
+        text = message.get("content") if isinstance(message, dict) else ""
+        if str(text or "").strip():
+            return str(text).strip()
+    raise Exception(f"xAI returned empty text: {str(data)[:240]}")
+
+
 class ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -1366,6 +1406,17 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         self.send_json(500, {"error": f"{str(e)} | OAuth: {str(oauth_error)} | ChatGPT: {str(chatgpt_error)}"})
                         return
                 self.send_json(500, {"error": str(e)})
+
+        elif self.path == "/grok/call":
+            prompt = body.get("prompt", "")
+            system = body.get("system", "")
+            max_tokens = int(body.get("max_tokens") or 1500)
+            model = body.get("model") or os.environ.get("XAI_MODEL") or os.environ.get("GROK_MODEL") or "grok-4-fast-non-reasoning"
+            try:
+                text = _call_grok_api_key(prompt, system, max_tokens, model, timeout=60)
+                self.send_json(200, {"text": text, "route": "grok_proxy", "model": model})
+            except Exception as e:
+                self.send_json(500, {"error": str(e), "route": "grok_proxy", "model": model})
 
         elif self.path == "/save-tweet-url":
             # iOS Shortcut sends tweet URL → fetch content → save to inspiration Gist

@@ -840,6 +840,19 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 CREDENTIALS_PATH = os.path.expanduser("~/.claude/.credentials.json")
 
 
+def _local_streamlit_secret(name: str) -> str:
+    """Read local Streamlit secrets when st.secrets is unavailable outside Cloud."""
+    secrets_path = APP_DIR / ".streamlit" / "secrets.toml"
+    try:
+        if not secrets_path.exists():
+            return ""
+        data = tomli.loads(secrets_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    value = data.get(name, "")
+    return str(value or "").strip()
+
+
 def _secret_or_env(*names: str) -> str:
     for name in names:
         value = ""
@@ -849,6 +862,8 @@ def _secret_or_env(*names: str) -> str:
             value = ""
         if not value:
             value = os.environ.get(name, "")
+        if not value:
+            value = _local_streamlit_secret(name)
         value = str(value or "").strip()
         if value:
             return value
@@ -868,6 +883,8 @@ def _streamlit_api_key_routes_enabled() -> bool:
 
 def _ce_normalize_ai_provider(value: object) -> str:
     text = str(value or "").strip().lower()
+    if text in {"chatgpt", "chat gpt", "openai", "gpt"}:
+        return "ChatGPT"
     if text in {"grok", "xai", "x.ai"}:
         return "Grok"
     return CE_AI_PROVIDER_DEFAULT
@@ -885,6 +902,13 @@ def _ce_grok_key_present() -> bool:
     return bool(_secret_or_env("XAI_API_KEY", "GROK_API_KEY"))
 
 
+def _ce_grok_proxy_available() -> bool:
+    try:
+        return bool(_get_proxy_url() and _proxy_key_candidates())
+    except Exception:
+        return False
+
+
 def _streamlit_ai_profile_status() -> dict:
     """Non-secret provider profile snapshot for owner diagnostics."""
     api_key_enabled = _streamlit_api_key_routes_enabled()
@@ -896,6 +920,7 @@ def _streamlit_ai_profile_status() -> dict:
         "anthropic_api_key_present": bool(_secret_or_env("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")),
         "openai_api_key_present": bool(_secret_or_env("OPENAI_API_KEY")),
         "grok_api_key_present": _ce_grok_key_present(),
+        "grok_proxy_available": _ce_grok_proxy_available(),
         "creator_evolution_provider": _ce_selected_ai_provider(),
         "creator_evolution_grok_model": _ce_grok_model(),
         "last_route": last_route or "no AI call yet",
@@ -1325,6 +1350,40 @@ def _call_grok_api_key(prompt: str, system: str, max_tokens: int, timeout: int =
         if isinstance(text, str) and text.strip():
             return text.strip()
     raise Exception(f"Grok API returned empty text: {str(data)[:240]}")
+
+
+def _call_grok_proxy(prompt: str, system: str, max_tokens: int, timeout: int = 75) -> str:
+    proxy_url = _get_proxy_url()
+    if not proxy_url:
+        raise Exception("No proxy configured")
+    body = json.dumps({"prompt": prompt, "system": system, "max_tokens": max_tokens, "model": _ce_grok_model()}).encode()
+    key_candidates = _proxy_key_candidates() or [""]
+    last_error = ""
+    for proxy_key in key_candidates:
+        headers = {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1"}
+        if proxy_key:
+            headers["X-Proxy-Key"] = proxy_key
+        req = urllib.request.Request(f"{proxy_url.rstrip('/')}/grok/call", data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read())
+            if data.get("error"):
+                raise Exception(str(data["error"]))
+            text = str(data.get("text") or "").strip()
+            if text:
+                return text
+            raise Exception(f"Proxy returned empty Grok text: {str(data)[:240]}")
+        except urllib.error.HTTPError as exc:
+            raw_error = exc.read().decode("utf-8", errors="ignore")
+            try:
+                payload = json.loads(raw_error)
+            except Exception:
+                payload = None
+            last_error = (payload or {}).get("error") or raw_error or f"Grok proxy request failed with HTTP {exc.code}"
+            if exc.code == 403 and proxy_key != key_candidates[-1]:
+                continue
+            raise Exception(last_error)
+    raise Exception(last_error or "Grok proxy request failed")
 
 
 def _call_with_token(token: str, prompt: str, system: str, max_tokens: int, model: str = "claude-sonnet-4-6") -> str:
@@ -10674,17 +10733,28 @@ def _call_creator_evolution_ai_for_provider(
             _append_debug_event(
                 "creator_evolution",
                 "warn",
-                "grok missing key; using fallback route",
+                "grok missing direct key; trying proxy route",
                 {"lane": lane, "model": _ce_grok_model()},
             )
-            raw = call_claude(
-                prompt,
-                system=system_prompt,
-                max_tokens=max_tokens,
-                timeout_seconds=timeout_seconds,
-            )
-            st.session_state["_ai_last_provider"] = "chatgpt_fallback_for_grok"
-            st.session_state["_ai_last_source"] = "creator_evolution_grok_missing_key_fallback"
+            try:
+                raw = _call_grok_proxy(prompt, system_prompt, max_tokens, timeout=timeout_seconds + 20)
+                st.session_state["_ai_last_route"] = "grok_proxy"
+                st.session_state["_ai_last_provider"] = "grok"
+                st.session_state["_ai_last_source"] = "creator_evolution_proxy"
+                st.session_state["_ai_last_model"] = _ce_grok_model()
+                st.session_state["_ai_last_at"] = datetime.now().isoformat(timespec="seconds")
+                _append_debug_event("creator_evolution", "ok", "grok_proxy", {"model": _ce_grok_model(), "lane": lane})
+            except Exception as e:
+                _record_ai_failure("grok_proxy", e)
+                _append_debug_event("creator_evolution", "error", f"grok_proxy {e}", {"model": _ce_grok_model(), "lane": lane})
+                raw = call_claude(
+                    prompt,
+                    system=system_prompt,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+                st.session_state["_ai_last_provider"] = "chatgpt_fallback_for_grok"
+                st.session_state["_ai_last_source"] = "creator_evolution_grok_missing_key_fallback"
         else:
             _ai_failure_chain_start()
             try:
@@ -11945,7 +12015,12 @@ def _render_creator_evolution_provider_switch():
     with right:
         selected = _ce_selected_ai_provider()
         route = "Grok API via XAI_API_KEY/GROK_API_KEY" if selected == "Grok" else "Root app ChatGPT/OAuth/proxy route"
-        key_state = "ready" if _ce_grok_key_present() else "missing key, using ChatGPT/OAuth fallback"
+        if _ce_grok_key_present():
+            key_state = "ready"
+        elif _ce_grok_proxy_available():
+            key_state = "ready via HQ proxy"
+        else:
+            key_state = "missing key/proxy, using ChatGPT/OAuth fallback"
         detail = f"{route} | model {model} | {key_state}" if selected == "Grok" else route
         st.markdown(
             f"""<div style="border:1px solid rgba(45,212,191,0.18);background:rgba(45,212,191,0.055);border-radius:12px;padding:10px 12px;margin-top:2px;">
