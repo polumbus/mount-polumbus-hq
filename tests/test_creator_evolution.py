@@ -186,7 +186,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("def _ce_testing_generate_pair", app_text)
         self.assertIn("ThreadPoolExecutor(max_workers=2)", app_text)
         self.assertIn("_ce_testing_generate_pair(item, provider, state)", app_text)
-        self.assertIn("_ce_testing_overlay_text(lab_state, lane, fmt)", app_text)
+        self.assertIn("_ce_testing_overlay_text(lab_state, lane, fmt, concept_id=concept_id)", app_text)
         self.assertIn("_ce_voice_learning_text(state, lane)", app_text)
         self.assertNotIn("CE_MONETIZATION_OPTIMIZED_AB_RULES =", app_text)
         self.assertIn("elif str(item).strip() and not selected_lane", app_text)

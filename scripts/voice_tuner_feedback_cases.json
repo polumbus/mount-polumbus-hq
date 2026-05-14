@@ -1,0 +1,29 @@
+[
+  {
+    "id": "comedic_exact_ban",
+    "lane": "Comedic",
+    "format": "Normal Tweet",
+    "concept": "The Nuggets bench keeps turning comfortable leads into fourth-quarter cardio.",
+    "feedback": "do not say things like you can always tell, the whole thing is, the funny part is and let the tweet do its own work without wasted space",
+    "bad_candidate": "The whole thing is the Nuggets bench keeps turning comfortable leads into cardio.",
+    "good_candidate": "The Nuggets bench keeps turning safe leads into fourth-quarter cardio. At some point the non-Jokic minutes need a waiver form."
+  },
+  {
+    "id": "promo_less_salesy",
+    "lane": "Promo",
+    "format": "Normal Tweet",
+    "concept": "Bo Nix may be on track for training camp, but one QB decision will show how much Denver trusts the ankle.",
+    "feedback": "less salesy and make the ending create more tension",
+    "bad_candidate": "This new video is live and you need to watch now because Bo Nix changes everything.",
+    "good_candidate": "The Broncos can say Bo Nix is on track, but the next QB decision says more about the ankle than the press conference does."
+  },
+  {
+    "id": "deadpan_preserve_point",
+    "lane": "Deadpan",
+    "format": "Normal Tweet",
+    "concept": "The Rockies keep calling it a development year, but road series keep exposing the lineup.",
+    "feedback": "keep the point about the road series and make it less polished",
+    "bad_candidate": "The Rockies are navigating a complex development environment with room for improvement.",
+    "good_candidate": "The Rockies keep calling it a development year. The road series keep providing very calm evidence that the lineup has not joined the project yet."
+  }
+]

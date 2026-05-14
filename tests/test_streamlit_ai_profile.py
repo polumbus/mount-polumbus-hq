@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
@@ -96,19 +95,21 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
 
     assert "def _ce_testing_feedback_lines" in source
     assert "def _ce_repair_voice_tuner_feedback_generation" in source
-    assert "def _ce_feedback_forbidden_phrases" in source
-    assert "def _ce_feedback_violation_hits" in source
+    assert "import voice_tuner_feedback as vtf" in source
+    assert "def _ce_testing_feedback_rules" in source
+    assert "def _ce_add_voice_tuner_feedback" in source
     assert "def _ce_wasted_space_frame_hits" in source
     assert "the funny part is" in source
     assert "the whole thing is" in source
     assert "you can always tell" in source
     assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []" in generate_body
-    assert "feedback_forbidden_phrases = _ce_feedback_forbidden_phrases(applied_feedback) if testing_copy else []" in generate_body
-    assert "_ce_validate_generation_options(data, fmt, lane, forbidden_phrases=feedback_forbidden_phrases)" in generate_body
-    assert "len(passing_ids) < 3 and not applied_feedback" in generate_body
+    assert "feedback_rules = _ce_testing_feedback_rules(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else []" in generate_body
+    assert "_ce_validate_generation_options(data, fmt, lane, feedback_rules=feedback_rules, source_text=concept)" in generate_body
+    assert "candidate_count = _ce_testing_candidate_count(testing_copy)" in generate_body
     assert "_ce_repair_voice_tuner_feedback_generation(" in generate_body
     assert '"repair_attempted": repair_attempted' in generate_body
-    assert '"feedback_forbidden_phrases": feedback_forbidden_phrases' in generate_body
+    assert '"feedback_rules": feedback_rules' in generate_body
+    assert '"feedback_score": round(sum(feedback_scores) / max(len(feedback_scores), 1))' in generate_body
     assert "if len(fallback_passing) >= 3:" in generate_body
     assert '"applied_feedback": applied_feedback[-20:]' in generate_body
     assert "Save sharper feedback" not in generate_body
@@ -116,31 +117,18 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert "The funny part is" not in fallback_body
     assert "The whole thing is" not in fallback_body
     assert "You can always tell" not in fallback_body
-    assert "Voice Tuner blocked this result because it could not satisfy the saved feedback constraints." in card_body
+    assert "I could not make a clean tuned version with those hard constraints" in card_body
     assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
     assert "Regenerating A/B test with your feedback" in page_body
     assert "Feedback saved and regenerated." in page_body
 
 
-def test_voice_tuner_extracts_exact_bans_from_plain_feedback():
+def test_voice_tuner_uses_structured_feedback_module_for_exact_bans():
     source = APP.read_text(encoding="utf-8")
-    helper_source = (
-        "CE_WASTED_SPACE_FRAMES"
-        + source.split("CE_WASTED_SPACE_FRAMES", 1)[1].split("def _ce_prepare_generated_option", 1)[0]
-    )
-    namespace = {"re": re}
-    exec(helper_source, namespace)
+    body = source[source.index("def _ce_feedback_forbidden_phrases") : source.index("def _ce_prepare_generated_option")]
 
-    phrases = namespace["_ce_feedback_forbidden_phrases"]([
-        "do not say things like you can always tell, the whole thing is, the funny part is and let the tweet do its own work without wasted space"
-    ])
-
-    assert "you can always tell" in phrases
-    assert "the whole thing is" in phrases
-    assert "the funny part is" in phrases
-    assert "t say things like" not in phrases
-    assert "everything on the table this summer" not in phrases
-    assert namespace["_ce_feedback_violation_hits"]("The whole thing is the Nuggets bench still looks lost.", phrases) == ["the whole thing is"]
+    assert "vtf.compile_voice_feedback" in body
+    assert "vtf.evaluate_feedback_constraints" in body
 
 
 if __name__ == "__main__":
@@ -153,4 +141,4 @@ if __name__ == "__main__":
     test_voice_tuner_is_in_mobile_owner_nav()
     test_creator_evolution_whats_hot_uses_studio_discovery_cache()
     test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback()
-    test_voice_tuner_extracts_exact_bans_from_plain_feedback()
+    test_voice_tuner_uses_structured_feedback_module_for_exact_bans()
