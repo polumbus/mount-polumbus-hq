@@ -1,0 +1,33 @@
+1
+00:00:02,500 --> 00:00:05,332
+Profile Analyzer lets you study another
+account's strategy, voice, and
+
+2
+00:00:05,332 --> 00:00:08,164
+engagement patterns so you can learn from
+them without copying
+
+3
+00:00:08,164 --> 00:00:10,996
+blindly.
+
+4
+00:00:10,996 --> 00:00:15,112
+Start with the handle you want to study.
+This lets the tool pull
+
+5
+00:00:15,112 --> 00:00:19,228
+recent posts, summarize the voice, and
+surface repeatable tactics.
+
+6
+00:00:19,228 --> 00:00:23,356
+Hit Research and the analyzer breaks down
+the account's themes, tone,
+
+7
+00:00:23,356 --> 00:00:27,484
+engagement tactics, and where your own
+edge is stronger.

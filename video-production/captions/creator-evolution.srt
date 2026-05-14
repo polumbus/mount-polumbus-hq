@@ -1,0 +1,23 @@
+1
+00:00:02,000 --> 00:00:05,664
+Creator Evolution is the advanced creation
+engine. Start with the
+
+2
+00:00:05,664 --> 00:00:09,328
+messy idea, choose the format and voice,
+then let the system turn it
+
+3
+00:00:09,328 --> 00:00:12,992
+into options that sound like the account.
+
+4
+00:00:12,992 --> 00:00:17,732
+The workflow is simple. Raw angle in,
+format selected, voice selected,
+
+5
+00:00:17,732 --> 00:00:22,472
+and then the strongest generated option
+becomes the post candidate.

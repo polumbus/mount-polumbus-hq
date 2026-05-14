@@ -1,0 +1,41 @@
+1
+00:00:02,500 --> 00:00:05,932
+Content Coach gives you strategy, not just
+output. Amplifier uses your
+
+2
+00:00:05,932 --> 00:00:09,364
+history, your patterns, and the algorithm
+to tell you what to post
+
+3
+00:00:09,364 --> 00:00:12,796
+next and why it should work.
+
+4
+00:00:12,796 --> 00:00:17,020
+You can keep the answer as general advice
+or force the recommendation
+
+5
+00:00:17,020 --> 00:00:21,244
+into a post format like a normal tweet,
+thread, or article.
+
+6
+00:00:21,244 --> 00:00:24,328
+Ask a direct question tied to what you
+want to improve. The better the
+
+7
+00:00:24,328 --> 00:00:27,412
+question, the more useful the answer.
+
+8
+00:00:27,412 --> 00:00:30,700
+Hit Send and Amplifier answers with
+strategy grounded in your voice,
+
+9
+00:00:30,700 --> 00:00:33,988
+your data, and the algorithm.

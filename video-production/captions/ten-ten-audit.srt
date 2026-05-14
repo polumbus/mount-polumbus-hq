@@ -1,0 +1,22 @@
+1
+00:00:02,000 --> 00:00:05,176
+10 out of 10 Audit is the internal quality
+control page. Pick an area,
+
+2
+00:00:05,176 --> 00:00:08,352
+review what is not good enough yet, then
+turn the gaps into a fix
+
+3
+00:00:08,352 --> 00:00:11,528
+list.
+
+4
+00:00:11,528 --> 00:00:15,092
+This page is for making quality visible.
+It separates what works, what
+
+5
+00:00:15,092 --> 00:00:18,656
+is weak, and what should be fixed next.

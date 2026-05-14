@@ -1,0 +1,41 @@
+{
+  "title": "Reply Mode Walkthrough",
+  "subtitle": "Create useful replies without sounding generic",
+  "output_name": "reply-mode-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Reply+Mode",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Reply Mode and show the reply workflow.",
+      "narration": "Reply Mode is for daily engagement. Paste the post you want to respond to, generate options, then pick the reply that adds something specific.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Reply+Mode" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "choose",
+      "caption": "Pick the strongest response.",
+      "narration": "The finished action is simple. Pick the strongest reply, edit if needed, and use it as today's engagement move.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+1
+00:00:02,000 --> 00:00:06,548
+Debug Console is owner-only. It is used
+for safe diagnostics when AI,
+
+2
+00:00:06,548 --> 00:00:11,096
+posting, sync, or integrations are not
+working.
+
+3
+00:00:11,096 --> 00:00:14,528
+The value is a go or no-go read on route,
+proxy, and app health
+
+4
+00:00:14,528 --> 00:00:17,960
+without exposing secrets in the video.

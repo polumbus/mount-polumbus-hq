@@ -1,0 +1,41 @@
+{
+  "title": "Creator Evolution Walkthrough",
+  "subtitle": "Turn a rough idea into polished options",
+  "output_name": "creator-evolution-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Creator+Evolution",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Creator Evolution and frame the tool.",
+      "narration": "Creator Evolution is the advanced creation engine. Start with the messy idea, choose the format and voice, then let the system turn it into options that sound like the account.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Creator+Evolution" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "workflow",
+      "caption": "Show the raw idea, format, voice, and output area.",
+      "narration": "The workflow is simple. Raw angle in, format selected, voice selected, and then the strongest generated option becomes the post candidate.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

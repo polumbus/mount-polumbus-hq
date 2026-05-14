@@ -1,0 +1,17 @@
+1
+00:00:02,000 --> 00:00:05,588
+Signals and Prompts helps you find what to
+talk about today. It turns
+
+2
+00:00:05,588 --> 00:00:09,176
+timely signals into usable prompt ideas.
+
+3
+00:00:09,176 --> 00:00:12,656
+The workflow is to pick the strongest
+signal, open the brief, then use
+
+4
+00:00:12,656 --> 00:00:16,136
+the generated prompt in the writing tool.

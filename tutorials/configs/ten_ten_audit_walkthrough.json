@@ -1,0 +1,41 @@
+{
+  "title": "10/10 Audit Walkthrough",
+  "subtitle": "Turn weak spots into a fix list",
+  "output_name": "ten-ten-audit-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "10/10+Audit",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open 10/10 Audit and show the quality-control view.",
+      "narration": "10 out of 10 Audit is the internal quality control page. Pick an area, review what is not good enough yet, then turn the gaps into a fix list.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "10/10+Audit" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "fixlist",
+      "caption": "Show findings and the roadmap idea.",
+      "narration": "This page is for making quality visible. It separates what works, what is weak, and what should be fixed next.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

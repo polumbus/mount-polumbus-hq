@@ -1,0 +1,41 @@
+1
+00:00:02,500 --> 00:00:06,592
+Article Writer expands a tweet, dump, or
+scratch idea into a long-form
+
+2
+00:00:06,592 --> 00:00:10,684
+piece without starting from a blank page.
+
+3
+00:00:10,684 --> 00:00:14,608
+Choose whether the article starts from
+tweets, raw thoughts, or
+
+4
+00:00:14,608 --> 00:00:18,532
+scratch. That keeps the workflow connected
+to the rest of the app.
+
+5
+00:00:18,532 --> 00:00:22,012
+Paste the central idea or take you want to
+expand. Article Writer uses
+
+6
+00:00:22,012 --> 00:00:25,492
+that seed to build the full structure.
+
+7
+00:00:25,492 --> 00:00:28,324
+If you want structure before the full
+article, generate the outline
+
+8
+00:00:28,324 --> 00:00:31,156
+first. That gives you a clear roadmap
+before the long- form draft is
+
+9
+00:00:31,156 --> 00:00:33,988
+written.

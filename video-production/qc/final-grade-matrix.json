@@ -1,6 +1,6 @@
 {
   "APPROVED_FOR_PUBLIC_RELEASE": false,
-  "blockedReason": "Final videos and five-agent 10/10 reviews are not complete.",
+  "blockedReason": "Five-agent 10/10 reviews are not complete.",
   "requiredAgents": [
     "STYLE_MATCH_DIRECTOR",
     "PRODUCT_EDUCATION_REVIEWER",
@@ -10,79 +10,98 @@
   ],
   "videos": {
     "overview": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "creator-evolution": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "voice-tuner": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "creator-studio": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "raw-thoughts": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "content-coach": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "article-writer": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "reply-mode": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "idea-bank": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "post-history": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "algorithm-score": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "account-audit": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "my-stats": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "profile-analyzer": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "signals-prompts": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "fan-pulse-gameday": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "deterministic-safe-demo",
       "grades": {}
     },
     "podcast": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "ten-ten-audit": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     },
     "debug-console": {
-      "status": "not_rendered",
+      "status": "rendered_automated_qc_passed",
+      "renderSource": "existing-browser-walkthrough",
       "grades": {}
     }
   }

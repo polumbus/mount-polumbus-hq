@@ -1,0 +1,41 @@
+{
+  "title": "Podcast Walkthrough",
+  "subtitle": "Move an episode from source to published assets",
+  "output_name": "podcast-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Podcast",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Podcast and show the workflow tracker.",
+      "narration": "Podcast keeps an episode moving from source to final assets. It tracks transcript, packaging, clips, approvals, publishing, and final verification.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Podcast" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "gates",
+      "caption": "Show the workflow gates and approval idea.",
+      "narration": "The important part is control. Each step has a place, and publishing should not happen until the right approval gate is complete.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

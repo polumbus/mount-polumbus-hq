@@ -1,0 +1,41 @@
+{
+  "title": "Signals & Prompts Walkthrough",
+  "subtitle": "Find timely ideas instead of starting cold",
+  "output_name": "signals-prompts-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Signals+%26+Prompts",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Signals & Prompts and show timely ideas.",
+      "narration": "Signals and Prompts helps you find what to talk about today. It turns timely signals into usable prompt ideas.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Signals+%26+Prompts" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "prompt",
+      "caption": "Turn one signal into a prompt.",
+      "narration": "The workflow is to pick the strongest signal, open the brief, then use the generated prompt in the writing tool.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "title": "Creator Studio Walkthrough",
+  "subtitle": "Draft fast, grade, and save the best version",
+  "output_name": "creator-studio-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Creator+Studio",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open Creator Studio and show the fast draft workspace.",
+      "narration": "Creator Studio is the quick drafting room. Start with a rough idea, choose the format and voice, generate options, then grade the result.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Creator+Studio" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "save",
+      "caption": "Save the best idea.",
+      "narration": "If the draft is strong, save it to the Idea Bank so the best version does not disappear.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

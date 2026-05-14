@@ -275,6 +275,9 @@ async def click_button(page, text: str) -> None:
 
 
 async def get_app_frame(page):
+    if page.url.startswith("http://127.0.0.1:") or page.url.startswith("http://localhost:"):
+        await page.wait_for_load_state("domcontentloaded", timeout=120000)
+        return page
     await page.locator("iframe").first.wait_for(timeout=120000)
     deadline = asyncio.get_running_loop().time() + 120
     while asyncio.get_running_loop().time() < deadline:
@@ -290,13 +293,15 @@ async def perform_action(page, action: dict[str, Any], app_url: str, token: str)
     if kind == "goto_creator_studio":
         target = f"{app_url}/?token={token}&user=owner&page=Creator+Studio"
         await page.goto(target, wait_until="domcontentloaded", timeout=120000)
-        await get_app_frame(page)
+        frame = await get_app_frame(page)
+        await sanitize_demo_dom(frame)
         return
     if kind == "goto_page":
         page_name = action["page"]
         target = f"{app_url}/?token={token}&user=owner&page={page_name}"
         await page.goto(target, wait_until="domcontentloaded", timeout=120000)
-        await get_app_frame(page)
+        frame = await get_app_frame(page)
+        await sanitize_demo_dom(frame)
         return
     target = await get_app_frame(page)
     if kind == "wait_for_text":
@@ -304,30 +309,66 @@ async def perform_action(page, action: dict[str, Any], app_url: str, token: str)
         return
     if kind == "wait":
         await target.wait_for_timeout(int(float(action.get("seconds", 1)) * 1000))
+        await sanitize_demo_dom(target)
         return
     if kind == "fill_textarea":
         area = target.locator("textarea").first
         await area.wait_for(timeout=120000)
         await area.fill(action["text"])
+        await sanitize_demo_dom(target)
         return
     if kind == "fill_input":
         field = target.locator("input[type='text'], input:not([type]), input[placeholder]").first
         await field.wait_for(timeout=120000)
         await field.fill(action["text"])
+        await sanitize_demo_dom(target)
         return
     if kind == "click_text":
         await click_by_text(target, action["text"])
+        await sanitize_demo_dom(target)
         return
     if kind == "click_button":
         await click_button(target, action["text"])
+        await sanitize_demo_dom(target)
         return
     if kind == "click_dock":
         dock = action["dock"]
         locator = target.locator(f".cs-idock-btn[data-dock='{dock}']")
         await locator.first.wait_for(timeout=120000)
         await locator.first.click(force=True)
+        await sanitize_demo_dom(target)
         return
     raise RuntimeError(f"Unsupported action type: {kind}")
+
+
+async def sanitize_demo_dom(target) -> None:
+    await target.evaluate(
+        """() => {
+            const replacements = [
+                [/tyler_polumbus/gi, 'demo_creator'],
+                [/@TYLER_POL\\w*/gi, '@DEMO_CREATOR'],
+                [/@HarrisonWind/gi, '@demo_signal'],
+                [/@VicLombardi/gi, '@demo_signal'],
+                [/@TroyRenck/gi, '@demo_signal'],
+                [/@DNVR_Nuggets/gi, '@demo_signal'],
+                [/ngrok[-a-z0-9.]*\\.dev/gi, 'demo-proxy.local'],
+                [/X List ID/gi, 'Demo List ID'],
+                [/Update Posts/gi, 'Demo Sync Disabled'],
+                [/Run Live AI Probe/gi, 'Demo AI Probe Disabled'],
+                [/Run Backend Test Suite/gi, 'Demo Backend Checks'],
+                [/X POST/gi, 'Demo Post Disabled']
+            ];
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            for (const node of nodes) {
+                let value = node.nodeValue || '';
+                for (const [pattern, replacement] of replacements) value = value.replace(pattern, replacement);
+                if (value.trim() === '500') value = value.replace('500', 'demo');
+                node.nodeValue = value;
+            }
+        }"""
+    )
 
 
 def relative_now(started_at: float) -> float:
@@ -406,6 +447,11 @@ async def record_tutorial(
                 still_path = stills_dir / f"{scene['id']}.png"
                 if scene["id"] == "landing":
                     await page.wait_for_timeout(5000)
+                try:
+                    await sanitize_demo_dom(await get_app_frame(page))
+                    await page.wait_for_timeout(250)
+                except Exception:
+                    pass
                 await page.screenshot(path=str(still_path))
                 timelines.append(
                     SceneTimeline(

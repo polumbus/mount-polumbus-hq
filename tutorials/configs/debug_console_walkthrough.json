@@ -1,0 +1,41 @@
+{
+  "title": "Debug Console Walkthrough",
+  "subtitle": "Owner-only visibility into safe demo health checks",
+  "output_name": "debug-console-walkthrough",
+  "app_url": "http://127.0.0.1:8501",
+  "page": "Debug+Console",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "voice": "en-US-AndrewNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "lead_in_seconds": 2.0,
+  "tail_seconds": 1.0,
+  "scenes": [
+    {
+      "id": "landing",
+      "caption": "Open the owner-only command center in sanitized demo capture.",
+      "narration": "Debug Console is owner-only. It is used for safe diagnostics when AI, posting, sync, or integrations are not working.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "goto_page", "page": "Debug+Console" },
+        { "type": "wait", "seconds": 2.0 }
+      ]
+    },
+    {
+      "id": "safe",
+      "caption": "Show provider and app health without exposing secrets.",
+      "narration": "The value is a go or no-go read on route, proxy, and app health without exposing secrets in the video.",
+      "edit": {
+        "use_screenshot": true
+      },
+      "actions": [
+        { "type": "wait", "seconds": 1.5 }
+      ]
+    }
+  ]
+}

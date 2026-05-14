@@ -1,0 +1,23 @@
+1
+00:00:02,000 --> 00:00:05,600
+Podcast keeps an episode moving from
+source to final assets. It tracks
+
+2
+00:00:05,600 --> 00:00:09,200
+transcript, packaging, clips, approvals,
+publishing, and final
+
+3
+00:00:09,200 --> 00:00:12,800
+verification.
+
+4
+00:00:12,800 --> 00:00:16,460
+The important part is control. Each step
+has a place, and publishing
+
+5
+00:00:16,460 --> 00:00:20,120
+should not happen until the right approval
+gate is complete.
