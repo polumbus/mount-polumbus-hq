@@ -92,6 +92,7 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     generate_body = source[source.index("def _ce_testing_generate(") : source.index("def _ce_testing_generate_pair")]
     fallback_body = source[source.index("def _ce_lane_fallback_angles") : source.index("def _ce_build_fallback_text")]
     page_body = source[source.index("def page_voice_tuner") : source.index("def page_testing")]
+    card_body = source[source.index("def _render_ce_testing_output_card") : source.index("def page_voice_tuner")]
 
     assert "def _ce_testing_feedback_lines" in source
     assert "def _ce_repair_voice_tuner_feedback_generation" in source
@@ -115,6 +116,7 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert "The funny part is" not in fallback_body
     assert "The whole thing is" not in fallback_body
     assert "You can always tell" not in fallback_body
+    assert "Voice Tuner blocked this result because it could not satisfy the saved feedback constraints." in card_body
     assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
     assert "Regenerating A/B test with your feedback" in page_body
     assert "Feedback saved and regenerated." in page_body
@@ -136,6 +138,8 @@ def test_voice_tuner_extracts_exact_bans_from_plain_feedback():
     assert "you can always tell" in phrases
     assert "the whole thing is" in phrases
     assert "the funny part is" in phrases
+    assert "t say things like" not in phrases
+    assert "everything on the table this summer" not in phrases
     assert namespace["_ce_feedback_violation_hits"]("The whole thing is the Nuggets bench still looks lost.", phrases) == ["the whole thing is"]
 
 

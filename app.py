@@ -4460,7 +4460,8 @@ def _ce_feedback_forbidden_phrases(feedback_lines: list[str]) -> list[str]:
         "don't say", "dont say", "do not say", "not say", "never say", "stop saying",
         "avoid saying", "avoid", "no more", "without",
     )
-    splitter = re.compile(r"\s*(?:,|;|/|\bor\b|\band\b)\s*", re.I)
+    example_markers = ("things like", "phrases like", "words like")
+    splitter = re.compile(r"\s*(?:,|;|/|\bor\b)\s*", re.I)
     for raw_line in feedback_lines[-20:]:
         line = re.sub(r"\s+", " ", str(raw_line or "")).strip()
         lower = line.lower()
@@ -4475,17 +4476,29 @@ def _ce_feedback_forbidden_phrases(feedback_lines: list[str]) -> list[str]:
             if re.search(rf"\b{re.escape(known)}\b", lower):
                 if known not in forbidden:
                     forbidden.append(known)
-        tail = line
-        for marker in ("things like", "phrases like", "words like", "like ", "say "):
+        tail = ""
+        for marker in example_markers:
             idx = lower.find(marker)
             if idx >= 0:
                 tail = line[idx + len(marker):]
                 break
-        tail = re.split(r"\b(?:instead|because|so that|then immediately|immediately got)\b", tail, 1, flags=re.I)[0]
+        if not tail:
+            continue
+        tail = re.split(
+            r"\b(?:and\s+let|and\s+make|and\s+have|and\s+then|and\s+the\s+tweet|"
+            r"let\s+the\s+tweet|without\s+wasted|instead|because|so\s+that|"
+            r"then\s+immediately|immediately\s+got)\b",
+            tail,
+            1,
+            flags=re.I,
+        )[0]
         for piece in splitter.split(tail):
             clean = re.sub(r"\s+", " ", piece).strip(" .,:;!?\"'“”‘’").lower()
             words = re.findall(r"[a-z0-9']+", clean)
-            if 2 <= len(words) <= 6 and clean not in {"things like", "phrases like", "words like"}:
+            looks_like_phrase_example = clean.startswith((
+                "the ", "you ", "you can ", "here's ", "heres ", "what's ", "whats ",
+            ))
+            if 2 <= len(words) <= 6 and looks_like_phrase_example:
                 if clean not in forbidden:
                     forbidden.append(clean)
     return forbidden[:25]
@@ -12578,6 +12591,8 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
         if status == "repaired"
         else "Not generated"
         if status == "missing"
+        else "Blocked"
+        if status == "error" and result.get("repair_attempted") and result.get("applied_feedback")
         else "Needs retry"
     )
     st.markdown(f"**{title}**")
@@ -12593,7 +12608,10 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
     options = result.get("options") if isinstance(result, dict) else []
     if not options:
         if status == "error":
-            st.warning("This side could not generate. Try again or switch model.")
+            if result.get("repair_attempted") and result.get("applied_feedback"):
+                st.warning("Voice Tuner blocked this result because it could not satisfy the saved feedback constraints. Generate again.")
+            else:
+                st.warning("This side could not generate. Try again or switch model.")
         else:
             st.info("Click Generate to see drafts.")
         return
