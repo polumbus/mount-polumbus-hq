@@ -12234,6 +12234,23 @@ def _ce_testing_generation_key(item: dict, *parts: str) -> str:
     return "|".join([str(item.get("id", "concept")), *parts])
 
 
+def _ce_guided_feedback_text(voice: str, issue: str, direction: str, ending: str, manual_note: str = "") -> str:
+    parts = [f"For {voice}, tune Option B:"]
+    issue = str(issue or "").strip()
+    direction = str(direction or "").strip()
+    ending = str(ending or "").strip()
+    manual_note = str(manual_note or "").strip()
+    if issue and issue != "No specific issue":
+        parts.append(f"fix the main issue: {issue.lower()}.")
+    if direction and direction != "No change":
+        parts.append(f"make it {direction.lower()}.")
+    if ending and ending != "No change":
+        parts.append(f"adjust the ending so it {ending.lower()}.")
+    if manual_note:
+        parts.append(manual_note)
+    return " ".join(parts).strip()
+
+
 def _render_ce_testing_output_card(title: str, result: dict) -> None:
     status = str(result.get("status", "missing"))
     provider = str(result.get("provider", ""))
@@ -12405,6 +12422,79 @@ def page_voice_tuner():
 
     st.markdown("### 3. Improve Or Apply")
     st.caption("Use feedback to change only Option B. Apply live only when this selected voice is ready.")
+    with st.expander("Not sure what to say? Use guided feedback", expanded=False):
+        st.caption("Pick the closest choices. This saves a sandbox note for Option B.")
+        with st.form(f"ce_voice_tuner_guided_feedback_form_{item['id']}"):
+            guide_cols = st.columns(3)
+            with guide_cols[0]:
+                guided_issue = st.selectbox(
+                    "What feels wrong?",
+                    [
+                        "No specific issue",
+                        "Too long",
+                        "Too generic",
+                        "Too polished",
+                        "Too much setup",
+                        "Not enough voice",
+                        "Not enough tension",
+                        "Ending is weak",
+                        "Loses my original point",
+                    ],
+                    key=f"ce_voice_tuner_guided_issue_{item['id']}",
+                )
+            with guide_cols[1]:
+                guided_direction = st.selectbox(
+                    "Make it more...",
+                    [
+                        "No change",
+                        "direct",
+                        "specific",
+                        "human",
+                        "witty",
+                        "sharp",
+                        "compressed",
+                        "emotional",
+                        "consequence-driven",
+                    ],
+                    key=f"ce_voice_tuner_guided_direction_{item['id']}",
+                )
+            with guide_cols[2]:
+                guided_ending = st.selectbox(
+                    "Ending should...",
+                    [
+                        "No change",
+                        "hit harder",
+                        "create an implied question",
+                        "end with a sharper consequence",
+                        "sound less formulaic",
+                        "avoid an ellipsis",
+                        "use an open loop",
+                        "make people want to reply",
+                    ],
+                    key=f"ce_voice_tuner_guided_ending_{item['id']}",
+                )
+            guided_manual = st.text_area(
+                "Optional extra note",
+                placeholder="Example: keep my original point about Payton's trust, but make the last sentence less wordy.",
+                height=80,
+                key=f"ce_voice_tuner_guided_manual_{item['id']}",
+            )
+            guided_submitted = st.form_submit_button("Save Guided Feedback", type="primary", use_container_width=True)
+        if guided_submitted:
+            guided_text = _ce_guided_feedback_text(selected_lane, guided_issue, guided_direction, guided_ending, guided_manual)
+            if guided_text and guided_text != f"For {selected_lane}, tune Option B:":
+                state.setdefault("feedback", []).append({
+                    "lane": item["lane"],
+                    "concept_id": item["id"],
+                    "text": guided_text,
+                    "source": "guided",
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                })
+                _save_ce_testing_state(state)
+                st.toast("Guided feedback saved to the sandbox.")
+                st.rerun()
+            else:
+                st.warning("Choose at least one guided feedback option or write a note.")
     feedback_key = f"ce_voice_tuner_feedback_{item['id']}"
     with st.form(f"ce_voice_tuner_feedback_form_{item['id']}", clear_on_submit=True):
         feedback = st.text_area(

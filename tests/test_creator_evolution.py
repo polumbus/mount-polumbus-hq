@@ -164,6 +164,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Option B: Tuned Sandbox Version", app_text)
         self.assertIn("History and advanced details", app_text)
         self.assertIn("Apply or remove live tuning", app_text)
+        self.assertIn("Not sure what to say? Use guided feedback", app_text)
+        self.assertIn("Save Guided Feedback", app_text)
+        self.assertIn("def _ce_guided_feedback_text", app_text)
         self.assertIn("def _ce_selected_tuning_rules", app_text)
         self.assertIn("def _ce_testing_generate_pair", app_text)
         self.assertIn("ThreadPoolExecutor(max_workers=2)", app_text)
@@ -222,6 +225,26 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("one more qb decision", ce.voice_tuner_test_prompt("Promo", "Long Tweet", 0).lower())
         self.assertIn("group project", ce.voice_tuner_test_prompt("Comedic", "Normal Tweet", 0).lower())
         self.assertIn("politely reminds", ce.voice_tuner_test_prompt("Deadpan", "Normal Tweet", 0).lower())
+
+    def test_voice_tuner_guided_feedback_builds_plain_english_note(self):
+        app_text = Path("app.py").read_text()
+        namespace = {}
+        helper_source = app_text.split("def _ce_guided_feedback_text", 1)[1].split("def _render_ce_testing_output_card", 1)[0]
+        exec("def _ce_guided_feedback_text" + helper_source, namespace)
+        text = namespace["_ce_guided_feedback_text"](
+            "Promo",
+            "Too much setup",
+            "compressed",
+            "use an open loop",
+            "Keep the YouTube reason to watch.",
+        )
+
+        self.assertIn("For Promo, tune Option B", text)
+        self.assertIn("too much setup", text)
+        self.assertIn("make it compressed", text)
+        self.assertIn("use an open loop", text)
+        self.assertIn("Keep the YouTube reason to watch.", text)
+
         app_text = Path("app.py").read_text()
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
         ce_ai = app_text.split("def _call_creator_evolution_ai", 1)[1].split("def _run_ce_ai", 1)[0]
