@@ -12190,7 +12190,6 @@ def _ce_testing_item_for_voice(concepts: list[dict], selected_lane: str, fallbac
 def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | None = None) -> str:
     selected_lane = _ce_normalize_lane(lane) if lane else ""
     selected_fmt = _normalize_tweet_format(fmt or CANONICAL_TWEET_DEFAULT_FORMAT)
-    feedback = state.get("feedback", []) if isinstance(state, dict) else []
     lines = [
         "CREATOR EVOLUTION OPTION B SANDBOX OVERRIDES:",
         "These rules apply only to Option B on the Voice Tuner page. They do not change Option A or live Creator Evolution.",
@@ -12198,7 +12197,19 @@ def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | No
         "Preserve Creator Evolution learning profiles, approved rules, source preservation, stat integrity, and quality gates.",
         _ce_selected_tuning_rules(selected_fmt, selected_lane) if selected_lane else "No selected voice is active. Use baseline Creator Evolution rules.",
     ]
-    clean_feedback = []
+    clean_feedback = _ce_testing_feedback_lines(state, selected_lane)
+    if clean_feedback:
+        lines.append("Apply this sandbox feedback after the selected Option B rules:")
+        lines.extend(f"- {text}" for text in clean_feedback[-20:])
+    else:
+        lines.append("No extra sandbox feedback has been added for this selected voice yet.")
+    return "\n".join(lines)
+
+
+def _ce_testing_feedback_lines(state: dict, lane: str | None = None) -> list[str]:
+    selected_lane = _ce_normalize_lane(lane) if lane else ""
+    feedback = state.get("feedback", []) if isinstance(state, dict) else []
+    clean_feedback: list[str] = []
     for item in feedback:
         if isinstance(item, dict):
             text = str(item.get("text", "")).strip()
@@ -12210,12 +12221,7 @@ def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | No
                 clean_feedback.append(f"{lane_label}: {text}" if lane_label else text)
         elif str(item).strip() and not selected_lane:
             clean_feedback.append(str(item).strip())
-    if clean_feedback:
-        lines.append("Apply this sandbox feedback after the selected Option B rules:")
-        lines.extend(f"- {text}" for text in clean_feedback[-20:])
-    else:
-        lines.append("No extra sandbox feedback has been added for this selected voice yet.")
-    return "\n".join(lines)
+    return clean_feedback
 
 
 def _ce_testing_max_tokens(fmt: str) -> int:
@@ -12236,6 +12242,7 @@ def _ce_testing_generate(
     prompt = _ce_build_generation_prompt(concept, fmt, lane, state, action="testing")
     lab_state = lab_state_override if isinstance(lab_state_override, dict) else _ce_testing_state()
     overlay = _ce_testing_overlay_text(lab_state, lane, fmt) if testing_copy else ""
+    applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []
     raw = _call_creator_evolution_ai_for_provider(
         prompt,
         lane,
@@ -12261,7 +12268,7 @@ def _ce_testing_generate(
     data = {f"option{idx}": options[idx - 1] if idx - 1 < len(options) else "" for idx in [1, 2, 3]}
     quality_report = _ce_validate_generation_options(data, fmt, lane) if options else {}
     passing_ids = _ce_passing_option_ids(data, quality_report) if options else []
-    if status != "error" and len(passing_ids) < 3:
+    if status != "error" and len(passing_ids) < 3 and not applied_feedback:
         fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(concept, fmt, lane)
         if fallback_passing:
             data = fallback_data
@@ -12271,6 +12278,8 @@ def _ce_testing_generate(
             status = "repaired"
         elif not options:
             status = "error"
+    elif status != "error" and len(passing_ids) < 3 and applied_feedback:
+        status = "needs_retry"
     return {
         "status": status,
         "provider": provider,
@@ -12282,7 +12291,15 @@ def _ce_testing_generate(
         "options": options,
         "quality_report": quality_report,
         "passing_option_ids": passing_ids,
-        "user_message": "Generation needed repair, so Voice Tuner replaced weak drafts with safer output." if status == "repaired" else "",
+        "applied_feedback": applied_feedback[-20:],
+        "overlay_hash": hashlib.sha1(overlay.encode()).hexdigest()[:8] if overlay else "",
+        "user_message": (
+            "Generation needed repair, so Voice Tuner replaced weak drafts with safer output."
+            if status == "repaired"
+            else "Sandbox feedback was applied, but the result still missed quality gates. Save sharper feedback or generate again."
+            if status == "needs_retry"
+            else ""
+        ),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -12320,6 +12337,12 @@ def _ce_testing_generation_key(item: dict, *parts: str) -> str:
     return "|".join([str(item.get("id", "concept")), *parts])
 
 
+def _ce_voice_tuner_generation_key(item: dict, provider: str, state: dict, lane: str, fmt: str) -> str:
+    prompt_hash = hashlib.sha1(str(item.get("concept", "") or "").encode()).hexdigest()[:8]
+    overlay_hash = hashlib.sha1(_ce_testing_overlay_text(state, lane, fmt).encode()).hexdigest()[:8]
+    return _ce_testing_generation_key(item, "voice_tuner", provider, prompt_hash, overlay_hash)
+
+
 def _ce_guided_feedback_text(voice: str, issue: str, direction: str, ending: str, manual_note: str = "") -> str:
     parts = [f"For {voice}, tune Option B:"]
     issue = str(issue or "").strip()
@@ -12345,7 +12368,10 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
     st.markdown(f"**{title}**")
     st.caption(f"{status_label} | Quality {grade['status']} | {provider or 'model pending'}")
     if result.get("user_message"):
-        st.caption("Weak drafts were repaired automatically before showing them here.")
+        st.caption(str(result.get("user_message")))
+    applied_feedback = result.get("applied_feedback") if isinstance(result, dict) else []
+    if applied_feedback:
+        st.caption(f"Applied sandbox notes: {len(applied_feedback)} | prompt {result.get('overlay_hash', '')}")
     options = result.get("options") if isinstance(result, dict) else []
     if not options:
         if status == "error":
@@ -12492,7 +12518,7 @@ def page_voice_tuner():
     if current_pref:
         pref_label = {"Baseline": "Option A", "Testing": "Option B", "Tie": "Tie"}.get(str(current_pref.get("choice", "")), "Unknown")
         st.caption(f"Previous choice: {pref_label}")
-    gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state, selected_lane, selected_fmt).encode()).hexdigest()[:8])
+    gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)
     show_saved_generation = state.get("active_generation_key") == gen_key
     existing = generations.get(gen_key, {}) if show_saved_generation and isinstance(generations.get(gen_key), dict) else {}
     if st.button("Generate A/B Test", type="primary", use_container_width=True):
@@ -12578,8 +12604,12 @@ def page_voice_tuner():
                     "source": "guided",
                     "at": datetime.now().isoformat(timespec="seconds"),
                 })
+                next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)
+                with st.spinner("Regenerating A/B test with your feedback..."):
+                    generations[next_gen_key] = _ce_testing_generate_pair(item, provider, state)
+                state["active_generation_key"] = next_gen_key
                 _save_ce_testing_state(state)
-                st.toast("Guided feedback saved to the sandbox.")
+                st.toast("Guided feedback saved and regenerated.")
                 st.rerun()
             else:
                 st.warning("Choose at least one guided feedback option or write a note.")
@@ -12599,8 +12629,12 @@ def page_voice_tuner():
             "text": feedback.strip(),
             "at": datetime.now().isoformat(timespec="seconds"),
         })
+        next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)
+        with st.spinner("Regenerating A/B test with your feedback..."):
+            generations[next_gen_key] = _ce_testing_generate_pair(item, provider, state)
+        state["active_generation_key"] = next_gen_key
         _save_ce_testing_state(state)
-        st.toast("Feedback applied to Voice Tuner.")
+        st.toast("Feedback saved and regenerated.")
         st.rerun()
 
     st.caption("Pick what worked best, or move to another test idea.")

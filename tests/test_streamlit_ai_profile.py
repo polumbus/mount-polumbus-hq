@@ -86,6 +86,20 @@ def test_creator_evolution_whats_hot_uses_studio_discovery_cache():
     assert "_run_creator_evolution_hot_signals(_studio_cache_key, _lane, _fmt)" in dialog
 
 
+def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
+    source = APP.read_text(encoding="utf-8")
+    generate_body = source[source.index("def _ce_testing_generate(") : source.index("def _ce_testing_generate_pair")]
+    page_body = source[source.index("def page_voice_tuner") : source.index("def page_testing")]
+
+    assert "def _ce_testing_feedback_lines" in source
+    assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []" in generate_body
+    assert "len(passing_ids) < 3 and not applied_feedback" in generate_body
+    assert '"applied_feedback": applied_feedback[-20:]' in generate_body
+    assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
+    assert "Regenerating A/B test with your feedback" in page_body
+    assert "Feedback saved and regenerated." in page_body
+
+
 if __name__ == "__main__":
     test_streamlit_api_key_routes_are_opt_in_only()
     test_streamlit_oauth_proxy_routes_precede_openai_api_key_fallback()
@@ -95,3 +109,4 @@ if __name__ == "__main__":
     test_creator_evolution_grok_uses_proxy_when_direct_key_missing()
     test_voice_tuner_is_in_mobile_owner_nav()
     test_creator_evolution_whats_hot_uses_studio_discovery_cache()
+    test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback()
