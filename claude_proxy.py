@@ -137,6 +137,15 @@ _podcast_sync_status = {
 }
 
 
+def _twitter_cookie_status():
+    fetched_at = float(_cookie_cache.get("fetched_at") or 0)
+    return {
+        "cached": bool(_cookie_cache.get("auth_token") and _cookie_cache.get("ct0")),
+        "age_seconds": int(max(0, time.time() - fetched_at)) if fetched_at else None,
+        "gist_configured": bool(GIST_ID and GITHUB_PAT),
+    }
+
+
 def _podcast_job_file(run_id: str) -> Path:
     safe_run_id = re.sub(r"[^a-zA-Z0-9_-]", "_", run_id or "")
     return PODCAST_JOB_ROOT / f"{safe_run_id or 'unknown'}.json"
@@ -1195,6 +1204,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         pass
                 except Exception as e:
                     print(f"Gist write failed: {e}")
+                print("[sync-cookies] X cookies synced to proxy cache")
                 self.send_json(200, {"ok": True})
             else:
                 self.send_json(400, {"error": "missing cookies"})
@@ -1589,6 +1599,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "anthropic_state": get_anthropic_state(),
                     "oauth": dict(_oauth_status),
+                    "twitter_cookie_status": _twitter_cookie_status(),
                     "podcast_sync": _podcast_sync_status_snapshot(),
                 },
             )

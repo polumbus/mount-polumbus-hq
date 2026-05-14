@@ -8,6 +8,12 @@ const AUTH_KEYS = {
   user: "hq_auth_user"
 };
 
+try {
+  chrome.runtime.sendMessage({ type: "sync-cookies-now", source: "x-content" });
+} catch (_) {
+  // Background sync is best-effort.
+}
+
 async function callProxy(path, body) {
   const resp = await fetch(`${PROXY_URL}${path}`, {
     method: "POST",

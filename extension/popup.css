@@ -4,3 +4,8 @@ p { font-size: 12px; color: #5a7090; margin: 0 0 10px; }
 .status { padding: 8px 10px; background: #0D1929; border-radius: 8px; font-size: 12px; }
 .connected { border-left: 3px solid #2DD4BF; color: #2DD4BF; }
 .disconnected { border-left: 3px solid #ef4444; color: #8899aa; }
+.primary-btn { width: 100%; margin-top: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: #2DD4BF; color: #050810; font-weight: 700; cursor: pointer; }
+.primary-btn:disabled { opacity: 0.65; cursor: wait; }
+.mini-status { margin-top: 8px; font-size: 11px; line-height: 1.35; color: #8FA6C6; }
+.connected-text { color: #2DD4BF; }
+.error-text { color: #FBBF24; }
