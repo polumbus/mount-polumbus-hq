@@ -14,5 +14,5 @@ The value is a go or no-go read on route,
 proxy, and app health
 
 4
-00:00:14,528 --> 00:00:17,960
+00:00:14,528 --> 00:00:19,161
 without exposing secrets in the video.

@@ -13,7 +13,7 @@
   "account-audit": "existing-browser-walkthrough",
   "my-stats": "existing-browser-walkthrough",
   "profile-analyzer": "existing-browser-walkthrough",
-  "signals-prompts": "existing-browser-walkthrough",
+  "signals-prompts": "deterministic-safe-demo",
   "fan-pulse-gameday": "deterministic-safe-demo",
   "podcast": "existing-browser-walkthrough",
   "ten-ten-audit": "existing-browser-walkthrough",

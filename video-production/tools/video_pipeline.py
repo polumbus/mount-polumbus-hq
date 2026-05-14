@@ -74,7 +74,16 @@ DIRS = [
     VP / "qc" / "subagent-reviews",
     VP / "reference-frames",
     ASSETS_REF,
+    ROOT / "static" / "tutorials",
 ]
+
+OWNER_ONLY_SLUGS = {
+    "creator-evolution",
+    "voice-tuner",
+    "podcast",
+    "ten-ten-audit",
+    "debug-console",
+}
 
 
 def sh(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -438,10 +447,24 @@ def route_map() -> None:
             "requiredDemoData": f"video-production/demo-data/{'video-demo-seed.json'}",
             "primarySelectors": [f"data-video-id={page.slug}-primary", "main", "button", "textarea", "select"],
             "captureStatus": "planned",
+            "publicSurface": page.slug not in OWNER_ONLY_SLUGS,
             "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization.",
         }
         for page in PAGES
     ])
+
+
+def write_publish_manifest() -> None:
+    manifest = {
+        "publicSurface": [
+            page.slug for page in PAGES if page.slug not in OWNER_ONLY_SLUGS
+        ],
+        "ownerOnly": [
+            page.slug for page in PAGES if page.slug in OWNER_ONLY_SLUGS
+        ],
+        "rule": "Only publicSurface videos are copied to static/tutorials. Owner-only videos remain in video-production unless explicitly gated.",
+    }
+    write_json(VP / "publish-manifest.json", manifest)
 
 
 def materialize_docs() -> None:
@@ -450,6 +473,7 @@ def materialize_docs() -> None:
     extract_reference_frames()
     style_bible()
     route_map()
+    write_publish_manifest()
     demo_data()
     for page in PAGES:
         write(VP / "scripts" / f"{page.slug}.md", script_for(page))
@@ -524,7 +548,7 @@ EXISTING_TUTORIAL_OUTPUTS = {
     "debug-console": "debug-console-walkthrough",
 }
 
-SAFE_DEMO_FALLBACK_SLUGS = {"fan-pulse-gameday"}
+SAFE_DEMO_FALLBACK_SLUGS = {"fan-pulse-gameday", "signals-prompts"}
 
 
 def run_ffmpeg(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -553,6 +577,42 @@ def srt_to_vtt(srt_path: Path, vtt_path: Path) -> None:
             line = line.replace(",", ".")
         lines.append(line)
     vtt_path.write_text("WEBVTT\n\n" + "\n".join(lines).lstrip() + "\n", encoding="utf-8")
+
+
+def stretch_srt_timing(srt_path: Path, factor: float = 1.35) -> None:
+    """Give captions more reading time without altering media duration."""
+    text = srt_path.read_text(encoding="utf-8", errors="ignore")
+    pattern = re.compile(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})")
+
+    def parse_ts(value: str) -> float:
+        head, ms = value.split(",")
+        hh, mm, ss = [int(part) for part in head.split(":")]
+        return hh * 3600 + mm * 60 + ss + int(ms) / 1000
+
+    def fmt_ts(seconds: float) -> str:
+        ms_total = int(round(max(0, seconds) * 1000))
+        hh = ms_total // 3_600_000
+        ms_total %= 3_600_000
+        mm = ms_total // 60_000
+        ms_total %= 60_000
+        ss = ms_total // 1000
+        ms = ms_total % 1000
+        return f"{hh:02d}:{mm:02d}:{ss:02d},{ms:03d}"
+
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return
+    replacements: dict[str, str] = {}
+    for idx, match in enumerate(matches):
+        start = parse_ts(match.group(1))
+        end = parse_ts(match.group(2))
+        next_start = parse_ts(matches[idx + 1].group(1)) if idx + 1 < len(matches) else end + 2.0
+        desired = start + ((end - start) * factor)
+        new_end = min(desired, next_start - 0.05)
+        replacements[match.group(0)] = f"{match.group(1)} --> {fmt_ts(max(end, new_end))}"
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    srt_path.write_text(text, encoding="utf-8")
 
 
 def rewrap_srt(srt_path: Path, max_chars: int = 42) -> None:
@@ -609,33 +669,7 @@ def rewrap_srt(srt_path: Path, max_chars: int = 42) -> None:
 
 
 def redaction_filters(slug: str) -> str:
-    base: list[str] = []
-    by_slug = {
-        "debug-console": [
-            "drawbox=x=730:y=240:w=760:h=90:color=#07111f@0.98:t=fill",
-            "drawbox=x=675:y=475:w=650:h=105:color=#07111f@0.98:t=fill",
-            "drawbox=x=1650:y=970:w=250:h=80:color=#07111f@0.98:t=fill",
-        ],
-        "post-history": [
-            "drawbox=x=760:y=220:w=735:h=85:color=#07111f@0.98:t=fill",
-            "drawbox=x=615:y=785:w=840:h=155:color=#07111f@0.98:t=fill",
-            "drawbox=x=1650:y=970:w=250:h=80:color=#07111f@0.98:t=fill",
-        ],
-        "reply-mode": [
-            "drawbox=x=710:y=220:w=545:h=90:color=#07111f@0.98:t=fill",
-            "drawbox=x=625:y=720:w=855:h=175:color=#07111f@0.98:t=fill",
-            "drawbox=x=1650:y=970:w=250:h=80:color=#07111f@0.98:t=fill",
-        ],
-        "signals-prompts": [
-            "drawbox=x=610:y=390:w=930:h=455:color=#07111f@0.92:t=fill",
-            "drawbox=x=1650:y=970:w=250:h=80:color=#07111f@0.98:t=fill",
-        ],
-        "creator-studio": [
-            "drawbox=x=1285:y=840:w=260:h=75:color=#07111f@0.96:t=fill",
-            "drawbox=x=1650:y=970:w=250:h=80:color=#07111f@0.98:t=fill",
-        ],
-    }
-    return ",".join(base + by_slug.get(slug, []))
+    return ""
 
 
 def normalize_final_video(path: Path, slug: str) -> None:
@@ -691,13 +725,30 @@ def create_storyboard_video(page: Page, mp4_path: Path, srt_path: Path) -> None:
     font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     from PIL import Image, ImageDraw, ImageFont
 
-    slides = [
-        (page.canonical, page.purpose),
-        ("When to use it", page.takeaway),
-        ("Demo example", page.demo),
-        ("Workflow", " -> ".join(page.actions[:4])),
-        ("Main value", page.takeaway),
-    ]
+    if page.slug == "fan-pulse-gameday":
+        slides = [
+            ("Fan Pulse Gameday", "Live topic: Avalanche goalie switch after one loss"),
+            ("Fan emotion", "Confused momentum panic. Fans are arguing rhythm vs trust."),
+            ("Strongest angle", "The goalie decision is now bigger than one bad goal."),
+            ("Draft idea", "This is how one lineup call turns a clean playoff lane into a debate."),
+            ("Main value", "Find the live fan emotion while the moment still matters."),
+        ]
+    elif page.slug == "signals-prompts":
+        slides = [
+            ("Signals & Prompts", "Demo signals: Broncos camp pressure, Avalanche goalie debate, Nuggets bench minutes"),
+            ("Pick the signal", "Broncos camp pressure has the clearest audience tension today."),
+            ("Open the brief", "Angle: Payton does not have to say pressure when the depth chart says it."),
+            ("Generated prompt", "Turn this into a Normal Tweet in Witty Edge without sounding generic."),
+            ("Main value", "Start from a timely signal instead of a blank page."),
+        ]
+    else:
+        slides = [
+            (page.canonical, page.purpose),
+            ("When to use it", page.takeaway),
+            ("Demo example", page.demo),
+            ("Workflow", " -> ".join(page.actions[:4])),
+            ("Main value", page.takeaway),
+        ]
     image_paths = []
     for idx, (title, body) in enumerate(slides, start=1):
         image = Image.new("RGB", (1920, 1080), "#07111f")
@@ -712,21 +763,29 @@ def create_storyboard_video(page: Page, mp4_path: Path, srt_path: Path) -> None:
         for line in wrap_text(body, 54).splitlines():
             draw.text((180, y), line, font=body_font, fill="#cfe6ff")
             y += 62
-        draw.text((180, 820), "Deterministic demo render", font=small_font, fill="#fbbf24")
+        draw.text((180, 820), "Demo fixture data only", font=small_font, fill="#fbbf24")
         path = tmp / f"slide-{idx:02d}.png"
         image.save(path)
         image_paths.append(path)
     concat = tmp / "slides.txt"
     concat.write_text("".join(f"file '{p.name}'\nduration 6\n" for p in image_paths) + f"file '{image_paths[-1].name}'\n", encoding="utf-8")
-    silent = tmp / "silent.m4a"
+    narration = tmp / "narration.m4a"
     video = tmp / "video.mp4"
-    run_ffmpeg(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", "30", "-c:a", "aac", str(silent)])
+    narration_text = ". ".join(f"{title}. {body}" for title, body in slides)
+    narration_text_path = tmp / "narration.txt"
+    narration_text_path.write_text(narration_text, encoding="utf-8")
+    run_ffmpeg([
+        "ffmpeg", "-y", "-f", "lavfi",
+        "-i", f"flite=textfile='{narration_text_path}':voice=kal",
+        "-af", "apad=pad_dur=30,atrim=0:30,loudnorm=I=-16:TP=-1.5:LRA=11",
+        "-c:a", "aac", "-ar", "48000", str(narration)
+    ])
     run_ffmpeg([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
         "-vf", "fps=30,format=yuv420p", "-c:v", "libx264", "-preset", "fast", "-crf", "20", str(video)
     ])
     run_ffmpeg([
-        "ffmpeg", "-y", "-i", str(video), "-i", str(silent), "-map", "0:v:0", "-map", "1:a:0",
+        "ffmpeg", "-y", "-i", str(video), "-i", str(narration), "-map", "0:v:0", "-map", "1:a:0",
         "-shortest", "-c:v", "copy", "-c:a", "aac", str(mp4_path)
     ])
     write_basic_srt(page, srt_path)
@@ -752,7 +811,7 @@ def make_thumbnail(video_path: Path, out_path: Path, page: Page) -> None:
 def make_contact_sheet(video_path: Path, out_path: Path) -> None:
     run_ffmpeg([
         "ffmpeg", "-y", "-i", str(video_path),
-        "-vf", "fps=1/5,scale=480:-1,tile=3x2", "-frames:v", "1", str(out_path)
+        "-vf", "fps=1/5,scale=480:-1,tile=2x2:padding=12:margin=8:color=#f3d4ca", "-frames:v", "1", str(out_path)
     ])
 
 
@@ -777,12 +836,43 @@ def produce_assets() -> dict[str, str]:
             create_storyboard_video(page, paths["mp4"], paths["srt"])
             produced[page.slug] = "deterministic-storyboard-fallback"
         rewrap_srt(paths["srt"])
+        stretch_srt_timing(paths["srt"])
         srt_to_vtt(paths["srt"], paths["vtt"])
         normalize_final_video(paths["mp4"], page.slug)
         make_thumbnail(paths["mp4"], paths["thumb"], page)
         make_contact_sheet(paths["mp4"], paths["contact"])
     write_json(VP / "renders" / "render-manifest.json", produced)
+    publish_public_assets()
     return produced
+
+
+def publish_public_assets() -> None:
+    static_dir = ROOT / "static" / "tutorials"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    for stale in static_dir.glob("*"):
+        if stale.is_file():
+            stale.unlink()
+    manifest = {
+        "published": [],
+        "ownerOnlyExcluded": [],
+    }
+    for page in PAGES:
+        if page.slug in OWNER_ONLY_SLUGS:
+            manifest["ownerOnlyExcluded"].append(page.slug)
+            continue
+        paths = asset_paths(page)
+        for key in ("mp4", "srt", "vtt", "thumb"):
+            if paths[key].exists():
+                target_name = {
+                    "mp4": f"{page.slug}.mp4",
+                    "srt": f"{page.slug}.srt",
+                    "vtt": f"{page.slug}.vtt",
+                    "thumb": f"{page.slug}.png",
+                }[key]
+                target = static_dir / target_name
+                shutil.copy2(paths[key], target)
+        manifest["published"].append(page.slug)
+    write_json(static_dir / "manifest.json", manifest)
 
 
 def qc() -> int:

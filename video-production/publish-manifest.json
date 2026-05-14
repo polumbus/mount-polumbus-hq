@@ -1,0 +1,26 @@
+{
+  "publicSurface": [
+    "overview",
+    "creator-studio",
+    "raw-thoughts",
+    "content-coach",
+    "article-writer",
+    "reply-mode",
+    "idea-bank",
+    "post-history",
+    "algorithm-score",
+    "account-audit",
+    "my-stats",
+    "profile-analyzer",
+    "signals-prompts",
+    "fan-pulse-gameday"
+  ],
+  "ownerOnly": [
+    "creator-evolution",
+    "voice-tuner",
+    "podcast",
+    "ten-ten-audit",
+    "debug-console"
+  ],
+  "rule": "Only publicSurface videos are copied to static/tutorials. Owner-only videos remain in video-production unless explicitly gated."
+}

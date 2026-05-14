@@ -13,6 +13,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -29,6 +30,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": false,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -45,6 +47,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": false,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -61,6 +64,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -77,6 +81,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -93,6 +98,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -109,6 +115,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -125,6 +132,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -141,6 +149,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -157,6 +166,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -173,6 +183,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -189,6 +200,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -205,6 +217,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -221,6 +234,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -237,6 +251,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -253,6 +268,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": true,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -269,6 +285,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": false,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -285,6 +302,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": false,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   },
   {
@@ -301,6 +319,7 @@
       "select"
     ],
     "captureStatus": "planned",
+    "publicSurface": false,
     "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
   }
 ]

@@ -351,12 +351,19 @@ async def sanitize_demo_dom(target) -> None:
                 [/@VicLombardi/gi, '@demo_signal'],
                 [/@TroyRenck/gi, '@demo_signal'],
                 [/@DNVR_Nuggets/gi, '@demo_signal'],
+                [/@ZacStevensDNVR/gi, '@demo_signal'],
+                [/@[A-Za-z0-9_]{3,25}/g, '@demo_signal'],
                 [/ngrok[-a-z0-9.]*\\.dev/gi, 'demo-proxy.local'],
+                [/1294328608417177604/g, 'DEMO_LIST_001'],
                 [/X List ID/gi, 'Demo List ID'],
+                [/Open in X/gi, 'Demo Source'],
                 [/Update Posts/gi, 'Demo Sync Disabled'],
                 [/Run Live AI Probe/gi, 'Demo AI Probe Disabled'],
                 [/Run Backend Test Suite/gi, 'Demo Backend Checks'],
-                [/X POST/gi, 'Demo Post Disabled']
+                [/X POST/gi, 'Demo Post Disabled'],
+                [/posting and live backend probes/gi, 'safe demo diagnostics'],
+                [/live backend probes/gi, 'safe demo checks'],
+                [/500 tweets available/gi, 'demo posts available']
             ];
             const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
             const nodes = [];
@@ -559,7 +566,10 @@ def create_outro_card(config: dict[str, Any], work_dir: Path, settings: RenderSe
     title_x = (width - (title_box[2] - title_box[0])) // 2
     draw.text((title_x + 3, height // 2 - 38), title, font=title_font, fill="#000000")
     draw.text((title_x, height // 2 - 42), title, font=title_font, fill="#ffffff")
-    draw.text((width // 2 - 210, height // 2 + 56), "Creator Studio walkthrough complete", font=subtitle_font, fill="#7dded1")
+    completion = f"{config['title']} complete"
+    completion_box = draw.textbbox((0, 0), completion, font=subtitle_font)
+    completion_x = (width - (completion_box[2] - completion_box[0])) // 2
+    draw.text((completion_x, height // 2 + 56), completion, font=subtitle_font, fill="#7dded1")
     image.save(outro_image)
 
     run(

@@ -1,0 +1,25 @@
+{
+  "published": [
+    "overview",
+    "creator-studio",
+    "raw-thoughts",
+    "content-coach",
+    "article-writer",
+    "reply-mode",
+    "idea-bank",
+    "post-history",
+    "algorithm-score",
+    "account-audit",
+    "my-stats",
+    "profile-analyzer",
+    "signals-prompts",
+    "fan-pulse-gameday"
+  ],
+  "ownerOnlyExcluded": [
+    "creator-evolution",
+    "voice-tuner",
+    "podcast",
+    "ten-ten-audit",
+    "debug-console"
+  ]
+}

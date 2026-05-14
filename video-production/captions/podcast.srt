@@ -18,6 +18,6 @@ The important part is control. Each step
 has a place, and publishing
 
 5
-00:00:16,460 --> 00:00:20,120
+00:00:16,460 --> 00:00:21,401
 should not happen until the right approval
 gate is complete.

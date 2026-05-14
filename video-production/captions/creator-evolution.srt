@@ -18,6 +18,6 @@ The workflow is simple. Raw angle in,
 format selected, voice selected,
 
 5
-00:00:17,732 --> 00:00:22,472
+00:00:17,732 --> 00:00:24,131
 and then the strongest generated option
 becomes the post candidate.

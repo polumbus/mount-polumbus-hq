@@ -81,7 +81,7 @@
     },
     "signals-prompts": {
       "status": "rendered_automated_qc_passed",
-      "renderSource": "existing-browser-walkthrough",
+      "renderSource": "deterministic-safe-demo",
       "grades": {}
     },
     "fan-pulse-gameday": {
