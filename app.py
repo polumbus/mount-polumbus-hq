@@ -12238,26 +12238,30 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
     status = str(result.get("status", "missing"))
     provider = str(result.get("provider", ""))
     grade = _ce_voice_tuner_compact_grade(result)
+    status_label = "Ready" if status == "ok" else "Repaired" if status == "repaired" else "Not generated" if status == "missing" else "Needs retry"
     st.markdown(f"**{title}**")
-    st.caption(f"{provider} | {status} | {result.get('generated_at', 'not generated')} | Quality: {grade['status']}")
-    st.caption(grade["summary"])
+    st.caption(f"{status_label} | Quality {grade['status']} | {provider or 'model pending'}")
     if result.get("user_message"):
-        st.info(str(result.get("user_message")))
+        st.caption("Weak drafts were repaired automatically before showing them here.")
     options = result.get("options") if isinstance(result, dict) else []
     if not options:
         if status == "error":
-            st.warning("Generation could not complete. Try the other provider or use a simpler manual prompt.")
+            st.warning("This side could not generate. Try again or switch model.")
         else:
-            st.info("No output generated yet.")
+            st.info("Click Generate to see drafts.")
         return
     for idx, text in enumerate(options[:3], 1):
         st.markdown(
             f"""<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;margin:8px 0;background:rgba(255,255,255,0.035);">
-            <div style="font-size:10px;color:rgba(255,255,255,0.34);font-weight:800;letter-spacing:1px;margin-bottom:6px;">OPTION {idx}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.38);font-weight:800;letter-spacing:1px;margin-bottom:6px;">DRAFT {idx}</div>
             <div style="font-size:14px;line-height:1.55;color:rgba(255,255,255,0.90);white-space:pre-wrap;">{html.escape(str(text))}</div>
             </div>""",
             unsafe_allow_html=True,
         )
+    with st.expander("Quality details", expanded=False):
+        st.caption(grade["summary"])
+        if result.get("generated_at"):
+            st.caption(f"Generated: {result.get('generated_at')}")
 
 
 def page_voice_tuner():
@@ -12265,7 +12269,7 @@ def page_voice_tuner():
         st.warning("Owner access required.")
         return
     st.markdown('<div class="main-header">VOICE TUNER</div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Permanent Creator Evolution sandbox. Choose a voice, tune Option B safely, then apply that voice tuning live when approved.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Test a voice safely before making it live. Option A is today&apos;s Creator Evolution. Option B is the sandbox version you are tuning.</div>', unsafe_allow_html=True)
 
     concepts = _ce_testing_concepts()
     state = _ce_testing_state()
@@ -12287,15 +12291,31 @@ def page_voice_tuner():
         _save_ce_testing_state(state)
     item = dict(concepts[active_index])
 
-    top_cols = st.columns([2.2, 1, 1])
-    with top_cols[0]:
-        st.markdown(f"**Option A vs Option B: Concept {active_index + 1} of {len(concepts)}**")
-        st.caption(f"ID: {item['id']}")
-    with top_cols[1]:
-        if st.button("Reset Voice Tuner", use_container_width=True):
-            _ce_testing_reset()
-            st.rerun()
-    with top_cols[2]:
+    st.markdown("### 1. Choose The Test")
+    setup_cols = st.columns(3)
+    with setup_cols[0]:
+        lane_opts = list(_ce_emotion_lanes())
+        selected_lane = st.selectbox(
+            "Voice",
+            lane_opts,
+            index=lane_opts.index(state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())))
+            if state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())) in lane_opts
+            else 0,
+            key="ce_voice_tuner_lane",
+            help="The voice you want to tune.",
+        )
+    with setup_cols[1]:
+        fmt_opts = _tweet_format_options()
+        selected_fmt = st.selectbox(
+            "Format",
+            fmt_opts,
+            index=fmt_opts.index(state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)))
+            if state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)) in fmt_opts
+            else 0,
+            key="ce_voice_tuner_format",
+            help="The content shape to test.",
+        )
+    with setup_cols[2]:
         provider = st.selectbox(
             "Model",
             CE_AI_PROVIDER_OPTIONS,
@@ -12303,32 +12323,11 @@ def page_voice_tuner():
             if state.get("voice_tuner_provider", CE_AI_PROVIDER_DEFAULT) in CE_AI_PROVIDER_OPTIONS
             else 0,
             key="ce_voice_tuner_provider",
+            help="The AI model used for this test.",
         )
         if provider != state.get("voice_tuner_provider"):
             state["voice_tuner_provider"] = provider
             _save_ce_testing_state(state)
-
-    control_cols = st.columns(2)
-    with control_cols[0]:
-        fmt_opts = _tweet_format_options()
-        selected_fmt = st.selectbox(
-            "Format To Test",
-            fmt_opts,
-            index=fmt_opts.index(state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)))
-            if state.get("voice_tuner_format", item.get("format", CANONICAL_TWEET_DEFAULT_FORMAT)) in fmt_opts
-            else 0,
-            key="ce_voice_tuner_format",
-        )
-    with control_cols[1]:
-        lane_opts = list(_ce_emotion_lanes())
-        selected_lane = st.selectbox(
-            "Voice To Tune",
-            lane_opts,
-            index=lane_opts.index(state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())))
-            if state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())) in lane_opts
-            else 0,
-            key="ce_voice_tuner_lane",
-        )
     if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane"):
         state["voice_tuner_format"] = selected_fmt
         state["voice_tuner_lane"] = selected_lane
@@ -12347,29 +12346,14 @@ def page_voice_tuner():
         and str(entry.get("text", "")).strip()
     ]
 
-    status_cols = st.columns(5)
-    status_items = [
-        ("Voice", selected_lane),
-        ("Format", selected_fmt),
-        ("Provider", provider),
-        ("Live Override", "Active" if live_entries else "None"),
-        ("Sandbox Notes", str(len(lane_feedback))),
-    ]
-    for col, (label, value) in zip(status_cols, status_items):
-        with col:
-            st.markdown(
-                f"""<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.035);">
-                <div style="font-size:9px;color:rgba(255,255,255,0.42);font-weight:900;letter-spacing:1.2px;text-transform:uppercase;">{html.escape(label)}</div>
-                <div style="font-size:14px;color:#E6EDF3;font-weight:800;margin-top:3px;">{html.escape(value)}</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+    live_label = "live tuning is ON for this voice" if live_entries else "live tuning is OFF"
+    st.caption(f"Sandbox notes: {len(lane_feedback)} | {live_label}. Feedback stays sandboxed until you apply it live.")
 
     manual_value = st.text_area(
-        "Manual Test Prompt",
+        "Prompt to test",
         value=str(state.get("manual_prompt", "") or ""),
         height=90,
-        placeholder="Optional: paste the exact tweet, topic, or raw idea you want to test. If this has text, it overrides the generated voice-matched prompt.",
+        placeholder="Optional: paste your own tweet, topic, or raw idea. Leave blank to use an auto-generated voice test.",
         help="Manual input stays in the Voice Tuner lab. It does not change live Creator Evolution.",
     )
     if manual_value != state.get("manual_prompt", ""):
@@ -12377,7 +12361,7 @@ def page_voice_tuner():
         _save_ce_testing_state(state)
     prompt_cols = st.columns([1, 1, 2])
     with prompt_cols[0]:
-        if st.button("New Auto Prompt", use_container_width=True):
+        if st.button("New Test Idea", use_container_width=True):
             state["test_prompt_variant"] = int(state.get("test_prompt_variant", 0) or 0) + 1
             _save_ce_testing_state(state)
             st.rerun()
@@ -12392,22 +12376,22 @@ def page_voice_tuner():
 
     st.markdown(
         f"""<div style="border:1px solid rgba(45,212,191,0.22);background:rgba(45,212,191,0.06);border-radius:14px;padding:14px;margin:12px 0;">
-        <div style="font-size:10px;color:#2DD4BF;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Prompt To Test - {html.escape(prompt_mode)}</div>
+        <div style="font-size:10px;color:#2DD4BF;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Current Test Idea - {html.escape(prompt_mode)}</div>
         <div style="font-size:17px;line-height:1.45;color:rgba(255,255,255,0.92);">{html.escape(item['concept'])}</div>
         </div>""",
         unsafe_allow_html=True,
     )
 
     generations = state.setdefault("generations", {})
-    st.markdown("### Baseline vs Tuned Copy")
-    st.caption("Option A uses current live Creator Evolution. Option B uses sandbox tuning for this selected voice only. Nothing goes live until you explicitly apply it below.")
-    st.caption(f"Using model for this concept: {provider} | Voice: {selected_lane} | Format: {selected_fmt}")
+    st.markdown("### 2. Compare Drafts")
+    st.caption("A is live today. B is the sandbox. Nothing changes live unless you apply it in step 3.")
     current_pref = state.get("prompt_preferences", {}).get(item["id"], {}) if isinstance(state.get("prompt_preferences"), dict) else {}
     if current_pref:
-        st.caption(f"Last choice for this prompt: {current_pref.get('choice', 'Unknown')} | applied live: {'yes' if live_entries else 'no'}")
+        pref_label = {"Baseline": "Option A", "Testing": "Option B", "Tie": "Tie"}.get(str(current_pref.get("choice", "")), "Unknown")
+        st.caption(f"Previous choice: {pref_label}")
     gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state, selected_lane, selected_fmt).encode()).hexdigest()[:8])
     existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
-    if st.button("Generate Baseline vs Tuned Copy", type="primary", use_container_width=True):
+    if st.button("Generate A/B Test", type="primary", use_container_width=True):
         with st.spinner("Generating baseline and tuned-copy outputs..."):
             existing = _ce_testing_generate_pair(item, provider, state)
             generations[gen_key] = existing
@@ -12419,15 +12403,17 @@ def page_voice_tuner():
     with col_b:
         _render_ce_testing_output_card("Option B: Tuned Sandbox Version", existing.get("testing", {}))
 
+    st.markdown("### 3. Improve Or Apply")
+    st.caption("Use feedback to change only Option B. Apply live only when this selected voice is ready.")
     feedback_key = f"ce_voice_tuner_feedback_{item['id']}"
     with st.form(f"ce_voice_tuner_feedback_form_{item['id']}", clear_on_submit=True):
         feedback = st.text_area(
-            "Feedback for Option B sandbox only",
-            placeholder="Example: Option B is too salesy. Make the final sentence shorter and more direct, less over-explained, more consequence.",
+            "Feedback for Option B",
+            placeholder="Example: Shorter final line. Less setup. More consequence. Do not sound salesy.",
             height=100,
             key=feedback_key,
         )
-        submitted = st.form_submit_button("Add Sandbox Feedback To Option B", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Save Feedback To Sandbox", type="primary", use_container_width=True)
     if submitted and feedback.strip():
         state.setdefault("feedback", []).append({
             "lane": item["lane"],
@@ -12439,47 +12425,9 @@ def page_voice_tuner():
         st.toast("Feedback applied to Voice Tuner.")
         st.rerun()
 
-    st.markdown("### Make This Voice Live")
-    st.caption(f"{len(lane_feedback)} tuned feedback note(s) are available for {selected_lane}. {len(live_entries)} live override note(s) are currently active.")
-    confirm_live = st.checkbox(
-        f"I understand this applies only {selected_lane} tuning live",
-        key=f"ce_voice_tuner_confirm_live_{selected_lane}",
-        help="This does not affect other voices. Option A remains the baseline until this box is checked and the live button is clicked.",
-    )
-    live_cols = st.columns(2)
-    with live_cols[0]:
-        if st.button(f"Apply {selected_lane} Tuning Live", type="primary", use_container_width=True, disabled=not lane_feedback or not confirm_live):
-            merged = []
-            for text in [*live_entries, *[str(entry.get("text", "")).strip() for entry in lane_feedback]]:
-                clean = str(text or "").strip()
-                if clean and clean not in merged:
-                    merged.append(clean)
-            live_overrides[selected_lane] = merged[-12:]
-            state["live_voice_overrides"] = live_overrides
-            state.setdefault("live_override_history", []).append({
-                "lane": selected_lane,
-                "action": "apply",
-                "count": len(live_overrides[selected_lane]),
-                "at": datetime.now().isoformat(timespec="seconds"),
-            })
-            _save_ce_testing_state(state)
-            st.toast(f"{selected_lane} tuning is now live in Creator Evolution.")
-            st.rerun()
-    with live_cols[1]:
-        if st.button(f"Remove Live {selected_lane} Tuning", use_container_width=True, disabled=not live_entries or not confirm_live):
-            live_overrides.pop(selected_lane, None)
-            state["live_voice_overrides"] = live_overrides
-            state.setdefault("live_override_history", []).append({
-                "lane": selected_lane,
-                "action": "remove",
-                "count": 0,
-                "at": datetime.now().isoformat(timespec="seconds"),
-            })
-            _save_ce_testing_state(state)
-            st.toast(f"Live {selected_lane} tuning removed.")
-            st.rerun()
+    st.caption("Pick what worked best, or move to another test idea.")
     result_cols = st.columns(4)
-    result_choices = [("Option A wins", "Baseline"), ("Option B wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
+    result_choices = [("A is better", "Baseline"), ("B is better", "Testing"), ("Tie", "Tie"), ("Next test", "Next")]
     for col, (label, value) in zip(result_cols, result_choices):
         with col:
             if st.button(label, key=f"ce_voice_tuner_pref_{item['id']}_{value}", use_container_width=True):
@@ -12499,10 +12447,51 @@ def page_voice_tuner():
                     next_format = _normalize_tweet_format(next_item.get("format", item["format"]))
                     state["voice_tuner_lane"] = next_lane
                     state["voice_tuner_format"] = next_format
-                    state["_force_voice_tuner_widget_sync"] = True
+                state["_force_voice_tuner_widget_sync"] = True
                 _save_ce_testing_state(state)
                 st.rerun()
-    with st.expander("Recent Voice Tuner Runs", expanded=False):
+
+    with st.expander(f"Apply or remove live tuning for {selected_lane}", expanded=False):
+        st.info("Live tuning only affects this selected voice. Other voices keep their own rules.")
+        st.caption(f"Sandbox notes available: {len(lane_feedback)}. Live notes active: {len(live_entries)}.")
+        confirm_live = st.checkbox(
+            f"I understand this changes only {selected_lane}",
+            key=f"ce_voice_tuner_confirm_live_{selected_lane}",
+        )
+        live_cols = st.columns(2)
+        with live_cols[0]:
+            if st.button(f"Apply {selected_lane} Live", type="primary", use_container_width=True, disabled=not lane_feedback or not confirm_live):
+                merged = []
+                for text in [*live_entries, *[str(entry.get("text", "")).strip() for entry in lane_feedback]]:
+                    clean = str(text or "").strip()
+                    if clean and clean not in merged:
+                        merged.append(clean)
+                live_overrides[selected_lane] = merged[-12:]
+                state["live_voice_overrides"] = live_overrides
+                state.setdefault("live_override_history", []).append({
+                    "lane": selected_lane,
+                    "action": "apply",
+                    "count": len(live_overrides[selected_lane]),
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                })
+                _save_ce_testing_state(state)
+                st.toast(f"{selected_lane} tuning is now live in Creator Evolution.")
+                st.rerun()
+        with live_cols[1]:
+            if st.button(f"Remove Live {selected_lane}", use_container_width=True, disabled=not live_entries or not confirm_live):
+                live_overrides.pop(selected_lane, None)
+                state["live_voice_overrides"] = live_overrides
+                state.setdefault("live_override_history", []).append({
+                    "lane": selected_lane,
+                    "action": "remove",
+                    "count": 0,
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                })
+                _save_ce_testing_state(state)
+                st.toast(f"Live {selected_lane} tuning removed.")
+                st.rerun()
+
+    with st.expander("History and advanced details", expanded=False):
         rows = []
         for key, value in generations.items():
             if not isinstance(value, dict):
@@ -12521,10 +12510,16 @@ def page_voice_tuner():
         for row in sorted(rows, key=lambda item: item["at"], reverse=True)[:8]:
             st.markdown(f"**{row['lane']} | {row['format']} | {row['provider']} | {row['status']}**")
             st.caption(f"{row['at']} - {row['concept']}")
-    with st.expander("Advanced: current Option B sandbox prompt overlay", expanded=False):
+        st.divider()
+        st.caption("Current Option B sandbox prompt overlay")
         st.text(_ce_testing_overlay_text(state, selected_lane, selected_fmt))
-    with st.expander("Live voice override for selected voice", expanded=False):
+        st.caption("Live voice override for selected voice")
         st.text(_ce_live_voice_override_text(selected_lane) or "No live override is active for this voice.")
+    with st.expander("Reset Voice Tuner", expanded=False):
+        st.warning("This resets the Voice Tuner lab state. It does not change live Creator Evolution prompts.")
+        if st.button("Reset Voice Tuner", use_container_width=True):
+            _ce_testing_reset()
+            st.rerun()
 
 
 def page_testing():
