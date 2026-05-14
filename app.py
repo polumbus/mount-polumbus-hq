@@ -4454,6 +4454,53 @@ def _ce_wasted_space_frame_hits(text: str) -> list[str]:
     ]
 
 
+def _ce_feedback_forbidden_phrases(feedback_lines: list[str]) -> list[str]:
+    forbidden: list[str] = []
+    negation_markers = (
+        "don't say", "dont say", "do not say", "not say", "never say", "stop saying",
+        "avoid saying", "avoid", "no more", "without",
+    )
+    splitter = re.compile(r"\s*(?:,|;|/|\bor\b|\band\b)\s*", re.I)
+    for raw_line in feedback_lines[-20:]:
+        line = re.sub(r"\s+", " ", str(raw_line or "")).strip()
+        lower = line.lower()
+        quoted = re.findall(r"[\"'“”‘’]([^\"'“”‘’]{2,80})[\"'“”‘’]", line)
+        for phrase in quoted:
+            clean = re.sub(r"\s+", " ", phrase).strip(" .,:;!?\"'“”‘’").lower()
+            if clean and clean not in forbidden:
+                forbidden.append(clean)
+        if not any(marker in lower for marker in negation_markers):
+            continue
+        for known in CE_WASTED_SPACE_FRAMES:
+            if re.search(rf"\b{re.escape(known)}\b", lower):
+                if known not in forbidden:
+                    forbidden.append(known)
+        tail = line
+        for marker in ("things like", "phrases like", "words like", "like ", "say "):
+            idx = lower.find(marker)
+            if idx >= 0:
+                tail = line[idx + len(marker):]
+                break
+        tail = re.split(r"\b(?:instead|because|so that|then immediately|immediately got)\b", tail, 1, flags=re.I)[0]
+        for piece in splitter.split(tail):
+            clean = re.sub(r"\s+", " ", piece).strip(" .,:;!?\"'“”‘’").lower()
+            words = re.findall(r"[a-z0-9']+", clean)
+            if 2 <= len(words) <= 6 and clean not in {"things like", "phrases like", "words like"}:
+                if clean not in forbidden:
+                    forbidden.append(clean)
+    return forbidden[:25]
+
+
+def _ce_feedback_violation_hits(text: str, forbidden_phrases: list[str] | None) -> list[str]:
+    lower = re.sub(r"\s+", " ", str(text or "").lower()).strip()
+    hits: list[str] = []
+    for phrase in forbidden_phrases or []:
+        clean = re.sub(r"\s+", " ", str(phrase or "").lower()).strip()
+        if clean and re.search(rf"\b{re.escape(clean)}\b", lower) and clean not in hits:
+            hits.append(clean)
+    return hits
+
+
 def _ce_prepare_generated_option(text: str, fmt: str, lane: str) -> str:
     """Apply deterministic repairs for fixable model formatting before gates run."""
     cleaned = _sanitize_output(str(text or ""))
@@ -8788,7 +8835,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     }
 
 
-def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
+def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
+                                    forbidden_phrases: list[str] | None = None) -> dict:
     """Validate options without trusting stale Creator Evolution module internals."""
     reports: dict = {}
     validator = getattr(ce, "validate_generation_options", None)
@@ -8808,6 +8856,12 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str) -> dict:
             merged["issues"] = list(dict.fromkeys(list(helper_report.get("issues", []) or []) + list(local_report.get("issues", []) or [])))
             merged["warnings"] = list(dict.fromkeys(list(helper_report.get("warnings", []) or []) + list(local_report.get("warnings", []) or [])))
             merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))
+            feedback_hits = _ce_feedback_violation_hits(str(data[option_key]), forbidden_phrases)
+            if feedback_hits:
+                merged["issues"] = list(dict.fromkeys(merged["issues"] + ["Violates saved Voice Tuner feedback: " + ", ".join(feedback_hits[:5])]))
+                merged["ok"] = False
+                merged["score"] = max(0, min(100, int(merged.get("score", 100) or 100) - 35))
+                merged["feedback_violation_hits"] = feedback_hits
             reports[option_key] = merged
     option_texts = {
         option_key: str(data.get(option_key) or "").strip()
@@ -9180,6 +9234,7 @@ def _ce_repair_voice_tuner_feedback_generation(
     original_prompt: str,
     overlay: str,
     applied_feedback: list[str],
+    forbidden_phrases: list[str],
     data: dict,
     quality_report: dict,
     fmt: str,
@@ -9190,6 +9245,7 @@ def _ce_repair_voice_tuner_feedback_generation(
 ) -> tuple[dict | None, dict, list[str]]:
     failure_summary = _ce_quality_failure_summary(quality_report, limit=10)
     feedback_text = "\n".join(f"- {text}" for text in applied_feedback[-20:]) or "- No readable feedback found."
+    forbidden_text = "\n".join(f"- {phrase}" for phrase in forbidden_phrases[:25]) or "- No exact banned phrases extracted."
     repair_prompt = f"""{original_prompt}
 
 VOICE TUNER OPTION B AUTO-REPAIR REQUIRED:
@@ -9198,6 +9254,9 @@ You must convert the saved feedback and quality-gate failures into a corrected O
 
 Saved sandbox feedback:
 {feedback_text}
+
+Exact phrases forbidden by saved feedback:
+{forbidden_text}
 
 Blocking quality-gate issues:
 {failure_summary or "Unknown quality failure."}
@@ -9234,7 +9293,7 @@ Return ONLY corrected JSON with option1, option1_pattern, option2, option2_patte
     for option_key in ["option1", "option2", "option3"]:
         if repaired.get(option_key):
             repaired[option_key] = _ce_prepare_generated_option(repaired[option_key], fmt, lane)
-    repaired_quality = _ce_validate_generation_options(repaired, fmt, lane)
+    repaired_quality = _ce_validate_generation_options(repaired, fmt, lane, forbidden_phrases=forbidden_phrases)
     return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
 
 
@@ -12198,7 +12257,10 @@ def _ce_voice_tuner_compact_grade(result: dict) -> dict:
     options = [str(opt).strip() for opt in result.get("options", []) if str(opt).strip()]
     if not options:
         return {"status": "No output", "summary": "Generate this side to score it."}
-    reports = [_ce_draft_quality_report(option, fmt, lane) for option in options[:3]]
+    data = {f"option{idx}": option for idx, option in enumerate(options[:3], 1)}
+    forbidden_phrases = result.get("feedback_forbidden_phrases", []) if isinstance(result.get("feedback_forbidden_phrases", []), list) else []
+    quality_report = _ce_validate_generation_options(data, fmt, lane, forbidden_phrases=forbidden_phrases)
+    reports = [quality_report.get(f"option{idx}", {}) for idx in range(1, len(options[:3]) + 1)]
     def ok_count(predicate) -> int:
         return sum(1 for report in reports if predicate(report))
     clean_count = ok_count(lambda report: report.get("ok") and not report.get("warnings"))
@@ -12292,6 +12354,10 @@ def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | No
     if clean_feedback:
         lines.append("Apply this sandbox feedback after the selected Option B rules:")
         lines.extend(f"- {text}" for text in clean_feedback[-20:])
+        forbidden_phrases = _ce_feedback_forbidden_phrases(clean_feedback)
+        if forbidden_phrases:
+            lines.append("Hard feedback constraints - these exact phrases are forbidden in Option B:")
+            lines.extend(f"- {phrase}" for phrase in forbidden_phrases)
     else:
         lines.append("No extra sandbox feedback has been added for this selected voice yet.")
     return "\n".join(lines)
@@ -12334,6 +12400,7 @@ def _ce_testing_generate(
     lab_state = lab_state_override if isinstance(lab_state_override, dict) else _ce_testing_state()
     overlay = _ce_testing_overlay_text(lab_state, lane, fmt) if testing_copy else ""
     applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []
+    feedback_forbidden_phrases = _ce_feedback_forbidden_phrases(applied_feedback) if testing_copy else []
     raw = _call_creator_evolution_ai_for_provider(
         prompt,
         lane,
@@ -12357,7 +12424,7 @@ def _ce_testing_generate(
         status = "error"
         st.session_state.pop("ce_error", None)
     data = {f"option{idx}": options[idx - 1] if idx - 1 < len(options) else "" for idx in [1, 2, 3]}
-    quality_report = _ce_validate_generation_options(data, fmt, lane) if options else {}
+    quality_report = _ce_validate_generation_options(data, fmt, lane, forbidden_phrases=feedback_forbidden_phrases) if options else {}
     passing_ids = _ce_passing_option_ids(data, quality_report) if options else []
     repair_attempted = False
     if status != "error" and len(passing_ids) < 3 and not applied_feedback:
@@ -12376,6 +12443,7 @@ def _ce_testing_generate(
             prompt,
             overlay,
             applied_feedback,
+            feedback_forbidden_phrases,
             data,
             quality_report,
             fmt,
@@ -12399,13 +12467,20 @@ def _ce_testing_generate(
                 if str(part or "").strip()
             )
             fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(fallback_source, fmt, lane)
-            if fallback_passing:
+            if fallback_data:
+                fallback_quality = _ce_validate_generation_options(fallback_data, fmt, lane, forbidden_phrases=feedback_forbidden_phrases)
+                fallback_passing = _ce_passing_option_ids(fallback_data, fallback_quality)
+            if len(fallback_passing) >= 3:
                 data = fallback_data
                 quality_report = fallback_quality
                 passing_ids = fallback_passing
                 options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
                 status = "auto_repaired"
-            elif not options:
+            else:
+                data = {}
+                quality_report = {}
+                passing_ids = []
+                options = []
                 status = "error"
     return {
         "status": status,
@@ -12419,6 +12494,7 @@ def _ce_testing_generate(
         "quality_report": quality_report,
         "passing_option_ids": passing_ids,
         "applied_feedback": applied_feedback[-20:],
+        "feedback_forbidden_phrases": feedback_forbidden_phrases,
         "overlay_hash": hashlib.sha1(overlay.encode()).hexdigest()[:8] if overlay else "",
         "repair_attempted": repair_attempted,
         "user_message": (
@@ -12511,6 +12587,9 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
     applied_feedback = result.get("applied_feedback") if isinstance(result, dict) else []
     if applied_feedback:
         st.caption(f"Applied sandbox notes: {len(applied_feedback)} | prompt {result.get('overlay_hash', '')}")
+    feedback_forbidden = result.get("feedback_forbidden_phrases") if isinstance(result, dict) else []
+    if feedback_forbidden:
+        st.caption("Enforced feedback bans: " + ", ".join(str(phrase) for phrase in feedback_forbidden[:6]))
     options = result.get("options") if isinstance(result, dict) else []
     if not options:
         if status == "error":
