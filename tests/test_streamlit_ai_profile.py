@@ -102,7 +102,7 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert "the funny part is" in source
     assert "the whole thing is" in source
     assert "you can always tell" in source
-    assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []" in generate_body
+    assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else []" in generate_body
     assert "feedback_rules = _ce_testing_feedback_rules(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else []" in generate_body
     assert "_ce_validate_generation_options(data, fmt, lane, feedback_rules=feedback_rules, source_text=concept)" in generate_body
     assert "candidate_count = _ce_testing_candidate_count(testing_copy)" in generate_body
@@ -110,7 +110,7 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert '"repair_attempted": repair_attempted' in generate_body
     assert '"feedback_rules": feedback_rules' in generate_body
     assert '"feedback_score": round(sum(feedback_scores) / max(len(feedback_scores), 1))' in generate_body
-    assert "if len(fallback_passing) >= 3:" in generate_body
+    assert "if len(fallback_clean) >= 3:" in generate_body
     assert '"applied_feedback": applied_feedback[-20:]' in generate_body
     assert "Save sharper feedback" not in generate_body
     assert "needs_retry" not in generate_body
@@ -130,6 +130,27 @@ def test_voice_tuner_uses_structured_feedback_module_for_exact_bans():
     assert "vtf.compile_voice_feedback" in body
     assert "vtf.evaluate_feedback_constraints" in body
 
+def test_voice_tuner_followup_contract_blocks_false_greens():
+    source = APP.read_text(encoding="utf-8")
+    repair_body = source[source.index("def _ce_repair_voice_tuner_feedback_generation") : source.index("def _ce_testing_concepts")]
+    generate_body = source[source.index("def _ce_testing_generate(") : source.index("def _ce_testing_generate_pair")]
+    live_body = source[source.index("def _ce_live_voice_override_text") : source.index("def _ce_prompt_version")]
+    route_body = source[source.index("def _ce_ai_route_snapshot") : source.index("def _ce_local_route_snapshot")]
+
+    assert "Saved sandbox feedback:" not in repair_body
+    assert "do not use raw sandbox notes" in repair_body
+    assert "feedback_text" not in repair_body
+    assert "len(clean_ids) < 3" in generate_body
+    assert "repaired_clean = _ce_clean_feedback_option_ids" in generate_body
+    assert "fallback_clean = _ce_clean_feedback_option_ids" in generate_body
+    assert "feedback_rules and len(clean_ids) < 3" in generate_body
+    assert "actual_provider" in route_body and '"grok" not in actual_provider.lower()' in route_body
+    assert '"instructions": distilled_rules[-12:]' in source
+    assert '"rules_hash": active_rules_hash' in source
+    assert "Approval provenance" in live_body
+    assert "No live override is active for this voice and format" in source
+
+
 
 if __name__ == "__main__":
     test_streamlit_api_key_routes_are_opt_in_only()
@@ -142,3 +163,4 @@ if __name__ == "__main__":
     test_creator_evolution_whats_hot_uses_studio_discovery_cache()
     test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback()
     test_voice_tuner_uses_structured_feedback_module_for_exact_bans()
+    test_voice_tuner_followup_contract_blocks_false_greens()

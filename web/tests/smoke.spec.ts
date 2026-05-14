@@ -30,12 +30,12 @@ async function selectRailTool(page: Page, name: string) {
 async function openOwnerPreviewTool(page: Page, path: string) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
   await page.goto(path);
 }
 
 test("marketing home loads", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/landing");
   await expect(
     page.getByRole("heading", {
       name: "A creator operating system for posts that still sound like you.",
@@ -64,27 +64,26 @@ test("marketing home loads", async ({ page }) => {
 });
 
 test("public preview query loads the preserved app shell", async ({ page }) => {
-  await page.goto("/?preview=workspace");
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: "Creator Studio" })).toBeVisible();
 
   const appNav = page.getByRole("navigation", { name: "Workspace sections" });
   await expect(appNav.getByRole("button", { name: "Creator Studio" }).first()).toBeVisible();
   await expect(appNav.getByRole("button", { name: "Reply Mode" }).first()).toBeVisible();
   await expect(appNav.getByRole("button", { name: "My Stats" }).first()).toBeVisible();
-  await expect(appNav.getByRole("button", { name: "Signals & Prompts" }).first()).toBeVisible();
-  await expect(appNav.getByRole("button", { name: "Podcast" }).first()).toBeVisible();
-
-  const gamedayLink = appNav.getByRole("link", { name: "Gameday Mode" }).first();
-  await expect(gamedayLink).toBeVisible();
-  await expect(gamedayLink).toHaveAttribute("href", "https://gameday-open.postascend.io");
-  await expect(gamedayLink).toHaveAttribute("target", "_blank");
+  await expect(appNav.getByRole("button", { name: "Signals & Prompts" })).toHaveCount(0);
+  await expect(appNav.getByRole("button", { name: "Podcast" })).toHaveCount(0);
+  await expect(appNav.getByRole("button", { name: "Creator Evolution" })).toHaveCount(0);
+  await expect(appNav.getByRole("button", { name: "Voice Tuner" })).toHaveCount(0);
+  await expect(appNav.getByRole("button", { name: "10/10 Audit" })).toHaveCount(0);
+  await expect(appNav.getByRole("link", { name: "Gameday Mode" })).toHaveCount(0);
   await expect(appNav.getByRole("button", { name: "Debug Console" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Go Viral" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Grades" })).toBeVisible();
 });
 
 test("public root swaps through real app-matched workbench pages", async ({ page }) => {
-  await page.goto("/?preview=workspace");
+  await page.goto("/");
 
   const checks = [
     { button: "Creator Studio", marker: page.locator('[data-testid="creator-input"]') },
@@ -98,8 +97,6 @@ test("public root swaps through real app-matched workbench pages", async ({ page
     { button: "Account Audit", marker: page.getByRole("button", { exact: true, name: "Audit" }) },
     { button: "My Stats", marker: page.locator('[data-testid="my-stats-top-posts"]') },
     { button: "Profile Analyzer", marker: page.locator('[data-testid="profile-analyzer-handle"]') },
-    { button: "Signals & Prompts", marker: page.locator('[data-testid="signals-list"]') },
-    { button: "Podcast", marker: page.getByRole("heading", { name: "Podcast Workflow" }) },
   ];
 
   for (const check of checks) {
@@ -108,15 +105,12 @@ test("public root swaps through real app-matched workbench pages", async ({ page
   }
 
   const appNav = page.getByRole("navigation", { name: "Workspace sections" });
-  await expect(appNav.getByRole("link", { name: "Gameday Mode" }).first()).toHaveAttribute(
-    "href",
-    "https://gameday-open.postascend.io",
-  );
+  await expect(appNav.getByRole("link", { name: "Gameday Mode" })).toHaveCount(0);
   await expect(appNav.getByRole("button", { name: "Debug Console" })).toHaveCount(0);
 });
 
 test("public root uses app shell chrome and keeps handoffs in-page", async ({ page }) => {
-  await page.goto("/?preview=workspace");
+  await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Workspace sections" })).toBeVisible();
   await page.locator('[data-testid="creator-input"]').fill("One strong seed for Idea Bank handoff.");
   await page.getByRole("button", { name: "Build" }).click();
@@ -195,17 +189,18 @@ test("public root handles reply handoff and malformed preview storage safely", a
   await expect(page.locator('[data-testid="creator-input"]')).toHaveValue(/.+/);
 });
 
-test("public root preserves owner workflow deep-link props", async ({ page }) => {
+test("public root rejects owner-only workflow deep-links", async ({ page }) => {
   await page.goto("/?tool=signals-prompts&sig_text=Imported%20signal%20from%20X&sig_author=beat_writer&sig_likes=12&sig_replies=3&sig_rts=2");
-  await expect(page.getByText("Imported signal from X").first()).toBeVisible();
-  await expect(page.getByText("@beat_writer").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator Studio" })).toBeVisible();
+  await expect(page.getByText("Imported signal from X")).toHaveCount(0);
 
   await page.goto("/?tool=podcast&run=podcast-episode-042-building-the-product-while-flying-it&state=ready_to_publish");
-  await expect(page.getByRole("heading", { name: "Podcast Workflow" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Episode 042 - Building the product while flying it" }),
-  ).toBeVisible();
-  await expect(page.locator("span").filter({ hasText: "Ready to Publish" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Podcast Workflow" })).toHaveCount(0);
+
+  await page.goto("/?page=Creator+Evolution");
+  await expect(page.getByRole("heading", { name: "Creator Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator Evolution" })).toHaveCount(0);
 });
 
 test("extension fallback handoffs open the public website preview", async ({ page }) => {
@@ -227,7 +222,7 @@ test("extension fallback handoffs open the public website preview", async ({ pag
     },
     {
       action: "open-signal",
-      expectedTool: "signals-prompts",
+      expectedPathname: "/app/signals-prompts",
       payload: { tweet: { text: "Promote this public root signal.", handle: "source" } },
     },
   ];
@@ -246,8 +241,12 @@ test("extension fallback handoffs open the public website preview", async ({ pag
     expect(response.ok()).toBeTruthy();
     expect(body.ok).toBeTruthy();
     const openUrl = new URL(body.data?.openUrl ?? "");
-    expect(openUrl.pathname).toBe("/");
-    expect(openUrl.searchParams.get("tool")).toBe(check.expectedTool);
+    if ("expectedPathname" in check) {
+      expect(openUrl.pathname).toBe(check.expectedPathname);
+    } else {
+      expect(openUrl.pathname).toBe("/");
+      expect(openUrl.searchParams.get("tool")).toBe(check.expectedTool);
+    }
   }
 });
 
@@ -266,7 +265,7 @@ test("active preview sessions redirect away from login", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
   await page.goto("/login").catch(() => undefined);
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
 });
 
 test("guest onboarding completion updates the app shell profile", async ({ page }) => {
@@ -293,13 +292,27 @@ test("guest onboarding completion updates the app shell profile", async ({ page 
 test("app shell preview renders", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(
-    page.getByRole("heading", { name: "Preview the Post Ascend workspace locally." }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Creator Studio", exact: true }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
+  await expect(page.getByLabel("Creator Evolution seed")).toBeVisible();
+  await expect(page.getByText("Active Creator Evolution Rules")).toBeVisible();
+});
+
+
+
+test("owner Voice Tuner preview reflects structured feedback gates", async ({ page }) => {
+  await page.goto("/login");
+  const ownerPreview = page.getByRole("button", { name: "Owner Preview" });
+  test.skip((await ownerPreview.count()) === 0, "Local preview auth is unavailable in this runtime.");
+  await ownerPreview.click();
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
+  await page.goto("/app/voice-tuner");
+  await expect(page.getByText("Structured Feedback Gate")).toBeVisible();
+  await expect(page.getByPlaceholder("Paste the test concept. Feedback is compiled into scoped structured rules before tuning.")).toBeVisible();
+  await page.getByRole("button", { name: "Generate A/B Test" }).click();
+  await expect(page.getByText("route metadata")).toBeVisible();
+  await expect(page.getByText("feedback score")).toBeVisible();
+  await page.getByRole("button", { name: "Apply Live" }).click();
+  await expect(page.getByText("matching scoped rule hash")).toBeVisible();
 });
 
 test("creator studio preview actions render structured results", async ({ page }) => {
@@ -446,7 +459,7 @@ test("completed guest preview still cannot open owner-only routes directly", asy
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Complete Setup" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-studio$/);
 
   await page.goto("/app/debug-console");
   await expect(
@@ -487,7 +500,7 @@ test("new guest preview clears stale completed onboarding cookies", async ({ pag
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Complete Setup" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-studio$/);
 
   await Promise.all([
     page.waitForURL(/\/login$/, { timeout: 5000 }).catch(() => undefined),
@@ -521,9 +534,8 @@ test("malformed preview profile cookie is ignored", async ({ context, page }) =>
   ]);
 
   await page.goto("/app");
-  await expect(
-    page.getByRole("heading", { name: "Preview the Post Ascend workspace locally." }),
-  ).toBeVisible();
+  await expect(page.getByLabel("Creator Evolution seed")).toBeVisible();
+  await expect(page.getByText("Active Creator Evolution Rules")).toBeVisible();
 });
 
 test("profile analyzer researches and saves a voice style", async ({ page }) => {
@@ -537,8 +549,8 @@ test("profile analyzer researches and saves a voice style", async ({ page }) => 
 });
 
 test("signals page builds owner drafts", async ({ page }) => {
-  await page.goto("/?page=Signals+%26+Prompts");
-  await expect(page.getByRole("heading", { name: "Signals & Prompts" })).toBeVisible();
+  await openOwnerPreviewTool(page, "/app/signals-prompts");
+  await expect(page.getByText("Signals & Prompts").first()).toBeVisible();
   await page.getByTestId("signals-build").click();
   await expect(page.getByTestId("signals-result")).toContainText("Expanded draft directions");
 });
@@ -546,7 +558,7 @@ test("signals page builds owner drafts", async ({ page }) => {
 test("signals page accepts an imported signal from query params", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
   await page.goto(
     "/app/signals-prompts?sig_text=League%20belief%20in%20this%20team%20is%20changing%20fast.&sig_author=AdamSchefter&sig_author_name=Adam%20Schefter&sig_replies=222&sig_rts=101&sig_likes=1800",
   );
@@ -559,7 +571,7 @@ test("signals page accepts an imported signal from query params", async ({ page 
 test("gameday page builds a reaction draft", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
   await page.goto("/app/gameday");
   await expect(
     page.getByRole("heading", { name: "Live game board and reaction drafting for the owner desk" }),
@@ -571,7 +583,7 @@ test("gameday page builds a reaction draft", async ({ page }) => {
 test("debug console refreshes checks and runs an AI probe", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/creator-evolution$/);
   await page.goto("/app/debug-console");
   await expect(
     page.getByRole("heading", { name: "Owner runtime checks and launch readiness" }),

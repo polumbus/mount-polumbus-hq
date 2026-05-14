@@ -8025,8 +8025,9 @@ def _ce_normalize_lane(lane: str | None) -> str:
     return lane if lane in lanes else _ce_default_lane()
 
 
-def _ce_live_voice_override_text(lane: str) -> str:
+def _ce_live_voice_override_text(lane: str, fmt: str | None = None) -> str:
     lane = _ce_normalize_lane(lane)
+    selected_fmt = _normalize_tweet_format(fmt or "") if fmt else ""
     state = st.session_state.get("_ce_testing_state_cache")
     if not isinstance(state, dict):
         try:
@@ -8036,16 +8037,39 @@ def _ce_live_voice_override_text(lane: str) -> str:
             state = {}
     overrides = state.get("live_voice_overrides", {}) if isinstance(state, dict) else {}
     entries = overrides.get(lane, []) if isinstance(overrides, dict) else []
-    if isinstance(entries, str):
+    if isinstance(entries, (str, dict)):
         entries = [entries]
-    clean_entries = [str(entry).strip() for entry in entries if str(entry).strip()]
+    clean_entries: list[str] = []
+    provenance: list[str] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict):
+            entry_fmt = _normalize_tweet_format(entry.get("format", "") or "") if entry.get("format") else ""
+            if selected_fmt and entry_fmt and entry_fmt != selected_fmt:
+                continue
+            instructions = entry.get("instructions", [])
+            if isinstance(instructions, str):
+                instructions = [instructions]
+            if not instructions and isinstance(entry.get("rules"), list):
+                instructions = [rule.get("instruction", "") for rule in entry.get("rules", []) if isinstance(rule, dict)]
+            for instruction in instructions:
+                clean = str(instruction or "").strip()
+                if clean and clean not in clean_entries:
+                    clean_entries.append(clean)
+            if entry.get("rules_hash"):
+                provenance.append(f"{entry_fmt or 'all formats'} / rules {entry.get('rules_hash')}")
+        else:
+            clean = str(entry or "").strip()
+            if clean and clean not in clean_entries:
+                clean_entries.append(clean)
     if not clean_entries:
         return ""
     lines = [
         f"LIVE VOICE TUNER OVERRIDE FOR {lane}:",
-        "- These owner-approved Voice Tuner changes are now live for this voice.",
+        "- These owner-approved Voice Tuner changes are live for this voice and matching format.",
         "- Apply them after the base voice rules while preserving source details, stat integrity, no hashtags, no invented facts, and no polished punctuation.",
     ]
+    if provenance:
+        lines.append("- Approval provenance: " + "; ".join(provenance[-3:]))
     lines.extend(f"- {entry}" for entry in clean_entries[-12:])
     return "\n".join(lines)
 
@@ -8375,6 +8399,9 @@ def _ce_build_generation_prompt(source: str, fmt: str, lane: str, state: dict,
                     prompt += f"\n\nLEARNED FORMAT PROFILE:\n{_ce_format_learning_text(state, fmt) or '- No mature learned profile for this selected format yet.'}"
                 if "LEARNED VOICE PROFILE:" not in prompt:
                     prompt += f"\n\nLEARNED VOICE PROFILE:\n{_ce_voice_learning_text(state, lane) or '- No mature learned voice profile yet.'}"
+                live_override_text = _ce_live_voice_override_text(lane, fmt)
+                if live_override_text:
+                    prompt += f"\n\n{live_override_text}"
                 return prompt
         except Exception as exc:
             _ce_pulse_debug_event("warn", "generation prompt helper recovered", {"error": str(exc)[:160]})
@@ -8392,6 +8419,8 @@ Use only Creator Evolution approved rules plus mature metric-derived profiles fr
 
 LANE BEHAVIOR:
 {_ce_lane_recipe_text(lane)}
+
+{_ce_live_voice_override_text(lane, fmt)}
 
 FORMAT BEHAVIOR:
 {_ce_format_recipe_text(fmt)}
@@ -9287,7 +9316,6 @@ Return ONLY corrected JSON with option1, option1_pattern, option2, option2_patte
 def _ce_repair_voice_tuner_feedback_generation(
     original_prompt: str,
     overlay: str,
-    applied_feedback: list[str],
     feedback_rules: list[dict],
     data: dict,
     quality_report: dict,
@@ -9298,16 +9326,12 @@ def _ce_repair_voice_tuner_feedback_generation(
     timeout_seconds: int = 45,
 ) -> tuple[dict | None, dict, list[str]]:
     failure_summary = _ce_quality_failure_summary(quality_report, limit=10)
-    feedback_text = "\n".join(f"- {text}" for text in applied_feedback[-20:]) or "- No readable feedback found."
     structured_feedback = vtf.feedback_prompt_text(feedback_rules)
     repair_prompt = f"""{original_prompt}
 
 VOICE TUNER OPTION B AUTO-REPAIR REQUIRED:
 The user already gave sandbox feedback. Do not ask the user for sharper feedback.
-You must convert the saved feedback and quality-gate failures into a corrected Option B draft set.
-
-Saved sandbox feedback:
-{feedback_text}
+Use only the structured feedback contract and quality-gate failures below; do not use raw sandbox notes.
 
 Structured feedback contract:
 {structured_feedback}
@@ -9319,7 +9343,7 @@ Previous rejected Option B JSON:
 {json.dumps(data, ensure_ascii=False)[:3500]}
 
 Rewrite all 3 options so each one:
-- Applies the saved sandbox feedback as the highest-priority tuning direction.
+- Applies the structured feedback contract as the highest-priority tuning direction.
 - Still follows the selected Creator Evolution voice, selected format, source preservation, stat integrity, and quality gates.
 - Fixes the blocking issues internally without telling the user how to phrase feedback.
 
@@ -10693,7 +10717,7 @@ def _ce_lane_recipe_text(lane: str) -> str:
     """Return Creator Evolution lane rules even when Cloud has a stale helper module."""
     lane = _ce_normalize_lane(lane)
     formatter = getattr(ce, "lane_recipe_text", None)
-    live_override_text = _ce_live_voice_override_text(lane)
+    live_override_text = ""
     if callable(formatter) and formatter is not _ce_lane_recipe_text:
         try:
             text = str(formatter(lane) or "").strip()
@@ -10938,7 +10962,16 @@ def _ce_ai_route_snapshot(requested_provider: str, fallback_used: bool = False, 
         "actual_route": actual_route or "unknown",
         "actual_source": actual_source or "",
         "model": actual_model or (_ce_grok_model() if _ce_normalize_ai_provider(requested_provider) == "Grok" else ""),
-        "fallback_used": bool(fallback_used or ("fallback" in actual_provider.lower()) or ("fallback" in actual_source.lower())),
+        "fallback_used": bool(
+            fallback_used
+            or ("fallback" in actual_provider.lower())
+            or ("fallback" in actual_source.lower())
+            or (
+                _ce_normalize_ai_provider(requested_provider) == "Grok"
+                and actual_provider
+                and "grok" not in actual_provider.lower()
+            )
+        ),
         "fallback_reason": fallback_reason,
         "captured_at": datetime.now().isoformat(timespec="seconds"),
     }
@@ -12282,6 +12315,47 @@ def _ce_testing_default_state() -> dict:
     return json.loads(json.dumps(CE_TESTING_SESSION_DEFAULT))
 
 
+def _ce_normalize_live_voice_overrides(overrides: dict | None) -> dict:
+    normalized: dict[str, list] = {}
+    if not isinstance(overrides, dict):
+        return normalized
+    for lane_key, entries in overrides.items():
+        lane = _ce_normalize_lane(lane_key)
+        if isinstance(entries, (str, dict)):
+            entries = [entries]
+        clean_entries = []
+        for entry in entries if isinstance(entries, list) else []:
+            if isinstance(entry, dict):
+                item = dict(entry)
+                item.setdefault("lane", lane)
+                if item.get("format"):
+                    item["format"] = _normalize_tweet_format(item.get("format"))
+                item.setdefault("concept_id", "")
+                item.setdefault("rules_hash", "")
+                if "instructions" not in item:
+                    if "instruction" in item:
+                        item["instructions"] = [item.get("instruction")]
+                    elif "rules" in item and isinstance(item.get("rules"), list):
+                        item["instructions"] = [rule.get("instruction", "") for rule in item["rules"] if isinstance(rule, dict)]
+                    else:
+                        item["instructions"] = []
+                clean_entries.append(item)
+            else:
+                text = str(entry or "").strip()
+                if text:
+                    clean_entries.append({
+                        "legacy": True,
+                        "lane": lane,
+                        "format": "",
+                        "concept_id": "",
+                        "rules_hash": "",
+                        "instructions": [text],
+                    })
+        if clean_entries:
+            normalized[lane] = clean_entries
+    return normalized
+
+
 def _ce_feedback_entry_rules(entry: dict, lane: str | None = None, fmt: str | None = None) -> list[dict]:
     if not isinstance(entry, dict):
         return []
@@ -12306,8 +12380,11 @@ def _ce_migrate_testing_state(state: dict) -> dict:
     state.setdefault("feedback", [])
     state.setdefault("feedback_rules", [])
     state.setdefault("feedback_rules_version", vtf.FEEDBACK_RULE_VERSION)
-    compiled = vtf.normalize_rules(state.get("feedback_rules", []))
-    known_ids = {str(rule.get("id")) for rule in compiled if rule.get("id")}
+    state["live_voice_overrides"] = _ce_normalize_live_voice_overrides(state.get("live_voice_overrides", {}))
+    state.setdefault("live_override_history", [])
+    existing_rules = vtf.normalize_rules(state.get("feedback_rules", []))
+    compiled: list[dict] = []
+    known_rule_keys: set[tuple] = set()
     normalized_feedback = []
     for entry in list(state.get("feedback", []) or []):
         if isinstance(entry, str):
@@ -12326,9 +12403,15 @@ def _ce_migrate_testing_state(state: dict) -> dict:
         entry.setdefault("lane", state.get("voice_tuner_lane") or _ce_default_lane())
         normalized_feedback.append(entry)
         for rule in _ce_feedback_entry_rules(entry):
-            if rule.get("id") not in known_ids:
+            rule_key = vtf.rule_identity_key(rule)
+            if rule_key not in known_rule_keys:
                 compiled.append(rule)
-                known_ids.add(str(rule.get("id")))
+                known_rule_keys.add(rule_key)
+    for rule in existing_rules:
+        rule_key = vtf.rule_identity_key(rule)
+        if rule_key not in known_rule_keys:
+            compiled.append(rule)
+            known_rule_keys.add(rule_key)
     state["feedback"] = normalized_feedback
     state["feedback_rules"] = compiled
     state["feedback_rules_version"] = vtf.FEEDBACK_RULE_VERSION
@@ -12518,15 +12601,24 @@ def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | No
     return "\n".join(lines)
 
 
-def _ce_testing_feedback_lines(state: dict, lane: str | None = None) -> list[str]:
+def _ce_testing_feedback_lines(state: dict, lane: str | None = None, fmt: str | None = None,
+                              concept_id: str | None = None) -> list[str]:
     selected_lane = _ce_normalize_lane(lane) if lane else ""
+    selected_fmt = _normalize_tweet_format(fmt or "") if fmt else ""
+    selected_concept = str(concept_id or "")
     feedback = state.get("feedback", []) if isinstance(state, dict) else []
     clean_feedback: list[str] = []
     for item in feedback:
         if isinstance(item, dict):
             text = str(item.get("text", "")).strip()
             item_lane = _ce_normalize_lane(item.get("lane", "")) if item.get("lane") else ""
+            item_fmt = _normalize_tweet_format(item.get("format", "") or "") if item.get("format") else ""
+            item_concept = str(item.get("concept_id", "") or "")
             if selected_lane and item_lane and item_lane != selected_lane:
+                continue
+            if selected_fmt and item_fmt and item_fmt != selected_fmt:
+                continue
+            if selected_concept and item_concept and item_concept != selected_concept:
                 continue
             lane_label = str(item.get("lane", "")).strip()
             if text:
@@ -12647,7 +12739,7 @@ def _ce_testing_generate(
     concept_id = str(item.get("id", "") or "")
     feedback_rules = _ce_testing_feedback_rules(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else []
     overlay = _ce_testing_overlay_text(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else ""
-    applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []
+    applied_feedback = _ce_testing_feedback_lines(lab_state, lane, fmt, concept_id=concept_id) if testing_copy else []
     candidate_count = _ce_testing_candidate_count(testing_copy)
     if testing_copy:
         prompt = f"""{prompt}
@@ -12674,18 +12766,19 @@ The best 3 will be selected after structured feedback validation.
     data = {f"option{idx}": options[idx - 1] if idx - 1 < len(options) else "" for idx in range(1, candidate_count + 1)}
     quality_report = _ce_validate_generation_options(data, fmt, lane, feedback_rules=feedback_rules, source_text=concept) if options else {}
     passing_ids = _ce_passing_option_ids(data, quality_report) if options else []
+    clean_ids = _ce_clean_feedback_option_ids(data, quality_report) if options else []
     repair_attempted = False
     if testing_copy and options:
         data, quality_report, passing_ids = _ce_testing_select_best_options(data, quality_report, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
+        clean_ids = _ce_clean_feedback_option_ids(data, quality_report)
         options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
     if status != "error" and not testing_copy and not options:
         status = "error"
-    elif status != "error" and testing_copy and len(passing_ids) < 3 and applied_feedback:
+    elif status != "error" and testing_copy and feedback_rules and len(clean_ids) < 3:
         repair_attempted = True
         repaired_data, repaired_quality, repaired_passing = _ce_repair_voice_tuner_feedback_generation(
             prompt,
             overlay,
-            applied_feedback,
             feedback_rules,
             data,
             quality_report,
@@ -12696,7 +12789,8 @@ The best 3 will be selected after structured feedback validation.
         )
         if repaired_data:
             repaired_data, repaired_quality, repaired_passing = _ce_testing_select_best_options(repaired_data, repaired_quality, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
-        if repaired_data and len(repaired_passing) >= 3:
+        repaired_clean = _ce_clean_feedback_option_ids(repaired_data or {}, repaired_quality or {}) if repaired_data else []
+        if repaired_data and len(repaired_clean) >= 3:
             data = repaired_data
             quality_report = repaired_quality
             passing_ids = repaired_passing
@@ -12715,7 +12809,8 @@ The best 3 will be selected after structured feedback validation.
             if fallback_data:
                 fallback_quality = _ce_validate_generation_options(fallback_data, fmt, lane, feedback_rules=feedback_rules, source_text=concept)
                 fallback_data, fallback_quality, fallback_passing = _ce_testing_select_best_options(fallback_data, fallback_quality, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
-            if len(fallback_passing) >= 3:
+            fallback_clean = _ce_clean_feedback_option_ids(fallback_data or {}, fallback_quality or {}) if fallback_data else []
+            if len(fallback_clean) >= 3:
                 data = fallback_data
                 quality_report = fallback_quality
                 passing_ids = fallback_passing
@@ -12724,6 +12819,8 @@ The best 3 will be selected after structured feedback validation.
                 route_meta = _ce_local_route_snapshot(provider, "voice_tuner_feedback_fallback")
             elif not options:
                 status = "error"
+            else:
+                status = "needs_feedback_repair"
     elif status != "error" and not testing_copy and len(passing_ids) < 1:
         status = "error"
     elif status != "error" and testing_copy and len(passing_ids) < 3 and not applied_feedback:
@@ -12866,6 +12963,16 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
                 st.warning("This side could not generate a clean result, so live stayed unchanged. Generate again.")
         else:
             st.info("Click Generate to see drafts.")
+        with st.expander("Debug", expanded=False):
+            st.caption(f"Requested provider: {provider or 'model pending'} | prompt {result.get('overlay_hash', '')}")
+            st.json({
+                "route": result.get("route", {}),
+                "feedback_rules": result.get("feedback_rules", []),
+                "passing_option_ids": result.get("passing_option_ids", []),
+                "clean_option_ids": result.get("clean_option_ids", []),
+                "repair_attempted": result.get("repair_attempted", False),
+                "feedback_score": result.get("feedback_score"),
+            })
         return
     for idx, text in enumerate(options[:3], 1):
         st.markdown(
@@ -13178,14 +13285,27 @@ def page_voice_tuner():
         live_cols = st.columns(2)
         with live_cols[0]:
             if st.button(f"Apply {selected_lane} Live", type="primary", use_container_width=True, disabled=not active_rules or not confirm_live or not latest_live_ready):
-                distilled_rules = vtf.distill_live_rule_texts(active_rules)
-                live_overrides[selected_lane] = distilled_rules[-12:]
+                distilled_rule_entries = vtf.distill_live_rule_entries(active_rules)
+                distilled_rules = [entry.get("instruction", "") for entry in distilled_rule_entries if entry.get("instruction")]
+                live_overrides[selected_lane] = [{
+                    "lane": selected_lane,
+                    "format": selected_fmt,
+                    "concept_id": str(item.get("id", "") or ""),
+                    "rules_hash": active_rules_hash,
+                    "feedback_rules_version": vtf.FEEDBACK_RULE_VERSION,
+                    "rules": distilled_rule_entries,
+                    "instructions": distilled_rules[-12:],
+                    "applied_at": datetime.now().isoformat(timespec="seconds"),
+                }]
                 state["live_voice_overrides"] = live_overrides
                 state.setdefault("live_override_history", []).append({
                     "lane": selected_lane,
                     "action": "apply",
                     "count": len(live_overrides[selected_lane]),
                     "source": "structured_voice_tuner_rules",
+                    "format": selected_fmt,
+                    "concept_id": str(item.get("id", "") or ""),
+                    "rules_hash": active_rules_hash,
                     "feedback_score": latest_testing.get("feedback_score"),
                     "at": datetime.now().isoformat(timespec="seconds"),
                 })
@@ -13231,7 +13351,7 @@ def page_voice_tuner():
         st.caption("Current Option B sandbox prompt overlay")
         st.text(_ce_testing_overlay_text(state, selected_lane, selected_fmt, concept_id=str(item.get("id", "") or "")))
         st.caption("Live voice override for selected voice")
-        st.text(_ce_live_voice_override_text(selected_lane) or "No live override is active for this voice.")
+        st.text(_ce_live_voice_override_text(selected_lane, selected_fmt) or "No live override is active for this voice and format.")
     with st.expander("Reset Voice Tuner", expanded=False):
         st.warning("This resets the Voice Tuner lab state. It does not change live Creator Evolution prompts.")
         if st.button("Reset Voice Tuner", use_container_width=True):

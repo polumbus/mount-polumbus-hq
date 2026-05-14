@@ -124,6 +124,15 @@ class VoiceTunerFeedbackTests(unittest.TestCase):
         )
         self.assertTrue(any(rule["kind"] == "source_preservation" for rule in rules))
 
+
+    def test_rule_ids_include_concept_and_scope(self):
+        first = vtf.compile_voice_feedback("less setup", "Comedic", "Normal Tweet", "concept_a", "manual", scope="sandbox")
+        second = vtf.compile_voice_feedback("less setup", "Comedic", "Normal Tweet", "concept_b", "manual", scope="sandbox")
+        live = vtf.compile_voice_feedback("less setup", "Comedic", "Normal Tweet", "concept_a", "manual", scope="live")
+
+        self.assertNotEqual(first[0]["id"], second[0]["id"])
+        self.assertNotEqual(first[0]["id"], live[0]["id"])
+
     def test_rules_are_scoped_to_lane_format_and_concept(self):
         rules = vtf.compile_voice_feedback("less setup", "Comedic", "Normal Tweet", "comedic", "manual")
         self.assertEqual(len(vtf.rules_for_context(rules, "Comedic", "Normal Tweet", "comedic")), 1)

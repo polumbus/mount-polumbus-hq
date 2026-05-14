@@ -7,7 +7,10 @@
     "feedback": "do not say things like you can always tell, the whole thing is, the funny part is and let the tweet do its own work without wasted space",
     "bad_candidate": "The whole thing is the Nuggets bench keeps turning comfortable leads into cardio.",
     "good_candidate": "The Nuggets bench keeps turning safe leads into fourth-quarter cardio. At some point the non-Jokic minutes need a waiver form.",
-    "expected_rule_kinds": ["forbid_phrase", "avoid_style"],
+    "expected_rule_kinds": [
+      "forbid_phrase",
+      "avoid_style"
+    ],
     "bad_requires_hard_failure": true,
     "bad_max_feedback_score": 70,
     "good_min_feedback_score": 85,
@@ -21,7 +24,11 @@
     "feedback": "less salesy and make the ending create more tension",
     "bad_candidate": "This new video is live and you need to watch now because Bo Nix changes everything.",
     "good_candidate": "The Broncos can say Bo Nix is on track, but the next QB decision shows how much Denver actually trusts the ankle.",
-    "expected_rule_kinds": ["avoid_style", "require_trait", "ending_policy"],
+    "expected_rule_kinds": [
+      "avoid_style",
+      "require_trait",
+      "ending_policy"
+    ],
     "bad_requires_warning": true,
     "bad_max_feedback_score": 84,
     "good_min_feedback_score": 85,
@@ -35,7 +42,10 @@
     "feedback": "keep the point about the road series and make it less polished",
     "bad_candidate": "The Rockies are navigating a complex development environment with room for improvement.",
     "good_candidate": "The Rockies keep calling it a development year. The road series keep providing calm evidence that the lineup has not joined the project yet.",
-    "expected_rule_kinds": ["source_preservation", "avoid_style"],
+    "expected_rule_kinds": [
+      "source_preservation",
+      "avoid_style"
+    ],
     "bad_requires_warning": true,
     "bad_max_feedback_score": 84,
     "good_min_feedback_score": 85,
@@ -49,9 +59,63 @@
     "feedback": "make it shorter and less setup",
     "bad_candidate": "Here's the thing, the Broncos keep saying the roster is deeper, but training camp is going to show whether that is real depth or just a familiar pile of average players fighting for the same backup jobs.",
     "good_candidate": "Broncos depth sounds great until camp makes the backup jobs choose sides.",
-    "expected_rule_kinds": ["compression", "avoid_style"],
+    "expected_rule_kinds": [
+      "compression",
+      "avoid_style"
+    ],
     "bad_requires_warning": true,
     "bad_max_feedback_score": 84,
+    "good_min_feedback_score": 85,
+    "good_allows_warnings": false
+  },
+  {
+    "id": "thread_exact_ban",
+    "lane": "Critical",
+    "format": "Thread",
+    "concept": "Sean Payton keeps saying competition matters, but camp will show who responds.",
+    "feedback": "do not say 'the whole thing is' and make it more consequence-driven",
+    "bad_candidate": "The whole thing is Sean Payton keeps talking competition while everyone waits for the depth chart.",
+    "good_candidate": "Sean Payton keeps talking competition, but camp decides whose reputation still carries weight.",
+    "expected_rule_kinds": [
+      "forbid_phrase",
+      "require_trait"
+    ],
+    "bad_requires_hard_failure": true,
+    "bad_max_feedback_score": 70,
+    "good_min_feedback_score": 85,
+    "good_allows_warnings": false
+  },
+  {
+    "id": "long_tweet_exact_ban",
+    "lane": "Skeptical",
+    "format": "Long Tweet",
+    "concept": "The Broncos keep saying the roster is deeper, but camp will show if it is real.",
+    "feedback": "never say 'you can always tell' and keep the point about camp",
+    "bad_candidate": "You can always tell the Broncos depth talk is serious when everyone starts pretending camp is a formality.",
+    "good_candidate": "The Broncos can sell the roster as deeper, but camp is where that claim stops being a slogan.",
+    "expected_rule_kinds": [
+      "forbid_phrase",
+      "source_preservation"
+    ],
+    "bad_requires_hard_failure": true,
+    "bad_max_feedback_score": 70,
+    "good_min_feedback_score": 85,
+    "good_allows_warnings": false
+  },
+  {
+    "id": "article_exact_ban",
+    "lane": "Witty Edge",
+    "format": "Article",
+    "concept": "The Avs keep acting like the goalie situation is settled, but the next tough start will test it.",
+    "feedback": "stop saying 'the funny part is' and make the source detail more specific",
+    "bad_candidate": "The funny part is the Avs goalie situation is being treated like a solved problem.",
+    "good_candidate": "The Avs can call the goalie situation settled, but the next tough start is the part that tests the room.",
+    "expected_rule_kinds": [
+      "forbid_phrase",
+      "avoid_style"
+    ],
+    "bad_requires_hard_failure": true,
+    "bad_max_feedback_score": 70,
     "good_min_feedback_score": 85,
     "good_allows_warnings": false
   }

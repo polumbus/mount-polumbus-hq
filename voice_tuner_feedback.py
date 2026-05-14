@@ -66,8 +66,8 @@ def _marker_hit(marker: str, lower_text: str) -> bool:
     return not any(phrase in lower_text for phrase in negated)
 
 
-def _rule_id(raw_text: str, lane: str, fmt: str, kind: str, value: str, source: str) -> str:
-    digest = hashlib.sha1("|".join([raw_text, lane, fmt, kind, value, source]).encode()).hexdigest()[:12]
+def _rule_id(raw_text: str, lane: str, fmt: str, kind: str, value: str, source: str, concept_id: str = "", scope: str = "sandbox") -> str:
+    digest = hashlib.sha1("|".join([raw_text, lane, fmt, kind, value, source, concept_id, scope]).encode()).hexdigest()[:12]
     return f"vtr_{digest}"
 
 
@@ -164,7 +164,7 @@ def compile_voice_feedback(
     rules: list[dict[str, Any]] = []
     for phrase in _example_phrase_bans(raw):
         _append_unique_rule(rules, {
-            "id": _rule_id(raw, lane, fmt, "forbid_phrase", phrase, source),
+            "id": _rule_id(raw, lane, fmt, "forbid_phrase", phrase, source, concept_id, scope),
             "version": FEEDBACK_RULE_VERSION,
             "lane": lane,
             "format": fmt,
@@ -186,7 +186,7 @@ def compile_voice_feedback(
     for kind, dimension, direction, markers, instruction in STYLE_RULES:
         if any(_marker_hit(marker, lower) for marker in markers):
             _append_unique_rule(rules, {
-                "id": _rule_id(raw, lane, fmt, kind, f"{dimension}:{direction}", source),
+                "id": _rule_id(raw, lane, fmt, kind, f"{dimension}:{direction}", source, concept_id, scope),
                 "version": FEEDBACK_RULE_VERSION,
                 "lane": lane,
                 "format": fmt,
@@ -206,7 +206,7 @@ def compile_voice_feedback(
             })
     if not rules and len(re.findall(r"[a-zA-Z0-9']+", raw)) >= 3:
         _append_unique_rule(rules, {
-            "id": _rule_id(raw, lane, fmt, "require_trait", "general", source),
+            "id": _rule_id(raw, lane, fmt, "require_trait", "general", source, concept_id, scope),
             "version": FEEDBACK_RULE_VERSION,
             "lane": lane,
             "format": fmt,
@@ -243,12 +243,12 @@ def normalize_rules(rules: list[dict[str, Any]] | None, lane: str = "", fmt: str
         clean.setdefault("matcher", {"type": "none", "values": []})
         clean.setdefault("prompt_instruction", clean.get("raw_text", ""))
         if not clean.get("id"):
-            clean["id"] = _rule_id(str(clean.get("raw_text", "")), str(clean.get("lane", "")), str(clean.get("format", "")), str(clean.get("kind", "")), str(clean.get("prompt_instruction", "")), str(clean.get("source", "")))
+            clean["id"] = _rule_id(str(clean.get("raw_text", "")), str(clean.get("lane", "")), str(clean.get("format", "")), str(clean.get("kind", "")), str(clean.get("prompt_instruction", "")), str(clean.get("source", "")), str(clean.get("concept_id", "")), str(clean.get("scope", "sandbox")))
         normalized.append(clean)
     return normalized
 
 
-def _rule_semantic_key(rule: dict[str, Any]) -> tuple[Any, ...]:
+def rule_identity_key(rule: dict[str, Any]) -> tuple[Any, ...]:
     values = tuple(_norm(value) for value in (rule.get("matcher", {}).get("values", []) or []))
     return (
         rule.get("scope", "sandbox"),
@@ -262,6 +262,9 @@ def _rule_semantic_key(rule: dict[str, Any]) -> tuple[Any, ...]:
         values,
         _norm(rule.get("prompt_instruction", "")),
     )
+
+
+_rule_semantic_key = rule_identity_key
 
 
 def rules_for_context(rules: list[dict[str, Any]] | None, lane: str, fmt: str, concept_id: str | None = None, scope: str = "sandbox") -> list[dict[str, Any]]:
@@ -464,12 +467,39 @@ def evaluate_feedback_constraints(
     }
 
 
-def distill_live_rule_texts(rules: list[dict[str, Any]] | None) -> list[str]:
-    texts: list[str] = []
+def distill_live_rule_entries(rules: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
     for rule in normalize_rules(rules):
         if rule.get("status") != "active":
             continue
-        text = str(rule.get("prompt_instruction") or "").strip()
+        instruction = str(rule.get("prompt_instruction") or "").strip()
+        if not instruction:
+            continue
+        entry = {
+            "rule_id": rule.get("id"),
+            "lane": rule.get("lane", ""),
+            "format": rule.get("format", ""),
+            "concept_id": rule.get("concept_id", ""),
+            "kind": rule.get("kind", ""),
+            "severity": rule.get("severity", "soft"),
+            "instruction": instruction,
+            "source": rule.get("source", ""),
+            "scope": rule.get("scope", "sandbox"),
+            "created_at": rule.get("created_at", ""),
+        }
+        key = rule_identity_key({**rule, "prompt_instruction": instruction})
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(entry)
+    return entries[-12:]
+
+
+def distill_live_rule_texts(rules: list[dict[str, Any]] | None) -> list[str]:
+    texts: list[str] = []
+    for entry in distill_live_rule_entries(rules):
+        text = str(entry.get("instruction") or "").strip()
         if text and text not in texts:
             texts.append(text)
     return texts[-12:]
