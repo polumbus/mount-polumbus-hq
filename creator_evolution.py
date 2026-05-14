@@ -61,6 +61,7 @@ WITTY EDGE - MONETIZATION-OPTIMIZED MIC DROP MODE:
 - Exaggeration is allowed, but it must stay tied to the sports situation.
 - Borderline adult energy and crude-adjacent humor are allowed when they make the joke sharper, but do not use actual profanity, slurs, threats, or personal harassment.
 - Never explain the joke. Never turn it into Witty Edge with one cute word added.
+- Avoid wasted setup frames like "the funny part is", "the whole thing is", and "you can always tell". Let the tweet do its own work.
 - Avoid random office/legal/dating metaphors unless the topic truly demands it. Avoid object-agency jokes and fake-deep closers.
 - End with the punchline or the funniest implication.""",
         "target": "Grok-like sports comedy: a funny group-chat read that spots the human contradiction faster than everyone else. Not angry. Not clever-metaphor writing. The laugh comes from making the exact sports behavior sound obviously ridiculous.",
@@ -454,6 +455,11 @@ COMEDIC_FAKE_MARKERS = (
     "the joke is",
     "the funny part",
     "funny part",
+    "the funny part is",
+    "funny part is",
+    "the whole thing is",
+    "you can always tell",
+    "the thing is",
     "the funniest outcome",
     "department of vibes",
     "football for",

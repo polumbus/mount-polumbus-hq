@@ -89,10 +89,15 @@ def test_creator_evolution_whats_hot_uses_studio_discovery_cache():
 def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     source = APP.read_text(encoding="utf-8")
     generate_body = source[source.index("def _ce_testing_generate(") : source.index("def _ce_testing_generate_pair")]
+    fallback_body = source[source.index("def _ce_lane_fallback_angles") : source.index("def _ce_build_fallback_text")]
     page_body = source[source.index("def page_voice_tuner") : source.index("def page_testing")]
 
     assert "def _ce_testing_feedback_lines" in source
     assert "def _ce_repair_voice_tuner_feedback_generation" in source
+    assert "def _ce_wasted_space_frame_hits" in source
+    assert "the funny part is" in source
+    assert "the whole thing is" in source
+    assert "you can always tell" in source
     assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []" in generate_body
     assert "len(passing_ids) < 3 and not applied_feedback" in generate_body
     assert "_ce_repair_voice_tuner_feedback_generation(" in generate_body
@@ -100,6 +105,9 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert '"applied_feedback": applied_feedback[-20:]' in generate_body
     assert "Save sharper feedback" not in generate_body
     assert "needs_retry" not in generate_body
+    assert "The funny part is" not in fallback_body
+    assert "The whole thing is" not in fallback_body
+    assert "You can always tell" not in fallback_body
     assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
     assert "Regenerating A/B test with your feedback" in page_body
     assert "Feedback saved and regenerated." in page_body

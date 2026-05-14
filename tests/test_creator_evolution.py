@@ -79,6 +79,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("stronger diagnosis, sarcastic turn, or real joke", sarcastic)
         self.assertNotIn("Voice is a filter, not a reset button", comedic)
 
+    def test_comedic_quality_rejects_wasted_setup_frames(self):
+        for phrase in ("The funny part is", "The whole thing is", "You can always tell"):
+            report = ce.draft_quality_report(
+                f"{phrase} the Nuggets rotation problem gets explained like the bench did not just move the furniture again.",
+                "Normal Tweet",
+                "Comedic",
+            )
+            self.assertFalse(report["ok"])
+            self.assertTrue(
+                any("meme-caption energy" in issue for issue in report["issues"]),
+                report["issues"],
+            )
+
     def test_build_prompt_uses_structured_source_material_without_hof(self):
         state = ce.refresh_state(None, [
             _tweet(1, "The best Broncos posts lately all leave the uncomfortable part hanging...", hours_ago=90, views=9000, likes=180, replies=30, reposts=18),
@@ -603,7 +616,15 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_app_draft_quality_report_rechecks_lane_gates_after_helper_report(self):
         app_text = Path("app.py").read_text()
-        source = "def _ce_format_quality_findings" + app_text.split("def _ce_format_quality_findings", 1)[1].split("def _ce_validate_generation_options", 1)[0]
+        wasted_space_source = (
+            "CE_WASTED_SPACE_FRAMES"
+            + app_text.split("CE_WASTED_SPACE_FRAMES", 1)[1].split("def _ce_prepare_generated_option", 1)[0]
+        )
+        source = (
+            wasted_space_source
+            + "\ndef _ce_format_quality_findings"
+            + app_text.split("def _ce_format_quality_findings", 1)[1].split("def _ce_validate_generation_options", 1)[0]
+        )
 
         class StaleCe:
             RISK_TERMS = ("loser", "trash")

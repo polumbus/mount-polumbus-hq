@@ -4431,6 +4431,29 @@ def _sanitize_output(text: str) -> str:
     return text
 
 
+CE_WASTED_SPACE_FRAMES = (
+    "the funny part is",
+    "the funny part",
+    "funny part is",
+    "the whole thing is",
+    "you can always tell",
+    "the thing is",
+    "here's the thing",
+    "the reality is",
+    "what's interesting is",
+    "what is interesting is",
+)
+
+
+def _ce_wasted_space_frame_hits(text: str) -> list[str]:
+    lower = re.sub(r"\s+", " ", str(text or "").lower()).strip()
+    return [
+        phrase
+        for phrase in CE_WASTED_SPACE_FRAMES
+        if re.search(rf"\b{re.escape(phrase)}\b", lower)
+    ]
+
+
 def _ce_prepare_generated_option(text: str, fmt: str, lane: str) -> str:
     """Apply deterministic repairs for fixable model formatting before gates run."""
     cleaned = _sanitize_output(str(text or ""))
@@ -8561,6 +8584,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
             else re.search(rf"\b{re.escape(term)}\b", lower)
         )
     ]
+    wasted_space_hits = _ce_wasted_space_frame_hits(clean)
     has_concrete_sports_detail = bool(
         concrete_term_hits
         or re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", clean)
@@ -8626,6 +8650,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                         local_issues.append("Sarcastic lane should imply the real story without direct insults: " + ", ".join(local_risk_hits[:4]))
                 if lane == "Comedic" and any(phrase in lower for phrase in ("lol", "lmao", "😂", "🤣", "it's giving", "so unserious", "very normal")):
                     local_issues.append("Comedic should be funny through the topic, not meme-caption energy.")
+                if wasted_space_hits:
+                    local_issues.append("Cuts wasted setup phrases so the tweet does its own work: " + ", ".join(wasted_space_hits[:4]))
                 if lane == "Celebratory" and any(phrase in lower for phrase in ("let's go", "massive", "unreal", "so back")):
                     local_issues.append("Celebratory works better when the joy is specific instead of generic hype.")
                 if lane == "Skeptical" and any(phrase in lower for phrase in ("everyone knows", "obviously", "clearly", "guaranteed", "book it")):
@@ -8674,6 +8700,8 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     ai_hits = [term for term in ai_terms if term in lower]
     if ai_hits:
         issues.append("Contains banned AI/content-strategy wording: " + ", ".join(ai_hits[:4]))
+    if wasted_space_hits:
+        issues.append("Cuts wasted setup phrases so the tweet does its own work: " + ", ".join(wasted_space_hits[:4]))
 
     bait_terms = ("thoughts?", "agree?", "what do you think", "reply below", "drop your")
     bait_hits = [term for term in bait_terms if term in lower]
@@ -8963,9 +8991,9 @@ def _ce_lane_fallback_angles(subject: str, lane: str) -> list[tuple[str, str, st
     lane = _ce_normalize_lane(lane)
     if lane == "Comedic":
         return [
-            ("The funny part is", f"{subject} is being sold as settled while everyone is clearly still checking the exits", "That is not confidence. That is sports anxiety in a team-issued hoodie."),
-            ("The whole thing is", f"{subject} has reached the part where the calm public line is doing way too much work", "Somebody is absolutely pretending this is normal."),
-            ("You can always tell", f"{subject} is serious when the explanation gets cleaner than the actual situation", "Clean answers are usually where the mess starts hiding."),
+            (f"{subject} keeps getting described like a solved math problem", "Meanwhile the rotation is still looking around for an adult in the room", "That is not depth. That is a group text with minutes."),
+            (f"{subject} has reached the stage where every calm explanation makes it sound less calm", "The bench unit is not asking for trust. It is asking for a witness.", "Somebody should probably check whether the plan has shoes on."),
+            (f"{subject} sounds stable until the non-Jokic minutes walk back into the conversation", "Then the bench starts moving like the floor changed locations.", "That is basketball, technically, but it is also a blood pressure subscription."),
         ]
     if lane == "Annoyed":
         return [
@@ -12257,6 +12285,7 @@ def _ce_testing_overlay_text(state: dict, lane: str | None = None, fmt: str | No
         "These rules apply only to Option B on the Voice Tuner page. They do not change Option A or live Creator Evolution.",
         "Option A is the current live baseline. Option B is the selected voice and selected format tuning sandbox.",
         "Preserve Creator Evolution learning profiles, approved rules, source preservation, stat integrity, and quality gates.",
+        "Never use wasted setup phrases like 'the funny part is', 'the whole thing is', or 'you can always tell'. Let the tweet do its own work.",
         _ce_selected_tuning_rules(selected_fmt, selected_lane) if selected_lane else "No selected voice is active. Use baseline Creator Evolution rules.",
     ]
     clean_feedback = _ce_testing_feedback_lines(state, selected_lane)
