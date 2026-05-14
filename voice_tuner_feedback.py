@@ -34,16 +34,36 @@ STYLE_RULES = (
     ("avoid_style", "polish", "less", ("too polished", "less polished", "linkedin", "content strategy", "salesy", "sales", "corporate"), "Make it less polished and more natural."),
     ("avoid_style", "generic", "less", ("too generic", "generic", "not specific", "more specific"), "Make the sports detail more specific."),
     ("require_trait", "voice", "more", ("not enough voice", "more voice", "more tyler", "more human", "human"), "Make the voice more natural and human."),
-    ("require_trait", "tension", "more", ("not enough tension", "more tension", "more consequence", "consequence-driven", "more consequence"), "Add a sharper consequence or tension beat."),
+    ("require_trait", "tension", "more", ("not enough tension", "more tension", "create more tension", "more consequence", "consequence-driven", "more consequence"), "Add a sharper consequence or tension beat."),
     ("compression", "length", "less", ("too long", "shorter", "compress", "compressed", "tighten"), "Make the draft tighter without losing the point."),
-    ("ending_policy", "ending", "stronger", ("ending is weak", "stronger ending", "hit harder", "sharper ending", "sharper consequence"), "Make the ending sharper and more consequential."),
+    ("ending_policy", "ending", "stronger", ("ending is weak", "stronger ending", "ending create more tension", "hit harder", "sharper ending", "sharper consequence"), "Make the ending sharper and more consequential."),
     ("ending_policy", "ellipsis", "avoid", ("avoid ellipsis", "no ellipsis", "without ellipsis"), "Do not rely on an ellipsis ending."),
-    ("source_preservation", "source", "preserve", ("lost my point", "loses my original point", "keep my point", "preserve my point", "don't lose detail", "dont lose detail"), "Preserve the original point and source detail."),
+    ("source_preservation", "source", "preserve", ("lost my point", "loses my original point", "keep my point", "keep the point", "preserve my point", "don't lose detail", "dont lose detail"), "Preserve the original point and source detail."),
 )
 
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
+
+
+def _word_hit(needle: str, haystack: str) -> bool:
+    clean = _norm(needle)
+    if not clean:
+        return False
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(clean)}(?![a-z0-9])", haystack))
+
+
+def _marker_hit(marker: str, lower_text: str) -> bool:
+    marker = _norm(marker)
+    if not _word_hit(marker, lower_text):
+        return False
+    negated = (
+        f"not too {marker}",
+        f"no longer {marker}",
+        f"not {marker} anymore",
+        f"not {marker} any more",
+    )
+    return not any(phrase in lower_text for phrase in negated)
 
 
 def _rule_id(raw_text: str, lane: str, fmt: str, kind: str, value: str, source: str) -> str:
@@ -84,18 +104,24 @@ def _quoted_phrases(text: str) -> list[str]:
 def _example_phrase_bans(text: str) -> list[str]:
     lower = _norm(text)
     phrases: list[str] = []
-    negation_markers = (
+    phrase_ban_markers = (
         "don't say", "dont say", "do not say", "not say", "never say", "stop saying",
-        "avoid saying", "avoid", "no more", "without",
+        "avoid saying", "no more phrases like", "no more lines like", "things like",
+        "phrases like", "words like",
     )
-    if not any(marker in lower for marker in negation_markers):
+    if not any(marker in lower for marker in phrase_ban_markers):
         return phrases
     for known in WASTED_SETUP_FRAMES:
-        if re.search(rf"\b{re.escape(known)}\b", lower) and known not in phrases:
+        if _word_hit(known, lower) and known not in phrases:
             phrases.append(known)
-    for phrase in _quoted_phrases(text):
-        if phrase not in phrases:
-            phrases.append(phrase)
+    quote_trigger = re.search(
+        r"(?:don't|dont|do not|never|stop|avoid|no more)\s+(?:say|saying|use|using|write|writing)?[^\"'“”‘’]{0,40}[\"'“”‘’]",
+        lower,
+    )
+    if quote_trigger:
+        for phrase in _quoted_phrases(text):
+            if phrase not in phrases:
+                phrases.append(phrase)
     tail = ""
     for marker in ("things like", "phrases like", "words like"):
         idx = lower.find(marker)
@@ -158,7 +184,7 @@ def compile_voice_feedback(
         })
     lower = _norm(raw)
     for kind, dimension, direction, markers, instruction in STYLE_RULES:
-        if any(marker in lower for marker in markers):
+        if any(_marker_hit(marker, lower) for marker in markers):
             _append_unique_rule(rules, {
                 "id": _rule_id(raw, lane, fmt, kind, f"{dimension}:{direction}", source),
                 "version": FEEDBACK_RULE_VERSION,
@@ -222,9 +248,25 @@ def normalize_rules(rules: list[dict[str, Any]] | None, lane: str = "", fmt: str
     return normalized
 
 
+def _rule_semantic_key(rule: dict[str, Any]) -> tuple[Any, ...]:
+    values = tuple(_norm(value) for value in (rule.get("matcher", {}).get("values", []) or []))
+    return (
+        rule.get("scope", "sandbox"),
+        rule.get("lane", ""),
+        rule.get("format", ""),
+        rule.get("concept_id", ""),
+        rule.get("kind", ""),
+        rule.get("severity", "soft"),
+        rule.get("dimension", ""),
+        rule.get("direction", ""),
+        values,
+        _norm(rule.get("prompt_instruction", "")),
+    )
+
+
 def rules_for_context(rules: list[dict[str, Any]] | None, lane: str, fmt: str, concept_id: str | None = None, scope: str = "sandbox") -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
+    seen_keys: set[tuple[Any, ...]] = set()
     for rule in normalize_rules(rules):
         if rule.get("status", "active") != "active":
             continue
@@ -236,11 +278,10 @@ def rules_for_context(rules: list[dict[str, Any]] | None, lane: str, fmt: str, c
             continue
         if concept_id and rule.get("concept_id") and rule.get("concept_id") != concept_id:
             continue
-        rule_id = str(rule.get("id", ""))
-        if rule_id and rule_id in seen_ids:
+        semantic_key = _rule_semantic_key(rule)
+        if semantic_key in seen_keys:
             continue
-        if rule_id:
-            seen_ids.add(rule_id)
+        seen_keys.add(semantic_key)
         selected.append(rule)
     return selected[-40:]
 
@@ -320,25 +361,46 @@ def evaluate_feedback_constraints(
     soft_warnings: list[dict[str, Any]] = []
     satisfied: list[str] = []
     not_applicable: list[str] = []
-    active = normalize_rules(rules)
+    active = rules_for_context(rules, lane, fmt) if lane or fmt else []
+    if not active:
+        active = [
+            rule for rule in normalize_rules(rules)
+            if rule.get("status", "active") == "active"
+        ]
+        deduped: list[dict[str, Any]] = []
+        seen_keys: set[tuple[Any, ...]] = set()
+        for rule in active:
+            semantic_key = _rule_semantic_key(rule)
+            if semantic_key in seen_keys:
+                continue
+            seen_keys.add(semantic_key)
+            deduped.append(rule)
+        active = deduped
     for rule in active:
         kind = rule.get("kind")
         severity = rule.get("severity", "soft")
         values = rule.get("matcher", {}).get("values", []) or []
         failed = False
         if kind == "forbid_phrase":
-            hits = [phrase for phrase in values if re.search(rf"\b{re.escape(_norm(phrase))}\b", lower)]
+            hits = [phrase for phrase in values if _word_hit(str(phrase), lower)]
             if hits:
                 failed = True
                 payload = {"id": rule.get("id"), "kind": kind, "message": "Banned phrase used: " + ", ".join(hits), "hits": hits}
             else:
                 payload = {"id": rule.get("id"), "kind": kind}
         elif kind == "avoid_style" and rule.get("dimension") == "setup":
-            hits = [phrase for phrase in WASTED_SETUP_FRAMES if re.search(rf"\b{re.escape(phrase)}\b", lower)]
+            hits = [phrase for phrase in WASTED_SETUP_FRAMES if _word_hit(phrase, lower)]
             failed = bool(hits)
             payload = {"id": rule.get("id"), "kind": kind, "message": "Still uses setup/throat-clearing: " + ", ".join(hits[:3]), "hits": hits}
         elif kind == "avoid_style" and rule.get("dimension") == "polish":
-            hits = [phrase for phrase in ("content strategy", "at the end of the day", "the reality is", "here's why", "game-changer", "unlock") if phrase in lower]
+            hits = [
+                phrase for phrase in (
+                    "content strategy", "at the end of the day", "the reality is", "here's why",
+                    "game-changer", "unlock", "watch now", "video is live", "changes everything",
+                    "must watch", "you need to watch", "complex development environment", "room for improvement",
+                )
+                if _word_hit(phrase, lower)
+            ]
             failed = bool(hits)
             payload = {"id": rule.get("id"), "kind": kind, "message": "Still sounds polished: " + ", ".join(hits[:3]), "hits": hits}
         elif kind == "avoid_style" and rule.get("dimension") == "generic":
@@ -353,19 +415,31 @@ def evaluate_feedback_constraints(
             payload = {"id": rule.get("id"), "kind": kind, "message": "Still ends with ellipsis."}
         elif kind == "ending_policy":
             final = re.split(r"[.!?]\s+", clean.strip())[-1]
-            failed = len(re.findall(r"\b[\w']+\b", final)) > 22
+            final_words = len(re.findall(r"\b[\w']+\b", final))
+            tension_terms = ("because", "until", "unless", "shows", "decides", "cost", "risk", "trust", "pressure", "problem", "exposes")
+            failed = final_words > 22 or not any(_word_hit(term, lower) for term in tension_terms)
             payload = {"id": rule.get("id"), "kind": kind, "message": "Ending is still too long or soft."}
         elif kind == "source_preservation":
-            source_terms = {term for term in re.findall(r"\b[A-Za-z][A-Za-z0-9'-]{3,}\b", source_text.lower()) if term not in {"this", "that", "with", "from", "they", "have", "about", "says", "keep"}}
+            source_terms = {term for term in re.findall(r"\b[A-Za-z][A-Za-z0-9'-]{3,}\b", source_text.lower()) if term not in {"this", "that", "with", "from", "they", "have", "about", "says", "keep", "year"}}
             if source_terms:
-                kept = [term for term in source_terms if term in lower]
+                kept = [term for term in source_terms if _word_hit(term, lower)]
                 failed = len(kept) < max(1, min(2, len(source_terms)))
                 payload = {"id": rule.get("id"), "kind": kind, "message": "May be losing the original point.", "kept": kept[:6]}
             else:
                 not_applicable.append(str(rule.get("id")))
                 continue
+        elif kind == "require_trait" and rule.get("dimension") == "tension":
+            tension_terms = ("but", "until", "unless", "pressure", "cost", "risk", "trust", "exposes", "decides", "problem", "consequence")
+            failed = not any(_word_hit(term, lower) for term in tension_terms)
+            payload = {"id": rule.get("id"), "kind": kind, "message": "Needs a clearer consequence or tension beat."}
+        elif kind == "require_trait" and rule.get("dimension") == "voice":
+            ai_terms = ("content", "strategy", "leverage", "unlock", "narrative", "conversation", "environment")
+            failed = any(_word_hit(term, lower) for term in ai_terms)
+            payload = {"id": rule.get("id"), "kind": kind, "message": "Still sounds too polished to read as natural voice."}
         else:
-            payload = {"id": rule.get("id"), "kind": kind}
+            not_applicable.append(str(rule.get("id")))
+            continue
+        payload["score_weight"] = int(rule.get("score_weight", 0) or 0)
         if failed and severity == "hard":
             hard_failures.append(payload)
         elif failed:
@@ -373,7 +447,13 @@ def evaluate_feedback_constraints(
         else:
             satisfied.append(str(rule.get("id")))
     applicable = len(active) - len(not_applicable)
-    feedback_score = 100 if applicable <= 0 else max(0, round((len(satisfied) / applicable) * 100) - len(soft_warnings) * 8 - len(hard_failures) * 40)
+    soft_penalty = sum(int(item.get("score_weight", 0) or 0) for item in soft_warnings)
+    hard_penalty = sum(int(item.get("score_weight", 0) or 0) for item in hard_failures)
+    if not soft_penalty and soft_warnings:
+        soft_penalty = len(soft_warnings) * 8
+    if not hard_penalty and hard_failures:
+        hard_penalty = len(hard_failures) * 40
+    feedback_score = 100 if applicable <= 0 else max(0, round((len(satisfied) / applicable) * 100) - soft_penalty - hard_penalty)
     return {
         "ok": not hard_failures,
         "feedback_score": feedback_score,

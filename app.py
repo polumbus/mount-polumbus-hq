@@ -8866,6 +8866,7 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
             feedback_report = vtf.evaluate_feedback_constraints(str(data[option_key]), compat_rules, fmt, lane, source_text)
             hard_failures = list(feedback_report.get("hard_failures", []) or [])
             soft_warnings = list(feedback_report.get("soft_warnings", []) or [])
+            feedback_ok = bool(feedback_report.get("ok", True))
             if hard_failures:
                 merged["issues"] = list(dict.fromkeys(merged["issues"] + ["Violates saved Voice Tuner feedback: " + "; ".join(str(item.get("message", "")) for item in hard_failures[:5])]))
                 merged["ok"] = False
@@ -8873,6 +8874,7 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
             if soft_warnings:
                 merged["warnings"] = list(dict.fromkeys(merged["warnings"] + ["Soft Voice Tuner feedback warning: " + "; ".join(str(item.get("message", "")) for item in soft_warnings[:5])]))
                 merged["score"] = max(0, min(100, int(merged.get("score", 100) or 100) - len(soft_warnings) * 8))
+            merged["ok"] = bool(merged.get("ok", True)) and feedback_ok
             merged["feedback_score"] = feedback_report.get("feedback_score", 100)
             merged["hard_feedback_violations"] = hard_failures
             merged["soft_feedback_warnings"] = soft_warnings
@@ -8949,6 +8951,42 @@ def _ce_clean_comedic_option_ids(data: dict, quality_report: dict) -> list[str]:
         if data.get(option_key) and report.get("ok") and not report.get("warnings"):
             passing.append(str(idx))
     return passing
+
+
+def _ce_clean_feedback_option_ids(data: dict, quality_report: dict) -> list[str]:
+    passing: list[str] = []
+    for option_key in _ce_option_keys(data):
+        idx = str(option_key).replace("option", "")
+        report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
+        if (
+            data.get(option_key)
+            and report.get("ok")
+            and not report.get("warnings")
+            and not report.get("hard_feedback_violations")
+            and not report.get("soft_feedback_warnings")
+            and int(report.get("feedback_score", 100) or 100) >= 85
+        ):
+            passing.append(str(idx))
+    return passing
+
+
+def _ce_voice_tuner_live_ready(result: dict, expected_rules_hash: str = "") -> bool:
+    if not isinstance(result, dict) or result.get("status") == "error":
+        return False
+    options = [str(opt).strip() for opt in result.get("options", []) if str(opt).strip()]
+    if len(options) < 3:
+        return False
+    report = result.get("quality_report", {}) if isinstance(result.get("quality_report"), dict) else {}
+    data = {f"option{idx}": option for idx, option in enumerate(options[:3], 1)}
+    if len(_ce_clean_feedback_option_ids(data, report)) < 3:
+        return False
+    if result.get("hard_feedback_violations") or result.get("soft_feedback_warnings"):
+        return False
+    if int(result.get("feedback_score", 0) or 0) < 85:
+        return False
+    if expected_rules_hash and str(result.get("feedback_rules_hash", "") or "") != expected_rules_hash:
+        return False
+    return True
 
 
 def _ce_is_promo_lane(lane: str) -> bool:
@@ -10889,6 +10927,36 @@ def _ce_capture_ai_error(raw_text: str) -> bool:
     return True
 
 
+def _ce_ai_route_snapshot(requested_provider: str, fallback_used: bool = False, fallback_reason: str = "") -> dict:
+    actual_route = str(st.session_state.get("_ai_last_route", "") or "").strip()
+    actual_provider = str(st.session_state.get("_ai_last_provider", "") or "").strip()
+    actual_source = str(st.session_state.get("_ai_last_source", "") or "").strip()
+    actual_model = str(st.session_state.get("_ai_last_model", "") or "").strip()
+    return {
+        "requested_provider": _ce_normalize_ai_provider(requested_provider),
+        "actual_provider": actual_provider or _ce_normalize_ai_provider(requested_provider).lower(),
+        "actual_route": actual_route or "unknown",
+        "actual_source": actual_source or "",
+        "model": actual_model or (_ce_grok_model() if _ce_normalize_ai_provider(requested_provider) == "Grok" else ""),
+        "fallback_used": bool(fallback_used or ("fallback" in actual_provider.lower()) or ("fallback" in actual_source.lower())),
+        "fallback_reason": fallback_reason,
+        "captured_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def _ce_local_route_snapshot(requested_provider: str, reason: str) -> dict:
+    return {
+        "requested_provider": _ce_normalize_ai_provider(requested_provider),
+        "actual_provider": "local",
+        "actual_route": "deterministic_lane_fallback",
+        "actual_source": "creator_evolution_local_repair",
+        "model": "local_fallback",
+        "fallback_used": True,
+        "fallback_reason": reason,
+        "captured_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def _call_creator_evolution_ai_for_provider(
     prompt: str,
     lane: str,
@@ -10929,8 +10997,11 @@ def _call_creator_evolution_ai_for_provider(
                     max_tokens=max_tokens,
                     timeout_seconds=timeout_seconds,
                 )
-                st.session_state["_ai_last_provider"] = "chatgpt_fallback_for_grok"
-                st.session_state["_ai_last_source"] = "creator_evolution_grok_missing_key_fallback"
+                actual_provider = str(st.session_state.get("_ai_last_provider", "") or "").strip()
+                actual_source = str(st.session_state.get("_ai_last_source", "") or "").strip()
+                st.session_state["_ai_last_provider"] = actual_provider or "fallback_for_grok"
+                st.session_state["_ai_last_source"] = actual_source or "creator_evolution_grok_missing_key_fallback"
+                st.session_state["_ai_last_route"] = str(st.session_state.get("_ai_last_route", "") or "fallback_for_grok")
         else:
             _ai_failure_chain_start()
             try:
@@ -12237,13 +12308,28 @@ def _ce_migrate_testing_state(state: dict) -> dict:
     state.setdefault("feedback_rules_version", vtf.FEEDBACK_RULE_VERSION)
     compiled = vtf.normalize_rules(state.get("feedback_rules", []))
     known_ids = {str(rule.get("id")) for rule in compiled if rule.get("id")}
+    normalized_feedback = []
     for entry in list(state.get("feedback", []) or []):
+        if isinstance(entry, str):
+            entry = {
+                "text": entry,
+                "lane": state.get("voice_tuner_lane") or _ce_default_lane(),
+                "format": state.get("voice_tuner_format") or CANONICAL_TWEET_DEFAULT_FORMAT,
+                "source": "legacy",
+                "scope": "sandbox",
+            }
         if not isinstance(entry, dict):
             continue
+        entry.setdefault("source", "legacy" if old_version < 2 else "manual")
+        entry.setdefault("scope", "sandbox")
+        entry.setdefault("format", state.get("voice_tuner_format") or CANONICAL_TWEET_DEFAULT_FORMAT)
+        entry.setdefault("lane", state.get("voice_tuner_lane") or _ce_default_lane())
+        normalized_feedback.append(entry)
         for rule in _ce_feedback_entry_rules(entry):
             if rule.get("id") not in known_ids:
                 compiled.append(rule)
                 known_ids.add(str(rule.get("id")))
+    state["feedback"] = normalized_feedback
     state["feedback_rules"] = compiled
     state["feedback_rules_version"] = vtf.FEEDBACK_RULE_VERSION
     if old_version < 2 or state.get("version") != 2:
@@ -12264,8 +12350,14 @@ def _ce_testing_state() -> dict:
     default = _ce_testing_default_state()
     for key, value in default.items():
         state.setdefault(key, value)
+    before_version = int(state.get("version", 1) or 1)
+    before_rules_version = state.get("feedback_rules_version")
+    before_rule_count = len(state.get("feedback_rules", []) or []) if isinstance(state.get("feedback_rules", []), list) else 0
     state = _ce_migrate_testing_state(state)
     st.session_state["_ce_testing_state_cache"] = state
+    after_rule_count = len(state.get("feedback_rules", []) or []) if isinstance(state.get("feedback_rules", []), list) else 0
+    if before_version < 2 or before_rules_version != vtf.FEEDBACK_RULE_VERSION or before_rule_count != after_rule_count:
+        _save_ce_testing_state(state)
     return state
 
 
@@ -12276,7 +12368,14 @@ def _save_ce_testing_state(state: dict) -> None:
 
 
 def _ce_testing_reset() -> dict:
+    previous = st.session_state.get("_ce_testing_state_cache")
+    if not isinstance(previous, dict):
+        previous = load_json(CE_TESTING_STATE_FILENAME, {})
+    live_overrides = previous.get("live_voice_overrides", {}) if isinstance(previous, dict) else {}
+    live_history = previous.get("live_override_history", []) if isinstance(previous, dict) else []
     state = _ce_testing_default_state()
+    state["live_voice_overrides"] = live_overrides if isinstance(live_overrides, dict) else {}
+    state["live_override_history"] = live_history if isinstance(live_history, list) else []
     state["created_at"] = datetime.now().isoformat(timespec="seconds")
     _save_ce_testing_state(state)
     return state
@@ -12495,12 +12594,21 @@ def _ce_parse_testing_options(raw: str, fmt: str, lane: str, count: int) -> list
     return options
 
 
-def _ce_testing_select_best_options(data: dict, quality_report: dict, limit: int = 3) -> tuple[dict, dict, list[str]]:
+def _ce_testing_select_best_options(
+    data: dict,
+    quality_report: dict,
+    limit: int = 3,
+    *,
+    fmt: str = "",
+    lane: str = "",
+    feedback_rules: list[dict] | None = None,
+    source_text: str = "",
+) -> tuple[dict, dict, list[str]]:
     scored: list[tuple[int, int, int, str, int]] = []
     for option_key in _ce_option_keys(data):
         report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
         hard_count = len(report.get("hard_feedback_violations", []) or [])
-        warn_count = len(report.get("warnings", []) or []) + len(report.get("soft_feedback_warnings", []) or [])
+        warn_count = len(set([*list(report.get("warnings", []) or []), *[str(item) for item in (report.get("soft_feedback_warnings", []) or [])]]))
         score = int(report.get("score", 0) or 0) + int(report.get("feedback_score", 100) or 100)
         scored.append((0 if report.get("ok") else 1, hard_count, warn_count, str(option_key), score))
     scored.sort(key=lambda item: (item[0], item[1], item[2], -item[4]))
@@ -12512,6 +12620,14 @@ def _ce_testing_select_best_options(data: dict, quality_report: dict, limit: int
         selected_data[new_key] = str(data.get(old_key, "") or "").strip()
         selected_data[f"{new_key}_pattern"] = str(data.get(f"{old_key}_pattern", "Voice Tuner structured-feedback candidate.") or "")
         selected_quality[new_key] = dict(quality_report.get(old_key, {}) if isinstance(quality_report, dict) else {})
+    if fmt and lane:
+        selected_quality = _ce_validate_generation_options(
+            selected_data,
+            fmt,
+            lane,
+            feedback_rules=feedback_rules or [],
+            source_text=source_text,
+        )
     return selected_data, selected_quality, _ce_passing_option_ids(selected_data, selected_quality)
 
 
@@ -12549,6 +12665,7 @@ The best 3 will be selected after structured feedback validation.
         system_suffix=overlay,
         strict_chatgpt=True,
     )
+    route_meta = _ce_ai_route_snapshot(provider)
     options = _ce_parse_testing_options(raw or "", fmt, lane, candidate_count)
     status = "ok"
     if _ce_capture_ai_error(raw or ""):
@@ -12559,7 +12676,7 @@ The best 3 will be selected after structured feedback validation.
     passing_ids = _ce_passing_option_ids(data, quality_report) if options else []
     repair_attempted = False
     if testing_copy and options:
-        data, quality_report, passing_ids = _ce_testing_select_best_options(data, quality_report, limit=3)
+        data, quality_report, passing_ids = _ce_testing_select_best_options(data, quality_report, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
         options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
     if status != "error" and not testing_copy and not options:
         status = "error"
@@ -12578,7 +12695,7 @@ The best 3 will be selected after structured feedback validation.
             _ce_testing_max_tokens(fmt),
         )
         if repaired_data:
-            repaired_data, repaired_quality, repaired_passing = _ce_testing_select_best_options(repaired_data, repaired_quality, limit=3)
+            repaired_data, repaired_quality, repaired_passing = _ce_testing_select_best_options(repaired_data, repaired_quality, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
         if repaired_data and len(repaired_passing) >= 3:
             data = repaired_data
             quality_report = repaired_quality
@@ -12597,13 +12714,14 @@ The best 3 will be selected after structured feedback validation.
             fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(fallback_source, fmt, lane)
             if fallback_data:
                 fallback_quality = _ce_validate_generation_options(fallback_data, fmt, lane, feedback_rules=feedback_rules, source_text=concept)
-                fallback_data, fallback_quality, fallback_passing = _ce_testing_select_best_options(fallback_data, fallback_quality, limit=3)
+                fallback_data, fallback_quality, fallback_passing = _ce_testing_select_best_options(fallback_data, fallback_quality, limit=3, fmt=fmt, lane=lane, feedback_rules=feedback_rules, source_text=concept)
             if len(fallback_passing) >= 3:
                 data = fallback_data
                 quality_report = fallback_quality
                 passing_ids = fallback_passing
                 options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
                 status = "auto_repaired"
+                route_meta = _ce_local_route_snapshot(provider, "voice_tuner_feedback_fallback")
             elif not options:
                 status = "error"
     elif status != "error" and not testing_copy and len(passing_ids) < 1:
@@ -12616,6 +12734,7 @@ The best 3 will be selected after structured feedback validation.
             passing_ids = fallback_passing
             options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
             status = "repaired"
+            route_meta = _ce_local_route_snapshot(provider, "voice_tuner_quality_fallback")
         elif not options:
             status = "error"
     feedback_scores = [
@@ -12636,6 +12755,9 @@ The best 3 will be selected after structured feedback validation.
     return {
         "status": status,
         "provider": provider,
+        "route": route_meta,
+        "actual_provider": route_meta.get("actual_provider", ""),
+        "actual_route": route_meta.get("actual_route", ""),
         "testing_copy": testing_copy,
         "lane": lane,
         "format": fmt,
@@ -12644,8 +12766,10 @@ The best 3 will be selected after structured feedback validation.
         "options": options,
         "quality_report": quality_report,
         "passing_option_ids": passing_ids,
+        "clean_option_ids": _ce_clean_feedback_option_ids(data, quality_report),
         "applied_feedback": applied_feedback[-20:],
         "feedback_rules": feedback_rules,
+        "feedback_rules_hash": vtf.feedback_rules_hash(feedback_rules),
         "feedback_interpretation": vtf.interpretation_summary(feedback_rules),
         "feedback_score": round(sum(feedback_scores) / max(len(feedback_scores), 1)),
         "hard_feedback_violations": hard_violations,
@@ -12665,32 +12789,13 @@ The best 3 will be selected after structured feedback validation.
 
 
 def _ce_testing_generate_pair(item: dict, provider: str, lab_state: dict) -> dict:
-    """Generate A/B Voice Tuner outputs concurrently when possible."""
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            baseline_future = executor.submit(
-                _ce_testing_generate,
-                item,
-                provider=provider,
-                testing_copy=False,
-                lab_state_override=lab_state,
-            )
-            testing_future = executor.submit(
-                _ce_testing_generate,
-                item,
-                provider=provider,
-                testing_copy=True,
-                lab_state_override=lab_state,
-            )
-            return {
-                "baseline": baseline_future.result(timeout=60),
-                "testing": testing_future.result(timeout=60),
-            }
-    except Exception:
-        return {
-            "baseline": _ce_testing_generate(item, provider=provider, testing_copy=False, lab_state_override=lab_state),
-            "testing": _ce_testing_generate(item, provider=provider, testing_copy=True, lab_state_override=lab_state),
-        }
+    """Generate A/B Voice Tuner outputs with independent route snapshots."""
+    baseline = _ce_testing_generate(item, provider=provider, testing_copy=False, lab_state_override=lab_state)
+    testing = _ce_testing_generate(item, provider=provider, testing_copy=True, lab_state_override=lab_state)
+    return {
+        "baseline": baseline,
+        "testing": testing,
+    }
 
 
 def _ce_testing_generation_key(item: dict, *parts: str) -> str:
@@ -12701,7 +12806,7 @@ def _ce_voice_tuner_generation_key(item: dict, provider: str, state: dict, lane:
     prompt_hash = hashlib.sha1(str(item.get("concept", "") or "").encode()).hexdigest()[:8]
     active_rules = _ce_testing_feedback_rules(state, lane, fmt, concept_id=str(item.get("id", "") or ""))
     rules_hash = vtf.feedback_rules_hash(active_rules)
-    return _ce_testing_generation_key(item, "voice_tuner_v2", provider, prompt_hash, rules_hash)
+    return _ce_testing_generation_key(item, "voice_tuner_v2", provider, _ce_normalize_lane(lane), _normalize_tweet_format(fmt), prompt_hash, rules_hash)
 
 
 def _ce_guided_feedback_text(voice: str, issue: str, direction: str, ending: str, manual_note: str = "") -> str:
@@ -12739,7 +12844,11 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
         else "Needs retry"
     )
     st.markdown(f"**{title}**")
-    st.caption(f"{status_label} | Quality {grade['status']} | {provider or 'model pending'}")
+    route = result.get("route", {}) if isinstance(result.get("route"), dict) else {}
+    route_label = provider or 'model pending'
+    if route.get("actual_route") == "deterministic_lane_fallback":
+        route_label = f"{provider or 'model'} requested, local repair used"
+    st.caption(f"{status_label} | Quality {grade['status']} | {route_label}")
     if result.get("user_message"):
         st.caption(str(result.get("user_message")))
     applied_feedback = result.get("applied_feedback") if isinstance(result, dict) else []
@@ -12754,7 +12863,7 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
             if result.get("repair_attempted") and result.get("applied_feedback"):
                 st.warning("I could not make a clean tuned version with those hard constraints, so live stayed unchanged. Generate again.")
             else:
-                st.warning("This side could not generate. Try again or switch model.")
+                st.warning("This side could not generate a clean result, so live stayed unchanged. Generate again.")
         else:
             st.info("Click Generate to see drafts.")
         return
@@ -12779,10 +12888,12 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
         if result.get("generated_at"):
             st.caption(f"Generated: {result.get('generated_at')}")
         with st.expander("Debug", expanded=False):
-            st.caption(f"Provider: {provider or 'model pending'} | prompt {result.get('overlay_hash', '')}")
+            st.caption(f"Requested provider: {provider or 'model pending'} | prompt {result.get('overlay_hash', '')}")
             st.json({
+                "route": result.get("route", {}),
                 "feedback_rules": result.get("feedback_rules", []),
                 "passing_option_ids": result.get("passing_option_ids", []),
+                "clean_option_ids": result.get("clean_option_ids", []),
                 "repair_attempted": result.get("repair_attempted", False),
             })
 
@@ -12868,7 +12979,8 @@ def page_voice_tuner():
         and _ce_normalize_lane(entry.get("lane", "")) == selected_lane
         and str(entry.get("text", "")).strip()
     ]
-    active_rules = _ce_testing_feedback_rules(state, selected_lane, selected_fmt)
+    active_rules = _ce_testing_feedback_rules(state, selected_lane, selected_fmt, concept_id=str(item.get("id", "") or ""))
+    active_rules_hash = vtf.feedback_rules_hash(active_rules)
 
     live_label = "live tuning is ON for this voice" if live_entries else "live tuning is OFF"
     st.caption(f"Sandbox notes: {len(lane_feedback)} | {live_label}. Feedback stays sandboxed until you apply it live.")
@@ -12912,10 +13024,10 @@ def page_voice_tuner():
     st.markdown("### 2. Compare Drafts")
     st.caption("A is live today. B is the sandbox. Nothing changes live unless you apply it in step 3.")
     current_pref = state.get("prompt_preferences", {}).get(item["id"], {}) if isinstance(state.get("prompt_preferences"), dict) else {}
-    if current_pref:
+    gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)
+    if current_pref and current_pref.get("generation_key") == gen_key:
         pref_label = {"Baseline": "Option A", "Testing": "Option B", "Tie": "Tie"}.get(str(current_pref.get("choice", "")), "Unknown")
         st.caption(f"Previous choice: {pref_label}")
-    gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)
     show_saved_generation = state.get("active_generation_key") == gen_key
     existing = generations.get(gen_key, {}) if show_saved_generation and isinstance(generations.get(gen_key), dict) else {}
     if st.button("Generate A/B Test", type="primary", use_container_width=True):
@@ -13037,6 +13149,9 @@ def page_voice_tuner():
                         "lane": item["lane"],
                         "concept": item["concept"],
                         "provider": provider,
+                        "format": selected_fmt,
+                        "generation_key": gen_key,
+                        "rules_hash": active_rules_hash,
                         "at": datetime.now().isoformat(timespec="seconds"),
                     }
                 next_index = (active_index + 1) % len(concepts) if concepts else active_index
@@ -13054,11 +13169,7 @@ def page_voice_tuner():
     with st.expander(f"Apply or remove live tuning for {selected_lane}", expanded=False):
         st.info("Live tuning only affects this selected voice. Other voices keep their own rules.")
         latest_testing = existing.get("testing", {}) if isinstance(existing, dict) and isinstance(existing.get("testing"), dict) else {}
-        latest_live_ready = (
-            len(latest_testing.get("passing_option_ids", []) or []) >= 3
-            and not latest_testing.get("hard_feedback_violations")
-            and int(latest_testing.get("feedback_score", 0) or 0) >= 85
-        )
+        latest_live_ready = _ce_voice_tuner_live_ready(latest_testing, expected_rules_hash=active_rules_hash)
         st.caption(f"Sandbox notes available: {len(lane_feedback)}. Structured rules active: {len(active_rules)}. Live notes active: {len(live_entries)}.")
         confirm_live = st.checkbox(
             f"I understand this changes only {selected_lane}",
@@ -13067,13 +13178,8 @@ def page_voice_tuner():
         live_cols = st.columns(2)
         with live_cols[0]:
             if st.button(f"Apply {selected_lane} Live", type="primary", use_container_width=True, disabled=not active_rules or not confirm_live or not latest_live_ready):
-                merged = []
                 distilled_rules = vtf.distill_live_rule_texts(active_rules)
-                for text in [*live_entries, *distilled_rules]:
-                    clean = str(text or "").strip()
-                    if clean and clean not in merged:
-                        merged.append(clean)
-                live_overrides[selected_lane] = merged[-12:]
+                live_overrides[selected_lane] = distilled_rules[-12:]
                 state["live_voice_overrides"] = live_overrides
                 state.setdefault("live_override_history", []).append({
                     "lane": selected_lane,
@@ -13087,7 +13193,7 @@ def page_voice_tuner():
                 st.toast(f"{selected_lane} tuning is now live in Creator Evolution.")
                 st.rerun()
             if active_rules and not latest_live_ready:
-                st.caption("Apply unlocks after the latest tuned preview has 3 clean drafts, no hard feedback misses, and feedback score 85+.")
+                st.caption("Apply unlocks after the latest tuned preview has 3 clean drafts, no warnings, no feedback misses, feedback score 85+, and the same scoped rules.")
         with live_cols[1]:
             if st.button(f"Remove Live {selected_lane}", use_container_width=True, disabled=not live_entries or not confirm_live):
                 live_overrides.pop(selected_lane, None)
