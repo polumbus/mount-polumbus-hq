@@ -167,6 +167,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Not sure what to say? Use guided feedback", app_text)
         self.assertIn("Save Guided Feedback", app_text)
         self.assertIn("def _ce_guided_feedback_text", app_text)
+        self.assertIn('state["active_generation_key"] = gen_key', app_text)
+        self.assertIn('state.get("active_generation_key") == gen_key', app_text)
         self.assertIn("def _ce_selected_tuning_rules", app_text)
         self.assertIn("def _ce_testing_generate_pair", app_text)
         self.assertIn("ThreadPoolExecutor(max_workers=2)", app_text)

@@ -12407,11 +12407,13 @@ def page_voice_tuner():
         pref_label = {"Baseline": "Option A", "Testing": "Option B", "Tie": "Tie"}.get(str(current_pref.get("choice", "")), "Unknown")
         st.caption(f"Previous choice: {pref_label}")
     gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state, selected_lane, selected_fmt).encode()).hexdigest()[:8])
-    existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
+    show_saved_generation = state.get("active_generation_key") == gen_key
+    existing = generations.get(gen_key, {}) if show_saved_generation and isinstance(generations.get(gen_key), dict) else {}
     if st.button("Generate A/B Test", type="primary", use_container_width=True):
         with st.spinner("Generating baseline and tuned-copy outputs..."):
             existing = _ce_testing_generate_pair(item, provider, state)
             generations[gen_key] = existing
+            state["active_generation_key"] = gen_key
             _save_ce_testing_state(state)
         st.rerun()
     col_a, col_b = st.columns(2)
