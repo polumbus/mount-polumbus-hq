@@ -1601,7 +1601,7 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
     """Post a new tweet natively first, then proxy/local helper, or return X composer fallback."""
-    clean_text = (text or "").strip()[:280]
+    clean_text = (text or "").strip()
     if not clean_text:
         return False, "No tweet text to post"
     intent_url = _x_intent_url(clean_text)
@@ -1679,7 +1679,7 @@ def _post_tweet_xurl_helper(text: str) -> tuple[bool, str]:
 def _x_intent_url(text: str) -> str:
     import urllib.parse as _up
 
-    return "https://twitter.com/intent/tweet?text=" + _up.quote((text or "").strip()[:280])
+    return "https://twitter.com/intent/tweet?text=" + _up.quote((text or "").strip())
 
 
 def _x_native_post_credentials() -> dict:
@@ -13490,16 +13490,15 @@ def _render_creator_evolution_editor():
             if tweet_text.strip():
                 quality = _ce_draft_quality_report(tweet_text.strip(), cur_fmt, cur_lane)
                 if not quality.get("ok"):
-                    st.error("Creator Evolution blocked this post for quality/safety. Fix: " + " | ".join(quality.get("issues", [])[:3]))
+                    st.warning("Creator Evolution note only. Posting anyway because you control what goes to X. Note: " + " | ".join(quality.get("issues", [])[:3]))
+                with st.spinner("Posting..."):
+                    ok, detail = _post_tweet(tweet_text.strip())
+                if ok:
+                    st.success("Posted to X.")
+                    if str(detail).startswith("https://"):
+                        st.markdown(f"[Open posted tweet]({detail})")
                 else:
-                    with st.spinner("Posting..."):
-                        ok, detail = _post_tweet(tweet_text.strip())
-                    if ok:
-                        st.success("Posted to X.")
-                        if str(detail).startswith("https://"):
-                            st.markdown(f"[Open posted tweet]({detail})")
-                    else:
-                        _render_post_failure(detail)
+                    _render_post_failure(detail)
 
 
 def page_creator_evolution():
