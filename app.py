@@ -1600,12 +1600,15 @@ def _call_claude_grades(prompt: str, system: str, max_tokens: int = 700, model: 
 
 
 def _post_tweet(text: str) -> tuple[bool, str]:
-    """Post a new tweet natively first, then proxy/local helper, or return X composer fallback."""
+    """Post a new tweet through official X OAuth first, then legacy fallbacks."""
     clean_text = (text or "").strip()
     if not clean_text:
         return False, "No tweet text to post"
     intent_url = _x_intent_url(clean_text)
-    native_ok, native_detail = _post_tweet_native_x(clean_text)
+    oauth2_ok, oauth2_detail = _post_tweet_native_x_oauth2(clean_text)
+    if oauth2_ok:
+        return True, oauth2_detail
+    native_ok, native_detail = _post_tweet_native_x_oauth1(clean_text)
     if native_ok:
         return True, native_detail
 
@@ -1626,7 +1629,7 @@ def _post_tweet(text: str) -> tuple[bool, str]:
             proxy_error = data.get("error", "Proxy returned not ok")
         except Exception as e:
             proxy_error = f"Proxy error: {e}"
-    failure_parts = [f"Native X: {native_detail}"]
+    failure_parts = [f"Native X OAuth2: {oauth2_detail}", f"Native X OAuth1: {native_detail}"]
     if helper_error:
         failure_parts.append(f"Local X helper: {helper_error}")
     if proxy_error:
@@ -1682,6 +1685,441 @@ def _x_intent_url(text: str) -> str:
     return "https://twitter.com/intent/tweet?text=" + _up.quote((text or "").strip())
 
 
+X_POST_API_URL = "https://api.x.com/2/tweets"
+X_OAUTH2_AUTHORIZE_URL = "https://x.com/i/oauth2/authorize"
+X_OAUTH2_TOKEN_URL = "https://api.x.com/2/oauth2/token"
+X_OAUTH2_SCOPES = "tweet.write tweet.read users.read offline.access"
+X_OAUTH2_TOKEN_FILENAME = "x_oauth2_token.enc.json"
+X_OAUTH2_PENDING_FILENAME = "x_oauth2_pending.json"
+X_OAUTH2_GIST_FILENAME = "hq_x_oauth2_token.enc.json"
+
+
+def _x_oauth2_config() -> dict:
+    return {
+        "client_id": _secret_or_env("X_OAUTH2_CLIENT_ID", "TWITTER_OAUTH2_CLIENT_ID", "X_CLIENT_ID", "TWITTER_CLIENT_ID"),
+        "client_secret": _secret_or_env("X_OAUTH2_CLIENT_SECRET", "TWITTER_OAUTH2_CLIENT_SECRET", "X_CLIENT_SECRET", "TWITTER_CLIENT_SECRET"),
+        "redirect_uri": _secret_or_env("X_OAUTH2_REDIRECT_URI", "TWITTER_OAUTH2_REDIRECT_URI"),
+        "token_key": _secret_or_env("X_OAUTH_TOKEN_KEY", "TWITTER_OAUTH_TOKEN_KEY"),
+    }
+
+
+def _x_oauth2_missing_config() -> list[str]:
+    cfg = _x_oauth2_config()
+    missing = []
+    if not cfg.get("client_id"):
+        missing.append("X_OAUTH2_CLIENT_ID")
+    if not cfg.get("redirect_uri"):
+        missing.append("X_OAUTH2_REDIRECT_URI")
+    return missing
+
+
+def _x_oauth2_pending_path() -> Path:
+    return DATA_DIR / X_OAUTH2_PENDING_FILENAME
+
+
+def _x_oauth2_token_path() -> Path:
+    return DATA_DIR / X_OAUTH2_TOKEN_FILENAME
+
+
+def _x_oauth2_b64url(data: bytes) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _x_oauth2_code_challenge(verifier: str) -> str:
+    return _x_oauth2_b64url(hashlib.sha256(verifier.encode("ascii")).digest())
+
+
+def _x_oauth2_basic_header(client_id: str, client_secret: str) -> str:
+    import base64
+
+    raw = f"{client_id}:{client_secret}".encode("utf-8")
+    return "Basic " + base64.b64encode(raw).decode("ascii")
+
+
+def _x_oauth2_cipher():
+    cfg = _x_oauth2_config()
+    key_material = str(cfg.get("token_key") or "").strip()
+    if not key_material:
+        return None, "X_OAUTH_TOKEN_KEY is not configured, so OAuth tokens are session-only"
+    try:
+        from cryptography.fernet import Fernet
+    except Exception as exc:
+        return None, f"cryptography is unavailable: {exc}"
+    import base64
+
+    try:
+        if len(key_material) == 44:
+            key_material.encode("ascii")
+            return Fernet(key_material.encode("ascii")), ""
+    except Exception:
+        pass
+    derived = base64.urlsafe_b64encode(hashlib.sha256(key_material.encode("utf-8")).digest())
+    try:
+        return Fernet(derived), ""
+    except Exception as exc:
+        return None, f"invalid X_OAUTH_TOKEN_KEY: {exc}"
+
+
+def _x_oauth2_gist_id() -> str:
+    return _secret_or_env("X_OAUTH_GIST_ID", "GIST_ID")
+
+
+def _x_oauth2_read_gist_bundle() -> dict:
+    gist_id = _x_oauth2_gist_id()
+    if not gist_id:
+        return {}
+    try:
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=_gist_headers(), timeout=8)
+        if resp.status_code >= 400:
+            return {}
+        data = resp.json()
+        raw = data.get("files", {}).get(X_OAUTH2_GIST_FILENAME, {}).get("content", "")
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def _x_oauth2_write_gist_bundle(bundle: dict) -> None:
+    gist_id = _x_oauth2_gist_id()
+    if not gist_id:
+        return
+    try:
+        payload = {
+            "files": {
+                X_OAUTH2_GIST_FILENAME: {
+                    "content": json.dumps(bundle or {}, indent=2, default=str)
+                }
+            }
+        }
+        requests.patch(f"https://api.github.com/gists/{gist_id}", json=payload, headers=_gist_headers(), timeout=8)
+    except Exception:
+        pass
+
+
+def _x_oauth2_encrypt_token(token: dict) -> tuple[dict | None, str]:
+    cipher, err = _x_oauth2_cipher()
+    if not cipher:
+        return None, err
+    raw = json.dumps(token or {}, separators=(",", ":"), default=str).encode("utf-8")
+    return {
+        "version": 1,
+        "encrypted": True,
+        "cipher": "fernet-sha256",
+        "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "payload": cipher.encrypt(raw).decode("ascii"),
+    }, ""
+
+
+def _x_oauth2_decrypt_token(bundle: dict) -> tuple[dict | None, str]:
+    if not isinstance(bundle, dict) or not bundle.get("payload"):
+        return None, "not connected"
+    cipher, err = _x_oauth2_cipher()
+    if not cipher:
+        return None, err
+    try:
+        raw = cipher.decrypt(str(bundle.get("payload") or "").encode("ascii"))
+        token = json.loads(raw.decode("utf-8"))
+        return token if isinstance(token, dict) else None, ""
+    except Exception as exc:
+        return None, f"OAuth token could not be decrypted: {exc}"
+
+
+def _x_oauth2_load_token() -> tuple[dict | None, str]:
+    cached = st.session_state.get("_x_oauth2_token_cache")
+    if isinstance(cached, dict) and cached.get("access_token"):
+        return cached, ""
+    bundle = {}
+    path = _x_oauth2_token_path()
+    if path.exists():
+        try:
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            bundle = {}
+    if not bundle:
+        bundle = _x_oauth2_read_gist_bundle()
+    token, err = _x_oauth2_decrypt_token(bundle)
+    if token and token.get("access_token"):
+        st.session_state["_x_oauth2_token_cache"] = token
+        return token, ""
+    return None, err or "not connected"
+
+
+def _x_oauth2_save_token(token: dict) -> str:
+    token = dict(token or {})
+    if not token.get("access_token"):
+        return "OAuth response did not include an access token"
+    st.session_state["_x_oauth2_token_cache"] = token
+    bundle, err = _x_oauth2_encrypt_token(token)
+    if not bundle:
+        return err
+    try:
+        _x_oauth2_token_path().write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+    except Exception as exc:
+        return f"local encrypted token save failed: {exc}"
+    _x_oauth2_write_gist_bundle(bundle)
+    return ""
+
+
+def _x_oauth2_clear_token() -> None:
+    st.session_state.pop("_x_oauth2_token_cache", None)
+    try:
+        _x_oauth2_token_path().unlink(missing_ok=True)
+    except Exception:
+        pass
+    _x_oauth2_write_gist_bundle({})
+
+
+def _x_oauth2_store_pending(state: str, code_verifier: str) -> None:
+    pending = {
+        "state": state,
+        "code_verifier": code_verifier,
+        "created_at": time.time(),
+        "expires_at": time.time() + 600,
+    }
+    st.session_state["_x_oauth2_pending"] = pending
+    try:
+        _x_oauth2_pending_path().write_text(json.dumps(pending), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _x_oauth2_load_pending() -> dict:
+    pending = st.session_state.get("_x_oauth2_pending")
+    if isinstance(pending, dict):
+        return pending
+    try:
+        data = json.loads(_x_oauth2_pending_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _x_oauth2_clear_pending() -> None:
+    st.session_state.pop("_x_oauth2_pending", None)
+    try:
+        _x_oauth2_pending_path().unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _x_oauth2_authorize_url() -> tuple[str, str]:
+    import secrets as _secrets
+
+    missing = _x_oauth2_missing_config()
+    if missing:
+        return "", "missing " + ", ".join(missing)
+    cfg = _x_oauth2_config()
+    verifier = _secrets.token_urlsafe(64)[:128]
+    state = _secrets.token_urlsafe(32)
+    _x_oauth2_store_pending(state, verifier)
+    params = {
+        "response_type": "code",
+        "client_id": cfg["client_id"],
+        "redirect_uri": cfg["redirect_uri"],
+        "scope": X_OAUTH2_SCOPES,
+        "state": state,
+        "code_challenge": _x_oauth2_code_challenge(verifier),
+        "code_challenge_method": "S256",
+    }
+    return X_OAUTH2_AUTHORIZE_URL + "?" + urllib.parse.urlencode(params), ""
+
+
+def _x_oauth2_token_request(form: dict) -> tuple[dict | None, str]:
+    cfg = _x_oauth2_config()
+    headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+    data = dict(form or {})
+    if cfg.get("client_secret"):
+        headers["Authorization"] = _x_oauth2_basic_header(cfg.get("client_id", ""), cfg.get("client_secret", ""))
+    elif cfg.get("client_id"):
+        data.setdefault("client_id", cfg["client_id"])
+    try:
+        resp = requests.post(X_OAUTH2_TOKEN_URL, data=data, headers=headers, timeout=20)
+    except Exception as exc:
+        return None, f"OAuth token request failed: {exc}"
+    if resp.status_code >= 400:
+        return None, f"OAuth token HTTP {resp.status_code}: {resp.text[:300]}"
+    try:
+        payload = resp.json()
+    except Exception as exc:
+        return None, f"OAuth token response was not JSON: {exc}"
+    return payload, ""
+
+
+def _x_oauth2_normalize_token(payload: dict, previous: dict | None = None) -> dict:
+    previous = previous or {}
+    expires_in = int((payload or {}).get("expires_in") or 7200)
+    return {
+        "access_token": payload.get("access_token") or previous.get("access_token", ""),
+        "refresh_token": payload.get("refresh_token") or previous.get("refresh_token", ""),
+        "token_type": payload.get("token_type") or previous.get("token_type") or "bearer",
+        "scope": payload.get("scope") or previous.get("scope") or X_OAUTH2_SCOPES,
+        "expires_at": time.time() + max(60, expires_in - 60),
+        "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _x_oauth2_exchange_callback(code: str, state: str) -> tuple[bool, str]:
+    pending = _x_oauth2_load_pending()
+    if not pending:
+        return False, "OAuth connection expired. Start the secure X connect flow again."
+    if str(pending.get("state") or "") != str(state or ""):
+        return False, "OAuth state mismatch. Secure X connection was rejected."
+    if time.time() > float(pending.get("expires_at") or 0):
+        _x_oauth2_clear_pending()
+        return False, "OAuth connection expired. Start the secure X connect flow again."
+    cfg = _x_oauth2_config()
+    form = {
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": cfg.get("redirect_uri", ""),
+        "code_verifier": pending.get("code_verifier", ""),
+    }
+    payload, err = _x_oauth2_token_request(form)
+    _x_oauth2_clear_pending()
+    if err:
+        return False, err
+    token = _x_oauth2_normalize_token(payload or {})
+    save_err = _x_oauth2_save_token(token)
+    if save_err:
+        st.session_state["_x_oauth2_notice"] = "X connected for this session, but persistent encrypted token storage is not ready: " + save_err
+    return True, "X OAuth connected"
+
+
+def _x_oauth2_access_token() -> tuple[str, str]:
+    token, err = _x_oauth2_load_token()
+    if not token:
+        missing = _x_oauth2_missing_config()
+        if missing:
+            return "", "not configured: missing " + ", ".join(missing)
+        return "", err or "not connected"
+    access_token = str(token.get("access_token") or "")
+    if access_token and float(token.get("expires_at") or 0) > time.time() + 120:
+        return access_token, ""
+    refresh_token = str(token.get("refresh_token") or "")
+    if not refresh_token:
+        return "", "OAuth access token expired and no refresh token is available"
+    form = {"refresh_token": refresh_token, "grant_type": "refresh_token"}
+    payload, refresh_err = _x_oauth2_token_request(form)
+    if refresh_err:
+        return "", refresh_err
+    refreshed = _x_oauth2_normalize_token(payload or {}, previous=token)
+    save_err = _x_oauth2_save_token(refreshed)
+    if save_err:
+        return "", save_err
+    return str(refreshed.get("access_token") or ""), ""
+
+
+def _post_tweet_native_x_oauth2(text: str) -> tuple[bool, str]:
+    """Post through official X OAuth 2.0 user context. Requires tweet.write."""
+    access_token, err = _x_oauth2_access_token()
+    if not access_token:
+        return False, err
+    try:
+        resp = requests.post(
+            X_POST_API_URL,
+            json={"text": text},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=30,
+        )
+    except Exception as exc:
+        return False, str(exc)[:300]
+    if resp.status_code not in (200, 201):
+        return False, f"HTTP {resp.status_code}: {resp.text[:300]}"
+    try:
+        data = resp.json()
+    except Exception as exc:
+        return False, f"OAuth2 post response was not JSON: {exc}"
+    tweet_id = str(((data or {}).get("data") or {}).get("id") or "")
+    if not tweet_id:
+        return False, f"OAuth2 response missing tweet id: {str(data)[:240]}"
+    username = _x_native_post_credentials().get("username") or get_current_handle()
+    if username:
+        return True, f"https://x.com/{username.lstrip('@')}/status/{tweet_id}"
+    return True, tweet_id
+
+
+def _x_oauth2_status() -> dict:
+    cfg = _x_oauth2_config()
+    token, token_err = _x_oauth2_load_token()
+    expires_at = float((token or {}).get("expires_at") or 0)
+    return {
+        "configured": not bool(_x_oauth2_missing_config()),
+        "client_id": bool(cfg.get("client_id")),
+        "client_secret": bool(cfg.get("client_secret")),
+        "redirect_uri": bool(cfg.get("redirect_uri")),
+        "token_key": bool(cfg.get("token_key")),
+        "connected": bool((token or {}).get("access_token")),
+        "refresh_token": bool((token or {}).get("refresh_token")),
+        "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat(timespec="seconds") if expires_at else "",
+        "token_error": token_err if not token else "",
+        "scopes": (token or {}).get("scope") or X_OAUTH2_SCOPES,
+    }
+
+
+def _render_x_oauth2_connect_card(*, compact: bool = False) -> None:
+    status = _x_oauth2_status()
+    if compact:
+        st.info("Safer direct posting is available through official X OAuth. It uses your authorized X account instead of browser cookies.")
+    rows = [
+        {"item": "OAuth2 client ID", "ready": status["client_id"]},
+        {"item": "OAuth2 redirect URI", "ready": status["redirect_uri"]},
+        {"item": "Encrypted token key", "ready": status["token_key"]},
+        {"item": "Connected account token", "ready": status["connected"]},
+        {"item": "Refresh token", "ready": status["refresh_token"]},
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    if status.get("connected"):
+        st.success("X OAuth is connected. Direct posts will use the official X API first.")
+        if st.button("Disconnect X OAuth", key="x_oauth2_disconnect"):
+            _x_oauth2_clear_token()
+            st.rerun()
+        return
+    if not status.get("configured"):
+        st.warning("Add X_OAUTH2_CLIENT_ID and X_OAUTH2_REDIRECT_URI in Streamlit secrets to enable secure X connection.")
+        st.caption("Optional but recommended: add X_OAUTH2_CLIENT_SECRET for a Web App client and X_OAUTH_TOKEN_KEY for encrypted token storage.")
+        return
+    url, err = _x_oauth2_authorize_url()
+    if err:
+        st.warning(err)
+        return
+    st.markdown(
+        f'<a href="{html.escape(url)}" target="_self" '
+        'style="display:inline-block;padding:9px 16px;background:#2DD4BF;border-radius:9px;'
+        'color:#050810;font-weight:700;text-decoration:none;">Connect X Securely</a>',
+        unsafe_allow_html=True,
+    )
+    st.caption("This opens X's consent screen for tweet.write, tweet.read, users.read, and offline.access.")
+
+
+def _handle_x_oauth2_callback() -> None:
+    if str(st.query_params.get("x_oauth", "")).strip() != "callback":
+        return
+    error = str(st.query_params.get("error", "") or "").strip()
+    if error:
+        detail = str(st.query_params.get("error_description", "") or "").strip()
+        st.session_state["_x_oauth2_notice"] = f"X OAuth was not connected: {error} {detail}".strip()
+    else:
+        code = str(st.query_params.get("code", "") or "").strip()
+        state = str(st.query_params.get("state", "") or "").strip()
+        ok, detail = _x_oauth2_exchange_callback(code, state)
+        st.session_state["_x_oauth2_notice"] = detail if ok else "X OAuth connection failed: " + detail
+    for key in ["x_oauth", "code", "state", "error", "error_description"]:
+        try:
+            if key in st.query_params:
+                del st.query_params[key]
+        except Exception:
+            pass
+    if not st.query_params.get("page"):
+        st.query_params["page"] = "Creator Evolution"
+    st.rerun()
+
+
 def _x_native_post_credentials() -> dict:
     return {
         "consumer_key": _secret_or_env("X_API_KEY", "TWITTER_API_KEY", "X_CONSUMER_KEY", "TWITTER_CONSUMER_KEY"),
@@ -1734,7 +2172,7 @@ def _x_oauth1_header(method: str, url: str, creds: dict, extra_params: dict | No
     )
 
 
-def _post_tweet_native_x(text: str) -> tuple[bool, str]:
+def _post_tweet_native_x_oauth1(text: str) -> tuple[bool, str]:
     """Post through X API v2. Requires OAuth 1.0a user-context app secrets."""
     import urllib.request
 
@@ -1742,7 +2180,7 @@ def _post_tweet_native_x(text: str) -> tuple[bool, str]:
     missing = [name for name in ("consumer_key", "consumer_secret", "access_token", "access_secret") if not creds.get(name)]
     if missing:
         return False, "missing native X secrets: " + ", ".join(missing)
-    url = "https://api.x.com/2/tweets"
+    url = X_POST_API_URL
     body = json.dumps({"text": text}).encode()
     req = urllib.request.Request(
         url,
@@ -1787,6 +2225,9 @@ def _render_post_failure(detail: str, *, prefix: str = "Post failed") -> None:
         if clean_detail:
             if "No Twitter cookies available" in clean_detail:
                 st.error("Direct X posting needs a fresh X browser session. Open x.com in Chrome while logged in, then wait for the Post Ascend extension to sync cookies or click its extension popup.")
+            if "Native X OAuth2:" in clean_detail or "X_OAUTH2" in clean_detail:
+                with st.expander("Connect X securely", expanded=True):
+                    _render_x_oauth2_connect_card(compact=True)
             with st.expander("Why direct posting failed", expanded=True):
                 st.code(clean_detail, language="text")
         return
@@ -2267,6 +2708,15 @@ def load_json(filename: str, default=None):
 def save_json(filename: str, data):
     path = get_data_dir() / filename
     path.write_text(json.dumps(data, indent=2, default=str))
+
+
+_handle_x_oauth2_callback()
+_x_oauth2_notice_once = st.session_state.pop("_x_oauth2_notice", "")
+if _x_oauth2_notice_once:
+    if "failed" in _x_oauth2_notice_once.lower() or "not connected" in _x_oauth2_notice_once.lower():
+        st.error(_x_oauth2_notice_once)
+    else:
+        st.success(_x_oauth2_notice_once)
 
 
 # Single source for every Streamlit surface that builds tweet copy with AI.
@@ -17502,6 +17952,20 @@ def page_debug_console():
     st.dataframe(ai_rows, use_container_width=True, hide_index=True)
 
     st.markdown("### Native X Posting")
+    st.markdown("#### Official OAuth2 Posting")
+    _render_x_oauth2_connect_card()
+    x_oauth_status = _x_oauth2_status()
+    st.dataframe([
+        {"secret": "X_OAUTH2_CLIENT_ID / TWITTER_OAUTH2_CLIENT_ID", "present": x_oauth_status["client_id"]},
+        {"secret": "X_OAUTH2_CLIENT_SECRET / TWITTER_OAUTH2_CLIENT_SECRET", "present": x_oauth_status["client_secret"]},
+        {"secret": "X_OAUTH2_REDIRECT_URI / TWITTER_OAUTH2_REDIRECT_URI", "present": x_oauth_status["redirect_uri"]},
+        {"secret": "X_OAUTH_TOKEN_KEY / TWITTER_OAUTH_TOKEN_KEY", "present": x_oauth_status["token_key"]},
+        {"secret": "Connected OAuth token", "present": x_oauth_status["connected"]},
+        {"secret": "Refresh token from offline.access", "present": x_oauth_status["refresh_token"]},
+    ], use_container_width=True, hide_index=True)
+    if x_oauth_status.get("expires_at") or x_oauth_status.get("token_error"):
+        st.caption(f"OAuth2 status: expires={x_oauth_status.get('expires_at') or 'n/a'}; {x_oauth_status.get('token_error') or 'ready'}")
+    st.markdown("#### Legacy OAuth1 Fallback")
     x_creds = _x_native_post_credentials()
     st.dataframe([
         {"secret": "X_API_KEY / TWITTER_API_KEY", "present": bool(x_creds.get("consumer_key"))},

@@ -218,6 +218,22 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("generated_lineage", app_text)
         self.assertIn("Creator Evolution rejected every generated draft", app_text)
         self.assertNotIn("Creator Evolution blocked this post", app_text)
+        self.assertIn("X_OAUTH2_AUTHORIZE_URL", app_text)
+        self.assertIn("https://x.com/i/oauth2/authorize", app_text)
+        self.assertIn("X_OAUTH2_TOKEN_URL", app_text)
+        self.assertIn("https://api.x.com/2/oauth2/token", app_text)
+        self.assertIn("tweet.write tweet.read users.read offline.access", app_text)
+        self.assertIn("code_challenge_method", app_text)
+        self.assertIn("S256", app_text)
+        self.assertIn("X_OAUTH_TOKEN_KEY", app_text)
+        self.assertIn("_post_tweet_native_x_oauth2(clean_text)", app_text)
+        self.assertIn("_post_tweet_native_x_oauth1(clean_text)", app_text)
+        self.assertLess(
+            app_text.index("_post_tweet_native_x_oauth2(clean_text)"),
+            app_text.index("_post_tweet_native_x_oauth1(clean_text)"),
+        )
+        self.assertIn("Connect X Securely", app_text)
+        self.assertIn("Connected OAuth token", app_text)
         self.assertIn("Creator Evolution note only. Posting anyway because you control what goes to X.", app_text)
         self.assertIn('clean_text = (text or "").strip()', app_text)
         self.assertNotIn('clean_text = (text or "").strip()[:280]', app_text)
