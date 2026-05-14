@@ -1,22 +1,40 @@
 1
-00:00:02,000 --> 00:00:05,176
-10 out of 10 Audit is the internal quality
-control page. Pick an area,
+00:00:00,000 --> 00:00:02,300
+10/10 Audit
 
 2
-00:00:05,176 --> 00:00:08,352
-review what is not good enough yet, then
-turn the gaps into a fix
+00:00:02,300 --> 00:00:04,600
+Internal
+quality-control
 
 3
-00:00:08,352 --> 00:00:11,528
-list.
+00:00:04,600 --> 00:00:06,900
+audit for
+app/workflow areas.
 
 4
-00:00:11,528 --> 00:00:15,092
-This page is for making quality visible.
-It separates what works, what
+00:00:06,900 --> 00:00:09,200
+Use: Turn quality
+gaps into fixes.
 
 5
-00:00:15,092 --> 00:00:19,903
-is weak, and what should be fixed next.
+00:00:09,200 --> 00:00:11,500
+Demo: Mock Creator
+Evolution audit.
+
+6
+00:00:11,500 --> 00:00:13,800
+Open page
+
+7
+00:00:13,800 --> 00:00:16,100
+Pick area
+
+8
+00:00:16,100 --> 00:00:18,400
+Show findings
+
+9
+00:00:18,400 --> 00:00:20,600
+Turn quality gaps
+into fixes.

@@ -1,25 +1,49 @@
 WEBVTT
 
 1
-00:00:02.000 --> 00:00:05.600
-Podcast keeps an episode moving from
-source to final assets. It tracks
+00:00:00.000 --> 00:00:02.018
+Podcast
 
 2
-00:00:05.600 --> 00:00:09.200
-transcript, packaging, clips, approvals,
-publishing, and final
+00:00:02.018 --> 00:00:04.036
+Tracks podcast
+workflow from source
 
 3
-00:00:09.200 --> 00:00:12.800
-verification.
+00:00:04.036 --> 00:00:06.055
+to publish...
 
 4
-00:00:12.800 --> 00:00:16.460
-The important part is control. Each step
-has a place, and publishing
+00:00:06.055 --> 00:00:08.073
+Use: Keep the
+episode moving
 
 5
-00:00:16.460 --> 00:00:21.401
-should not happen until the right approval
-gate is complete.
+00:00:08.073 --> 00:00:10.091
+through approved...
+
+6
+00:00:10.091 --> 00:00:12.109
+Demo: Mock Draft Day
+episode run.
+
+7
+00:00:12.109 --> 00:00:14.127
+Open page
+
+8
+00:00:14.127 --> 00:00:16.145
+Open run
+
+9
+00:00:16.145 --> 00:00:18.164
+Show wizard steps
+
+10
+00:00:18.164 --> 00:00:20.182
+Keep the episode
+moving through
+
+11
+00:00:20.182 --> 00:00:22.100
+approved gates.

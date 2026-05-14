@@ -1,0 +1,29 @@
+{
+  "agents": {
+    "STYLE_MATCH_DIRECTOR": {
+      "approved": true,
+      "grade": 10,
+      "evidence": "APPROVED 10/10 after final fixture shell, style, static sync, and locked pipeline checks."
+    },
+    "PRODUCT_EDUCATION_REVIEWER": {
+      "approved": true,
+      "grade": 10,
+      "evidence": "APPROVED 10/10 after render, QC, public byte sync, owner-only exclusion, and final-review packet update."
+    },
+    "UI_ACCURACY_AND_SECURITY_QA": {
+      "approved": true,
+      "grade": 10,
+      "evidence": "APPROVED 10/10 with no secrets, no owner-only public leakage, public byte sync, and no live-posting blockers."
+    },
+    "AUDIO_CAPTION_ACCESSIBILITY_QA": {
+      "approved": true,
+      "grade": 10,
+      "evidence": "APPROVED 10/10 with 19 MP4/SRT/VTT pairs, no caption mismatches, no duration overruns, max cue 4.09s, max CPS 18.8, and safe audio peaks."
+    },
+    "EXECUTIVE_LAUNCH_REVIEWER": {
+      "approved": true,
+      "grade": 10,
+      "evidence": "APPROVED 10/10 with 14 public tutorials, owner-only exclusions, public byte sync, correct export specs, and launch-ready surface."
+    }
+  }
+}

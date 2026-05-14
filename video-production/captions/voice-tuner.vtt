@@ -1,25 +1,49 @@
 WEBVTT
 
 1
-00:00:02.000 --> 00:00:05.792
-Voice Tuner is the safe testing lab.
-Option A is the current live
+00:00:00.000 --> 00:00:02.136
+Voice Tuner
 
 2
-00:00:05.792 --> 00:00:09.584
-voice. Option B is the sandbox version.
-Nothing changes live unless
+00:00:02.136 --> 00:00:04.273
+Safe lab for testing
+voice changes
 
 3
-00:00:09.584 --> 00:00:13.376
-you explicitly apply it live.
+00:00:04.273 --> 00:00:06.409
+before...
 
 4
-00:00:13.376 --> 00:00:17.432
-Choose the voice, choose the format, run
-the A B test, then add
+00:00:06.409 --> 00:00:08.545
+Use: Nothing changes
+live unless
 
 5
-00:00:17.432 --> 00:00:22.908
-feedback to the sandbox until the voice
-feels right.
+00:00:08.545 --> 00:00:10.682
+explicitly applied.
+
+6
+00:00:10.682 --> 00:00:12.818
+Demo: Bo Nix may be
+on track,...
+
+7
+00:00:12.818 --> 00:00:14.955
+Open page
+
+8
+00:00:14.955 --> 00:00:17.091
+Choose Promo
+
+9
+00:00:17.091 --> 00:00:19.227
+Generate A/B Test
+
+10
+00:00:19.227 --> 00:00:21.364
+Nothing changes live
+unless explicitly
+
+11
+00:00:21.364 --> 00:00:23.400
+applied.

@@ -1,20 +1,25 @@
 WEBVTT
 
 1
-00:00:02.000 --> 00:00:06.548
-Debug Console is owner-only. It is used
-for safe diagnostics when AI,
+00:00:00.000 --> 00:00:03.333
+Debug Console
 
 2
-00:00:06.548 --> 00:00:11.096
-posting, sync, or integrations are not
-working.
+00:00:03.333 --> 00:00:06.667
+Owner only
 
 3
-00:00:11.096 --> 00:00:14.528
-The value is a go or no-go read on route,
-proxy, and app health
+00:00:06.667 --> 00:00:10.000
+Provider health
 
 4
-00:00:14.528 --> 00:00:19.161
-without exposing secrets in the video.
+00:00:10.000 --> 00:00:13.333
+Safe demo data
+
+5
+00:00:13.333 --> 00:00:16.667
+No secrets shown
+
+6
+00:00:16.667 --> 00:00:19.900
+Troubleshoot safely

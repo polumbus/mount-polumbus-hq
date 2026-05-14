@@ -1,37 +1,39 @@
 1
-00:00:02,500 --> 00:00:05,876
-Idea Bank is where you keep the posts,
-angles, and references you do
+00:00:00,000 --> 00:00:03,400
+Idea Bank
 
 2
-00:00:05,876 --> 00:00:09,252
-not want to lose. It gives you a reusable
-vault instead of starting
+00:00:03,400 --> 00:00:06,800
+Saved content vault
+for ideas, drafts,
 
 3
-00:00:09,252 --> 00:00:12,628
-from zero every time.
+00:00:06,800 --> 00:00:10,200
+and...
 
 4
-00:00:12,628 --> 00:00:15,268
-The vault keeps your saved inspiration in
-one place, so when you need
+00:00:10,200 --> 00:00:13,600
+Use: Good ideas stay
+available for reuse.
 
 5
-00:00:15,268 --> 00:00:17,908
-a strong starting point you can browse
-proven ideas instead of
+00:00:13,600 --> 00:00:17,000
+Demo: Saved camp
+pressure idea.
 
 6
-00:00:17,908 --> 00:00:20,548
-guessing.
+00:00:17,000 --> 00:00:20,400
+Open page
 
 7
-00:00:20,548 --> 00:00:24,568
-When you find a post worth saving, use Add
-to Vault to capture the
+00:00:20,400 --> 00:00:23,800
+Browse ideas
 
 8
-00:00:24,568 --> 00:00:29,995
-text, author, tags, and performance
-context for later.
+00:00:23,800 --> 00:00:27,200
+Open idea
+
+9
+00:00:27,200 --> 00:00:30,500
+Good ideas stay
+available for reuse.

@@ -1,41 +1,41 @@
 1
-00:00:02,500 --> 00:00:05,932
-Content Coach gives you strategy, not just
-output. Amplifier uses your
+00:00:00,000 --> 00:00:03,344
+Content Coach
 
 2
-00:00:05,932 --> 00:00:09,364
-history, your patterns, and the algorithm
-to tell you what to post
+00:00:03,344 --> 00:00:06,689
+Strategic advisor
+for angles,
 
 3
-00:00:09,364 --> 00:00:12,796
-next and why it should work.
+00:00:06,689 --> 00:00:10,033
+positioning, and
+stronger...
 
 4
-00:00:12,796 --> 00:00:17,020
-You can keep the answer as general advice
-or force the recommendation
+00:00:10,033 --> 00:00:13,378
+Use: Use it when the
+angle feels...
 
 5
-00:00:17,020 --> 00:00:21,244
-into a post format like a normal tweet,
-thread, or article.
+00:00:13,378 --> 00:00:16,722
+Demo: How should I
+frame Sean Payton...
 
 6
-00:00:21,244 --> 00:00:24,328
-Ask a direct question tied to what you
-want to improve. The better the
+00:00:16,722 --> 00:00:20,067
+Open page
 
 7
-00:00:24,328 --> 00:00:27,412
-question, the more useful the answer.
+00:00:20,067 --> 00:00:23,411
+Ask coaching
+question
 
 8
-00:00:27,412 --> 00:00:30,700
-Hit Send and Amplifier answers with
-strategy grounded in your voice,
+00:00:23,411 --> 00:00:26,756
+Submit
 
 9
-00:00:30,700 --> 00:00:35,139
-your data, and the algorithm.
+00:00:26,756 --> 00:00:30,000
+Use it when the
+angle feels generic.

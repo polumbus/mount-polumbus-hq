@@ -1,27 +1,51 @@
 1
-00:00:00,000 --> 00:00:05,000
-Fan Pulse Gameday: Finds live sports fan
-emotion and timely angles.
+00:00:00,000 --> 00:00:02,508
+Fan Pulse Gameday
 
 2
-00:00:05,000 --> 00:00:11,000
-Use it when: Post while the moment still
-matters.
+00:00:02,508 --> 00:00:05,017
+Finds live sports
+fan emotion and
 
 3
-00:00:11,000 --> 00:00:18,000
-Example: Mock Avalanche playoff momentum
-swing.
+00:00:05,017 --> 00:00:07,525
+timely...
 
 4
-00:00:18,000 --> 00:00:21,500
-Workflow: Open page, Show live game topic,
-Review fan angle, Create
+00:00:07,525 --> 00:00:10,033
+Use: Post while the
+moment still
 
 5
-00:00:21,500 --> 00:00:25,000
-timely post idea
+00:00:10,033 --> 00:00:12,542
+matters.
 
 6
-00:00:25,000 --> 00:00:31,750
-Post while the moment still matters.
+00:00:12,542 --> 00:00:15,050
+Demo: Mock Avalanche
+playoff momentum
+
+7
+00:00:15,050 --> 00:00:17,558
+swing.
+
+8
+00:00:17,558 --> 00:00:20,067
+Open page
+
+9
+00:00:20,067 --> 00:00:22,575
+Show live game topic
+
+10
+00:00:22,575 --> 00:00:25,083
+Review fan angle
+
+11
+00:00:25,083 --> 00:00:27,592
+Post while the
+moment still
+
+12
+00:00:27,592 --> 00:00:30,000
+matters.

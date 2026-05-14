@@ -1,18 +1,43 @@
 1
-00:00:02,000 --> 00:00:06,596
-Post History is the memory of the account.
-It shows what has already
+00:00:00,000 --> 00:00:02,020
+Post History
 
 2
-00:00:06,596 --> 00:00:11,192
-been posted, helps avoid repeats, and
-gives the system better context.
+00:00:02,020 --> 00:00:04,040
+Tracks past posts
+and gives the app...
 
 3
-00:00:11,192 --> 00:00:14,696
-The value is context. You can review the
-pattern, then decide what to
+00:00:04,040 --> 00:00:06,060
+Use: Avoid repeats
+and give the
 
 4
-00:00:14,696 --> 00:00:19,426
-say next without repeating the same angle.
+00:00:06,060 --> 00:00:08,080
+system...
+
+5
+00:00:08,080 --> 00:00:10,100
+Demo: Mock recent
+post history.
+
+6
+00:00:10,100 --> 00:00:12,120
+Open page
+
+7
+00:00:12,120 --> 00:00:14,140
+Show previous posts
+
+8
+00:00:14,140 --> 00:00:16,160
+Filter or scroll
+
+9
+00:00:16,160 --> 00:00:18,180
+Avoid repeats and
+give the system
+
+10
+00:00:18,180 --> 00:00:20,100
+better...

@@ -1,100 +1,52 @@
 1
-00:00:01,600 --> 00:00:05,888
-If you're serious about growing on X, Post
-Ascend is the system that
+00:00:00,000 --> 00:00:02,508
+Overview
 
 2
-00:00:05,888 --> 00:00:10,176
-makes random posting feel outdated. Stop
-guessing what to write. Stop
+00:00:02,508 --> 00:00:05,017
+Introduce Post
+Ascend as a creator
 
 3
-00:00:10,176 --> 00:00:14,464
-wasting strong ideas. Stop posting without
-a plan.
+00:00:05,017 --> 00:00:07,525
+operating...
 
 4
-00:00:14,464 --> 00:00:17,504
-Go Viral turns one raw thought into
-multiple high-upside posts in
+00:00:07,525 --> 00:00:10,033
+Use: Capture,
+create, tune, score,
 
 5
-00:00:17,504 --> 00:00:20,544
-seconds. Pick the winner, refresh the
-batch, and move fast while the
+00:00:10,033 --> 00:00:12,542
+and learn...
 
 6
-00:00:20,544 --> 00:00:23,584
-idea is still hot.
+00:00:12,542 --> 00:00:15,050
+Demo: Fast flashes
+of major app
 
 7
-00:00:23,584 --> 00:00:27,424
-Content Coach tells you what to post next,
-what format to use, and why
+00:00:15,050 --> 00:00:17,558
+sections.
 
 8
-00:00:27,424 --> 00:00:31,264
-it should work. This is not generic AI
-filler. It's strategy tuned to
+00:00:17,558 --> 00:00:20,067
+Show opening title
 
 9
-00:00:31,264 --> 00:00:35,104
-your account, your voice, and the
-algorithm.
+00:00:20,067 --> 00:00:22,575
+Show page group
+flashes
 
 10
-00:00:35,104 --> 00:00:38,288
-Reply Mode turns engagement into a daily
-system. Load the feed, spot
+00:00:22,575 --> 00:00:25,083
+End on app view
 
 11
-00:00:38,288 --> 00:00:41,472
-the angles, and build momentum with
-replies that compound instead of
+00:00:25,083 --> 00:00:27,592
+Capture, create,
+tune, score, and
 
 12
-00:00:41,472 --> 00:00:44,656
-wasting time doom-scrolling.
-
-13
-00:00:44,656 --> 00:00:47,440
-Before anything goes live, Algorithm Score
-pressure-tests the post,
-
-14
-00:00:47,440 --> 00:00:50,224
-finds the weak spot, and tells you exactly
-what to fix so weak drafts
-
-15
-00:00:50,224 --> 00:00:53,008
-stop costing you reach.
-
-16
-00:00:53,008 --> 00:00:56,040
-My Stats and Account Audit make the growth
-picture obvious. You can
-
-17
-00:00:56,040 --> 00:00:59,072
-see what is winning, where the account is
-leaking, and what to fix
-
-18
-00:00:59,072 --> 00:01:02,104
-next without digging through ten tabs.
-
-19
-00:01:02,104 --> 00:01:05,624
-If content drives your business, your
-audience, or your brand, you
-
-20
-00:01:05,624 --> 00:01:09,144
-cannot afford to wing it. Sign up for Post
-Ascend now and turn posting
-
-21
-00:01:09,144 --> 00:01:13,896
-into a real growth system before everyone
-else catches up.
+00:00:27,592 --> 00:00:30,000
+learn in...

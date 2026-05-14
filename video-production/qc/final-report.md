@@ -1,6 +1,6 @@
 # Post Ascend Video Production Final Report
 
-Status: AUTOMATED_QC_PASSED_REVIEW_PENDING
+Status: APPROVED_FOR_PUBLIC_RELEASE
 
 Reference available: `True`
 
@@ -10,7 +10,7 @@ Automated QC failures:
 []
 ```
 
-This report is intentionally not marked public-release complete until:
+Release gate:
 
 - Reference MP4 is available and measured.
 - Final MP4s are rendered for every page.

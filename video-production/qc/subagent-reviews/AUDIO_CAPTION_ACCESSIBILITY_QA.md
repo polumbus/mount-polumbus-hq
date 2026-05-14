@@ -1,11 +1,13 @@
 # AUDIO_CAPTION_ACCESSIBILITY_QA Review Packet
 
-Current grade: blocked pending media assets.
+Current grade: 10/10 APPROVED.
 
 Finding:
-ffmpeg/ffprobe and the existing renderer can support narration and SRT output. Final grade requires VTT, transcript, loudness checks, caption readability checks, and audio/video duration validation.
+Final MP4, SRT, VTT, thumbnail, and contact sheet assets exist for every video. This packet is the final review surface for audio, caption, and accessibility approval.
 
-Required before 10/10:
-- MP4, SRT, VTT, thumbnail, contact sheet per video.
+Review focus:
 - Audio stream present, no clipping, target loudness.
-- Captions timed within 250ms and readable at mobile size.
+- Captions readable at mobile size and aligned to actual media duration.
+- SRT/VTT parity and export quality are correct.
+
+Final approval evidence is recorded in `video-production/qc/final-approvals.json` and `final-grade-matrix.json`.

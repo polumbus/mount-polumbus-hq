@@ -1,27 +1,43 @@
 1
-00:00:00,000 --> 00:00:05,000
-Signals & Prompts: Finds timely signals
-and turns them into prompts.
+00:00:00,000 --> 00:00:03,010
+Signals & Prompts
 
 2
-00:00:05,000 --> 00:00:11,000
-Use it when: Know what to talk about
-today.
+00:00:03,010 --> 00:00:06,020
+Finds timely signals
+and turns them
 
 3
-00:00:11,000 --> 00:00:18,000
-Example: Mock Broncos camp and Denver
-sports signals.
+00:00:06,020 --> 00:00:09,030
+into...
 
 4
-00:00:18,000 --> 00:00:21,500
-Workflow: Open page, Load signals, Pick
-one signal, Turn it into
+00:00:09,030 --> 00:00:12,040
+Use: Know what to
+talk about today.
 
 5
-00:00:21,500 --> 00:00:25,000
-prompt
+00:00:12,040 --> 00:00:15,050
+Demo: Mock Broncos
+camp and Denver
 
 6
-00:00:25,000 --> 00:00:31,750
-Know what to talk about today.
+00:00:15,050 --> 00:00:18,060
+sports...
+
+7
+00:00:18,060 --> 00:00:21,070
+Open page
+
+8
+00:00:21,070 --> 00:00:24,080
+Load signals
+
+9
+00:00:24,080 --> 00:00:27,090
+Pick one signal
+
+10
+00:00:27,090 --> 00:00:30,000
+Know what to talk
+about today.
