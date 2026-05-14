@@ -122,6 +122,7 @@ CE_TESTING_SESSION_DEFAULT = {
     "model_preferences": {},
     "prompt_preferences": {},
     "feedback": [],
+    "live_voice_overrides": {},
     "generations": {},
 }
 for _ce_attr, _ce_default in CE_COMPAT_DEFAULTS.items():
@@ -7891,6 +7892,28 @@ def _ce_normalize_lane(lane: str | None) -> str:
     return lane if lane in lanes else _ce_default_lane()
 
 
+def _ce_live_voice_override_text(lane: str) -> str:
+    lane = _ce_normalize_lane(lane)
+    try:
+        state = load_json(CE_TESTING_STATE_FILENAME, _ce_testing_default_state())
+    except Exception:
+        state = {}
+    overrides = state.get("live_voice_overrides", {}) if isinstance(state, dict) else {}
+    entries = overrides.get(lane, []) if isinstance(overrides, dict) else []
+    if isinstance(entries, str):
+        entries = [entries]
+    clean_entries = [str(entry).strip() for entry in entries if str(entry).strip()]
+    if not clean_entries:
+        return ""
+    lines = [
+        f"LIVE VOICE TUNER OVERRIDE FOR {lane}:",
+        "- These owner-approved Voice Tuner changes are now live for this voice.",
+        "- Apply them after the base voice rules while preserving source details, stat integrity, no hashtags, no invented facts, and no polished punctuation.",
+    ]
+    lines.extend(f"- {entry}" for entry in clean_entries[-12:])
+    return "\n".join(lines)
+
+
 def _ce_prompt_version() -> str:
     return str(getattr(ce, "PROMPT_VERSION", CE_COMPAT_DEFAULTS["PROMPT_VERSION"]) or CE_COMPAT_DEFAULTS["PROMPT_VERSION"])
 
@@ -10374,10 +10397,13 @@ def _ce_lane_recipe_text(lane: str) -> str:
     """Return Creator Evolution lane rules even when Cloud has a stale helper module."""
     lane = _ce_normalize_lane(lane)
     formatter = getattr(ce, "lane_recipe_text", None)
+    live_override_text = _ce_live_voice_override_text(lane)
     if callable(formatter) and formatter is not _ce_lane_recipe_text:
         try:
             text = str(formatter(lane) or "").strip()
             if text:
+                if live_override_text:
+                    return f"{text}\n\n{live_override_text}"
                 return text
         except Exception as exc:
             _ce_pulse_debug_event("warn", "lane recipe helper recovered", {"error": str(exc)[:160]})
@@ -10389,13 +10415,16 @@ def _ce_lane_recipe_text(lane: str) -> str:
         "avoid": "Content-strategy phrasing, generic templates, fake questions, and invented facts.",
         "ending": "A declarative open loop or punchline that leaves the tension alive.",
     }
-    return "\n".join([
+    recipe_text = "\n".join([
         f"{lane}:",
         f"- Target: {recipe.get('target', '')}",
         f"- Do: {recipe.get('do', '')}",
         f"- Avoid: {recipe.get('avoid', '')}",
         f"- Ending: {recipe.get('ending', '')}",
     ])
+    if live_override_text:
+        recipe_text = f"{recipe_text}\n\n{live_override_text}"
+    return recipe_text
 
 
 def _ce_format_recipe_text(fmt: str) -> str:
@@ -12122,7 +12151,8 @@ def _ce_testing_item_for_voice(concepts: list[dict], selected_lane: str, fallbac
     return dict(fallback)
 
 
-def _ce_testing_overlay_text(state: dict) -> str:
+def _ce_testing_overlay_text(state: dict, lane: str | None = None) -> str:
+    selected_lane = _ce_normalize_lane(lane) if lane else ""
     feedback = state.get("feedback", []) if isinstance(state, dict) else []
     lines = [
         "CREATOR EVOLUTION OPTION B OVERRIDES:",
@@ -12135,9 +12165,12 @@ def _ce_testing_overlay_text(state: dict) -> str:
     for item in feedback:
         if isinstance(item, dict):
             text = str(item.get("text", "")).strip()
-            lane = str(item.get("lane", "")).strip()
+            item_lane = _ce_normalize_lane(item.get("lane", "")) if item.get("lane") else ""
+            if selected_lane and item_lane and item_lane != selected_lane:
+                continue
+            lane_label = str(item.get("lane", "")).strip()
             if text:
-                clean_feedback.append(f"{lane}: {text}" if lane else text)
+                clean_feedback.append(f"{lane_label}: {text}" if lane_label else text)
         elif str(item).strip():
             clean_feedback.append(str(item).strip())
     if clean_feedback:
@@ -12164,7 +12197,7 @@ def _ce_testing_generate(
     state = _creator_evolution_state()
     prompt = _ce_build_generation_prompt(concept, fmt, lane, state, action="testing")
     lab_state = _ce_testing_state()
-    overlay = _ce_testing_overlay_text(lab_state) if testing_copy else ""
+    overlay = _ce_testing_overlay_text(lab_state, lane) if testing_copy else ""
     raw = _call_creator_evolution_ai_for_provider(
         prompt,
         lane,
@@ -12228,7 +12261,7 @@ def page_voice_tuner():
         st.warning("Owner access required.")
         return
     st.markdown('<div class="main-header">VOICE TUNER</div>', unsafe_allow_html=True)
-    st.markdown('<div class="tool-desc">Permanent Creator Evolution sandbox. Baseline stays locked; live feedback only changes this tuning copy.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tool-desc">Permanent Creator Evolution sandbox. Choose a voice, tune Option B safely, then apply that voice tuning live when approved.</div>', unsafe_allow_html=True)
 
     concepts = _ce_testing_concepts()
     state = _ce_testing_state()
@@ -12285,7 +12318,7 @@ def page_voice_tuner():
     with control_cols[1]:
         lane_opts = list(_ce_emotion_lanes())
         selected_lane = st.selectbox(
-            "Voice To Test",
+            "Voice To Tune",
             lane_opts,
             index=lane_opts.index(state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())))
             if state.get("voice_tuner_lane", item.get("lane", _ce_default_lane())) in lane_opts
@@ -12310,9 +12343,9 @@ def page_voice_tuner():
 
     generations = state.setdefault("generations", {})
     st.markdown("### Baseline vs Tuned Copy")
-    st.caption("Option A uses current Creator Evolution rules. Option B uses the monetization-optimized rules you supplied plus any feedback below. Live Creator Evolution is not changed.")
+    st.caption("Option A uses current live Creator Evolution rules. Option B uses the tuned Voice Tuner copy for this selected voice. Use the live button below only when you want the tuned feedback to affect Creator Evolution.")
     st.caption(f"Using model for this concept: {provider} | Voice: {selected_lane} | Format: {selected_fmt}")
-    gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state).encode()).hexdigest()[:8])
+    gen_key = _ce_testing_generation_key(item, "voice_tuner", provider, hashlib.sha1(_ce_testing_overlay_text(state, selected_lane).encode()).hexdigest()[:8])
     existing = generations.get(gen_key, {}) if isinstance(generations.get(gen_key), dict) else {}
     if st.button("Generate Baseline vs Tuned Copy", type="primary", use_container_width=True):
         with st.spinner("Generating baseline and tuned-copy outputs..."):
@@ -12348,6 +12381,34 @@ def page_voice_tuner():
         _save_ce_testing_state(state)
         st.toast("Feedback applied to Voice Tuner.")
         st.rerun()
+
+    lane_feedback = [
+        entry for entry in state.get("feedback", [])
+        if isinstance(entry, dict)
+        and _ce_normalize_lane(entry.get("lane", "")) == selected_lane
+        and str(entry.get("text", "")).strip()
+    ]
+    live_overrides = state.setdefault("live_voice_overrides", {})
+    live_entries = live_overrides.get(selected_lane, []) if isinstance(live_overrides, dict) else []
+    if isinstance(live_entries, str):
+        live_entries = [live_entries]
+    st.markdown("### Make This Voice Live")
+    st.caption(f"{len(lane_feedback)} tuned feedback note(s) are available for {selected_lane}. {len(live_entries)} live override note(s) are currently active.")
+    live_cols = st.columns(2)
+    with live_cols[0]:
+        if st.button(f"Apply {selected_lane} Tuning Live", type="primary", use_container_width=True, disabled=not lane_feedback):
+            live_overrides[selected_lane] = [str(entry.get("text", "")).strip() for entry in lane_feedback if str(entry.get("text", "")).strip()][-12:]
+            state["live_voice_overrides"] = live_overrides
+            _save_ce_testing_state(state)
+            st.toast(f"{selected_lane} tuning is now live in Creator Evolution.")
+            st.rerun()
+    with live_cols[1]:
+        if st.button(f"Remove Live {selected_lane} Tuning", use_container_width=True, disabled=not live_entries):
+            live_overrides.pop(selected_lane, None)
+            state["live_voice_overrides"] = live_overrides
+            _save_ce_testing_state(state)
+            st.toast(f"Live {selected_lane} tuning removed.")
+            st.rerun()
     result_cols = st.columns(4)
     result_choices = [("Option A wins", "Baseline"), ("Option B wins", "Testing"), ("Tie", "Tie"), ("Next concept", "Next")]
     for col, (label, value) in zip(result_cols, result_choices):
@@ -12373,7 +12434,9 @@ def page_voice_tuner():
                 _save_ce_testing_state(state)
                 st.rerun()
     with st.expander("Current Voice Tuner prompt overlay", expanded=False):
-        st.text(_ce_testing_overlay_text(state))
+        st.text(_ce_testing_overlay_text(state, selected_lane))
+    with st.expander("Live voice override for selected voice", expanded=False):
+        st.text(_ce_live_voice_override_text(selected_lane) or "No live override is active for this voice.")
 
 
 def page_testing():
