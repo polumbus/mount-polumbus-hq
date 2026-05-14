@@ -65,6 +65,14 @@ def test_creator_evolution_grok_uses_proxy_when_direct_key_missing():
     assert '"ready via HQ proxy"' in source
 
 
+def test_voice_tuner_is_in_mobile_owner_nav():
+    source = APP.read_text(encoding="utf-8")
+    mobile_nav = source[source.index("# ── Mobile hamburger nav") : source.index("page = st.session_state.current_page")]
+
+    assert "page=Voice+Tuner" in mobile_nav
+    assert "Voice Tuner" in mobile_nav
+
+
 if __name__ == "__main__":
     test_streamlit_api_key_routes_are_opt_in_only()
     test_streamlit_oauth_proxy_routes_precede_openai_api_key_fallback()
@@ -72,3 +80,4 @@ if __name__ == "__main__":
     test_creator_evolution_provider_normalizer_preserves_chatgpt_choice()
     test_streamlit_secret_lookup_has_local_secrets_fallback()
     test_creator_evolution_grok_uses_proxy_when_direct_key_missing()
+    test_voice_tuner_is_in_mobile_owner_nav()

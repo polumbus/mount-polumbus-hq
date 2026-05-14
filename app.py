@@ -4008,6 +4008,7 @@ st.markdown(f"""
   <div style="{_sec}">CREATE</div>
   <a href="/?{_tok_qp}page=Creator+Studio" target="_self" style="{_lnk}">Creator Studio</a>
   {'<a href="/?'+_tok_qp+'page=Creator+Evolution" target="_self" style="'+_lnk+'">Creator Evolution</a>' if is_owner() else ''}
+  {'<a href="/?'+_tok_qp+'page=Voice+Tuner" target="_self" style="'+_lnk+'">Voice Tuner</a>' if is_owner() else ''}
   <a href="/?{_tok_qp}page=Raw+Thoughts" target="_self" style="{_lnk}">Raw Thoughts</a>
   <a href="/?{_tok_qp}page=Content Coach" target="_self" style="{_lnk}">Content Coach</a>
   <a href="/?{_tok_qp}page=Article+Writer" target="_self" style="{_lnk}">Article Writer</a>
@@ -4037,7 +4038,7 @@ st.markdown(f"""
 
 
 page = st.session_state.current_page
-if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Fan Pulse Gameday", "Podcast", "Creator Evolution", "10/10 Audit"} and not is_owner():
+if page in {"Debug Console", "Signals & Prompts", "Gameday Mode", "Fan Pulse Gameday", "Podcast", "Creator Evolution", "Voice Tuner", "10/10 Audit"} and not is_owner():
     _append_debug_event("nav", "redirect", f"{page} blocked for non-owner", {
         "auth_role": st.session_state.get("auth_role", ""),
         "query_page": st.query_params.get("page", ""),
