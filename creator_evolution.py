@@ -216,6 +216,81 @@ FORMAT_RECIPES = {
 }
 
 
+VOICE_TUNER_TEST_SCENARIOS = {
+    "Witty Edge": (
+        "The Broncos keep saying this roster finally has real depth, but the first surprise cut will tell us whether that is actual competition or just a nicer way to describe average.",
+        "The Avs keep calling the goalie picture settled, but the next tough start will show whether that confidence is real or just convenient.",
+        "The Nuggets keep talking about flexibility, but the non-Jokic minutes are still the part that decides how brave the offseason actually gets.",
+    ),
+    "Comedic": (
+        "The Nuggets say everything is on the table this summer, but nobody knows if that includes the bench minutes that keep turning every lead into a group project from hell.",
+        "The Broncos keep calling it open competition, which is adorable because half the fanbase has already talked itself into every backup like he is a secret Pro Bowler.",
+        "The Rockies keep calling this development, and the lineup keeps responding like left-handed pitching was invented this morning.",
+    ),
+    "Annoyed": (
+        "The Avs keep acting like the goalie conversation is settled, but one shaky start turns the whole thing back into the same exhausting argument.",
+        "The Broncos keep saying every job is open, but the annoying part is how often reputation still seems to get the first real chance.",
+        "The Nuggets keep saying the right things about fixing the rotation, but the same pressure point keeps surviving every offseason explanation.",
+    ),
+    "Fired-Up": (
+        "The Broncos finally have real energy around camp, young players are pushing veterans, the defense looks fast, and this roster feels like it is starting to believe.",
+        "The Avs just got the kind of response shift that makes the whole bench feel alive and gives the series a completely different charge.",
+        "The Nuggets have a chance to turn one ugly ending into the offseason that finally forces real answers and a tougher roster.",
+    ),
+    "Skeptical": (
+        "The Broncos keep saying the roster is more competitive now, but training camp will show whether that is real depth or just more average players fighting for the same spots.",
+        "The Avs can say the goalie call is matchup-based, but one more switch will make it fair to wonder if they actually know who they trust.",
+        "The Nuggets can sell patience this summer, but the same bench problem keeps asking for proof instead of another clean explanation.",
+    ),
+    "Critical": (
+        "Sean Payton keeps saying competition matters, but camp will show which Broncos players actually respond when reputation stops protecting roster spots.",
+        "The Nuggets front office can talk about options, but the real critique starts if the rotation problem survives another offseason untouched.",
+        "The Avs can explain the goalie decision however they want, but the process matters if it turns one bad night into a confidence problem.",
+    ),
+    "Promo": (
+        "Bo Nix may be on track for training camp, but there is one more QB decision coming that will show how much the Broncos really trust the ankle.",
+        "RJ Harvey's job is already in jeopardy, but Jonah Coleman does not need to be RB1 to steal the Broncos snaps that matter most.",
+        "The Avs goalie switch sounds simple until you isolate the one bench tell that makes the decision feel a lot less clean.",
+    ),
+    "Celebratory": (
+        "The Avalanche finally got the kind of response game that makes the whole series feel like it just tilted back toward Colorado.",
+        "The Broncos finally have a camp where young players pushing veterans feels like a real roster strength instead of offseason decoration.",
+        "The Nuggets found the one lineup stretch that actually made the building feel like it remembered who it is.",
+    ),
+    "Deadpan": (
+        "The Rockies keep calling it a development year, then every road series politely reminds everyone the lineup still cannot hit left-handed pitching.",
+        "The Broncos say every job is open, which is a peaceful way to announce that several adults are about to have a very bad August.",
+        "The Avs goalie conversation is settled right up until the next save percentage graphic walks into the room and ruins the meeting.",
+    ),
+    "Sarcastic": (
+        "The Broncos say every job is open, which is always a very comforting thing to hear right before veterans realize the depth chart stopped caring about their resume.",
+        "The Nuggets are open to everything this summer, which is tremendous news for every problem except the one that keeps showing up when Jokic sits.",
+        "The Avs goalie situation is totally calm, which is why everyone keeps explaining how calm it is every fourteen minutes.",
+    ),
+}
+
+
+def voice_tuner_test_prompt(lane: str, fmt: str = "Normal Tweet", variant: int = 0) -> str:
+    """Return a voice-specific stress-test prompt for the Voice Tuner lab."""
+    lane = normalize_lane(lane)
+    fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
+    scenarios = VOICE_TUNER_TEST_SCENARIOS.get(lane) or VOICE_TUNER_TEST_SCENARIOS[DEFAULT_LANE]
+    try:
+        idx = int(variant or 0) % len(scenarios)
+    except (TypeError, ValueError):
+        idx = 0
+    base = scenarios[idx]
+    if fmt == "Punchy Tweet":
+        return f"{base} Keep it tight enough to prove the voice works in one or two sentences."
+    if fmt == "Long Tweet":
+        return f"{base} Use enough room to test whether the voice can build tension without over-explaining."
+    if fmt == "Thread":
+        return f"{base} Turn it into a short thread that tests whether each beat escalates instead of repeating the same point."
+    if fmt == "Article":
+        return f"{base} Expand it into a short article that tests whether the voice can hold a clear argument without sounding corporate."
+    return base
+
+
 def format_recipe(fmt: str) -> dict[str, str]:
     fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
     return dict(FORMAT_RECIPES[fmt])
@@ -2510,7 +2585,7 @@ def format_learning_text(state: dict[str, Any] | None, fmt: str) -> str:
     return "\n".join(lines)
 
 
-def voice_learning_text(state: dict[str, Any] | None) -> str:
+def voice_learning_text(state: dict[str, Any] | None, lane: str | None = None) -> str:
     patterns = (state or {}).get("patterns", {}) if isinstance(state, dict) else {}
     profile = patterns.get("voice_profile") if isinstance(patterns, dict) else None
     if not isinstance(profile, dict) or not _safe_int(profile.get("sample_size", 0)):
@@ -2526,6 +2601,7 @@ def voice_learning_text(state: dict[str, Any] | None) -> str:
     lines = [
         f"Creator Evolution learned voice profile ({profile.get('status', 'tracked')} sample, n={profile.get('sample_size', 0)}):",
         "- Use this as influence, not a hook library. Raw winner text is intentionally withheld from generation prompts.",
+        f"- Lane safety: apply these learned traits only when they fit the selected lane ({normalize_lane(lane) if lane else 'selected lane'}). The selected lane behavior remains the source of truth.",
     ]
     lines.extend(f"- Winning voice trait: {trait}" for trait in traits[:7])
     lines.extend(f"- Avoid voice drift: {trait}" for trait in avoid_traits[:3])
@@ -2690,7 +2766,7 @@ LANE BEHAVIOR:
 {lane_behavior}
 
 LEARNED VOICE PROFILE:
-{voice_learning_text(state) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
+{voice_learning_text(state, lane) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
 
 {context}
 {live_stats_block}

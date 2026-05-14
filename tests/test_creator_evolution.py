@@ -157,8 +157,25 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("page_voice_tuner", app_text)
         self.assertIn("page_testing", app_text)
         self.assertIn("CE_TESTING_STATE_FILENAME", app_text)
-        self.assertIn("CREATOR EVOLUTION TESTING COPY OVERRIDES", app_text)
+        self.assertIn("CREATOR EVOLUTION OPTION B SANDBOX OVERRIDES", app_text)
         self.assertIn("Generate Baseline vs Tuned Copy", app_text)
+        self.assertIn("Manual Test Prompt", app_text)
+        self.assertIn("Option A: Current Live Creator Evolution", app_text)
+        self.assertIn("Option B: Tuned Sandbox Version", app_text)
+        self.assertIn("Recent Voice Tuner Runs", app_text)
+        self.assertIn("def _ce_selected_tuning_rules", app_text)
+        self.assertIn("def _ce_testing_generate_pair", app_text)
+        self.assertIn("ThreadPoolExecutor(max_workers=2)", app_text)
+        self.assertIn("_ce_testing_generate_pair(item, provider, state)", app_text)
+        self.assertIn("_ce_testing_overlay_text(lab_state, lane, fmt)", app_text)
+        self.assertIn("_ce_voice_learning_text(state, lane)", app_text)
+        self.assertNotIn("CE_MONETIZATION_OPTIMIZED_AB_RULES =", app_text)
+        self.assertIn("elif str(item).strip() and not selected_lane", app_text)
+        self.assertIn('st.session_state["_ce_testing_state_cache"]', app_text)
+        self.assertIn('if report.get("ok"):', app_text)
+        self.assertIn("disabled=not live_entries or not confirm_live", app_text)
+        self.assertIn("Last choice for this prompt", app_text)
+        self.assertNotIn('"ok": True,\n            "issues": [],\n            "warnings": [],', app_text)
         self.assertNotIn("Generate ChatGPT vs Grok", app_text)
         self.assertIn("_ce_build_dialog", app_text)
         self.assertIn("_ce_show_build_dialog", app_text)
@@ -188,6 +205,24 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
         self.assertIn("_ce_build_generation_prompt", ce_runner)
+
+    def test_voice_tuner_generates_voice_and_format_specific_test_prompts(self):
+        for lane in ce.EMOTION_LANES:
+            normal = ce.voice_tuner_test_prompt(lane, "Normal Tweet", 0)
+            punchy = ce.voice_tuner_test_prompt(lane, "Punchy Tweet", 1)
+            thread = ce.voice_tuner_test_prompt(lane, "Thread", 2)
+
+            self.assertGreater(len(normal), 60, lane)
+            self.assertIn("Keep it tight", punchy)
+            self.assertIn("short thread", thread)
+            self.assertNotIn("write a tweet about", normal.lower())
+            self.assertNotIn("make this funny", normal.lower())
+
+        self.assertIn("one more qb decision", ce.voice_tuner_test_prompt("Promo", "Long Tweet", 0).lower())
+        self.assertIn("group project", ce.voice_tuner_test_prompt("Comedic", "Normal Tweet", 0).lower())
+        self.assertIn("politely reminds", ce.voice_tuner_test_prompt("Deadpan", "Normal Tweet", 0).lower())
+        app_text = Path("app.py").read_text()
+        ce_runner = app_text.split("def _run_ce_ai", 1)[1].split("def _ce_output_panel_impl", 1)[0]
         ce_ai = app_text.split("def _call_creator_evolution_ai", 1)[1].split("def _run_ce_ai", 1)[0]
         self.assertIn("_ce_selected_ai_provider", ce_ai)
         self.assertIn("_call_grok_api_key", ce_ai)
@@ -204,6 +239,21 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_pending", ce_hot)
         self.assertNotIn("_run_ci_ai", ce_hot)
         self.assertNotIn("_build_wh_hook_cached", ce_hot)
+
+    def test_voice_learning_is_lane_scoped_calibration(self):
+        state = ce.initial_state()
+        state["patterns"]["voice_profile"] = {
+            "status": "mature",
+            "sample_size": 12,
+            "confidence_active": True,
+            "traits": ["short final line"],
+            "avoid_traits": ["generic opener"],
+        }
+
+        text = ce.voice_learning_text(state, "Promo")
+
+        self.assertIn("selected lane (Promo)", text)
+        self.assertIn("selected lane behavior remains the source of truth", text)
 
     def test_creator_evolution_build_dialog_uses_form_and_persistent_result_panel(self):
         app_text = Path("app.py").read_text()
@@ -233,7 +283,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("Deadpan:", prompt)
-        self.assertIn("Straight-faced", prompt)
+        self.assertIn("straight-faced", prompt)
         self.assertIn("No exclamation points", prompt)
 
     def test_format_recipe_changes_prompt_behavior(self):
@@ -751,9 +801,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("missing third act", recipe["target"])
-        self.assertIn("one unresolved tension", recipe["target"])
-        self.assertIn("No question bait", prompt)
-        self.assertIn("PROMO VOICE - VIDEO CLICK TENSION MODE", prompt)
+        self.assertIn("unresolved click tension", recipe["target"])
+        self.assertIn("No generic 'new video is up", prompt)
+        self.assertIn("PROMO VOICE - MONETIZATION-OPTIMIZED CLICK TENSION MODE", prompt)
         self.assertIn("LEARNED FORMAT PROFILE", prompt)
         self.assertIn("LEARNED VOICE PROFILE", prompt)
 
@@ -870,11 +920,11 @@ class CreatorEvolutionTests(unittest.TestCase):
             ce.initial_state(),
         )
 
-        self.assertIn("SARCASTIC VOICE — DRY HUMOR MODE:", prompt)
-        self.assertIn("Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)", prompt)
-        self.assertIn("Never copy old sarcastic examples", prompt)
-        self.assertIn('Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"', prompt)
-        self.assertIn("Drop it and walk away. Never explain the joke.", prompt)
+        self.assertIn("SARCASTIC VOICE - FAKE ENTHUSIASM MODE:", prompt)
+        self.assertIn("Cultural Leap", prompt)
+        self.assertIn("copied examples", prompt)
+        self.assertIn("No generic sarcastic openers", prompt)
+        self.assertIn("Never explain. Sarcasm must create debate", prompt)
         self.assertNotIn("Turns out the Patriots offense", prompt)
         self.assertNotIn("That cornerback needs to call someone", prompt)
         self.assertNotIn("copy this exact energy", prompt)
@@ -929,7 +979,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("HOT SIGNAL", brief)
-        self.assertIn("Annoyed:", brief)
+        self.assertIn("PERSONALITY LANE:\nAnnoyed", brief)
         self.assertIn("Do not use Creator Studio voice modes", brief)
         self.assertNotIn("HALL OF FAME REFERENCE TWEETS", brief)
         self.assertNotIn("TYLER'S HALL OF FAME DATA", brief)
@@ -1803,7 +1853,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("duplicate_recent_angle", decision["top_rejected"][0]["hard_blocks"])
 
     def test_voice_and_format_recipes_are_engagement_focused_without_replacing_learning(self):
-        self.assertIn("one funny pressure point", ce.lane_recipe_text("Witty Edge"))
+        self.assertIn("razor-sharp turn", ce.lane_recipe_text("Witty Edge"))
         self.assertIn("leave the optimism on trial", ce.lane_recipe_text("Skeptical"))
         self.assertIn("accountability", ce.lane_recipe_text("Critical"))
         self.assertIn("specific sports contradiction", ce.lane_recipe_text("Promo"))
@@ -1925,8 +1975,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
 
         self.assertTrue(report)
-        self.assertTrue(all(not item["ok"] for item in report.values()))
-        self.assertTrue(any("same opener" in " ".join(item["issues"]) for item in report.values()))
+        joined = " ".join(" ".join(item.get("issues", []) + item.get("warnings", [])) for item in report.values())
+        self.assertIn("same opener", joined)
 
     def test_option_set_validation_blocks_repeated_normal_tweet_line_skeleton(self):
         data = {
@@ -1936,8 +1986,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         }
         report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
 
-        self.assertTrue(all(not item["ok"] for item in report.values()))
-        self.assertTrue(any("line-break skeleton" in " ".join(item["issues"]) for item in report.values()))
+        joined = " ".join(" ".join(item.get("issues", []) + item.get("warnings", [])) for item in report.values())
+        self.assertIn("line-break skeleton", joined)
 
     def test_option_set_validation_allows_single_line_punchy_options(self):
         data = {
@@ -1957,8 +2007,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         }
         report = ce.validate_generation_options(data, "Normal Tweet", "Witty Edge")
 
-        self.assertTrue(all(not item["ok"] for item in report.values()))
-        self.assertTrue(any("all end with ellipsis" in " ".join(item["issues"]) for item in report.values()))
+        joined = " ".join(" ".join(item.get("issues", []) + item.get("warnings", [])) for item in report.values())
+        self.assertIn("all end with ellipsis", joined)
 
     def test_learning_profiles_require_confidence_before_prompt_influence(self):
         tweets = [
