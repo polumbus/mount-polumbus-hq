@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import html as html_lib
 import json
 import os
 import re
@@ -1208,19 +1209,70 @@ def qc() -> int:
 
 
 def write_qc_dashboard(results: dict) -> None:
-    rows = []
-    for slug, checks in results["videos"].items():
+    approvals = load_final_approvals()
+    approved = approvals_are_complete(approvals) and not results.get("failures")
+    cards = []
+    for page in PAGES:
+        checks = results["videos"].get(page.slug, {})
         status = "PASS" if all(v for k, v in checks.items() if k.endswith("Exists")) else "BLOCKED"
-        rows.append(f"<tr><td>{slug}</td><td>{status}</td><td>{json.dumps(checks)}</td></tr>")
+        public_badge = "Public tutorial" if page.slug not in OWNER_ONLY_SLUGS else "Owner-only final"
+        duration = checks.get("mediaMetadata", {}).get("format", {}).get("duration", "")
+        source = checks.get("renderSource", "unknown")
+        cards.append(f"""
+<article class="card">
+  <div class="card-head">
+    <div>
+      <h2>{html_lib.escape(page.canonical)}</h2>
+      <p class="meta">{html_lib.escape(public_badge)} · {html_lib.escape(str(source))} · {html_lib.escape(str(duration))}s</p>
+    </div>
+    <span class="pill {status.lower()}">{status}</span>
+  </div>
+  <video controls preload="metadata" poster="../thumbnails/{page.slug}.png">
+    <source src="../renders/finals/{page.slug}.mp4" type="video/mp4">
+    Your browser cannot play this MP4. Use the direct link below.
+  </video>
+  <div class="links">
+    <a href="../renders/finals/{page.slug}.mp4">Open MP4</a>
+    <a href="../thumbnails/{page.slug}.png">Thumbnail</a>
+    <a href="./{page.slug}-contact-sheet.jpg">Contact Sheet</a>
+    <a href="../captions/{page.slug}.srt">SRT</a>
+    <a href="../captions/{page.slug}.vtt">VTT</a>
+  </div>
+</article>""")
+    approval_text = "APPROVED FOR PUBLIC RELEASE" if approved else "REVIEW PENDING"
+    approval_class = "ok" if approved else "bad"
     html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>Post Ascend Video QC</title>
-<style>body{{font-family:Arial,sans-serif;background:#07111f;color:#e6edf3;padding:24px}}table{{width:100%;border-collapse:collapse}}td,th{{border:1px solid #22314a;padding:8px;vertical-align:top}}.bad{{color:#ff6b6b}}.ok{{color:#2dd4bf}}</style></head>
+<style>
+body{{font-family:Arial,sans-serif;background:#07111f;color:#e6edf3;margin:0;padding:28px}}
+a{{color:#2dd4bf;text-decoration:none}}a:hover{{text-decoration:underline}}
+.top{{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}}
+.status{{border:1px solid #22314a;background:#0c1728;border-radius:18px;padding:16px 18px;min-width:300px}}
+.bad{{color:#ff6b6b}}.ok{{color:#2dd4bf}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:22px}}
+.card{{border:1px solid #22314a;background:#0c1728;border-radius:22px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25)}}
+.card-head{{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px}}
+h1{{margin:0 0 8px}}h2{{font-size:20px;margin:0 0 4px}}.meta{{color:#9fb1c7;margin:0;font-size:13px}}
+.pill{{font-size:12px;font-weight:700;border-radius:999px;padding:6px 10px;background:#102338;color:#cfe6ff}}
+.pill.pass{{background:#07332e;color:#2dd4bf}}.pill.blocked{{background:#3a1218;color:#ff8a8a}}
+video{{width:100%;border-radius:16px;background:#000;border:1px solid #22314a}}
+.links{{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:13px}}
+pre{{white-space:pre-wrap;background:#050b14;border:1px solid #22314a;border-radius:14px;padding:14px;max-height:220px;overflow:auto}}
+</style></head>
 <body>
-<h1>Post Ascend Video QC Dashboard</h1>
-<p>Reference available: <strong>{results['reference'].get('available')}</strong></p>
-<p class="bad">Final public-release approval is blocked until every final MP4, caption, thumbnail, contact sheet, and five-agent 10/10 review exists.</p>
+<section class="top">
+  <div>
+    <h1>Post Ascend Tutorial Videos</h1>
+    <p>Playable final MP4s, thumbnails, captions, and contact sheets for every major app page.</p>
+  </div>
+  <div class="status">
+    <div>Reference available: <strong>{results['reference'].get('available')}</strong></div>
+    <div>Automated QC failures: <strong>{len(results.get('failures', []))}</strong></div>
+    <div>Release status: <strong class="{approval_class}">{approval_text}</strong></div>
+  </div>
+</section>
 <h2>Failures</h2><pre>{json.dumps(results.get('failures', []), indent=2)}</pre>
-<h2>Videos</h2><table><thead><tr><th>Video</th><th>Status</th><th>Checks</th></tr></thead><tbody>{''.join(rows)}</tbody></table>
+<section class="grid">{''.join(cards)}</section>
 </body></html>"""
     write(VP / "qc" / "dashboard.html", html)
 
