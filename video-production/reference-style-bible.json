@@ -1,0 +1,21 @@
+{
+  "reference": {
+    "available": false,
+    "blockedReason": "Reference MP4 is missing. Direct X download was blocked by yt-dlp guest-token/API failure.",
+    "requiredPath": "assets/reference/post-ascend-reference.mp4"
+  },
+  "provisionalDefaults": {
+    "resolution": "1920x1080",
+    "fps": 60,
+    "codec": "h264",
+    "audio": "aac 48kHz -16 LUFS",
+    "durationSeconds": {
+      "overview": 30,
+      "page": [
+        45,
+        75
+      ]
+    },
+    "blockedUntilReferenceAvailable": true
+  }
+}

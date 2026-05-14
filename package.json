@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "scripts": {
+    "video:demo:seed": "python3 video-production/tools/video_pipeline.py seed",
+    "video:record": "python3 video-production/tools/video_pipeline.py record",
+    "video:render": "python3 video-production/tools/video_pipeline.py render",
+    "video:captions": "python3 video-production/tools/video_pipeline.py captions",
+    "video:qc": "python3 video-production/tools/video_pipeline.py qc",
+    "video:review": "python3 video-production/tools/video_pipeline.py review",
+    "video:all": "python3 video-production/tools/video_pipeline.py all"
+  }
+}

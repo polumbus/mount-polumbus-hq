@@ -1,0 +1,90 @@
+{
+  "slug": "my-stats",
+  "title": "My Stats",
+  "targetDurationSeconds": 55,
+  "route": "My Stats",
+  "pagePurpose": "Summarizes account performance trends.",
+  "viewerTakeaway": "Use trends to guide the next post.",
+  "demoData": {
+    "primaryExample": "Mock performance metrics."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:11.000",
+      "visual": "Focused screen recording of My Stats: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Performance trends",
+      "narration": "My Stats: Open page.",
+      "caption": "Performance trends",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use trends to guide the next post."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:11.000",
+      "end": "00:22.000",
+      "visual": "Focused screen recording of My Stats: Show metrics.",
+      "uiAction": "Show metrics",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find what works",
+      "narration": "My Stats: Show metrics.",
+      "caption": "Find what works",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use trends to guide the next post."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:22.000",
+      "end": "00:33.000",
+      "visual": "Focused screen recording of My Stats: Highlight trend.",
+      "uiAction": "Highlight trend",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Guide the next post",
+      "narration": "My Stats: Highlight trend.",
+      "caption": "Guide the next post",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use trends to guide the next post."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:33.000",
+      "end": "00:44.000",
+      "visual": "Focused screen recording of My Stats: Connect trend to next post.",
+      "uiAction": "Connect trend to next post",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Guide the next post",
+      "narration": "My Stats: Connect trend to next post.",
+      "caption": "Guide the next post",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use trends to guide the next post."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:44.000",
+      "end": "00:55.000",
+      "visual": "Focused screen recording of My Stats: Connect trend to next post.",
+      "uiAction": "Connect trend to next post",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Guide the next post",
+      "narration": "My Stats: Connect trend to next post.",
+      "caption": "Guide the next post",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use trends to guide the next post."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

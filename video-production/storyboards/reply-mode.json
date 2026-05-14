@@ -1,0 +1,90 @@
+{
+  "slug": "reply-mode",
+  "title": "Reply Mode",
+  "targetDurationSeconds": 60,
+  "route": "Reply Mode",
+  "pagePurpose": "Creates replies for engagement without sounding generic.",
+  "viewerTakeaway": "Join conversations with replies that still sound like the account.",
+  "demoData": {
+    "primaryExample": "The Broncos camp battles are more interesting than the starters this year."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:12.000",
+      "visual": "Focused screen recording of Reply Mode: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Paste the post",
+      "narration": "Reply Mode: Open page.",
+      "caption": "Paste the post",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Join conversations with replies that still sound like the account."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:12.000",
+      "end": "00:24.000",
+      "visual": "Focused screen recording of Reply Mode: Paste fake post.",
+      "uiAction": "Paste fake post",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Generate replies",
+      "narration": "Reply Mode: Paste fake post.",
+      "caption": "Generate replies",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Join conversations with replies that still sound like the account."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:24.000",
+      "end": "00:36.000",
+      "visual": "Focused screen recording of Reply Mode: Generate replies.",
+      "uiAction": "Generate replies",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Choose the strongest response",
+      "narration": "Reply Mode: Generate replies.",
+      "caption": "Choose the strongest response",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Join conversations with replies that still sound like the account."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:36.000",
+      "end": "00:48.000",
+      "visual": "Focused screen recording of Reply Mode: Choose best reply.",
+      "uiAction": "Choose best reply",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Choose the strongest response",
+      "narration": "Reply Mode: Choose best reply.",
+      "caption": "Choose the strongest response",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Join conversations with replies that still sound like the account."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:48.000",
+      "end": "00:60.000",
+      "visual": "Focused screen recording of Reply Mode: Choose best reply.",
+      "uiAction": "Choose best reply",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Choose the strongest response",
+      "narration": "Reply Mode: Choose best reply.",
+      "caption": "Choose the strongest response",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Join conversations with replies that still sound like the account."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

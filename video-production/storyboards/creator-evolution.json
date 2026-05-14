@@ -1,0 +1,90 @@
+{
+  "slug": "creator-evolution",
+  "title": "Creator Evolution",
+  "targetDurationSeconds": 65,
+  "route": "Creator Evolution",
+  "pagePurpose": "Advanced creation engine for rough ideas into polished content.",
+  "viewerTakeaway": "Messy idea in, polished options out.",
+  "demoData": {
+    "primaryExample": "Broncos camp is going to expose which depth pieces are real and which ones are just offseason hype."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:13.000",
+      "visual": "Focused screen recording of Creator Evolution: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Messy idea in",
+      "narration": "Creator Evolution: Open page.",
+      "caption": "Messy idea in",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Messy idea in, polished options out."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:13.000",
+      "end": "00:26.000",
+      "visual": "Focused screen recording of Creator Evolution: Choose Normal Tweet.",
+      "uiAction": "Choose Normal Tweet",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Choose format",
+      "narration": "Creator Evolution: Choose Normal Tweet.",
+      "caption": "Choose format",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Messy idea in, polished options out."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:26.000",
+      "end": "00:39.000",
+      "visual": "Focused screen recording of Creator Evolution: Choose Witty Edge.",
+      "uiAction": "Choose Witty Edge",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Choose voice",
+      "narration": "Creator Evolution: Choose Witty Edge.",
+      "caption": "Choose voice",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Messy idea in, polished options out."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:39.000",
+      "end": "00:52.000",
+      "visual": "Focused screen recording of Creator Evolution: Paste raw idea.",
+      "uiAction": "Paste raw idea",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Generate polished options",
+      "narration": "Creator Evolution: Paste raw idea.",
+      "caption": "Generate polished options",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Messy idea in, polished options out."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:52.000",
+      "end": "00:65.000",
+      "visual": "Focused screen recording of Creator Evolution: Generate options.",
+      "uiAction": "Generate options",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Generate polished options",
+      "narration": "Creator Evolution: Generate options.",
+      "caption": "Generate polished options",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Messy idea in, polished options out."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

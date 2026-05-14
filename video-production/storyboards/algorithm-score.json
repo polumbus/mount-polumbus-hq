@@ -1,0 +1,90 @@
+{
+  "slug": "algorithm-score",
+  "title": "Algorithm Score",
+  "targetDurationSeconds": 70,
+  "route": "Algorithm Score",
+  "pagePurpose": "Grades a draft for performance and fix opportunities.",
+  "viewerTakeaway": "Use it as a pre-flight check before posting.",
+  "demoData": {
+    "primaryExample": "Broncos camp is going to be interesting this year."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:14.000",
+      "visual": "Focused screen recording of Algorithm Score: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Score the draft",
+      "narration": "Algorithm Score: Open page.",
+      "caption": "Score the draft",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it as a pre-flight check before posting."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:14.000",
+      "end": "00:28.000",
+      "visual": "Focused screen recording of Algorithm Score: Paste draft.",
+      "uiAction": "Paste draft",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find the weak spot",
+      "narration": "Algorithm Score: Paste draft.",
+      "caption": "Find the weak spot",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it as a pre-flight check before posting."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:28.000",
+      "end": "00:42.000",
+      "visual": "Focused screen recording of Algorithm Score: Run score.",
+      "uiAction": "Run score",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Improve and re-check",
+      "narration": "Algorithm Score: Run score.",
+      "caption": "Improve and re-check",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it as a pre-flight check before posting."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:42.000",
+      "end": "00:56.000",
+      "visual": "Focused screen recording of Algorithm Score: Show weak category.",
+      "uiAction": "Show weak category",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Improve and re-check",
+      "narration": "Algorithm Score: Show weak category.",
+      "caption": "Improve and re-check",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it as a pre-flight check before posting."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:56.000",
+      "end": "00:70.000",
+      "visual": "Focused screen recording of Algorithm Score: Apply suggested fix.",
+      "uiAction": "Apply suggested fix",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Improve and re-check",
+      "narration": "Algorithm Score: Apply suggested fix.",
+      "caption": "Improve and re-check",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it as a pre-flight check before posting."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

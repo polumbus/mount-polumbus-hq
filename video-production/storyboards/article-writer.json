@@ -1,0 +1,90 @@
+{
+  "slug": "article-writer",
+  "title": "Article Writer",
+  "targetDurationSeconds": 65,
+  "route": "Article Writer",
+  "pagePurpose": "Turns tweets, raw thoughts, or scratch ideas into long-form content.",
+  "viewerTakeaway": "Small ideas become editable long-form structure.",
+  "demoData": {
+    "primaryExample": "Use saved Broncos camp raw thought."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:13.000",
+      "visual": "Focused screen recording of Article Writer: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Start from a saved idea",
+      "narration": "Article Writer: Open page.",
+      "caption": "Start from a saved idea",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Small ideas become editable long-form structure."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:13.000",
+      "end": "00:26.000",
+      "visual": "Focused screen recording of Article Writer: Choose Raw Thoughts source.",
+      "uiAction": "Choose Raw Thoughts source",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Generate long-form structure",
+      "narration": "Article Writer: Choose Raw Thoughts source.",
+      "caption": "Generate long-form structure",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Small ideas become editable long-form structure."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:26.000",
+      "end": "00:39.000",
+      "visual": "Focused screen recording of Article Writer: Select saved idea.",
+      "uiAction": "Select saved idea",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Edit and publish",
+      "narration": "Article Writer: Select saved idea.",
+      "caption": "Edit and publish",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Small ideas become editable long-form structure."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:39.000",
+      "end": "00:52.000",
+      "visual": "Focused screen recording of Article Writer: Generate article structure.",
+      "uiAction": "Generate article structure",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Edit and publish",
+      "narration": "Article Writer: Generate article structure.",
+      "caption": "Edit and publish",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Small ideas become editable long-form structure."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:52.000",
+      "end": "00:65.000",
+      "visual": "Focused screen recording of Article Writer: Generate article structure.",
+      "uiAction": "Generate article structure",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Edit and publish",
+      "narration": "Article Writer: Generate article structure.",
+      "caption": "Edit and publish",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Small ideas become editable long-form structure."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

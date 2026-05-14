@@ -1,0 +1,90 @@
+{
+  "slug": "debug-console",
+  "title": "Debug Console",
+  "targetDurationSeconds": 50,
+  "route": "Debug Console",
+  "pagePurpose": "Owner-only diagnostics for provider and system health.",
+  "viewerTakeaway": "Troubleshoot safely without exposing secrets.",
+  "demoData": {
+    "primaryExample": "Safe fake provider and proxy health."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:10.000",
+      "visual": "Focused screen recording of Debug Console: Open page in demo mode.",
+      "uiAction": "Open page in demo mode",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Owner-only",
+      "narration": "Debug Console: Open page in demo mode.",
+      "caption": "Owner-only",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Troubleshoot safely without exposing secrets."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:10.000",
+      "end": "00:20.000",
+      "visual": "Focused screen recording of Debug Console: Show fake health cards.",
+      "uiAction": "Show fake health cards",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Provider health",
+      "narration": "Debug Console: Show fake health cards.",
+      "caption": "Provider health",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Troubleshoot safely without exposing secrets."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:20.000",
+      "end": "00:30.000",
+      "visual": "Focused screen recording of Debug Console: Show no secrets.",
+      "uiAction": "Show no secrets",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Safe diagnostics",
+      "narration": "Debug Console: Show no secrets.",
+      "caption": "Safe diagnostics",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Troubleshoot safely without exposing secrets."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:30.000",
+      "end": "00:40.000",
+      "visual": "Focused screen recording of Debug Console: Show no secrets.",
+      "uiAction": "Show no secrets",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "No secrets shown",
+      "narration": "Debug Console: Show no secrets.",
+      "caption": "No secrets shown",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Troubleshoot safely without exposing secrets."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:40.000",
+      "end": "00:50.000",
+      "visual": "Focused screen recording of Debug Console: Show no secrets.",
+      "uiAction": "Show no secrets",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "No secrets shown",
+      "narration": "Debug Console: Show no secrets.",
+      "caption": "No secrets shown",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Troubleshoot safely without exposing secrets."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

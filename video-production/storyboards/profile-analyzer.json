@@ -1,0 +1,90 @@
+{
+  "slug": "profile-analyzer",
+  "title": "Profile Analyzer",
+  "targetDurationSeconds": 60,
+  "route": "Profile Analyzer",
+  "pagePurpose": "Analyzes profile positioning, voice, and opportunities.",
+  "viewerTakeaway": "Make the profile and content direction more intentional.",
+  "demoData": {
+    "primaryExample": "Fake creator profile."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:12.000",
+      "visual": "Focused screen recording of Profile Analyzer: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Analyze positioning",
+      "narration": "Profile Analyzer: Open page.",
+      "caption": "Analyze positioning",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Make the profile and content direction more intentional."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:12.000",
+      "end": "00:24.000",
+      "visual": "Focused screen recording of Profile Analyzer: Load safe sample profile.",
+      "uiAction": "Load safe sample profile",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find strengths",
+      "narration": "Profile Analyzer: Load safe sample profile.",
+      "caption": "Find strengths",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Make the profile and content direction more intentional."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:24.000",
+      "end": "00:36.000",
+      "visual": "Focused screen recording of Profile Analyzer: Run analysis.",
+      "uiAction": "Run analysis",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Spot opportunities",
+      "narration": "Profile Analyzer: Run analysis.",
+      "caption": "Spot opportunities",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Make the profile and content direction more intentional."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:36.000",
+      "end": "00:48.000",
+      "visual": "Focused screen recording of Profile Analyzer: Show strengths and opportunities.",
+      "uiAction": "Show strengths and opportunities",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Spot opportunities",
+      "narration": "Profile Analyzer: Show strengths and opportunities.",
+      "caption": "Spot opportunities",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Make the profile and content direction more intentional."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:48.000",
+      "end": "00:60.000",
+      "visual": "Focused screen recording of Profile Analyzer: Show strengths and opportunities.",
+      "uiAction": "Show strengths and opportunities",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Spot opportunities",
+      "narration": "Profile Analyzer: Show strengths and opportunities.",
+      "caption": "Spot opportunities",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Make the profile and content direction more intentional."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

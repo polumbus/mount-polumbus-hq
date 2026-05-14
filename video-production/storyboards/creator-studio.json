@@ -1,0 +1,90 @@
+{
+  "slug": "creator-studio",
+  "title": "Creator Studio",
+  "targetDurationSeconds": 60,
+  "route": "Creator Studio",
+  "pagePurpose": "Fast drafting, grading, and saving workspace.",
+  "viewerTakeaway": "Draft fast, grade, save the best idea.",
+  "demoData": {
+    "primaryExample": "Camp battles tell you more than press conferences."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:12.000",
+      "visual": "Focused screen recording of Creator Studio: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Draft fast",
+      "narration": "Creator Studio: Open page.",
+      "caption": "Draft fast",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Draft fast, grade, save the best idea."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:12.000",
+      "end": "00:24.000",
+      "visual": "Focused screen recording of Creator Studio: Enter idea.",
+      "uiAction": "Enter idea",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Grade the output",
+      "narration": "Creator Studio: Enter idea.",
+      "caption": "Grade the output",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Draft fast, grade, save the best idea."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:24.000",
+      "end": "00:36.000",
+      "visual": "Focused screen recording of Creator Studio: Choose format and voice.",
+      "uiAction": "Choose format and voice",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Save the best idea",
+      "narration": "Creator Studio: Choose format and voice.",
+      "caption": "Save the best idea",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Draft fast, grade, save the best idea."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:36.000",
+      "end": "00:48.000",
+      "visual": "Focused screen recording of Creator Studio: Generate.",
+      "uiAction": "Generate",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Save the best idea",
+      "narration": "Creator Studio: Generate.",
+      "caption": "Save the best idea",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Draft fast, grade, save the best idea."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:48.000",
+      "end": "00:60.000",
+      "visual": "Focused screen recording of Creator Studio: Open grades.",
+      "uiAction": "Open grades",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Save the best idea",
+      "narration": "Creator Studio: Open grades.",
+      "caption": "Save the best idea",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Draft fast, grade, save the best idea."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "slug": "overview",
+  "title": "Overview",
+  "targetDurationSeconds": 30,
+  "route": "Creator Evolution",
+  "pagePurpose": "Introduce Post Ascend as a creator operating system.",
+  "viewerTakeaway": "Capture, create, tune, score, and learn in one loop.",
+  "demoData": {
+    "primaryExample": "Fast flashes of major app sections."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:07.000",
+      "visual": "Focused screen recording of Overview: Show opening title.",
+      "uiAction": "Show opening title",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Capture",
+      "narration": "Overview: Show opening title.",
+      "caption": "Capture",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Capture, create, tune, score, and learn in one loop."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:07.000",
+      "end": "00:14.000",
+      "visual": "Focused screen recording of Overview: Show page group flashes.",
+      "uiAction": "Show page group flashes",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Create",
+      "narration": "Overview: Show page group flashes.",
+      "caption": "Create",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Capture, create, tune, score, and learn in one loop."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:14.000",
+      "end": "00:21.000",
+      "visual": "Focused screen recording of Overview: End on app view.",
+      "uiAction": "End on app view",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Tune",
+      "narration": "Overview: End on app view.",
+      "caption": "Tune",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Capture, create, tune, score, and learn in one loop."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:21.000",
+      "end": "00:30.000",
+      "visual": "Focused screen recording of Overview: End on app view.",
+      "uiAction": "End on app view",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Score",
+      "narration": "Overview: End on app view.",
+      "caption": "Score",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Capture, create, tune, score, and learn in one loop."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

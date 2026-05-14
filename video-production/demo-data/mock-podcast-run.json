@@ -1,0 +1,11 @@
+{
+  "title": "Draft Day",
+  "state": "publish_pending",
+  "steps": [
+    "Start",
+    "Package",
+    "Clip",
+    "Publish",
+    "Done"
+  ]
+}

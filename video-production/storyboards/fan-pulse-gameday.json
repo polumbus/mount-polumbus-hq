@@ -1,0 +1,90 @@
+{
+  "slug": "fan-pulse-gameday",
+  "title": "Fan Pulse Gameday",
+  "targetDurationSeconds": 65,
+  "route": "Fan Pulse Gameday",
+  "pagePurpose": "Finds live sports fan emotion and timely angles.",
+  "viewerTakeaway": "Post while the moment still matters.",
+  "demoData": {
+    "primaryExample": "Mock Avalanche playoff momentum swing."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:13.000",
+      "visual": "Focused screen recording of Fan Pulse Gameday: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Live fan reaction",
+      "narration": "Fan Pulse Gameday: Open page.",
+      "caption": "Live fan reaction",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Post while the moment still matters."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:13.000",
+      "end": "00:26.000",
+      "visual": "Focused screen recording of Fan Pulse Gameday: Show live game topic.",
+      "uiAction": "Show live game topic",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find the emotion",
+      "narration": "Fan Pulse Gameday: Show live game topic.",
+      "caption": "Find the emotion",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Post while the moment still matters."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:26.000",
+      "end": "00:39.000",
+      "visual": "Focused screen recording of Fan Pulse Gameday: Review fan angle.",
+      "uiAction": "Review fan angle",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Post while it matters",
+      "narration": "Fan Pulse Gameday: Review fan angle.",
+      "caption": "Post while it matters",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Post while the moment still matters."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:39.000",
+      "end": "00:52.000",
+      "visual": "Focused screen recording of Fan Pulse Gameday: Create timely post idea.",
+      "uiAction": "Create timely post idea",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Post while it matters",
+      "narration": "Fan Pulse Gameday: Create timely post idea.",
+      "caption": "Post while it matters",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Post while the moment still matters."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:52.000",
+      "end": "00:65.000",
+      "visual": "Focused screen recording of Fan Pulse Gameday: Create timely post idea.",
+      "uiAction": "Create timely post idea",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Post while it matters",
+      "narration": "Fan Pulse Gameday: Create timely post idea.",
+      "caption": "Post while it matters",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Post while the moment still matters."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

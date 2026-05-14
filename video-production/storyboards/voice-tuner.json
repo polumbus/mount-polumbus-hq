@@ -1,0 +1,90 @@
+{
+  "slug": "voice-tuner",
+  "title": "Voice Tuner",
+  "targetDurationSeconds": 70,
+  "route": "Voice Tuner",
+  "pagePurpose": "Safe lab for testing voice changes before applying them live.",
+  "viewerTakeaway": "Nothing changes live unless explicitly applied.",
+  "demoData": {
+    "primaryExample": "Bo Nix may be on track, but one QB decision will show whether Denver trusts the ankle."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:14.000",
+      "visual": "Focused screen recording of Voice Tuner: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Current live voice",
+      "narration": "Voice Tuner: Open page.",
+      "caption": "Current live voice",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Nothing changes live unless explicitly applied."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:14.000",
+      "end": "00:28.000",
+      "visual": "Focused screen recording of Voice Tuner: Choose Promo.",
+      "uiAction": "Choose Promo",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Sandbox test voice",
+      "narration": "Voice Tuner: Choose Promo.",
+      "caption": "Sandbox test voice",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Nothing changes live unless explicitly applied."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:28.000",
+      "end": "00:42.000",
+      "visual": "Focused screen recording of Voice Tuner: Generate A/B Test.",
+      "uiAction": "Generate A/B Test",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Safe until applied live",
+      "narration": "Voice Tuner: Generate A/B Test.",
+      "caption": "Safe until applied live",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Nothing changes live unless explicitly applied."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:42.000",
+      "end": "00:56.000",
+      "visual": "Focused screen recording of Voice Tuner: Show A live and B sandbox.",
+      "uiAction": "Show A live and B sandbox",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Safe until applied live",
+      "narration": "Voice Tuner: Show A live and B sandbox.",
+      "caption": "Safe until applied live",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Nothing changes live unless explicitly applied."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:56.000",
+      "end": "00:70.000",
+      "visual": "Focused screen recording of Voice Tuner: Open guided feedback.",
+      "uiAction": "Open guided feedback",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Safe until applied live",
+      "narration": "Voice Tuner: Open guided feedback.",
+      "caption": "Safe until applied live",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Nothing changes live unless explicitly applied."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

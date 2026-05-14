@@ -1,0 +1,306 @@
+[
+  {
+    "canonicalName": "Overview",
+    "slug": "overview",
+    "actualRoute": "Creator Evolution",
+    "componentPath": "app.py::cross-page montage",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=overview-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Creator Evolution",
+    "slug": "creator-evolution",
+    "actualRoute": "Creator Evolution",
+    "componentPath": "app.py::page_creator_evolution",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=creator-evolution-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Voice Tuner",
+    "slug": "voice-tuner",
+    "actualRoute": "Voice Tuner",
+    "componentPath": "app.py::page_voice_tuner",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=voice-tuner-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Creator Studio",
+    "slug": "creator-studio",
+    "actualRoute": "Creator Studio",
+    "componentPath": "app.py::page_compose_ideas",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=creator-studio-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Raw Thoughts",
+    "slug": "raw-thoughts",
+    "actualRoute": "Raw Thoughts",
+    "componentPath": "app.py::page_brain_dump",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=raw-thoughts-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Content Coach",
+    "slug": "content-coach",
+    "actualRoute": "Content Coach",
+    "componentPath": "app.py::page_content_coach",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=content-coach-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Article Writer",
+    "slug": "article-writer",
+    "actualRoute": "Article Writer",
+    "componentPath": "app.py::page_article_writer",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=article-writer-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Reply Mode",
+    "slug": "reply-mode",
+    "actualRoute": "Reply Mode",
+    "componentPath": "app.py::page_reply_guy",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=reply-mode-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Idea Bank",
+    "slug": "idea-bank",
+    "actualRoute": "Idea Bank",
+    "componentPath": "app.py::page_inspiration",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=idea-bank-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Post History",
+    "slug": "post-history",
+    "actualRoute": "Post History",
+    "componentPath": "app.py::page_tweet_history",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=post-history-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Algorithm Score",
+    "slug": "algorithm-score",
+    "actualRoute": "Algorithm Score",
+    "componentPath": "app.py::page_algo_analyzer",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=algorithm-score-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Account Audit",
+    "slug": "account-audit",
+    "actualRoute": "Account Audit",
+    "componentPath": "app.py::page_health_check",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=account-audit-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "My Stats",
+    "slug": "my-stats",
+    "actualRoute": "My Stats",
+    "componentPath": "app.py::page_account_pulse",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=my-stats-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Profile Analyzer",
+    "slug": "profile-analyzer",
+    "actualRoute": "Profile Analyzer",
+    "componentPath": "app.py::page_account_researcher",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=profile-analyzer-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Signals & Prompts",
+    "slug": "signals-prompts",
+    "actualRoute": "Signals & Prompts",
+    "componentPath": "app.py::page_signals_prompts",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=signals-prompts-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Fan Pulse Gameday",
+    "slug": "fan-pulse-gameday",
+    "actualRoute": "Fan Pulse Gameday",
+    "componentPath": "app.py::page_gameday",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=fan-pulse-gameday-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Podcast",
+    "slug": "podcast",
+    "actualRoute": "Podcast",
+    "componentPath": "app.py::page_podcast",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=podcast-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "10/10 Audit",
+    "slug": "ten-ten-audit",
+    "actualRoute": "10/10 Audit",
+    "componentPath": "app.py::page_ten_x_audit",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=ten-ten-audit-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  },
+  {
+    "canonicalName": "Debug Console",
+    "slug": "debug-console",
+    "actualRoute": "Debug Console",
+    "componentPath": "app.py::page_debug_console",
+    "requiredDemoData": "video-production/demo-data/video-demo-seed.json",
+    "primarySelectors": [
+      "data-video-id=debug-console-primary",
+      "main",
+      "button",
+      "textarea",
+      "select"
+    ],
+    "captureStatus": "planned",
+    "notes": "Capture requires VIDEO_DEMO_MODE=1 and reference style bible finalization."
+  }
+]

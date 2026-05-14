@@ -1,0 +1,90 @@
+{
+  "slug": "account-audit",
+  "title": "Account Audit",
+  "targetDurationSeconds": 60,
+  "route": "Account Audit",
+  "pagePurpose": "Reviews account-level health and strategic gaps.",
+  "viewerTakeaway": "Turn account weaknesses into a fix list.",
+  "demoData": {
+    "primaryExample": "Mock account audit results."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:12.000",
+      "visual": "Focused screen recording of Account Audit: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Big-picture account review",
+      "narration": "Account Audit: Open page.",
+      "caption": "Big-picture account review",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn account weaknesses into a fix list."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:12.000",
+      "end": "00:24.000",
+      "visual": "Focused screen recording of Account Audit: Show audit categories.",
+      "uiAction": "Show audit categories",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find weak areas",
+      "narration": "Account Audit: Show audit categories.",
+      "caption": "Find weak areas",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn account weaknesses into a fix list."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:24.000",
+      "end": "00:36.000",
+      "visual": "Focused screen recording of Account Audit: Highlight recommendation.",
+      "uiAction": "Highlight recommendation",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn recommendations into fixes",
+      "narration": "Account Audit: Highlight recommendation.",
+      "caption": "Turn recommendations into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn account weaknesses into a fix list."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:36.000",
+      "end": "00:48.000",
+      "visual": "Focused screen recording of Account Audit: Highlight recommendation.",
+      "uiAction": "Highlight recommendation",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn recommendations into fixes",
+      "narration": "Account Audit: Highlight recommendation.",
+      "caption": "Turn recommendations into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn account weaknesses into a fix list."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:48.000",
+      "end": "00:60.000",
+      "visual": "Focused screen recording of Account Audit: Highlight recommendation.",
+      "uiAction": "Highlight recommendation",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn recommendations into fixes",
+      "narration": "Account Audit: Highlight recommendation.",
+      "caption": "Turn recommendations into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn account weaknesses into a fix list."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

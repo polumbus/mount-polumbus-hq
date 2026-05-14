@@ -1,0 +1,90 @@
+{
+  "slug": "content-coach",
+  "title": "Content Coach",
+  "targetDurationSeconds": 65,
+  "route": "Content Coach",
+  "pagePurpose": "Strategic advisor for angles, positioning, and stronger framing.",
+  "viewerTakeaway": "Use it when the angle feels generic.",
+  "demoData": {
+    "primaryExample": "How should I frame Sean Payton creating camp pressure without sounding generic?"
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:13.000",
+      "visual": "Focused screen recording of Content Coach: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Ask for strategy",
+      "narration": "Content Coach: Open page.",
+      "caption": "Ask for strategy",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it when the angle feels generic."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:13.000",
+      "end": "00:26.000",
+      "visual": "Focused screen recording of Content Coach: Ask coaching question.",
+      "uiAction": "Ask coaching question",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Sharpen the angle",
+      "narration": "Content Coach: Ask coaching question.",
+      "caption": "Sharpen the angle",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it when the angle feels generic."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:26.000",
+      "end": "00:39.000",
+      "visual": "Focused screen recording of Content Coach: Submit.",
+      "uiAction": "Submit",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Use the best frame elsewhere",
+      "narration": "Content Coach: Submit.",
+      "caption": "Use the best frame elsewhere",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it when the angle feels generic."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:39.000",
+      "end": "00:52.000",
+      "visual": "Focused screen recording of Content Coach: Highlight stronger framing.",
+      "uiAction": "Highlight stronger framing",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Use the best frame elsewhere",
+      "narration": "Content Coach: Highlight stronger framing.",
+      "caption": "Use the best frame elsewhere",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it when the angle feels generic."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:52.000",
+      "end": "00:65.000",
+      "visual": "Focused screen recording of Content Coach: Highlight stronger framing.",
+      "uiAction": "Highlight stronger framing",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Use the best frame elsewhere",
+      "narration": "Content Coach: Highlight stronger framing.",
+      "caption": "Use the best frame elsewhere",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Use it when the angle feels generic."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

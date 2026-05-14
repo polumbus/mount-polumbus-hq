@@ -1,0 +1,26 @@
+{
+  "mode": "VIDEO_DEMO_MODE",
+  "token": "VIDEO_DEMO_TOKEN",
+  "owner": "demo-owner",
+  "examples": {
+    "overview": "Fast flashes of major app sections.",
+    "creator-evolution": "Broncos camp is going to expose which depth pieces are real and which ones are just offseason hype.",
+    "voice-tuner": "Bo Nix may be on track, but one QB decision will show whether Denver trusts the ankle.",
+    "creator-studio": "Camp battles tell you more than press conferences.",
+    "raw-thoughts": "Broncos depth chart pressure at camp, who survives real reps vs offseason hype.",
+    "content-coach": "How should I frame Sean Payton creating camp pressure without sounding generic?",
+    "article-writer": "Use saved Broncos camp raw thought.",
+    "reply-mode": "The Broncos camp battles are more interesting than the starters this year.",
+    "idea-bank": "Saved camp pressure idea.",
+    "post-history": "Mock recent post history.",
+    "algorithm-score": "Broncos camp is going to be interesting this year.",
+    "account-audit": "Mock account audit results.",
+    "my-stats": "Mock performance metrics.",
+    "profile-analyzer": "Fake creator profile.",
+    "signals-prompts": "Mock Broncos camp and Denver sports signals.",
+    "fan-pulse-gameday": "Mock Avalanche playoff momentum swing.",
+    "podcast": "Mock Draft Day episode run.",
+    "ten-ten-audit": "Mock Creator Evolution audit.",
+    "debug-console": "Safe fake provider and proxy health."
+  }
+}

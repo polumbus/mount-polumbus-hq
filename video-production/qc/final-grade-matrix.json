@@ -1,0 +1,89 @@
+{
+  "APPROVED_FOR_PUBLIC_RELEASE": false,
+  "blockedReason": "Final videos and five-agent 10/10 reviews are not complete.",
+  "requiredAgents": [
+    "STYLE_MATCH_DIRECTOR",
+    "PRODUCT_EDUCATION_REVIEWER",
+    "UI_ACCURACY_AND_SECURITY_QA",
+    "AUDIO_CAPTION_ACCESSIBILITY_QA",
+    "EXECUTIVE_LAUNCH_REVIEWER"
+  ],
+  "videos": {
+    "overview": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "creator-evolution": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "voice-tuner": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "creator-studio": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "raw-thoughts": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "content-coach": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "article-writer": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "reply-mode": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "idea-bank": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "post-history": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "algorithm-score": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "account-audit": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "my-stats": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "profile-analyzer": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "signals-prompts": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "fan-pulse-gameday": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "podcast": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "ten-ten-audit": {
+      "status": "not_rendered",
+      "grades": {}
+    },
+    "debug-console": {
+      "status": "not_rendered",
+      "grades": {}
+    }
+  }
+}

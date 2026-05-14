@@ -1,0 +1,90 @@
+{
+  "slug": "signals-prompts",
+  "title": "Signals & Prompts",
+  "targetDurationSeconds": 60,
+  "route": "Signals & Prompts",
+  "pagePurpose": "Finds timely signals and turns them into prompts.",
+  "viewerTakeaway": "Know what to talk about today.",
+  "demoData": {
+    "primaryExample": "Mock Broncos camp and Denver sports signals."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:12.000",
+      "visual": "Focused screen recording of Signals & Prompts: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find timely signals",
+      "narration": "Signals & Prompts: Open page.",
+      "caption": "Find timely signals",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Know what to talk about today."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:12.000",
+      "end": "00:24.000",
+      "visual": "Focused screen recording of Signals & Prompts: Load signals.",
+      "uiAction": "Load signals",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Pick the strongest angle",
+      "narration": "Signals & Prompts: Load signals.",
+      "caption": "Pick the strongest angle",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Know what to talk about today."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:24.000",
+      "end": "00:36.000",
+      "visual": "Focused screen recording of Signals & Prompts: Pick one signal.",
+      "uiAction": "Pick one signal",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn it into a prompt",
+      "narration": "Signals & Prompts: Pick one signal.",
+      "caption": "Turn it into a prompt",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Know what to talk about today."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:36.000",
+      "end": "00:48.000",
+      "visual": "Focused screen recording of Signals & Prompts: Turn it into prompt.",
+      "uiAction": "Turn it into prompt",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn it into a prompt",
+      "narration": "Signals & Prompts: Turn it into prompt.",
+      "caption": "Turn it into a prompt",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Know what to talk about today."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:48.000",
+      "end": "00:60.000",
+      "visual": "Focused screen recording of Signals & Prompts: Turn it into prompt.",
+      "uiAction": "Turn it into prompt",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn it into a prompt",
+      "narration": "Signals & Prompts: Turn it into prompt.",
+      "caption": "Turn it into a prompt",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Know what to talk about today."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

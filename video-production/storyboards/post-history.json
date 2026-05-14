@@ -1,0 +1,90 @@
+{
+  "slug": "post-history",
+  "title": "Post History",
+  "targetDurationSeconds": 55,
+  "route": "Post History",
+  "pagePurpose": "Tracks past posts and gives the app memory.",
+  "viewerTakeaway": "Avoid repeats and give the system better context.",
+  "demoData": {
+    "primaryExample": "Mock recent post history."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:11.000",
+      "visual": "Focused screen recording of Post History: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Past posts",
+      "narration": "Post History: Open page.",
+      "caption": "Past posts",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Avoid repeats and give the system better context."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:11.000",
+      "end": "00:22.000",
+      "visual": "Focused screen recording of Post History: Show previous posts.",
+      "uiAction": "Show previous posts",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Avoid repeats",
+      "narration": "Post History: Show previous posts.",
+      "caption": "Avoid repeats",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Avoid repeats and give the system better context."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:22.000",
+      "end": "00:33.000",
+      "visual": "Focused screen recording of Post History: Filter or scroll.",
+      "uiAction": "Filter or scroll",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Better context",
+      "narration": "Post History: Filter or scroll.",
+      "caption": "Better context",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Avoid repeats and give the system better context."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:33.000",
+      "end": "00:44.000",
+      "visual": "Focused screen recording of Post History: Highlight context value.",
+      "uiAction": "Highlight context value",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Better context",
+      "narration": "Post History: Highlight context value.",
+      "caption": "Better context",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Avoid repeats and give the system better context."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:44.000",
+      "end": "00:55.000",
+      "visual": "Focused screen recording of Post History: Highlight context value.",
+      "uiAction": "Highlight context value",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Better context",
+      "narration": "Post History: Highlight context value.",
+      "caption": "Better context",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Avoid repeats and give the system better context."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}

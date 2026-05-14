@@ -1,0 +1,90 @@
+{
+  "slug": "ten-ten-audit",
+  "title": "10/10 Audit",
+  "targetDurationSeconds": 55,
+  "route": "10/10 Audit",
+  "pagePurpose": "Internal quality-control audit for app/workflow areas.",
+  "viewerTakeaway": "Turn quality gaps into fixes.",
+  "demoData": {
+    "primaryExample": "Mock Creator Evolution audit."
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "start": "00:00.000",
+      "end": "00:11.000",
+      "visual": "Focused screen recording of 10/10 Audit: Open page.",
+      "uiAction": "Open page",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Quality audit",
+      "narration": "10/10 Audit: Open page.",
+      "caption": "Quality audit",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn quality gaps into fixes."
+    },
+    {
+      "sceneNumber": 2,
+      "start": "00:11.000",
+      "end": "00:22.000",
+      "visual": "Focused screen recording of 10/10 Audit: Pick area.",
+      "uiAction": "Pick area",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Find what is weak",
+      "narration": "10/10 Audit: Pick area.",
+      "caption": "Find what is weak",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn quality gaps into fixes."
+    },
+    {
+      "sceneNumber": 3,
+      "start": "00:22.000",
+      "end": "00:33.000",
+      "visual": "Focused screen recording of 10/10 Audit: Show findings.",
+      "uiAction": "Show findings",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn problems into fixes",
+      "narration": "10/10 Audit: Show findings.",
+      "caption": "Turn problems into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn quality gaps into fixes."
+    },
+    {
+      "sceneNumber": 4,
+      "start": "00:33.000",
+      "end": "00:44.000",
+      "visual": "Focused screen recording of 10/10 Audit: Show fix list.",
+      "uiAction": "Show fix list",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn problems into fixes",
+      "narration": "10/10 Audit: Show fix list.",
+      "caption": "Turn problems into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn quality gaps into fixes."
+    },
+    {
+      "sceneNumber": 5,
+      "start": "00:44.000",
+      "end": "00:55.000",
+      "visual": "Focused screen recording of 10/10 Audit: Show fix list.",
+      "uiAction": "Show fix list",
+      "cursorAction": "Smooth eased movement to the relevant control; click highlight only on the action.",
+      "cameraMove": "Reference-matched zoom/pan once reference is available; provisional 1.0x to 1.18x ease-in-out.",
+      "overlayText": "Turn problems into fixes",
+      "narration": "10/10 Audit: Show fix list.",
+      "caption": "Turn problems into fixes",
+      "sfx": "",
+      "qcIntent": "Prove viewer understands: Turn quality gaps into fixes."
+    }
+  ],
+  "requiredChecks": [
+    "No secrets or real private data visible.",
+    "Opening title present.",
+    "Ending value line present.",
+    "Captions present and readable.",
+    "UI action shown, not just described."
+  ]
+}
