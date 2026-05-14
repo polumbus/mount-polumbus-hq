@@ -9148,6 +9148,68 @@ Return ONLY corrected JSON with option1, option1_pattern, option2, option2_patte
     return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
 
 
+def _ce_repair_voice_tuner_feedback_generation(
+    original_prompt: str,
+    overlay: str,
+    applied_feedback: list[str],
+    data: dict,
+    quality_report: dict,
+    fmt: str,
+    lane: str,
+    provider: str,
+    max_tokens: int,
+    timeout_seconds: int = 45,
+) -> tuple[dict | None, dict, list[str]]:
+    failure_summary = _ce_quality_failure_summary(quality_report, limit=10)
+    feedback_text = "\n".join(f"- {text}" for text in applied_feedback[-20:]) or "- No readable feedback found."
+    repair_prompt = f"""{original_prompt}
+
+VOICE TUNER OPTION B AUTO-REPAIR REQUIRED:
+The user already gave sandbox feedback. Do not ask the user for sharper feedback.
+You must convert the saved feedback and quality-gate failures into a corrected Option B draft set.
+
+Saved sandbox feedback:
+{feedback_text}
+
+Blocking quality-gate issues:
+{failure_summary or "Unknown quality failure."}
+
+Previous rejected Option B JSON:
+{json.dumps(data, ensure_ascii=False)[:3500]}
+
+Rewrite all 3 options so each one:
+- Applies the saved sandbox feedback as the highest-priority tuning direction.
+- Still follows the selected Creator Evolution voice, selected format, source preservation, stat integrity, and quality gates.
+- Fixes the blocking issues internally without telling the user how to phrase feedback.
+
+Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
+"""
+    repair_overlay = "\n\n".join(
+        part for part in [
+            overlay,
+            "VOICE TUNER AUTO-REPAIR MODE: silently translate rough user feedback into quality-gate-safe Creator Evolution output.",
+        ]
+        if str(part or "").strip()
+    )
+    raw = _call_creator_evolution_ai_for_provider(
+        repair_prompt,
+        lane,
+        max_tokens,
+        provider=provider,
+        timeout_seconds=timeout_seconds,
+        system_suffix=repair_overlay,
+        strict_chatgpt=True,
+    )
+    repaired = _parse_banger_json(raw or "")
+    if not repaired or not repaired.get("option1"):
+        return None, quality_report, []
+    for option_key in ["option1", "option2", "option3"]:
+        if repaired.get(option_key):
+            repaired[option_key] = _ce_prepare_generated_option(repaired[option_key], fmt, lane)
+    repaired_quality = _ce_validate_generation_options(repaired, fmt, lane)
+    return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
+
+
 def _ce_pulse_meta_language(text: str) -> bool:
     lower = str(text or "").lower()
     return any(
@@ -12268,6 +12330,7 @@ def _ce_testing_generate(
     data = {f"option{idx}": options[idx - 1] if idx - 1 < len(options) else "" for idx in [1, 2, 3]}
     quality_report = _ce_validate_generation_options(data, fmt, lane) if options else {}
     passing_ids = _ce_passing_option_ids(data, quality_report) if options else []
+    repair_attempted = False
     if status != "error" and len(passing_ids) < 3 and not applied_feedback:
         fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(concept, fmt, lane)
         if fallback_passing:
@@ -12279,7 +12342,42 @@ def _ce_testing_generate(
         elif not options:
             status = "error"
     elif status != "error" and len(passing_ids) < 3 and applied_feedback:
-        status = "needs_retry"
+        repair_attempted = True
+        repaired_data, repaired_quality, repaired_passing = _ce_repair_voice_tuner_feedback_generation(
+            prompt,
+            overlay,
+            applied_feedback,
+            data,
+            quality_report,
+            fmt,
+            lane,
+            provider,
+            _ce_testing_max_tokens(fmt),
+        )
+        if repaired_data and len(repaired_passing) >= 3:
+            data = repaired_data
+            quality_report = repaired_quality
+            passing_ids = repaired_passing
+            options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
+            status = "auto_repaired"
+        else:
+            fallback_source = "\n\n".join(
+                part for part in [
+                    concept,
+                    "Voice Tuner sandbox feedback to preserve:",
+                    "\n".join(applied_feedback[-20:]),
+                ]
+                if str(part or "").strip()
+            )
+            fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(fallback_source, fmt, lane)
+            if fallback_passing:
+                data = fallback_data
+                quality_report = fallback_quality
+                passing_ids = fallback_passing
+                options = [str(data.get(f"option{idx}", "") or "").strip() for idx in [1, 2, 3] if str(data.get(f"option{idx}", "") or "").strip()]
+                status = "auto_repaired"
+            elif not options:
+                status = "error"
     return {
         "status": status,
         "provider": provider,
@@ -12293,11 +12391,13 @@ def _ce_testing_generate(
         "passing_option_ids": passing_ids,
         "applied_feedback": applied_feedback[-20:],
         "overlay_hash": hashlib.sha1(overlay.encode()).hexdigest()[:8] if overlay else "",
+        "repair_attempted": repair_attempted,
         "user_message": (
+            "Voice Tuner repaired Option B automatically using your feedback and the quality-gate issues."
+            if status == "auto_repaired"
+            else
             "Generation needed repair, so Voice Tuner replaced weak drafts with safer output."
             if status == "repaired"
-            else "Sandbox feedback was applied, but the result still missed quality gates. Save sharper feedback or generate again."
-            if status == "needs_retry"
             else ""
         ),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -12364,7 +12464,17 @@ def _render_ce_testing_output_card(title: str, result: dict) -> None:
     status = str(result.get("status", "missing"))
     provider = str(result.get("provider", ""))
     grade = _ce_voice_tuner_compact_grade(result)
-    status_label = "Ready" if status == "ok" else "Repaired" if status == "repaired" else "Not generated" if status == "missing" else "Needs retry"
+    status_label = (
+        "Ready"
+        if status == "ok"
+        else "AI repaired"
+        if status == "auto_repaired"
+        else "Repaired"
+        if status == "repaired"
+        else "Not generated"
+        if status == "missing"
+        else "Needs retry"
+    )
     st.markdown(f"**{title}**")
     st.caption(f"{status_label} | Quality {grade['status']} | {provider or 'model pending'}")
     if result.get("user_message"):

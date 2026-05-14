@@ -92,9 +92,14 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     page_body = source[source.index("def page_voice_tuner") : source.index("def page_testing")]
 
     assert "def _ce_testing_feedback_lines" in source
+    assert "def _ce_repair_voice_tuner_feedback_generation" in source
     assert "applied_feedback = _ce_testing_feedback_lines(lab_state, lane) if testing_copy else []" in generate_body
     assert "len(passing_ids) < 3 and not applied_feedback" in generate_body
+    assert "_ce_repair_voice_tuner_feedback_generation(" in generate_body
+    assert '"repair_attempted": repair_attempted' in generate_body
     assert '"applied_feedback": applied_feedback[-20:]' in generate_body
+    assert "Save sharper feedback" not in generate_body
+    assert "needs_retry" not in generate_body
     assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
     assert "Regenerating A/B test with your feedback" in page_body
     assert "Feedback saved and regenerated." in page_body
