@@ -2,13 +2,12 @@
 
 Status: BLOCKED
 
-Reference available: `False`
+Reference available: `True`
 
 Automated QC failures:
 
 ```json
 [
-  "reference_mp4_missing",
   "overview:mp4_missing",
   "overview:srt_missing",
   "overview:vtt_missing",

@@ -1,8 +1,14 @@
 {
   "reference": {
-    "available": false,
-    "blockedReason": "Reference MP4 is missing. Direct X download was blocked by yt-dlp guest-token/API failure.",
-    "requiredPath": "assets/reference/post-ascend-reference.mp4"
+    "available": true,
+    "path": "assets/reference/post-ascend-reference.mp4",
+    "width": 3692,
+    "height": 2160,
+    "fps": "30/1",
+    "duration": 26.333333,
+    "videoCodec": "h264",
+    "audioCodec": null,
+    "bitrate": "3319541"
   },
   "provisionalDefaults": {
     "resolution": "1920x1080",
@@ -16,6 +22,19 @@
         75
       ]
     },
-    "blockedUntilReferenceAvailable": true
+    "blockedUntilReferenceAvailable": false
+  },
+  "observedStyle": {
+    "aspectRatioApprox": 1.709,
+    "durationSeconds": 26.333333,
+    "audio": "none_detected",
+    "openingTreatment": "immediate_ui_context_no_long_logo_intro",
+    "backgroundTreatment": "soft_pink_peach_texture_with_black_red_pixel_horizon_accent",
+    "windowFraming": "floating_browser_or_app_windows_with_dark_surfaces_and_subtle_shadow",
+    "motionLanguage": "fast_cuts_scrolls_cursor_guidance_progressive_output_reveal",
+    "cursor": "standard_visible_cursor",
+    "captions": "no_obvious_burned_in_subtitles",
+    "callouts": "minimal_rely_on_ui_content_and_framing",
+    "recommendedAdaptation": "Post Ascend tutorials should use crisp UI capture, fast scene rhythm, minimal callouts, and optional narration/captions only where needed for teaching."
   }
 }
