@@ -259,6 +259,11 @@ test("login page can open a guest preview session", async ({ page }) => {
   await page.goto("/app");
   await expect(page.getByText("Preview Guest")).toBeVisible();
   await expect(page.getByText("Signals & Prompts")).toHaveCount(0);
+  await expect(page.getByText("Creator Evolution")).toHaveCount(0);
+  await expect(page.getByText("Voice Tuner")).toHaveCount(0);
+  await expect(page.getByText("Podcast")).toHaveCount(0);
+  await expect(page.getByText("Gameday Mode")).toHaveCount(0);
+  await expect(page.getByText("10/10 Audit")).toHaveCount(0);
 });
 
 test("active preview sessions redirect away from login", async ({ page }) => {
@@ -293,26 +298,73 @@ test("app shell preview renders", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "Owner Preview" }).click();
   await expect(page).toHaveURL(/\/app\/creator-evolution$/);
+  const ownerTools = [
+    "Creator Evolution",
+    "Voice Tuner",
+    "10/10 Audit",
+    "Signals & Prompts",
+    "Podcast",
+    "Gameday Mode",
+    "Debug Console",
+  ];
+  for (const tool of ownerTools) {
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: new RegExp(tool.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }),
+    ).toBeVisible();
+  }
+  await expect(
+    page
+      .getByRole("navigation")
+      .getByRole("link", { name: /Creator Evolution/ }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation")
+      .getByRole("link", { name: /Voice Tuner/ }),
+  ).toBeVisible();
+  await expect(page.getByText("Owner Studio")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Voice Tuner" }).first()).toBeVisible();
   await expect(page.getByLabel("Creator Evolution seed")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Grok" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel("Creator Evolution voice lane")).toHaveValue("Witty Edge");
+  await expect(page.locator('select[aria-label="Creator Evolution voice lane"] option')).toHaveCount(10);
+  await expect(page.locator('select[aria-label="Creator Evolution voice lane"]')).toContainText("Promo");
+  await expect(page.locator('select[aria-label="Creator Evolution voice lane"]')).toContainText("Sarcastic");
+  await page.getByLabel("Creator Evolution voice lane").selectOption("Promo");
+  await expect(page.getByText("unresolved video-tension")).toBeVisible();
   await expect(page.getByText("Active Creator Evolution Rules")).toBeVisible();
 });
 
 
 
-test("owner Voice Tuner preview reflects structured feedback gates", async ({ page }) => {
+test("owner Voice Tuner preview reflects guided wizard", async ({ page }) => {
   await page.goto("/login");
   const ownerPreview = page.getByRole("button", { name: "Owner Preview" });
   test.skip((await ownerPreview.count()) === 0, "Local preview auth is unavailable in this runtime.");
   await ownerPreview.click();
   await expect(page).toHaveURL(/\/app\/creator-evolution$/);
   await page.goto("/app/voice-tuner");
-  await expect(page.getByText("Structured Feedback Gate")).toBeVisible();
-  await expect(page.getByPlaceholder("Paste the test concept. Feedback is compiled into scoped structured rules before tuning.")).toBeVisible();
-  await page.getByRole("button", { name: "Generate A/B Test" }).click();
-  await expect(page.getByText("route metadata")).toBeVisible();
-  await expect(page.getByText("feedback score")).toBeVisible();
+  await expect(page.getByText("Pick Target").first()).toBeVisible();
+  await expect(page.getByText("Generate Preview").first()).toBeVisible();
+  await expect(page.getByText("Improve Tuned Voice").first()).toBeVisible();
+  await expect(page.getByText("Review And Apply").first()).toBeVisible();
+  await expect(page.getByPlaceholder("Optional: paste a tweet, topic, or rough thought. Leave blank and Voice Tuner will use a test idea for this voice.")).toBeVisible();
+  await page.getByRole("button", { name: "Continue To Preview" }).click();
+  await page.getByRole("button", { name: "Generate Preview" }).click();
+  await expect(page.getByText("Current voice")).toBeVisible();
+  await expect(page.getByText("Tuned voice")).toBeVisible();
+  await page.getByRole("button", { name: "Too much setup" }).click();
+  await page.getByRole("button", { name: "Sharper" }).click();
+  await expect(page.getByPlaceholder("Exact phrase to avoid, like: the funny part is")).toBeVisible();
+  await page.getByRole("button", { name: "Save Feedback And Regenerate" }).click();
+  await expect(page.getByText("I'll try:")).toBeVisible();
+  await expect(page.getByText("Apply this only to Witty Edge / Normal Tweet")).toBeVisible();
   await page.getByRole("button", { name: "Apply Live" }).click();
   await expect(page.getByText("matching scoped rule hash")).toBeVisible();
+  await page.getByText("Advanced").click();
+  await expect(page.getByText("Model, route metadata, prompt overlay, history, reset, and debug details stay here.")).toBeVisible();
 });
 
 test("creator studio preview actions render structured results", async ({ page }) => {
@@ -535,6 +587,7 @@ test("malformed preview profile cookie is ignored", async ({ context, page }) =>
 
   await page.goto("/app");
   await expect(page.getByLabel("Creator Evolution seed")).toBeVisible();
+  await expect(page.locator('select[aria-label="Creator Evolution voice lane"] option')).toHaveCount(10);
   await expect(page.getByText("Active Creator Evolution Rules")).toBeVisible();
 });
 

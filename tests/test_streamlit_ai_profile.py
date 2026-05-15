@@ -119,8 +119,8 @@ def test_voice_tuner_feedback_regenerates_and_cannot_be_replaced_by_fallback():
     assert "You can always tell" not in fallback_body
     assert "I could not make a clean tuned version with those hard constraints" in card_body
     assert "next_gen_key = _ce_voice_tuner_generation_key(item, provider, state, selected_lane, selected_fmt)" in page_body
-    assert "Regenerating A/B test with your feedback" in page_body
-    assert "Feedback saved and regenerated." in page_body
+    assert "Regenerating with your feedback" in page_body
+    assert "Feedback saved and the tuned preview was regenerated." in page_body
 
 
 def test_voice_tuner_uses_structured_feedback_module_for_exact_bans():
