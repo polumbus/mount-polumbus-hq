@@ -8897,13 +8897,13 @@ SOURCE MATERIAL:
 {sports_ctx or ""}
 
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
-Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
-If the selected format is Normal Tweet, do not use the old three-stacked-line template. Prefer one compact paragraph or one intentional break only.
-Prefer declarative open loops over literal question bait.
-No hashtags, no links unless the user supplied them.
+Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
+Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
+For Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
+The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait.
+Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
-No corporate polish, LinkedIn cadence, fake balance, symmetrical three-part essay structure, or over-explaining.
-Never use Hall of Fame tweets, Hall of Fame examples, Hall of Fame hooks, or static HOF benchmark language.
+No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """.strip()
 
@@ -11245,38 +11245,38 @@ def _ce_format_recipe_text(fmt: str) -> str:
     recipes = {
         "Punchy Tweet": (
             "Punchy Tweet:\n"
-            "- Target: 70-160 characters. One sharp thought. One or two sentences maximum.\n"
-            "- Structure: No setup paragraph. No line breaks. Compress until it feels like a phone post.\n"
-            "- Must: Every option must be under 160 characters and must not read like a normal-length tweet.\n"
-            "- Avoid: Explaining the context, adding a second angle, threads, or soft qualifiers."
+            "- Target: 70-160 characters. One sharp, complete reaction with a visible tension, joke, or contradiction.\n"
+            "- Structure: No setup paragraph. No line breaks. One or two sentences that land fast and feel typed on a phone, with varied openings and endings across options.\n"
+            "- Must: Every option must make one specific point, create curiosity without asking for engagement, and choose the punchy structure that fits the idea.\n"
+            "- Avoid: Explaining context, adding a second angle, soft qualifiers, generic hype, vague reaction-caption energy, or using the same punchline rhythm every time."
         ),
         "Normal Tweet": (
             "Normal Tweet:\n"
             "- Target: 161-260 preferred characters. Hard validator tolerance: 140-280.\n"
-            "- Structure: One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.\n"
-            "- Must: Every option must use the extra space without turning into a stacked template.\n"
-            "- Avoid: Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence."
+            "- Structure: Preferred shape is two or three natural sentences, then one intentional line break, then one final statement that invites engagement without asking a direct question. Strong one-paragraph versions are allowed when they sound more natural.\n"
+            "- Must: Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. The final line must create response pressure through a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait. Ellipsis endings are allowed and often good, but rotate with hard-period tension lines.\n"
+            "- Avoid: Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or ending every option with ellipsis."
         ),
         "Long Tweet": (
             "Long Tweet:\n"
             "- Target: 261-700 preferred characters. Hard validator tolerance: 260-900.\n"
-            "- Structure: Opening take, short supporting beat, contrast or consequence, closing pressure line.\n"
-            "- Must: Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.\n"
-            "- Avoid: Thread markers, article headings, or empty recap paragraphs."
+            "- Structure: Opening take, 2-3 short evidence/contrast beats, then a memorable closing turn. Vary whether the final turn is consequence, irony, tension, or a clean walk-off.\n"
+            "- Must: Every option must reward the extra length with escalation, specificity, and a structure that fits the idea instead of a fixed long-tweet template.\n"
+            "- Avoid: Thread markers, article headings, recap paragraphs, filler transitions, stretching one normal tweet into a bloated post, or repeating the same final-turn formula."
         ),
         "Thread": (
             "Thread:\n"
             "- Target: 4-7 tweets. Each tweet must stand alone and stay under 280 characters.\n"
-            "- Structure: Separate tweets with the exact marker ---TWEET--- inside each option.\n"
-            "- Must: Every option must contain at least 4 tweet segments separated by ---TWEET---.\n"
-            "- Avoid: One long paragraph, article headings, or a normal tweet pretending to be a thread."
+            "- Structure: Separate tweets with ---TWEET---. Tweet 1 hooks the tension, middle tweets escalate or reframe, final tweet lands the takeaway, but the sequence should vary by topic.\n"
+            "- Must: Every option must contain at least 4 tweet segments, each segment must earn its slot with a new beat, and the thread arc must fit the idea.\n"
+            "- Avoid: One long paragraph, numbered article sections, repeated setup lines, a normal tweet chopped into pieces, or the same hook-middle-close pattern every time."
         ),
         "Article": (
             "Article:\n"
             "- Target: 700-1,200 words per option. A real X Article/short column, not a tweet.\n"
-            "- Structure: Headline, intro, 3-5 section headings, and a closing take.\n"
-            "- Must: Every option must read like a complete article draft with section structure.\n"
-            "- Avoid: Tweet-length output, thread markers, or a short caption with a headline."
+            "- Structure: Headline, sharp intro, 3-5 section headings, concrete examples or consequences, and a closing take worth remembering. Vary the section rhythm and argument path by topic.\n"
+            "- Must: Every option must read like a complete opinion column with a clear argument, no invented facts, and an article shape chosen for the idea.\n"
+            "- Avoid: Tweet-length output, thread markers, generic newsletter tone, filler sections, a headline attached to a caption, or a reusable article skeleton."
         ),
     }
     return recipes.get(fmt, recipes["Normal Tweet"])

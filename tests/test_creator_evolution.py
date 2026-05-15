@@ -88,11 +88,11 @@ class CreatorEvolutionTests(unittest.TestCase):
             None,
         )
 
-        self.assertIn("do not use the old three-stacked-line template", standard)
-        self.assertIn("The smile you make when sports gets absurd", comedic)
-        self.assertIn("Clear diagnosis. Firm, specific", critical)
+        self.assertIn("line-break skeleton", standard)
+        self.assertIn("EDGY GROUP-CHAT SPORTS COMEDY", comedic)
+        self.assertIn("Clear diagnosis with accountability", critical)
         self.assertIn("SARCASTIC VOICE", sarcastic)
-        self.assertNotIn("Source freedom for this lane", comedic)
+        self.assertIn("Source freedom for this lane", comedic)
 
     def test_comedic_quality_rejects_wasted_setup_frames(self):
         for phrase in ("The funny part is", "The whole thing is", "You can always tell"):
@@ -425,14 +425,14 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("Deadpan:", prompt)
-        self.assertIn("Straight-faced", prompt)
+        self.assertIn("AGGRESSIVE DRY HUMOR MODE", prompt)
         self.assertIn("No exclamation points", prompt)
 
     def test_format_recipe_changes_prompt_behavior(self):
         base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
         cases = {
-            "Punchy Tweet": "One sharp thought",
-            "Normal Tweet": "One compact phone-style post",
+            "Punchy Tweet": "One sharp, complete reaction",
+            "Normal Tweet": "Preferred shape is two or three natural sentences",
             "Long Tweet": "261-700 preferred characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
@@ -892,13 +892,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("Amused", ce.EMOTION_LANES)
         self.assertEqual(ce.normalize_lane("Amused"), "Comedic")
         prompt = ce.build_generation_prompt("The Nuggets bench turned a lead into panic.", "Normal Tweet", "Comedic", ce.initial_state())
-        self.assertIn("The smile you make when sports gets absurd", prompt)
-        self.assertIn("Find the weird human detail", prompt)
-        self.assertIn("A dry little walk-off line", prompt)
-        self.assertIn("do not use the old three-stacked-line template", prompt)
-        self.assertNotIn("COMEDIC LANE HARD RULES", prompt)
-        self.assertNotIn("COMEDIC OVERRIDE", prompt)
-        self.assertNotIn("joke engine", prompt)
+        self.assertIn("EDGY GROUP-CHAT SPORTS COMEDY", prompt)
+        self.assertIn("real laugh beat", prompt)
+        self.assertIn("funniest sports guy", prompt)
+        self.assertIn("line-break skeleton", prompt)
+        self.assertIn("COMEDIC LANE HARD RULES", prompt)
+        self.assertIn("COMEDIC OVERRIDE", prompt)
+        self.assertIn("joke engine", prompt)
 
     def test_comedic_lane_accepts_sports_specific_jokes(self):
         examples = [
@@ -930,9 +930,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("missing third act", recipe["target"])
-        self.assertIn("one unresolved tension", recipe["target"])
-        self.assertIn("No fake urgency", prompt)
-        self.assertIn("PROMO VOICE - VIDEO CLICK TENSION MODE", prompt)
+        self.assertIn("unresolved click tension", recipe["target"])
+        self.assertIn("MONETIZATION-OPTIMIZED CLICK TENSION MODE", prompt)
+        self.assertIn("PROMO VOICE - MONETIZATION-OPTIMIZED CLICK TENSION MODE", prompt)
         self.assertIn("LEARNED FORMAT PROFILE", prompt)
         self.assertIn("LEARNED VOICE PROFILE", prompt)
 
@@ -1050,11 +1050,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("SARCASTIC VOICE", prompt)
-        self.assertIn("DRY HUMOR MODE", prompt)
+        self.assertIn("FAKE ENTHUSIASM MODE", prompt)
         self.assertIn("Cultural Leap", prompt)
-        self.assertIn("old sarcastic examples", prompt)
-        self.assertIn("Never use generic openers", prompt)
-        self.assertIn("Drop it and walk away", prompt)
+        self.assertIn("brutal exaggeration", prompt)
+        self.assertIn("No generic sarcastic openers", prompt)
+        self.assertIn("zero chill", prompt)
         self.assertNotIn("Turns out the Patriots offense", prompt)
         self.assertNotIn("That cornerback needs to call someone", prompt)
         self.assertNotIn("copy this exact energy", prompt)
@@ -1983,20 +1983,20 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("duplicate_recent_angle", decision["top_rejected"][0]["hard_blocks"])
 
     def test_voice_and_format_recipes_are_engagement_focused_without_replacing_learning(self):
-        self.assertIn("a little dangerous", ce.lane_recipe_text("Witty Edge"))
-        self.assertIn("raised eyebrow", ce.lane_recipe_text("Skeptical"))
-        self.assertIn("accountability-minded", ce.lane_recipe_text("Critical"))
+        self.assertIn("MONETIZATION-OPTIMIZED MIC DROP MODE", ce.lane_recipe_text("Witty Edge"))
+        self.assertIn("QUIET DOUBT MODE", ce.lane_recipe_text("Skeptical"))
+        self.assertIn("accountability", ce.lane_recipe_text("Critical"))
         self.assertIn("specific sports contradiction", ce.lane_recipe_text("Promo"))
         self.assertIn("source-specific wording", str(ce.validate_generation_options({
             "option1": "This Denver sports moment is where it gets interesting. The roster will tell us what matters next...",
             "option2": "This Denver sports moment is where it gets weird. The roster will tell us what matters next...",
             "option3": "This Denver sports moment is where the whole thing shifts. The roster will tell us what matters next...",
         }, "Normal Tweet", "Witty Edge")))
-        self.assertIn("One compact phone-style post", ce.format_recipe_text("Normal Tweet"))
-        self.assertIn("One sharp thought", ce.format_recipe_text("Punchy Tweet"))
-        self.assertIn("closing pressure line", ce.format_recipe_text("Long Tweet"))
-        self.assertIn("exact marker ---TWEET---", ce.format_recipe_text("Thread"))
-        self.assertIn("short caption with a headline", ce.format_recipe_text("Article"))
+        self.assertIn("Preferred shape is two or three natural sentences", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("One sharp, complete reaction", ce.format_recipe_text("Punchy Tweet"))
+        self.assertIn("memorable closing turn", ce.format_recipe_text("Long Tweet"))
+        self.assertIn("Separate tweets with ---TWEET---", ce.format_recipe_text("Thread"))
+        self.assertIn("reusable article skeleton", ce.format_recipe_text("Article"))
         self.assertIn("at least 4 tweet segments", ce.format_recipe_text("Thread"))
 
     def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
@@ -2200,11 +2200,11 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_app_fallback_recipes_include_current_creator_evolution_language(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("One sharp thought. One or two sentences maximum", app_text)
-        self.assertIn("One compact phone-style post", app_text)
-        self.assertIn("do not use the old three-stacked-line template", app_text)
-        self.assertIn("Headline, intro, 3-5 section headings", app_text)
-        self.assertIn("a normal tweet pretending to be a thread", app_text)
+        self.assertIn("One sharp, complete reaction", app_text)
+        self.assertIn("Preferred shape is two or three natural sentences", app_text)
+        self.assertIn("line-break skeleton", app_text)
+        self.assertIn("Headline, sharp intro, 3-5 section headings", app_text)
+        self.assertIn("same hook-middle-close pattern", app_text)
         self.assertIn("Generated options all end with ellipsis", app_text)
         self.assertIn("Witty Edge should not lean on hot-take", app_text)
         self.assertIn("Generated options repeat the same opener", app_text)
