@@ -13634,6 +13634,15 @@ def page_voice_tuner():
         "Voice + format": f"You are tuning the {selected_lane} voice specifically when it writes {selected_fmt}.",
     }
     st.info(focus_help[selected_focus])
+    target_actions = st.columns([1, 1, 2])
+    with target_actions[0]:
+        if st.button("New Test Idea", use_container_width=True):
+            state["test_prompt_variant"] = int(state.get("test_prompt_variant", 0) or 0) + 1
+            state["manual_prompt"] = ""
+            state["voice_tuner_step"] = "target"
+            state.pop("active_generation_key", None)
+            _save_ce_testing_state(state)
+            st.rerun()
     if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane") or selected_focus != state.get("voice_tuner_focus"):
         state["voice_tuner_format"] = selected_fmt
         state["voice_tuner_lane"] = selected_lane
@@ -13653,15 +13662,11 @@ def page_voice_tuner():
         if manual_value != state.get("manual_prompt", ""):
             state["manual_prompt"] = manual_value
             _save_ce_testing_state(state)
-        prompt_cols = st.columns([1, 1, 2])
+        prompt_cols = st.columns([1, 3])
         with prompt_cols[0]:
-            if st.button("New Test Idea", use_container_width=True):
-                state["test_prompt_variant"] = int(state.get("test_prompt_variant", 0) or 0) + 1
-                _save_ce_testing_state(state)
-                st.rerun()
-        with prompt_cols[1]:
             if st.button("Clear Idea", use_container_width=True, disabled=not str(state.get("manual_prompt", "") or "").strip()):
                 state["manual_prompt"] = ""
+                state.pop("active_generation_key", None)
                 _save_ce_testing_state(state)
                 st.rerun()
         active_prompt, prompt_mode = _ce_voice_tuner_active_prompt(state, item, selected_lane, selected_fmt)

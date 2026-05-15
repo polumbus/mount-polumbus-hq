@@ -47,6 +47,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("TYLER'S HALL OF FAME DATA", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
 
+
+    def test_voice_tuner_test_prompts_rotate_and_match_lane_style(self):
+        comedic = ce.voice_tuner_test_prompt("Comedic", "Normal Tweet", 0)
+        sarcastic = ce.voice_tuner_test_prompt("Sarcastic", "Normal Tweet", 0)
+        skeptical = ce.voice_tuner_test_prompt("Skeptical", "Normal Tweet", 0)
+        next_comedic = ce.voice_tuner_test_prompt("Comedic", "Normal Tweet", 1)
+
+        self.assertIn("group project", comedic)
+        self.assertIn("which is always comforting", sarcastic)
+        self.assertIn("but camp is where we find out", skeptical)
+        self.assertNotEqual(comedic, next_comedic)
+        self.assertIn("one or two sentences", ce.voice_tuner_test_prompt("Comedic", "Punchy Tweet", 0))
+
     def test_source_preservation_relaxes_for_transformational_lanes(self):
         standard = ce.build_generation_prompt(
             "The Broncos keep saying this roster is deeper, but camp will show if that is real.",
@@ -277,9 +290,9 @@ class CreatorEvolutionTests(unittest.TestCase):
             self.assertNotIn("write a tweet about", normal.lower())
             self.assertNotIn("make this funny", normal.lower())
 
-        self.assertIn("one more qb decision", ce.voice_tuner_test_prompt("Promo", "Long Tweet", 0).lower())
+        self.assertIn("one qb decision", ce.voice_tuner_test_prompt("Promo", "Long Tweet", 0).lower())
         self.assertIn("group project", ce.voice_tuner_test_prompt("Comedic", "Normal Tweet", 0).lower())
-        self.assertIn("politely reminds", ce.voice_tuner_test_prompt("Deadpan", "Normal Tweet", 0).lower())
+        self.assertIn("quietly submitting evidence", ce.voice_tuner_test_prompt("Deadpan", "Normal Tweet", 0).lower())
 
     def test_voice_tuner_guided_feedback_builds_plain_english_note(self):
         app_text = Path("app.py").read_text()
