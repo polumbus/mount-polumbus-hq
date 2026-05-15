@@ -13598,27 +13598,46 @@ def page_voice_tuner():
     provider = str(state.get("voice_tuner_provider", CE_AI_PROVIDER_DEFAULT) or CE_AI_PROVIDER_DEFAULT)
 
     st.markdown("### Tuning Target")
-    st.caption("This is the voice and format your feedback will change. You can switch it at any step.")
-    target_cols = st.columns(2)
+    st.caption("Choose whether this feedback is about the voice style, the format structure, or this exact voice+format pairing.")
+    focus_options = ("Voice only", "Format only", "Voice + format")
+    selected_focus = str(state.get("voice_tuner_focus", "Voice + format") or "Voice + format")
+    if selected_focus not in focus_options:
+        selected_focus = "Voice + format"
+    target_cols = st.columns(3)
     with target_cols[0]:
+        selected_focus = st.selectbox(
+            "What are you tuning?",
+            focus_options,
+            index=focus_options.index(selected_focus),
+            key="ce_voice_tuner_focus",
+            help="Voice changes tone and phrasing. Format changes structure and length. Voice + format tunes this exact pairing.",
+        )
+    with target_cols[1]:
         selected_lane = st.selectbox(
-            "Voice to tune",
+            "Voice style",
             lane_opts,
             index=lane_opts.index(selected_lane) if selected_lane in lane_opts else 0,
             key="ce_voice_tuner_lane",
-            help="The voice lane you want this feedback to teach.",
+            help="The voice lane whose tone and phrasing you are testing.",
         )
-    with target_cols[1]:
+    with target_cols[2]:
         selected_fmt = st.selectbox(
-            "Format to test",
+            "Format structure",
             fmt_opts,
             index=fmt_opts.index(selected_fmt) if selected_fmt in fmt_opts else 0,
             key="ce_voice_tuner_format",
-            help="Feedback is scoped to this format.",
+            help="The content shape whose structure and length you are testing.",
         )
-    if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane"):
+    focus_help = {
+        "Voice only": f"You are tuning how {selected_lane} sounds. Format stays {selected_fmt} only so the comparison is apples-to-apples.",
+        "Format only": f"You are tuning how {selected_fmt} is structured. Voice stays {selected_lane} only so tone does not blur the test.",
+        "Voice + format": f"You are tuning the {selected_lane} voice specifically when it writes {selected_fmt}.",
+    }
+    st.info(focus_help[selected_focus])
+    if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane") or selected_focus != state.get("voice_tuner_focus"):
         state["voice_tuner_format"] = selected_fmt
         state["voice_tuner_lane"] = selected_lane
+        state["voice_tuner_focus"] = selected_focus
         state["voice_tuner_step"] = "target"
         state.pop("active_generation_key", None)
         _save_ce_testing_state(state)
@@ -13673,7 +13692,7 @@ def page_voice_tuner():
 
     if step in {"preview", "feedback", "review"}:
         st.markdown("### Generate Preview")
-        st.caption("Current voice is the live baseline. Tuned voice is the sandbox version using your feedback rules.")
+        st.caption(f"Current voice is the live baseline. Tuned voice tests {state.get('voice_tuner_focus', 'Voice + format').lower()} for {selected_lane} / {selected_fmt}.")
         _render_voice_tuner_target_card(item, prompt_mode)
         if active_rules:
             st.info(vtf.interpretation_summary(active_rules))
@@ -13697,7 +13716,7 @@ def page_voice_tuner():
 
     if step in {"feedback", "review"}:
         st.markdown("### Improve Tuned Voice")
-        st.caption("Pick what feels off. Voice Tuner turns this into scoped rules and regenerates only the tuned side.")
+        st.caption(f"Pick what feels off about {state.get('voice_tuner_focus', 'Voice + format').lower()}. Voice Tuner turns this into scoped rules and regenerates only the tuned side.")
         st.caption(f"Saved notes for this voice: {len(lane_feedback)}. Live tuning is {'on' if live_entries else 'off'} for this voice.")
         with st.form(f"ce_voice_tuner_wizard_feedback_{item['id']}", clear_on_submit=True):
             issue_cols = st.columns(4)
