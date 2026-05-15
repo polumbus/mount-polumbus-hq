@@ -7,6 +7,7 @@ from pathlib import Path
 
 import apis
 import creator_evolution as ce
+import creator_evolution_algorithm as cexa
 import creator_evolution_pulse as pulse
 
 
@@ -31,6 +32,159 @@ def _tweet(tweet_id, text, *, hours_ago, views=1000, likes=20, replies=4, repost
 
 
 class CreatorEvolutionTests(unittest.TestCase):
+    def test_public_x_draft_report_rewards_clear_nuggets_anchor(self):
+        report = cexa.public_x_draft_report(
+            "The Nuggets rotation problem keeps surviving every clean explanation because the non Jokic minutes still decide the ceiling.",
+            "Normal Tweet",
+            "Witty Edge",
+        )
+
+        self.assertGreaterEqual(report["candidate_fit"], 60)
+        self.assertIn("nuggets", report["candidate_anchor"])
+        self.assertEqual(report["target_action"], "reply")
+
+    def test_public_x_draft_report_penalizes_vague_pronoun_opener(self):
+        report = cexa.public_x_draft_report(
+            "This is where it gets interesting because the whole thing has pressure now.",
+            "Normal Tweet",
+            "Witty Edge",
+        )
+
+        self.assertLess(report["candidate_fit"], 60)
+        self.assertGreaterEqual(report["not_dwelled_risk"], 45)
+
+    def test_negative_signal_risk_penalizes_heated_direct_insults(self):
+        risk, reason = cexa.negative_signal_risk("The Broncos process is run by idiots.", "Critical")
+
+        self.assertGreaterEqual(risk, 70)
+        self.assertIn(reason, {"direct insult language", "heated lane plus personal wording"})
+
+    def test_not_dwelled_risk_penalizes_safe_generic_text(self):
+        risk, reason = cexa.not_dwelled_risk("The important part is not the headline. That is where it matters.", "Normal Tweet")
+
+        self.assertGreaterEqual(risk, 70)
+        self.assertTrue(reason)
+
+    def test_select_best_option_by_public_x_does_not_default_to_option1(self):
+        data = {
+            "option1": "This is where it gets interesting because the whole thing has pressure now.",
+            "option2": "The Nuggets rotation problem keeps surviving every clean explanation because the non Jokic minutes still decide the ceiling.",
+            "option3": "That is a thing now.",
+            "pick": "1",
+        }
+        quality = {f"option{i}": {"ok": True} for i in (1, 2, 3)}
+
+        pick, report = cexa.select_best_option_by_public_x(data, quality, "Normal Tweet", "Witty Edge")
+
+        self.assertEqual(pick, "2")
+        self.assertGreaterEqual(report["candidate_fit"], 60)
+
+    def test_prompt_versions_are_public_x_action_profile(self):
+        self.assertEqual(ce.PROMPT_VERSION, "ce-prompt-v10-public-x-action-profile")
+        self.assertEqual(ce.SCORING_VERSION, "ce-score-v4-public-x-action-profile")
+
+    def test_build_generation_prompt_includes_public_x_contract_and_schema(self):
+        prompt = ce.build_generation_prompt("The Nuggets rotation is still the pressure point.", "Normal Tweet", "Witty Edge", None)
+
+        self.assertIn("PUBLIC X ALGORITHM CONTRACT", prompt)
+        self.assertIn("option1_candidate_anchor", prompt)
+        self.assertIn("option1_target_action", prompt)
+
+    def test_draft_quality_report_includes_public_x_diagnostics(self):
+        report = ce.draft_quality_report(
+            "The Nuggets rotation problem keeps surviving every clean explanation because the non Jokic minutes still decide the ceiling.",
+            "Normal Tweet",
+            "Witty Edge",
+        )
+
+        self.assertIn("public_x", report)
+        self.assertIn("candidate_fit", report)
+        self.assertIn("target_action", report)
+
+    def test_score_tweet_includes_algorithm_profile_and_new_score_keys(self):
+        score = ce.score_tweet(_tweet(
+            101,
+            "The Nuggets rotation problem keeps surviving every clean explanation because the non Jokic minutes still decide the ceiling.",
+            hours_ago=96,
+            views=9000,
+            likes=100,
+            replies=18,
+            reposts=8,
+        ), NOW)
+
+        self.assertIn("algorithm_profile", score)
+        self.assertIn("candidate_fit", score["scores"])
+        self.assertIn("positive_action_fit", score["scores"])
+        self.assertIn("actual_action_winner", score["flags"])
+
+    def test_build_format_profiles_include_action_profile_fields(self):
+        scores = [
+            ce.score_tweet(_tweet(201, "The Nuggets rotation problem keeps deciding the non Jokic minutes.", hours_ago=96, views=9000, likes=120, replies=22, reposts=12), NOW),
+            ce.score_tweet(_tweet(202, "The Broncos roster math gets real when camp reps stop protecting the clean public line.", hours_ago=100, views=8000, likes=90, replies=18, reposts=10), NOW),
+            ce.score_tweet(_tweet(203, "The Avs goalie decision is where one rough start can reopen the entire crease conversation.", hours_ago=104, views=7000, likes=80, replies=14, reposts=8), NOW),
+        ]
+        profiles = ce.build_format_profiles(scores)
+        profile = next(iter(profiles.values()))
+
+        self.assertIn("winning_target_action_distribution", profile)
+        self.assertIn("action_diversity", profile)
+        self.assertIn("avg_winner_oon_readability", profile)
+
+    def test_propose_rules_can_produce_action_aware_rules(self):
+        scores = [
+            ce.score_tweet(_tweet(301, "The Nuggets rotation problem keeps deciding the non Jokic minutes.", hours_ago=96, views=9000, likes=120, replies=22, reposts=12), NOW),
+            ce.score_tweet(_tweet(302, "The Broncos roster math gets real when camp reps stop protecting the clean public line.", hours_ago=100, views=8000, likes=90, replies=18, reposts=10), NOW),
+            ce.score_tweet(_tweet(303, "The Avs goalie decision is where one rough start can reopen the entire crease conversation.", hours_ago=104, views=7000, likes=80, replies=14, reposts=8), NOW),
+        ]
+        proposals = ce.propose_rules(scores, now=NOW)
+
+        self.assertTrue(any("target" in proposal["rule"] and "candidate anchor" in proposal["rule"] for proposal in proposals), proposals)
+
+    def test_pulse_score_cluster_includes_public_x_fields(self):
+        cluster = {
+            "id": "pulse-test",
+            "topic": "Nuggets rotation",
+            "sources": ["twitter"],
+            "signals": [{
+                "source": "twitter",
+                "text": "The Nuggets rotation problem is back because the non Jokic minutes are deciding the series.",
+                "freshness_status": "fresh",
+                "age_hours": 0.2,
+                "velocity": 15,
+                "audience_fit": 9,
+                "reply_tension": 8,
+                "fact_confidence": 8,
+            }],
+        }
+
+        report = pulse.score_cluster(cluster, {}, now=NOW)
+
+        self.assertIn("retrieval_fit", report)
+        self.assertIn("oon_readability", report)
+        self.assertIn("recommended_action_path", report)
+        self.assertIn("public_x_read", report)
+
+    def test_pulse_brief_includes_public_x_algorithm_read(self):
+        brief = pulse.build_pulse_brief({
+            "topic": "Nuggets rotation",
+            "recommended_action": "tweet",
+            "recommended_lane": "Witty Edge",
+            "summary_text": "The Nuggets rotation problem is back.",
+            "why_now": "fresh source",
+            "score": 80,
+            "freshness_score": 90,
+            "candidate_anchor": "nuggets",
+            "recommended_action_path": "reply",
+            "retrieval_fit": 80,
+            "oon_readability": 75,
+            "negative_signal_risk": 10,
+            "not_dwelled_risk": 20,
+            "source_basis": [{"source": "twitter", "freshness_status": "fresh", "text": "The Nuggets rotation problem is back."}],
+        }, {})
+
+        self.assertIn("PUBLIC X ALGORITHM READ", brief)
+        self.assertIn("Candidate anchor", brief)
+
     def test_prompt_excludes_hall_of_fame_blocks(self):
         state = ce.refresh_state(None, [
             _tweet(1, "Bo Nix getting better every week is becoming a pretty annoying problem for the division...", hours_ago=90, views=9000, likes=180, replies=30, reposts=18),
@@ -137,6 +291,8 @@ class CreatorEvolutionTests(unittest.TestCase):
             self.assertNotIn("Witty Edge fallback", text)
             self.assertNotIn("Normal Tweet usually works best", text)
             self.assertNotIn("Watch  Normal Tweet", text)
+        self.assertTrue(all((_quality[f"option{idx}"].get("score", 0) <= 82) for idx in (1, 2, 3)))
+        self.assertTrue(all(_quality[f"option{idx}"].get("fallback_repaired") for idx in (1, 2, 3)))
 
     def test_build_prompt_uses_structured_source_material_without_hof(self):
         state = ce.refresh_state(None, [
@@ -205,6 +361,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertEqual(ce.GIST_FILENAME, "hq_creator_evolution.json")
 
         app_text = Path("app.py").read_text()
+        self.assertIn('"PROMPT_VERSION": getattr(ce, "PROMPT_VERSION", "ce-prompt-v10-public-x-action-profile")', app_text)
         self.assertIn('"Creator Evolution"', app_text)
         self.assertIn("page_creator_evolution", app_text)
         self.assertIn('CE_AI_PROVIDER_DEFAULT = "Grok"', app_text)
@@ -1176,7 +1333,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v9-source-sanity-gates")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v10-public-x-opportunity")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -1887,7 +2044,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v9-source-sanity-gates", pulse_text)
+        self.assertIn("ce-pulse-v10-public-x-opportunity", pulse_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)

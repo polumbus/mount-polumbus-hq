@@ -140,7 +140,24 @@ class VoiceTunerFeedbackTests(unittest.TestCase):
         self.assertEqual(vtf.rules_for_context(rules, "Comedic", "Thread", "comedic"), [])
         self.assertEqual(vtf.rules_for_context(rules, "Comedic", "Normal Tweet", "other"), [])
 
+    def test_public_x_feedback_categories_compile_as_soft_rules(self):
+        rules = vtf.compile_voice_feedback(
+            "make the anchor clearer for non followers, more reply pressure, less toxic, stronger cliffhanger, less skippable",
+            "Promo",
+            "Normal Tweet",
+            "promo",
+            "manual",
+        )
+        kinds = {rule["kind"] for rule in rules}
+
+        self.assertIn("improve_candidate_anchor", kinds)
+        self.assertIn("improve_action_path", kinds)
+        self.assertIn("reduce_negative_signal_risk", kinds)
+        self.assertIn("improve_oon_readability", kinds)
+        self.assertIn("strengthen_click_tension", kinds)
+        self.assertIn("reduce_not_dwelled_risk", kinds)
+        self.assertTrue(all(rule["severity"] == "soft" for rule in rules))
+
 
 if __name__ == "__main__":
     unittest.main()
-

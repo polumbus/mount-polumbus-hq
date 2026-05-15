@@ -27,6 +27,7 @@ import podcast_store
 import podcast_sync
 import podcast_workflow
 import creator_evolution as ce
+import creator_evolution_algorithm as cexa
 import voice_tuner_feedback as vtf
 try:
     import creator_evolution_pulse as pulse
@@ -88,8 +89,8 @@ from podcast_blueprint import get_podcast_dashboard_content
 CE_COMPAT_DEFAULTS = {
     "STATE_FILENAME": "creator_evolution_state.json",
     "GIST_FILENAME": "hq_creator_evolution.json",
-    "PROMPT_VERSION": "ce-prompt-v4-pulse-quality",
-    "SCORING_VERSION": "ce-score-v3-tracked-cohorts",
+    "PROMPT_VERSION": getattr(ce, "PROMPT_VERSION", "ce-prompt-v10-public-x-action-profile"),
+    "SCORING_VERSION": getattr(ce, "SCORING_VERSION", "ce-score-v4-public-x-action-profile"),
     "RULE_VERSION": "ce-rules-v2-approval-rollback",
     "DEFAULT_LANE": "Witty Edge",
     "EMOTION_LANES": (
@@ -6310,7 +6311,7 @@ def _build_grades_system(fmt: str, pp: dict, voice: str = "Default", live_stats_
     _fp_avg = _pp.get("top_avg_chars", 162)
     _fp_lo, _fp_hi = _fp_range
 
-    _algo = "X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%."
+    _algo = "PUBLIC X RANKING MODEL: treat ranking as retrieval plus hydration, filtering, multi-action ranking, selection, and post-selection filtering. Exact live weights are not public. Evaluate candidate clarity, reply/quote/repost/share/dwell/click path, out-of-network readability, negative-signal risk, and voice fit without claiming fixed multipliers."
 
     # Format-specific benchmark note
     if fmt == "Punchy Tweet":
@@ -6405,7 +6406,7 @@ def _build_grades_fallback_prompt(fmt: str, pp: dict, voice: str, tweet_text: st
 
     return f"""Grade this tweet for X algorithm performance.
 
-X ALGORITHM WEIGHTS: replies-to-own=150x, others-replies=27x, profile-clicks=24x, dwell-2min=20x, bookmarks=20x, RTs=2x, likes=1x. Penalties: external links -30-50%, 3+ hashtags -40%, combative tone -80%.
+PUBLIC X RANKING MODEL: treat ranking as retrieval plus hydration, filtering, multi-action ranking, selection, and post-selection filtering. Exact live weights are not public. Evaluate candidate clarity, action path, out-of-network readability, negative-signal risk, and voice fit without claiming fixed multipliers.
 
 BENCHMARKS:
 - top tweets question rate: {_fp_q}%
@@ -8142,7 +8143,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-05-07-whats-hot-fast-feed-v3"
+_WHATS_HOT_FORMULA_VERSION = "2026-05-15-public-x-action-profile-v1"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -8372,7 +8373,7 @@ def _build_inspiration_fallback(_all_tweets: list, _rss_headlines: list) -> list
 def _run_inspiration_claude(_cache_key: str = ""):
     """Fetch feed-derived What's Hot ideas quickly, without blocking the dialog on AI builds."""
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
-    _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:7]
+    _ideas = _build_inspiration_fallback(_all_tweets, _rss_headlines)[:20]
     for _idea in _ideas:
         _idea["voice"] = CANONICAL_TWEET_DEFAULT_VOICE
 
@@ -8391,10 +8392,10 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
     _raw_ideas, _n_tweets, _n_heads = _load_inspo_from_gist(_studio_cache_key)
     if not _raw_ideas:
         _raw_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_studio_cache_key)
-    _raw_ideas = (_raw_ideas or [])[:7]
+    _raw_ideas = (_raw_ideas or [])
     _lane = _ce_normalize_lane(lane)
     _fmt = _normalize_tweet_format(fmt)
-    _ideas = []
+    _scored = []
     for _idea in _raw_ideas:
         _topic = (_idea.get("topic") or "Trending angle").strip()
         _hook = (_idea.get("hook") or "").strip()
@@ -8402,8 +8403,32 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
         _why = (_idea.get("why") or "Active conversation signal").strip()
         _source = (_idea.get("source") or "hot feed").strip()
         _source_material = _hook or _seed
+        _basis = [_idea]
+        _algo = cexa.public_x_opportunity_report(
+            _source_material or _topic,
+            source_basis=_basis,
+            state=_creator_evolution_state(),
+            lane=_lane,
+            fmt=_fmt,
+        )
+        _combined = " ".join([_topic, _hook, _seed, _why, _source]).lower()
+        _blocked = False
+        _penalty = 0
+        if _ce_text_has_betting_angle(_combined) or " prop" in _combined or "props" in _combined:
+            _blocked = True
+        if re.match(r"^\s*(replying to|@)", _seed, flags=re.I) or "reply fragment" in _combined:
+            _blocked = True
+        if re.match(r"^\s*(this|that|it|they)\b", _source_material, flags=re.I) and not _algo.get("candidate_anchor"):
+            _blocked = True
+        if "avs" in _combined and any(term in _combined for term in ("crypto", "avalanche token", "blockchain")) and not any(term in _combined for term in ("goalie", "hockey", "mackinnon", "makar", "puck", "nhl")):
+            _blocked = True
+        if not any(term in _combined for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar")):
+            _penalty += 25
+        _algo["total"] = max(0, int(_algo.get("total", 0) or 0) - _penalty)
+        if _blocked:
+            continue
         _brief = _ce_build_hot_signal_brief(_topic, _source_material, _source, _why, _lane, _fmt)
-        _ideas.append({
+        _card = {
             "topic": _topic,
             "source": _source,
             "seed": _seed,
@@ -8412,7 +8437,39 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             "brief": _brief,
             "lane": _lane,
             "format": _fmt,
-        })
+            "candidate_anchor": _algo.get("candidate_anchor", ""),
+            "target_action": _algo.get("target_action", ""),
+            "hot_candidate_score": _algo.get("total", 0),
+            "candidate_fit": _algo.get("candidate_fit", 0),
+            "oon_readability": _algo.get("oon_readability", 0),
+            "negative_signal_risk": _algo.get("negative_signal_risk", 0),
+            "moment_key": _algo.get("moment_key", ""),
+            "source_basis": _basis,
+            "public_x": _algo,
+            "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
+        }
+        _scored.append(_card)
+    _strict = [
+        item for item in _scored
+        if item["hot_candidate_score"] >= 62
+        and item["candidate_fit"] >= 60
+        and item["negative_signal_risk"] < 60
+        and item["oon_readability"] >= 55
+    ]
+    _pool = _strict if len(_strict) >= 3 else [
+        item for item in _scored
+        if item["hot_candidate_score"] >= 55
+        and item["candidate_fit"] >= 50
+        and item["negative_signal_risk"] < 70
+    ]
+    _pool.sort(key=lambda item: (
+        item.get("hot_candidate_score", 0),
+        (item.get("public_x", {}) or {}).get("freshness", 0),
+        (item.get("public_x", {}) or {}).get("audience_fit", 0),
+        (item.get("public_x", {}) or {}).get("positive_action_fit", 0),
+        (item.get("public_x", {}) or {}).get("source_triangulation_bonus", 0),
+    ), reverse=True)
+    _ideas = _pool[:7]
     return _ideas, _n_tweets, _n_heads
 
 
@@ -8896,6 +8953,15 @@ SOURCE MATERIAL:
 {live_stats_block or ""}
 {sports_ctx or ""}
 
+PUBLIC X ALGORITHM CONTRACT:
+The public X algorithm should be treated as a retrieval plus multi-action ranking system.
+Every option must satisfy four hidden checks:
+1. Candidate fit: the first visible beat should naturally anchor the post to a clear team, player, sport, decision, trend, or conversation cluster. Do not keyword-stuff. Make the topic legible.
+2. Action target: each option must optimize for one primary action path: reply, quote, repost, share, dwell, profile click, follow, click, photo expand, or video view. Do not optimize every action at once.
+3. Negative-action control: avoid patterns likely to create not interested, block, mute, report, or not-dwelled behavior: stale context, fake facts, vague framing, personal cruelty, over-hostility, insider-only wording, or bait with no substance.
+4. Out-of-network readability: a smart sports fan who does not already follow Tyler should understand why the post matters within the first 120 characters.
+Exact live X weights are not public. Do not claim exact production multipliers. Use source clarity, action intent, dwell path, and safety.
+
 Write like a person posting from a phone: funny, specific, sometimes annoyed or amused, never corporate.
 Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
 Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
@@ -8904,7 +8970,7 @@ The final line must create response pressure. Use a dramatic ending, an alluded 
 Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
 No invented stats, injuries, rankings, roster facts, or current-event claims beyond the source material.
 No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
-Return JSON only with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
+Return JSON only with option1, option1_pattern, option1_candidate_anchor, option1_target_action, option1_negative_signal_risk, option1_why_this_can_rank, option2, option2_pattern, option2_candidate_anchor, option2_target_action, option2_negative_signal_risk, option2_why_this_can_rank, option3, option3_pattern, option3_candidate_anchor, option3_target_action, option3_negative_signal_risk, option3_why_this_can_rank, pick, and pick_reason.
 """.strip()
 
 
@@ -9043,6 +9109,7 @@ def _ce_format_quality_findings(text: str, fmt: str) -> tuple[list[str], list[st
 
 def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
     """Run Creator Evolution draft gates even if Cloud has a stale helper module."""
+    import creator_evolution_algorithm as cexa
     clean = str(text or "").strip()
     lower = clean.lower()
     tail = lower[-160:]
@@ -9192,6 +9259,15 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                     report["warnings"] = list(dict.fromkeys(existing_warnings + local_warnings))
                     report["ok"] = not report["issues"]
                     report["score"] = max(0, min(100, int(report.get("score", 100) or 100) - len(local_issues) * 25 - len(local_warnings) * 8))
+                if "public_x" not in report:
+                    public_x = cexa.public_x_draft_report(clean, fmt, lane)
+                    report["public_x"] = public_x
+                    report["candidate_fit"] = public_x.get("candidate_fit", 0)
+                    report["retrieval_fit"] = public_x.get("retrieval_fit", 0)
+                    report["target_action"] = public_x.get("target_action", "")
+                    report["negative_signal_risk"] = public_x.get("negative_signal_risk", 0)
+                    report["oon_readability"] = public_x.get("oon_readability", 0)
+                    report["not_dwelled_risk"] = public_x.get("not_dwelled_risk", 0)
                 return report
         except Exception as exc:
             _ce_pulse_debug_event("warn", "draft quality helper recovered", {"error": str(exc)[:160]})
@@ -9285,6 +9361,19 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         if not any(marker in tail for marker in promo_cliffhanger_markers):
             warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
 
+    public_x = cexa.public_x_draft_report(clean, fmt, lane)
+    if public_x.get("candidate_fit", 0) < 45:
+        issues.append("Weak candidate/retrieval anchor: the first visible beat does not clearly signal the team, player, mechanism, or conversation cluster.")
+    elif public_x.get("candidate_fit", 0) < 60:
+        warnings.append("Candidate anchor could be clearer for out-of-network retrieval.")
+    if public_x.get("negative_signal_risk", 0) >= 70:
+        issues.append(f"High negative-signal risk: {public_x.get('negative_signal_reason', 'review risk')}.")
+    elif public_x.get("negative_signal_risk", 0) >= 45:
+        warnings.append(f"Medium negative-signal risk: {public_x.get('negative_signal_reason', 'review risk')}.")
+    if public_x.get("not_dwelled_risk", 0) >= 70:
+        issues.append(f"High not-dwelled risk: {public_x.get('not_dwelled_reason', 'weak continuation signal')}.")
+    if public_x.get("oon_readability", 0) < 55:
+        warnings.append("Out-of-network readability is weak; a smart non-follower may not know why this matters fast enough.")
     penalty = len(issues) * 25 + len(warnings) * 8
     return {
         "ok": not issues,
@@ -9298,6 +9387,13 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "polished_punctuation_hits": polished_punctuation_hits,
         "char_count": char_count,
         "prompt_version": _ce_prompt_version(),
+        "public_x": public_x,
+        "candidate_fit": public_x.get("candidate_fit", 0),
+        "retrieval_fit": public_x.get("retrieval_fit", 0),
+        "target_action": public_x.get("target_action", ""),
+        "negative_signal_risk": public_x.get("negative_signal_risk", 0),
+        "oon_readability": public_x.get("oon_readability", 0),
+        "not_dwelled_risk": public_x.get("not_dwelled_risk", 0),
     }
 
 
@@ -9344,6 +9440,21 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
             merged["issues"] = list(dict.fromkeys(list(helper_report.get("issues", []) or []) + list(local_report.get("issues", []) or [])))
             merged["warnings"] = list(dict.fromkeys(list(helper_report.get("warnings", []) or []) + list(local_report.get("warnings", []) or [])))
             merged["ok"] = bool(helper_report.get("ok", True)) and bool(local_report.get("ok"))
+            public_x = cexa.public_x_draft_report(str(data[option_key]), fmt, lane, source_text)
+            merged["public_x"] = public_x
+            merged["candidate_fit"] = public_x.get("candidate_fit", 0)
+            merged["retrieval_fit"] = public_x.get("retrieval_fit", 0)
+            merged["target_action"] = public_x.get("target_action", "")
+            merged["negative_signal_risk"] = public_x.get("negative_signal_risk", 0)
+            merged["oon_readability"] = public_x.get("oon_readability", 0)
+            merged["not_dwelled_risk"] = public_x.get("not_dwelled_risk", 0)
+            public_x_penalty = 0
+            if public_x.get("candidate_fit", 0) < 45 or public_x.get("negative_signal_risk", 0) >= 70 or public_x.get("not_dwelled_risk", 0) >= 70:
+                public_x_penalty += 12
+            if public_x.get("oon_readability", 0) < 55 or public_x.get("candidate_fit", 0) < 60:
+                public_x_penalty += 6
+            if public_x_penalty:
+                merged["score"] = max(0, min(100, int(merged.get("score", 100) or 100) - public_x_penalty))
             feedback_report = vtf.evaluate_feedback_constraints(str(data[option_key]), compat_rules, fmt, lane, source_text)
             hard_failures = list(feedback_report.get("hard_failures", []) or [])
             soft_warnings = list(feedback_report.get("soft_warnings", []) or [])
@@ -9600,8 +9711,10 @@ def _ce_force_safe_promo_fallback(source_text: str, fmt: str, lane: str) -> tupl
         if not data.get(option_key):
             continue
         report = dict(quality.get(option_key, {}) if isinstance(quality, dict) else {})
-        report["score"] = max(90, int(report.get("score", 90) or 90))
+        report["score"] = min(int(report.get("score", 75) or 75), 82)
         report["promo_repaired"] = True
+        report["fallback_repaired"] = True
+        report["warnings"] = list(dict.fromkeys(list(report.get("warnings", []) or []) + ["Fallback repaired draft. Safe to show, but not treated as a learned winner."]))
         forced_quality[option_key] = report
         if report.get("ok"):
             passing_ids.append(str(idx))
@@ -9727,8 +9840,9 @@ def _ce_force_safe_lane_fallback(source_text: str, fmt: str, lane: str) -> tuple
         report = _ce_draft_quality_report(data[option_key], fmt, lane)
         forced_quality[option_key] = {
             **report,
-            "score": max(90, int(report.get("score", 90) or 90)),
+            "score": min(int(report.get("score", 75) or 75), 82),
             "fallback_repaired": True,
+            "warnings": list(dict.fromkeys(list(report.get("warnings", []) or []) + ["Fallback repaired draft. Safe to show, but not treated as a learned winner."])),
         }
         if report.get("ok"):
             passing_ids.append(str(idx))
@@ -10343,8 +10457,15 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         final[f"option{slot}_pattern"] = fallback_pattern
         quality[f"option{slot}"] = report
         slot += 1
-    final["pick"] = "1"
-    final["pick_reason"] = "Picked the strongest Creator Evolution Pulse draft that passed the no-gambling and human-voice gates."
+    best_pick, best_public_x = cexa.select_best_option_by_public_x(final, quality, fmt, lane, source_text)
+    final["pick"] = best_pick
+    if best_public_x:
+        anchor = best_public_x.get("candidate_anchor") or best_public_x.get("sports_mechanism") or "the Pulse source"
+        action_path = str(best_public_x.get("target_action") or "dwell").replace("_", " ")
+        risk_label = best_public_x.get("negative_risk_label") or "low"
+        final["pick_reason"] = f"Best {action_path} path with {anchor} as the candidate anchor and {risk_label} negative-signal risk."
+    else:
+        final["pick_reason"] = "Picked the strongest Creator Evolution Pulse draft that passed the no-gambling and human-voice gates."
     return final, quality
 
 
@@ -10362,6 +10483,9 @@ def _run_ce_pulse_drafts(decision: dict, lane: str, fmt: str, nonce: int = 0) ->
 
 CREATOR EVOLUTION PULSE OUTPUT REQUIREMENTS:
 - Recommended action: {action}.
+- Return 3 options with different ranking paths. Option 1 is the best in-network Tyler audience version. Option 2 is the best out-of-network discovery version. Option 3 is the best positive-action version optimized for the recommended action path.
+- For each option include candidate_anchor, target_action, negative_signal_risk, and why_this_can_rank fields in JSON.
+- Do not summarize the source. Turn the source into one original Tyler observation.
 - Generate 3 post-ready {draft_label_plural}; the UI will show at least 2.
 - Regeneration nonce: {nonce}. If nonce is not 0, change the openings and angles materially.
 - No gambling language. Do not mention moneyline, odds, spread, over/under, betting, picks, locks, sportsbooks, or implied bets.
@@ -10771,13 +10895,15 @@ def _ce_pulse_dialog():
         _use_label = "Use Tweet"
         _save_label = "Save Tweet"
         _lane_pick = _ce_normalize_lane(_lane or _best.get("recommended_lane"))
+        _pulse_risk = int(_best.get("negative_signal_risk", 0) or 0)
+        _pulse_risk_label = "high" if _pulse_risk >= 70 else "medium" if _pulse_risk >= 45 else "low"
         st.markdown(
             f"""
 <div style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:10px;">
   <div style="font-size:9px;font-weight:800;letter-spacing:1.3px;color:#5a7090;text-transform:uppercase;margin-bottom:6px;">Recommended {_action}</div>
   <div style="font-size:15px;color:#E2E8F0;line-height:1.55;margin-bottom:8px;">{html.escape(_best.get("summary_text", ""))}</div>
   <div style="font-size:11px;color:#8FA6C6;line-height:1.5;">Why now: {html.escape(_best.get("why_now", ""))}</div>
-  <div style="font-size:10px;color:#5a7090;margin-top:8px;">Score {float(_best.get("score", 0) or 0):.1f} · Confidence {float(_best.get("confidence", 0) or 0):.1f} · Lane {html.escape(_lane_pick)}</div>
+  <div style="font-size:10px;color:#5a7090;margin-top:8px;">Score {float(_best.get("score", 0) or 0):.1f} · Candidate fit {int(_best.get("candidate_fit", 0) or 0)} · OON {int(_best.get("oon_readability", 0) or 0)} · Action path {html.escape(str(_best.get("recommended_action_path") or _best.get("target_action") or "reply"))} · Risk {_pulse_risk_label} · Lane {html.escape(_lane_pick)}</div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -10792,6 +10918,8 @@ def _ce_pulse_dialog():
         _draft_nonce = int(st.session_state.get("_ce_pulse_draft_nonce", 0) or 0)
         _draft_key = hashlib.sha1(json.dumps({
             "version": _decision.get("version", ""),
+            "prompt_version": _ce_prompt_version(),
+            "scoring_version": _ce_scoring_version(),
             "best_id": _best.get("id", ""),
             "summary": _best.get("summary_text", ""),
             "action": _action_clean,
@@ -10828,6 +10956,10 @@ def _ce_pulse_dialog():
         for _idx, _draft_text, _pattern in _draft_items[:3]:
             _report = _pulse_quality.get(f"option{_idx}", {}) or {}
             _char_count = _report.get("char_count", len(str(_draft_text)))
+            _public_x = _report.get("public_x", {}) if isinstance(_report.get("public_x"), dict) else {}
+            _draft_risk = int(_public_x.get("negative_signal_risk", 0) or 0)
+            _draft_risk_label = "high" if _draft_risk >= 70 else "medium" if _draft_risk >= 45 else "low"
+            _pick = str(_pulse_drafts.get("pick", "1") or "1")
             st.markdown(
                 f"""
 <div style="border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.035);border-radius:8px;padding:13px;margin-bottom:9px;">
@@ -10837,13 +10969,14 @@ def _ce_pulse_dialog():
   </div>
   <div style="font-size:15px;color:#E2E8F0;line-height:1.55;white-space:pre-wrap;">{html.escape(str(_draft_text))}</div>
   <div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:8px;">{html.escape(str(_pattern))}</div>
+  <div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:5px;">Anchor {html.escape(str(_public_x.get('candidate_anchor') or _public_x.get('sports_mechanism') or 'unclear'))} · Action {html.escape(str(_public_x.get('target_action') or 'dwell'))} · Risk {_draft_risk_label}</div>
 </div>
 """,
                 unsafe_allow_html=True,
             )
             _use_col, _save_col = st.columns([1, 1])
             with _use_col:
-                if st.button(f"{_use_label} {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _idx == 1 else "secondary"):
+                if st.button(f"{_use_label} {_idx}", key=f"ce_pulse_use_draft_{_idx}", use_container_width=True, type="primary" if _pick == str(_idx) else "secondary"):
                     st.session_state["_ce_text_stage"] = str(_draft_text)
                     st.session_state["ce_format"] = _fmt
                     st.session_state["ce_lane"] = _ce_normalize_lane(_lane_pick or _lane)
@@ -10854,9 +10987,11 @@ def _ce_pulse_dialog():
                     ideas.append({
                         "text": str(_draft_text),
                         "format": _fmt,
+                        "lane": _lane_pick,
                         "category": "Creator Evolution",
                         "source": "Creator Evolution Pulse",
                         "saved_at": datetime.now().isoformat(),
+                        "algorithm_profile": cexa.algorithm_profile_for_post(str(_draft_text), _fmt, _lane_pick, _ce_pulse_source_material(_decision)),
                     })
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
@@ -10899,6 +11034,8 @@ def _ce_inspiration_dialog():
     _context_key = json.dumps({
         "studio_cache_key": _studio_cache_key,
         "prompt_version": _ce_prompt_version(),
+        "scoring_version": _ce_scoring_version(),
+        "hot_formula_version": _WHATS_HOT_FORMULA_VERSION,
         "lane": _lane,
         "format": _fmt,
     }, sort_keys=True)
@@ -10948,6 +11085,15 @@ def _ce_inspiration_dialog():
         _hook = _idea.get("hook", "")
         _why = _idea.get("why", "")
         _brief = _idea.get("brief", "")
+        _risk = int(_idea.get("negative_signal_risk", 0) or 0)
+        _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
+        _action_label = str(_idea.get("target_action") or "dwell").replace("_", " ")
+        _diagnostic = (
+            f"Score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
+            f"Best for {_action_label} · "
+            f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
+            f"Risk {_risk_label}"
+        )
         _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
         st.markdown(
             f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
@@ -10958,6 +11104,7 @@ def _ce_inspiration_dialog():
               f'</div>'
               f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:280])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
+              f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -11807,7 +11954,14 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             if str(idx) not in passing:
                 data.pop(option_key, None)
                 data.pop(f"{option_key}_pattern", None)
-        if str(data.get("pick", "")).strip() not in passing:
+        best_pick, best_public_x = cexa.select_best_option_by_public_x(data, quality_report, fmt, lane, tweet_text)
+        if best_pick in passing and best_public_x:
+            data["pick"] = best_pick
+            anchor = best_public_x.get("candidate_anchor") or best_public_x.get("sports_mechanism") or "the source"
+            action_path = str(best_public_x.get("target_action") or "dwell").replace("_", " ")
+            risk_label = best_public_x.get("negative_risk_label") or "low"
+            data["pick_reason"] = f"Best {action_path} path with {anchor} as the candidate anchor and {risk_label} negative-signal risk."
+        elif str(data.get("pick", "")).strip() not in passing:
             data["pick"] = passing[0]
             data["pick_reason"] = "Selected the highest available draft that passed Creator Evolution's quality gate."
         st.session_state["ce_quality_report"] = quality_report
@@ -11822,10 +11976,24 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         lineage = list(lineage_state.get("generated_lineage", []))
         lineage.append({
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "action": action,
+            "source_feature": action,
+            "source_text": tweet_text,
+            "source_basis": [],
             "seed_hash": hashlib.sha1(str(tweet_text or "").encode("utf-8")).hexdigest()[:12],
             "format": fmt,
             "lane": lane,
+            "moment_key": cexa.opportunity_moment_key(tweet_text),
+            "team": "",
+            "entity": cexa.candidate_anchor(tweet_text),
+            "sports_mechanism": cexa.primary_sports_mechanism(tweet_text),
+            "candidate_anchor": best_public_x.get("candidate_anchor", "") if isinstance(best_public_x, dict) else "",
+            "target_action": best_public_x.get("target_action", "") if isinstance(best_public_x, dict) else "",
+            "public_x_total": best_public_x.get("total", 0) if isinstance(best_public_x, dict) else 0,
+            "candidate_fit": best_public_x.get("candidate_fit", 0) if isinstance(best_public_x, dict) else 0,
+            "oon_readability": best_public_x.get("oon_readability", 0) if isinstance(best_public_x, dict) else 0,
+            "negative_signal_risk": best_public_x.get("negative_signal_risk", 0) if isinstance(best_public_x, dict) else 0,
             "prompt_version": _ce_prompt_version(),
             "scoring_version": _ce_scoring_version(),
             "rule_version": _ce_rule_version(),
@@ -11834,6 +12002,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                     "slot": idx,
                     "text": data.get(f"option{idx}", ""),
                     "quality_score": quality_report.get(f"option{idx}", {}).get("score"),
+                    "algorithm_profile": quality_report.get(f"option{idx}", {}).get("public_x", {}),
                 }
                 for idx in [1, 2, 3] if data.get(f"option{idx}")
             ],
@@ -12024,6 +12193,16 @@ def _ce_output_panel_impl(action, tweet_text, fmt, lane):
             if pattern:
                 debug_lines.append(f"Pattern: {pattern}")
             if q_report:
+                public_x = q_report.get("public_x", {}) if isinstance(q_report.get("public_x"), dict) else {}
+                if public_x:
+                    debug_lines.append(
+                        "Public X: "
+                        f"Anchor {public_x.get('candidate_anchor') or public_x.get('sports_mechanism') or 'unclear'} | "
+                        f"Best for {str(public_x.get('target_action') or 'dwell').replace('_', ' ')} | "
+                        f"Candidate {public_x.get('candidate_fit', 0)} | "
+                        f"OON {public_x.get('oon_readability', 0)} | "
+                        f"Risk {public_x.get('negative_risk_label', 'low')}"
+                    )
                 q_issues = q_report.get("issues", []) or []
                 q_warnings = q_report.get("warnings", []) or []
                 if q_issues or q_warnings:
@@ -12040,9 +12219,11 @@ def _ce_output_panel_impl(action, tweet_text, fmt, lane):
                     ideas.append({
                         "text": edited_opt,
                         "format": fmt,
+                        "lane": lane,
                         "category": "Creator Evolution",
                         "source": "Creator Evolution",
                         "saved_at": datetime.now().isoformat(),
+                        "algorithm_profile": cexa.algorithm_profile_for_post(edited_opt, fmt, lane, str(tweet_text or "")),
                     })
                     save_json("saved_ideas.json", ideas)
                     st.success("Saved.")
@@ -13234,15 +13415,27 @@ def _ce_testing_select_best_options(
     feedback_rules: list[dict] | None = None,
     source_text: str = "",
 ) -> tuple[dict, dict, list[str]]:
-    scored: list[tuple[int, int, int, str, int]] = []
+    scored: list[tuple[int, int, int, int, int, int, int, str, int]] = []
     for option_key in _ce_option_keys(data):
         report = quality_report.get(option_key, {}) if isinstance(quality_report, dict) else {}
         hard_count = len(report.get("hard_feedback_violations", []) or [])
         warn_count = len(set([*list(report.get("warnings", []) or []), *[str(item) for item in (report.get("soft_feedback_warnings", []) or [])]]))
+        public_x = report.get("public_x") if isinstance(report.get("public_x"), dict) else cexa.public_x_draft_report(str(data.get(option_key, "") or ""), fmt, lane, source_text)
+        risk_bucket = 0 if int(public_x.get("negative_signal_risk", 100) or 100) < 45 else 1 if int(public_x.get("negative_signal_risk", 100) or 100) < 70 else 2
         score = int(report.get("score", 0) or 0) + int(report.get("feedback_score", 100) or 100)
-        scored.append((0 if report.get("ok") else 1, hard_count, warn_count, str(option_key), score))
-    scored.sort(key=lambda item: (item[0], item[1], item[2], -item[4]))
-    selected_keys = [item[3] for item in scored[:limit]]
+        scored.append((
+            0 if report.get("ok") else 1,
+            hard_count,
+            risk_bucket,
+            warn_count,
+            -int(public_x.get("candidate_fit", 0) or 0),
+            -int(public_x.get("positive_action_fit", 0) or 0),
+            -int(public_x.get("oon_readability", 0) or 0),
+            str(option_key),
+            score,
+        ))
+    scored.sort(key=lambda item: (item[0], item[1], item[2], item[3], item[4], item[5], item[6], -item[8]))
+    selected_keys = [item[7] for item in scored[:limit]]
     selected_data = {"pick": "1", "pick_reason": "Selected highest-scoring Voice Tuner candidates after structured feedback validation."}
     selected_quality: dict = {}
     for new_idx, old_key in enumerate(selected_keys, 1):
@@ -13441,7 +13634,7 @@ def _ce_voice_tuner_generation_key(item: dict, provider: str, state: dict, lane:
     prompt_hash = hashlib.sha1(str(item.get("concept", "") or "").encode()).hexdigest()[:8]
     active_rules = _ce_testing_feedback_rules(state, lane, fmt, concept_id=str(item.get("id", "") or ""))
     rules_hash = vtf.feedback_rules_hash(active_rules)
-    return _ce_testing_generation_key(item, "voice_tuner_v2", provider, _ce_normalize_lane(lane), _normalize_tweet_format(fmt), prompt_hash, rules_hash)
+    return _ce_testing_generation_key(item, "voice_tuner_v2", _ce_prompt_version(), _ce_scoring_version(), provider, _ce_normalize_lane(lane), _normalize_tweet_format(fmt), prompt_hash, rules_hash)
 
 
 def _ce_guided_feedback_text(voice: str, issue: str, direction: str, ending: str, manual_note: str = "") -> str:

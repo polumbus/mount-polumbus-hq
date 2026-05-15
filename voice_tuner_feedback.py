@@ -39,6 +39,13 @@ STYLE_RULES = (
     ("ending_policy", "ending", "stronger", ("ending is weak", "stronger ending", "ending create more tension", "hit harder", "sharper ending", "sharper consequence"), "Make the ending sharper and more consequential."),
     ("ending_policy", "ellipsis", "avoid", ("avoid ellipsis", "no ellipsis", "without ellipsis"), "Do not rely on an ellipsis ending."),
     ("source_preservation", "source", "preserve", ("lost my point", "loses my original point", "keep my point", "keep the point", "preserve my point", "don't lose detail", "dont lose detail"), "Preserve the original point and source detail."),
+    ("improve_candidate_anchor", "candidate_anchor", "more", ("clearer anchor", "anchor clearer", "better anchor", "name the team", "name the player", "more context early", "start with the topic"), "Make the team, player, mechanism, or conversation cluster clearer early."),
+    ("improve_action_path", "action_path", "clearer", ("unclear action", "why would people reply", "more reply pressure", "more quoteable", "more shareable"), "Make the intended reply, quote, repost, dwell, or click path clearer."),
+    ("reduce_negative_signal_risk", "risk", "less", ("too mean", "too toxic", "less toxic", "less hostile", "safer", "less rage", "less personal"), "Reduce negative-signal risk while keeping the sports point sharp."),
+    ("improve_oon_readability", "oon_readability", "more", ("out of network", "non followers", "people who don't know", "people who dont know", "more self contained"), "Make the post understandable for smart sports fans who do not already follow Tyler."),
+    ("improve_joke_portability", "joke_portability", "more", ("joke doesn't land", "joke doesnt land", "more portable joke", "funny to non followers"), "Make the joke more portable and sports-native without needing follower-only context."),
+    ("strengthen_click_tension", "click_tension", "more", ("more click tension", "stronger cliffhanger", "make me want to watch", "more reason to click"), "Strengthen the unresolved reason to click without spoiling the answer."),
+    ("reduce_not_dwelled_risk", "dwell", "more", ("too empty", "safe but empty", "more substance", "more reason to keep reading", "less skippable"), "Add a concrete reason to keep reading so the post does not feel safe but empty."),
 )
 
 

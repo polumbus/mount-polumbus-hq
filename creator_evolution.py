@@ -13,11 +13,12 @@ import math
 import re
 from typing import Any
 
+import creator_evolution_algorithm as cexa
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v9-tuner-locked-voices"
-SCORING_VERSION = "ce-score-v3-tracked-cohorts"
+PROMPT_VERSION = "ce-prompt-v10-public-x-action-profile"
+SCORING_VERSION = "ce-score-v4-public-x-action-profile"
 RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
 DEFAULT_DAILY_API_BUDGET_USD = 0.75
@@ -300,12 +301,25 @@ def format_recipe(fmt: str) -> dict[str, str]:
 def format_recipe_text(fmt: str) -> str:
     fmt = fmt if fmt in FORMAT_RECIPES else "Normal Tweet"
     recipe = format_recipe(fmt)
+    retrieval_anchor_rule = (
+        "The first visible beat should naturally identify the team, player, event, "
+        "decision, trend, sport, or conversation cluster unless doing so breaks the voice."
+    )
+    public_x_format_rules = {
+        "Punchy Tweet": "One sharp candidate. Opener anchors topic. Closer targets exactly one action path. Do not default to direct question. Under 160 chars remains hard.",
+        "Normal Tweet": "First 80 characters should contain a natural topic/entity/mechanism when possible. Preserve structure flexibility. Best default for Witty Edge/Skeptical/Critical. Final line creates action pressure without bait.",
+        "Long Tweet": "First 280 chars must provide standalone value and create one unresolved reason to continue. Every paragraph must add a new reason to keep reading. Dwell is escalation, not length.",
+        "Thread": "Tweet 1 must rank alone. Every reply tweet adds a new beat. Do not rely on later tweets to rescue a weak opener.",
+        "Article": "Body earns dwell. Companion tweet earns click/profile/follow by creating one unresolved, specific reason to click or profile-check without summarizing.",
+    }
     return "\n".join([
         f"{fmt}:",
         f"- Target: {recipe['target']}",
         f"- Structure: {recipe['structure']}",
         f"- Must: {recipe['must']}",
         f"- Avoid: {recipe['avoid']}",
+        f"- Retrieval Anchor: {retrieval_anchor_rule}",
+        f"- Public X Fit: {public_x_format_rules.get(fmt, public_x_format_rules['Normal Tweet'])}",
     ])
 
 SYNC_BUDGETS = {
@@ -807,14 +821,27 @@ def lane_recipe(lane: str) -> dict[str, str]:
 def lane_recipe_text(lane: str) -> str:
     lane = normalize_lane(lane)
     recipe = lane_recipe(lane)
+    public_x_addenda = {
+        "Witty Edge": "PUBLIC X ADDENDUM: Target reply, quote, or dwell. Use a natural retrieval anchor early unless it ruins the line. The final beat should create a consequence the reader can argue with or complete. Avoid vague room/vibes/crowd reaction framing. Name the sports mechanism before the punchline.",
+        "Comedic": "PUBLIC X ADDENDUM: Target quote/repost/share first. Reply is secondary. The joke must be understandable to out-of-network sports fans. Add one concrete sports anchor when local context is required. Reject mute/block/report risk. Keep it sports-native.",
+        "Annoyed": "PUBLIC X ADDENDUM: Target reply pressure without mute risk. Attack the decision, excuse, pattern, logic, public message, or process. Never attack personal character, intelligence, body, family, injury, or private life. Irritation should feel shared and earned.",
+        "Fired-Up": "PUBLIC X ADDENDUM: Target repost/share/follow. Require a concrete signal plus fan stake. No generic rally cries. Final line should make the reader feel this account sees momentum early.",
+        "Skeptical": "PUBLIC X ADDENDUM: Target dwell and thoughtful replies. First half makes the public assumption legible. Second half exposes the skipped pressure point. No generic contrarian content.",
+        "Critical": "PUBLIC X ADDENDUM: Target reply and quote with high negative-risk sensitivity. Attack process, timing, scheme, decision, or accountability chain. Never attack intelligence, character, body, injury, family, or private life. If a neutral reader would mute instead of argue, rewrite.",
+        "Promo": "PUBLIC X ADDENDUM: Target click, click dwell, profile click, and follow. Do not summarize the video. Create a credible missing answer with one specific sports contradiction, film tell, decision, stat, fan assumption, or pressure point. End one beat before the answer.",
+        "Celebratory": "PUBLIC X ADDENDUM: Target repost/share/follow. Celebrate an exact winning detail. Generic hype fails. Final line should create group pride, opponent consequence, or this account saw it early energy.",
+        "Deadpan": "PUBLIC X ADDENDUM: Target quote/repost. Flat, factual, compact. No explanation. Anchor absurdity in the sport. The line should be portable without becoming vague.",
+        "Sarcastic": "PUBLIC X ADDENDUM: Target quote/repost/share, not rage replies. Must be portable and safe. No cruelty or direct personal insult. No injury, tragedy, protected-trait, or private-life joke. Add a concrete sports anchor if the joke only works for existing followers.",
+    }
     if recipe.get("text"):
-        return str(recipe["text"]).strip()
+        return "\n".join([str(recipe["text"]).strip(), public_x_addenda.get(lane, "")]).strip()
     return "\n".join([
         f"{lane}:",
         f"- Target: {recipe['target']}",
         f"- Do: {recipe['do']}",
         f"- Avoid: {recipe['avoid']}",
         f"- Ending: {recipe['ending']}",
+        f"- {public_x_addenda.get(lane, 'PUBLIC X ADDENDUM: Use a clear candidate anchor, one target action path, and low negative-signal risk.')}",
     ])
 
 
@@ -1347,6 +1374,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
     sentence_count = len([part for part in re.split(r"[.!?]+", text) if part.strip()])
     paragraph_breaks = len(re.findall(r"\n\s*\n", text))
     non_empty_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    public_x = cexa.public_x_draft_report(text, fmt, lane)
 
     if not text:
         issues.append("Empty draft.")
@@ -1505,6 +1533,21 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         if not has_promo_cliffhanger(text):
             warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
 
+    if public_x.get("candidate_fit", 0) < 45:
+        issues.append("Weak candidate/retrieval anchor: the first visible beat does not clearly signal the team, player, mechanism, or conversation cluster.")
+    elif public_x.get("candidate_fit", 0) < 60:
+        warnings.append("Candidate anchor could be clearer for out-of-network retrieval.")
+    if public_x.get("negative_signal_risk", 0) >= 70:
+        issues.append(f"High negative-signal risk: {public_x.get('negative_signal_reason', 'review risk')}.")
+    elif public_x.get("negative_signal_risk", 0) >= 45:
+        warnings.append(f"Medium negative-signal risk: {public_x.get('negative_signal_reason', 'review risk')}.")
+    if public_x.get("not_dwelled_risk", 0) >= 70:
+        issues.append(f"High not-dwelled risk: {public_x.get('not_dwelled_reason', 'weak continuation signal')}.")
+    if public_x.get("oon_readability", 0) < 55:
+        warnings.append("Out-of-network readability is weak; a smart non-follower may not know why this matters fast enough.")
+    if not public_x.get("target_action"):
+        warnings.append("No clear positive action path.")
+
     penalty = len(issues) * 25 + len(warnings) * 8
     score = max(0, min(100, 100 - penalty))
     return {
@@ -1519,6 +1562,13 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         "polished_punctuation_hits": polished_punctuation,
         "char_count": char_count,
         "prompt_version": PROMPT_VERSION,
+        "public_x": public_x,
+        "candidate_fit": public_x.get("candidate_fit", 0),
+        "retrieval_fit": public_x.get("retrieval_fit", 0),
+        "target_action": public_x.get("target_action", ""),
+        "negative_signal_risk": public_x.get("negative_signal_risk", 0),
+        "oon_readability": public_x.get("oon_readability", 0),
+        "not_dwelled_risk": public_x.get("not_dwelled_risk", 0),
     }
 
 
@@ -1598,6 +1648,15 @@ def validate_generation_options(data: dict[str, Any], fmt: str, lane: str) -> di
     return reports
 
 
+def public_x_draft_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAULT_LANE, source_text: str = "") -> dict[str, Any]:
+    return cexa.public_x_draft_report(text, fmt, lane, source_text)
+
+
+def select_best_option_by_public_x(data: dict[str, Any], quality: dict[str, Any],
+                                   fmt: str, lane: str, source_text: str = "") -> tuple[str, dict[str, Any]]:
+    return cexa.select_best_option_by_public_x(data, quality, fmt, lane, source_text)
+
+
 def score_tweet(tweet: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
     text = tweet_text(tweet)
     views = metric(tweet, "viewCount", "view_count", "views")
@@ -1623,7 +1682,27 @@ def score_tweet(tweet: dict[str, Any], now: datetime | None = None) -> dict[str,
     ai_hits = ai_sounding_hits(text)
     risk_penalty = min(16.0, risk * 4.0)
     link_penalty = 4.0 if "http" in text.lower() else 0.0
-    score = max(0.0, reach_score + reply_score + share_score + affinity_score - risk_penalty - link_penalty)
+    fmt = classify_format(text)
+    lane = str(tweet.get("lane") or tweet.get("voice_lane") or "")
+    algorithm_profile = cexa.algorithm_profile_for_post(text, fmt, lane or DEFAULT_LANE)
+    negative_signal_safety = 100 - int(algorithm_profile.get("negative_signal_risk", 0) or 0)
+    reach_norm = min(100.0, reach_score / 45.0 * 100.0)
+    reply_norm = min(100.0, reply_score / 25.0 * 100.0)
+    share_norm = min(100.0, share_score / 18.0 * 100.0)
+    affinity_norm = min(100.0, affinity_score / 12.0 * 100.0)
+    score = max(
+        0.0,
+        reach_norm * 0.22
+        + reply_norm * 0.15
+        + share_norm * 0.18
+        + affinity_norm * 0.10
+        + float(algorithm_profile.get("candidate_fit", 0) or 0) * 0.12
+        + float(algorithm_profile.get("positive_action_fit", 0) or 0) * 0.12
+        + negative_signal_safety * 0.08
+        + float(algorithm_profile.get("voice_fit_proxy", 0) or 0) * 0.03
+        - link_penalty
+        - min(8.0, risk_penalty / 2.0),
+    )
 
     false_winner = bool(
         views >= 1000
@@ -1667,6 +1746,14 @@ def score_tweet(tweet: dict[str, Any], now: datetime | None = None) -> dict[str,
         },
         "scores": {
             "creator_evolution": round(score, 2),
+            "candidate_fit": round(float(algorithm_profile.get("candidate_fit", 0) or 0), 2),
+            "positive_action_fit": round(float(algorithm_profile.get("positive_action_fit", 0) or 0), 2),
+            "negative_signal_safety": round(float(negative_signal_safety), 2),
+            "voice_fit": round(float(algorithm_profile.get("voice_fit_proxy", 0) or 0), 2),
+            "reach_proxy": round(reach_norm, 2),
+            "reply_proxy": round(reply_norm, 2),
+            "share_proxy": round(share_norm, 2),
+            "affinity_proxy": round(affinity_norm, 2),
             "reach": round(reach_score, 2),
             "reply_quality": round(reply_score, 2),
             "share": round(share_score, 2),
@@ -1676,9 +1763,20 @@ def score_tweet(tweet: dict[str, Any], now: datetime | None = None) -> dict[str,
         "flags": {
             "false_winner": false_winner,
             "false_loser": false_loser,
+            "actual_action_winner": cexa.infer_actual_action_winner({
+                "views": views,
+                "replies": replies,
+                "reposts": reposts,
+                "quotes": quotes,
+                "likes": likes,
+                "bookmarks": bookmarks,
+                "reply_per_1k": reply_per_1k,
+                "repost_per_1k": repost_per_1k,
+            }),
             "risky_language": risk > 0,
             "ai_sounding_hits": ai_hits,
         },
+        "algorithm_profile": algorithm_profile,
     }
 
 
@@ -1811,6 +1909,15 @@ def _most_common(values: list[str]) -> str:
     return sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)[0][0]
 
 
+def _distribution(values: list[str], limit: int = 5) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        clean = str(value or "").strip()
+        if clean:
+            counts[clean] = counts.get(clean, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)[:limit])
+
+
 def _char_band(values: list[int]) -> tuple[int, int]:
     if not values:
         return 0, 0
@@ -1915,6 +2022,14 @@ def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool)
         weak_traits.append(f"weak {fmt} examples average {round(_avg([float(v) for v in loser_chars]))} chars")
     if loser_chars:
         weak_traits.append(f"weak sample avg score {loser_avg_score}")
+    winner_profiles = [item.get("algorithm_profile", {}) for item in winners if isinstance(item.get("algorithm_profile"), dict)]
+    target_action_distribution = _distribution([str(p.get("target_action", "")) for p in winner_profiles])
+    candidate_anchor_distribution = _distribution([str(p.get("candidate_anchor", "")) for p in winner_profiles])
+    avg_oon = round(_avg([float(p.get("oon_readability", p.get("out_of_network_readability", 0)) or 0) for p in winner_profiles]), 1) if winner_profiles else 0
+    avg_negative_risk = round(_avg([float(p.get("negative_signal_risk", 0) or 0) for p in winner_profiles]), 1) if winner_profiles else 0
+    action_diversity = len(target_action_distribution)
+    if action_diversity < 2:
+        confidence_notes.append("needs winning evidence across at least 2 positive action paths")
     return {
         "format": fmt,
         "status": "mature" if mature_only else "provisional",
@@ -1936,6 +2051,11 @@ def _format_profile(fmt: str, items: list[dict[str, Any]], *, mature_only: bool)
         "ellipsis_pct": ellipsis_pct,
         "traits": [trait for trait in traits if trait],
         "weak_traits": weak_traits,
+        "winning_target_action_distribution": target_action_distribution,
+        "winning_candidate_anchor_distribution": candidate_anchor_distribution,
+        "avg_winner_oon_readability": avg_oon,
+        "avg_winner_negative_signal_risk": avg_negative_risk,
+        "action_diversity": action_diversity,
         "winner_ids": [item["id"] for item in winners if item["id"]],
         "loser_ids": [item["id"] for item in losers if item["id"]],
         "examples": [],
@@ -2028,6 +2148,11 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
     winner_topic_diversity = _topic_diversity(winners)
     dominant_opening, dominant_opening_count = _dominant_first_words(winners)
     dominance_pct = round(dominant_opening_count / max(len(winners), 1) * 100)
+    winner_profiles = [item.get("algorithm_profile", {}) for item in winners if isinstance(item.get("algorithm_profile"), dict)]
+    top_target_actions = _distribution([str(p.get("target_action", "")) for p in winner_profiles])
+    top_candidate_anchor_styles = _distribution([str(p.get("sports_mechanism") or p.get("candidate_anchor") or "") for p in winner_profiles])
+    avg_winner_oon_readability = round(_avg([float(p.get("oon_readability", p.get("out_of_network_readability", 0)) or 0) for p in winner_profiles]), 1) if winner_profiles else 0
+    avg_winner_negative_signal_risk = round(_avg([float(p.get("negative_signal_risk", 0) or 0) for p in winner_profiles]), 1) if winner_profiles else 0
     confidence_notes: list[str] = []
     if not mature:
         confidence_notes.append("provisional tweets only")
@@ -2039,6 +2164,8 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
         confidence_notes.append("winner/loser score gap is too small")
     if dominance_pct >= 70 and len(winners) >= 3:
         confidence_notes.append(f"winner openers over-repeat '{dominant_opening}'")
+    if avg_winner_negative_signal_risk >= 45:
+        confidence_notes.append("top winners carry too much negative-signal risk")
     confidence_active = bool(mature) and len(pool) >= 8 and topic_diversity >= 2 and winner_topic_diversity >= 2 and score_delta >= 0.35 and not (dominance_pct >= 70 and len(winners) >= 3)
     return {
         "status": "mature" if mature else "provisional",
@@ -2061,6 +2188,10 @@ def build_voice_profile(scores: list[dict[str, Any]]) -> dict[str, Any]:
         "first_person_pct": first_person_pct,
         "avg_specificity_signal": specificity,
         "top_tension_terms": top_tension,
+        "top_winning_target_actions": top_target_actions,
+        "top_candidate_anchor_styles": top_candidate_anchor_styles,
+        "avg_winner_oon_readability": avg_winner_oon_readability,
+        "avg_winner_negative_signal_risk": avg_winner_negative_signal_risk,
         "traits": [trait for trait in traits if trait],
         "avoid_traits": avoid_traits,
         "winner_ids": [item["id"] for item in winners if item["id"]],
@@ -2162,6 +2293,27 @@ def propose_rules(scores: list[dict[str, Any]], existing: list[dict[str, Any]] |
                 "before_after": {
                     "before": "Default to old Creator Studio structure regardless of current performance.",
                     "after": f"Open with {best['format']} pacing when no explicit format is chosen.",
+                },
+            })
+            action_dist = best_profile.get("winning_target_action_distribution", {}) or {}
+            anchor_dist = best_profile.get("winning_candidate_anchor_distribution", {}) or {}
+            top_actions = ", ".join(list(action_dist.keys())[:2]) or "reply/dwell"
+            top_anchor = next(iter(anchor_dist.keys()), "early candidate anchors")
+            action_rule = (
+                f"For {best['format']}, current winners perform best when they target {top_actions} "
+                f"with candidate anchor {top_anchor} visible early and a clean open-loop ending."
+            )
+            proposals.append({
+                "id": _proposal_id(action_rule, evidence),
+                "status": "pending",
+                "created_at": iso_now(now),
+                "rule": action_rule,
+                "reason": "Creator Evolution public-X profile found stronger mature winners when action path and candidate anchor were explicit.",
+                "evidence_tweet_ids": evidence,
+                "sample_size": best["count"],
+                "before_after": {
+                    "before": "Pick the first clean draft that passes quality gates.",
+                    "after": "Prefer the clean draft with the strongest candidate anchor and target action path.",
                 },
             })
 
@@ -2372,14 +2524,16 @@ def build_tracked_tweet(tweet: dict[str, Any], *, source: str = "manual_or_impor
     created = parse_datetime(tweet.get("createdAt") or tweet.get("created_at"))
     hours = age_hours(tweet, now)
     lower = text.lower()
+    fmt = classify_format(text)
+    lane = str(tweet.get("lane") or tweet.get("voice_lane") or "")
     return {
         "id": str(tweet.get("id") or tweet.get("tweet_id") or ""),
         "text": text,
         "url": tweet_url(tweet),
         "source": str(tweet.get("source") or source),
         "posted_at": created.isoformat(timespec="seconds") if created else "",
-        "format": classify_format(text),
-        "lane": str(tweet.get("lane") or tweet.get("voice_lane") or ""),
+        "format": fmt,
+        "lane": lane,
         "topic": topic_tags(text),
         "has_media": bool(tweet.get("media") or tweet.get("photos") or tweet.get("videos")),
         "has_link": "http" in lower,
@@ -2398,6 +2552,7 @@ def build_tracked_tweet(tweet: dict[str, Any], *, source: str = "manual_or_impor
         "scoring_version": SCORING_VERSION,
         "prompt_version": PROMPT_VERSION,
         "rule_version": RULE_VERSION,
+        "algorithm_profile": cexa.algorithm_profile_for_post(text, fmt, lane or DEFAULT_LANE),
     }
 
 
@@ -2781,6 +2936,15 @@ LEARNED VOICE PROFILE:
 {comedic_contract}
 {witty_contract}
 
+PUBLIC X ALGORITHM CONTRACT:
+The public X algorithm should be treated as a retrieval plus multi-action ranking system.
+Every option must satisfy four hidden checks:
+1. Candidate fit: the first visible beat should naturally anchor the post to a clear team, player, sport, decision, trend, or conversation cluster. Do not keyword-stuff. Make the topic legible.
+2. Action target: each option must optimize for one primary action path: reply, quote, repost, share, dwell, profile click, follow, click, photo expand, or video view. Do not optimize every action at once.
+3. Negative-action control: avoid patterns likely to create not interested, block, mute, report, or not-dwelled behavior: stale context, fake facts, vague framing, personal cruelty, over-hostility, insider-only wording, or bait with no substance.
+4. Out-of-network readability: a smart sports fan who does not already follow Tyler should understand why the post matters within the first 120 characters.
+Exact live X weights are not public. Do not claim exact production multipliers. Use source clarity, action intent, dwell path, and safety.
+
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
 {source_preservation_rule}
@@ -2822,10 +2986,22 @@ Return ONLY JSON:
 {{
   "option1": "post-ready draft",
   "option1_pattern": "short reason this should perform",
+  "option1_candidate_anchor": "team/player/mechanism anchor",
+  "option1_target_action": "reply | quote | repost | share | dwell | profile_click | follow | click | photo_expand | video_view",
+  "option1_negative_signal_risk": "low | medium | high",
+  "option1_why_this_can_rank": "specific ranking reason",
   "option2": "post-ready draft",
   "option2_pattern": "short reason this should perform",
+  "option2_candidate_anchor": "team/player/mechanism anchor",
+  "option2_target_action": "reply | quote | repost | share | dwell | profile_click | follow | click | photo_expand | video_view",
+  "option2_negative_signal_risk": "low | medium | high",
+  "option2_why_this_can_rank": "specific ranking reason",
   "option3": "post-ready draft",
   "option3_pattern": "short reason this should perform",
+  "option3_candidate_anchor": "team/player/mechanism anchor",
+  "option3_target_action": "reply | quote | repost | share | dwell | profile_click | follow | click | photo_expand | video_view",
+  "option3_negative_signal_risk": "low | medium | high",
+  "option3_why_this_can_rank": "specific ranking reason",
   "pick": "1, 2, or 3",
   "pick_reason": "one sentence"
 }}"""

@@ -15,10 +15,12 @@ import math
 import re
 from typing import Any
 
+import creator_evolution_algorithm as cexa
+
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v9-source-sanity-gates"
+PULSE_VERSION = "ce-pulse-v10-public-x-opportunity"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -1065,20 +1067,33 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
     if colorado_now:
         urgency = 10.0
     voice_fit = min(10.0, 3.0 + reply_tension * 0.45 + audience_fit * 0.25)
+    public_x = cexa.public_x_opportunity_report(text, source_basis=draft_basis, state=state)
+    retrieval_fit = int(public_x.get("retrieval_fit", 0) or 0)
+    oon_readability = int(public_x.get("oon_readability", 0) or 0)
+    candidate_fit = int(public_x.get("candidate_fit", 0) or 0)
+    positive_action_clarity = int(public_x.get("positive_action_fit", 0) or 0)
+    negative_signal_risk = int(public_x.get("negative_signal_risk", 0) or 0)
+    not_dwelled = int(public_x.get("not_dwelled_risk", 0) or 0)
+    negative_signal_safety = max(0, 100 - negative_signal_risk)
     weighted = {
         "timeliness": timeliness,
         "velocity": velocity,
         "audience_fit": min(15.0, audience_fit * 1.5),
-        "reply_tension": min(15.0, reply_tension * 1.5),
+        "reply_tension": min(12.0, reply_tension * 1.2),
         "fact_confidence": fact_confidence,
         "novelty": novelty,
         "voice_fit": voice_fit,
         "monetization_safety": safety,
         "post_now_urgency": urgency,
         "conversation_dominance": conversation_dominance,
+        "retrieval_fit": min(12.0, retrieval_fit * 0.12),
+        "oon_readability": min(8.0, oon_readability * 0.08),
+        "positive_action_clarity": min(10.0, positive_action_clarity * 0.10),
+        "negative_signal_safety": min(10.0, negative_signal_safety * 0.10),
+        "not_dwelled_safety": min(6.0, (100 - not_dwelled) * 0.06),
     }
     raw_score = sum(weighted.values())
-    score = round(min(100.0, raw_score / 130.0 * 100.0), 2)
+    score = round(min(100.0, raw_score / 160.0 * 100.0), 2)
     hard_blocks = []
     soft_flags = []
     if fresh_count == 0:
@@ -1107,6 +1122,20 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         hard_blocks.append("commerce_source")
     if novelty_flag == "duplicate_recent_angle":
         hard_blocks.append("duplicate_recent_angle")
+    if not_dwelled >= 70:
+        hard_blocks.append("high_not_dwelled_risk")
+    elif not_dwelled >= 45:
+        soft_flags.append("medium_not_dwelled_risk")
+    if candidate_fit < 40 and not colorado_now:
+        hard_blocks.append("weak_candidate_anchor")
+    elif candidate_fit < 55:
+        soft_flags.append("weak_candidate_anchor")
+    if oon_readability < 35 and not colorado_now:
+        hard_blocks.append("weak_oon_readability")
+    elif oon_readability < 55:
+        soft_flags.append("weak_oon_readability")
+    if positive_action_clarity < 45:
+        soft_flags.append("unclear_action_path")
     primary_context_flags = set(primary.get("context_flags", []) or [])
     self_contained_sources = [
         s for s in signals
@@ -1119,6 +1148,7 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
             hard_blocks.append("unresolved_pronoun_context")
     elif primary_context_flags & {"reply_fragment_context", "unresolved_pronoun_context"}:
         soft_flags.append("context_from_secondary_source")
+    action_path = _recommended_action_path(text, weighted, draft_basis)
     action = "tweet"
     if score < DEFAULT_THRESHOLD and score >= SAVE_THRESHOLD:
         action = "save"
@@ -1148,7 +1178,22 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         "risk_flags": list(dict.fromkeys(risk_flags)),
         "context_flags": list(dict.fromkeys(context_flags)),
         "recommended_action": action,
+        "recommended_action_path": action_path,
         "recommended_lane": _recommended_lane(text, reply_tension, safety),
+        "target_action": public_x.get("target_action", action_path),
+        "candidate_anchor": public_x.get("candidate_anchor", ""),
+        "sports_mechanism": public_x.get("sports_mechanism", ""),
+        "candidate_fit": candidate_fit,
+        "retrieval_fit": retrieval_fit,
+        "oon_readability": oon_readability,
+        "negative_signal_risk": negative_signal_risk,
+        "not_dwelled_risk": not_dwelled,
+        "public_x_read": {
+            "retrieval_fit": retrieval_fit,
+            "positive_action_path": action_path,
+            "negative_risk": negative_signal_risk,
+            "why_this_can_rank": f"{public_x.get('candidate_anchor') or public_x.get('sports_mechanism') or 'source'} has {public_x.get('target_action', action_path)} potential with {public_x.get('negative_signal_reason', 'low risk')}.",
+        },
         "freshness_score": round(timeliness, 2),
         "confidence": round((score + fact_confidence * 10 + safety * 10) / 3.0, 2),
         "why_now": _why_now(signals, weighted),
@@ -1169,6 +1214,14 @@ def _has_strong_now_signal(item: dict[str, Any] | None) -> bool:
     sources = item.get("source_basis", []) or []
     fresh_sources = [s for s in sources if isinstance(s, dict) and s.get("freshness_status") == "fresh"]
     if _is_live_game_context(text):
+        return True
+    if (
+        fresh_sources
+        and float(item.get("candidate_fit", 0) or 0) >= 80
+        and float(item.get("retrieval_fit", 0) or 0) >= 80
+        and float(item.get("freshness_score", 0) or 0) >= 18
+        and _contains_any(text, ("avalanche", "avs", "nuggets", "broncos", "rockies", "buffs"))
+    ):
         return True
     if _is_colorado_current_context(text) and fresh_sources and _contains_any(
         text,
@@ -1218,6 +1271,21 @@ def _recommended_lane(text: str, reply_tension: float, safety: float) -> str:
     return _ce_default_lane()
 
 
+def _recommended_action_path(text: str, weighted: dict[str, float], source_basis: list[dict[str, Any]] | None = None) -> str:
+    lower = str(text or "").lower()
+    if any(term in lower for term in ("video", "youtube", "breakdown", "film")):
+        return "click"
+    if any(term in lower for term in ("absurd", "funny", "weird", "meme", "meltdown")):
+        return "quote"
+    if any(term in lower for term in ("win", "clutch", "signed", "extension", "positive momentum")):
+        return "repost"
+    if float(weighted.get("reply_tension", 0) or 0) >= 7:
+        return "reply"
+    if float(weighted.get("retrieval_fit", 0) or 0) >= 8:
+        return "dwell"
+    return "reply"
+
+
 def _why_now(signals: list[dict[str, Any]], weighted: dict[str, float]) -> str:
     source_count = len({s.get("source") for s in signals})
     newest = min(_signal_age_hours(s) for s in signals)
@@ -1243,11 +1311,12 @@ def find_pulse(tweets: list[dict[str, Any]] | None,
     scored.sort(key=lambda item: item.get("score", 0), reverse=True)
     usable = [item for item in scored if not _blocking_blocks(item)]
     colorado_usable = [item for item in usable if _is_colorado_opportunity(item)]
-    best = colorado_usable[0] if colorado_usable else None
+    live_usable = [item for item in colorado_usable if _is_live_game_context(_opportunity_text(item))]
+    best = live_usable[0] if live_usable else colorado_usable[0] if colorado_usable else None
     status = "no_op"
     if best and not _blocking_blocks(best):
         _thin_room_signal = "thin_room_signal" in (best.get("soft_flags") or [])
-        if _has_strong_now_signal(best):
+        if _has_strong_now_signal(best) or any(_is_live_game_context(str((src or {}).get("text") or "")) for src in (best.get("source_basis") or []) if isinstance(src, dict)):
             status = "ready"
         elif best.get("score", 0) >= threshold and not _thin_room_signal:
             status = "ready"
@@ -1359,6 +1428,15 @@ WHY NOW:
 
 CONFIDENCE:
 score {opportunity.get('score', 0)} | freshness {opportunity.get('freshness_score', 0)} | lane {lane}
+
+PUBLIC X ALGORITHM READ:
+- Candidate anchor: {opportunity.get('candidate_anchor') or 'unclear'}
+- Recommended action path: {opportunity.get('recommended_action_path') or opportunity.get('target_action') or 'reply'}
+- Retrieval fit: {opportunity.get('retrieval_fit', 0)}
+- Out-of-network readability: {opportunity.get('oon_readability', 0)}
+- Negative-signal risk: {opportunity.get('negative_signal_risk', 0)}
+- Not-dwelled risk: {opportunity.get('not_dwelled_risk', 0)}
+- Do not summarize the source. Convert it into one original Tyler observation with the anchor visible early.
 
 SOURCE BASIS:
 {chr(10).join(source_lines)}
