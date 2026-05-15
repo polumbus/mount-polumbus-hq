@@ -13597,19 +13597,36 @@ def page_voice_tuner():
         selected_fmt = CANONICAL_TWEET_DEFAULT_FORMAT
     provider = str(state.get("voice_tuner_provider", CE_AI_PROVIDER_DEFAULT) or CE_AI_PROVIDER_DEFAULT)
 
+    st.markdown("### Tuning Target")
+    st.caption("This is the voice and format your feedback will change. You can switch it at any step.")
+    target_cols = st.columns(2)
+    with target_cols[0]:
+        selected_lane = st.selectbox(
+            "Voice to tune",
+            lane_opts,
+            index=lane_opts.index(selected_lane) if selected_lane in lane_opts else 0,
+            key="ce_voice_tuner_lane",
+            help="The voice lane you want this feedback to teach.",
+        )
+    with target_cols[1]:
+        selected_fmt = st.selectbox(
+            "Format to test",
+            fmt_opts,
+            index=fmt_opts.index(selected_fmt) if selected_fmt in fmt_opts else 0,
+            key="ce_voice_tuner_format",
+            help="Feedback is scoped to this format.",
+        )
+    if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane"):
+        state["voice_tuner_format"] = selected_fmt
+        state["voice_tuner_lane"] = selected_lane
+        state["voice_tuner_step"] = "target"
+        state.pop("active_generation_key", None)
+        _save_ce_testing_state(state)
+        st.rerun()
+
     if step == "target":
         st.markdown("### Pick Target")
-        st.caption("Choose the voice and format you want to improve. The model details stay in Advanced unless you need them.")
-        setup_cols = st.columns(2)
-        with setup_cols[0]:
-            selected_lane = st.selectbox("Voice to tune", lane_opts, index=lane_opts.index(selected_lane) if selected_lane in lane_opts else 0, key="ce_voice_tuner_lane", help="The voice lane you want this feedback to teach.")
-        with setup_cols[1]:
-            selected_fmt = st.selectbox("Format to test", fmt_opts, index=fmt_opts.index(selected_fmt) if selected_fmt in fmt_opts else 0, key="ce_voice_tuner_format", help="Feedback is scoped to this format.")
-        if selected_fmt != state.get("voice_tuner_format") or selected_lane != state.get("voice_tuner_lane"):
-            state["voice_tuner_format"] = selected_fmt
-            state["voice_tuner_lane"] = selected_lane
-            state["voice_tuner_step"] = "target"
-            _save_ce_testing_state(state)
+        st.caption("Add or swap the test idea. The model details stay in Advanced unless you need them.")
         item = _ce_testing_item_for_voice(concepts, selected_lane, item)
         item["format"] = selected_fmt
         item["lane"] = selected_lane
