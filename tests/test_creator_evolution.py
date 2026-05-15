@@ -1,5 +1,7 @@
 import re
 import unittest
+import contextlib
+import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -86,11 +88,11 @@ class CreatorEvolutionTests(unittest.TestCase):
             None,
         )
 
-        self.assertIn("Voice is a filter, not a reset button", standard)
-        self.assertIn("Source freedom for this lane", comedic)
-        self.assertIn("substantially restructure", critical)
-        self.assertIn("stronger diagnosis, sarcastic turn, or real joke", sarcastic)
-        self.assertNotIn("Voice is a filter, not a reset button", comedic)
+        self.assertIn("do not use the old three-stacked-line template", standard)
+        self.assertIn("The smile you make when sports gets absurd", comedic)
+        self.assertIn("Clear diagnosis. Firm, specific", critical)
+        self.assertIn("SARCASTIC VOICE", sarcastic)
+        self.assertNotIn("Source freedom for this lane", comedic)
 
     def test_comedic_quality_rejects_wasted_setup_frames(self):
         for phrase in ("The funny part is", "The whole thing is", "You can always tell"):
@@ -104,6 +106,37 @@ class CreatorEvolutionTests(unittest.TestCase):
                 any("meme-caption energy" in issue for issue in report["issues"]),
                 report["issues"],
             )
+
+    def test_score_records_do_not_count_as_polished_hyphens(self):
+        report = ce.draft_quality_report(
+            "The Broncos can go 4-4 early and 7-2 late. That is how 11 or 12 wins gets on the table.",
+            "Normal Tweet",
+            "Witty Edge",
+        )
+
+        self.assertNotIn("hyphen/dash", report["polished_punctuation_hits"])
+
+    def test_app_lane_fallback_preserves_broncos_schedule_math_without_metadata(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            import app
+
+        source = (
+            "The 2026 Broncos formula...\n"
+            "Survive the first 8 games - Thrive in the next 9 games\n\n"
+            "If Broncos can go 4-4 to start the season it is very realistic to go 7-2 in the back half. "
+            "#1 Seed will be extremely difficult this year but an 11-12 win season is very much on the table."
+        )
+        data, _quality, passing = app._ce_force_safe_lane_fallback(source, "Normal Tweet", "Witty Edge")
+
+        self.assertEqual(["1", "2", "3"], passing)
+        for idx in (1, 2, 3):
+            text = data[f"option{idx}"]
+            self.assertIn("4-4", text)
+            self.assertIn("7-2", text)
+            self.assertTrue("11" in text or "12" in text or "1 seed" in text.lower())
+            self.assertNotIn("Witty Edge fallback", text)
+            self.assertNotIn("Normal Tweet usually works best", text)
+            self.assertNotIn("Watch  Normal Tweet", text)
 
     def test_build_prompt_uses_structured_source_material_without_hof(self):
         state = ce.refresh_state(None, [
@@ -125,8 +158,6 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("LANE BEHAVIOR", prompt)
         self.assertIn("Witty Edge:", prompt)
         self.assertIn("TOPIC:", prompt)
-        self.assertIn("Preserve the user's original tweet idea", prompt)
-        self.assertIn("Voice is a filter, not a reset button", prompt)
         self.assertNotIn("HALL OF FAME REFERENCE TWEETS", prompt)
         self.assertIn("Never use Hall of Fame tweets", prompt)
 
@@ -177,8 +208,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('"Creator Evolution"', app_text)
         self.assertIn("page_creator_evolution", app_text)
         self.assertIn('CE_AI_PROVIDER_DEFAULT = "Grok"', app_text)
-        self.assertIn("creator_evolution_grok_missing_key_fallback", app_text)
-        self.assertIn("ready via HQ proxy", app_text)
+        self.assertIn("creator_evolution_direct_xai", app_text)
+        self.assertIn("creator_evolution_direct_openai", app_text)
+        self.assertIn("direct xAI key missing", app_text)
+        self.assertIn("Direct ChatGPT/OpenAI only", app_text)
+        self.assertIn("proxy disabled", app_text)
+        self.assertIn("Proxy fallback is disabled", app_text)
+        ce_provider_body = app_text[
+            app_text.index("def _call_creator_evolution_ai_for_provider") :
+            app_text.index("def _call_creator_evolution_ai(", app_text.index("def _call_creator_evolution_ai_for_provider"))
+        ]
+        self.assertNotIn("_call_grok_proxy(prompt", ce_provider_body)
+        self.assertNotIn("raw = call_claude(", ce_provider_body)
+        self.assertNotIn("creator_evolution_proxy", ce_provider_body)
         self.assertIn('"Voice Tuner"', app_text)
         self.assertIn("page_voice_tuner", app_text)
         self.assertIn("page_testing", app_text)
@@ -229,8 +271,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('"Grok"', app_text)
         self.assertIn("def _call_grok_api_key", app_text)
         self.assertIn("XAI_API_KEY", app_text)
-        self.assertIn("creator_evolution_provider_switch", app_text)
-        self.assertIn("creator_evolution_testing_direct", app_text)
+        self.assertIn("creator_evolution_direct_xai", app_text)
+        self.assertIn("creator_evolution_direct_chatgpt_oauth", app_text)
         self.assertIn("CE_COMPAT_DEFAULTS", app_text)
         self.assertIn("ce_banger_data", app_text)
         self.assertIn("ce_quality_report", app_text)
@@ -249,10 +291,15 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("X_OAUTH_TOKEN_KEY", app_text)
         self.assertIn("_post_tweet_native_x_oauth2(clean_text)", app_text)
         self.assertIn("_post_tweet_native_x_oauth1(clean_text)", app_text)
+        self.assertIn("official native X auth only", app_text)
+        self.assertIn("Legacy helper/proxy posting is disabled", app_text)
         self.assertLess(
             app_text.index("_post_tweet_native_x_oauth2(clean_text)"),
             app_text.index("_post_tweet_native_x_oauth1(clean_text)"),
         )
+        post_body = app_text[app_text.index("def _post_tweet(text: str)") : app_text.index("def _xurl_helper_app_name", app_text.index("def _post_tweet(text: str)"))]
+        self.assertNotIn("_post_tweet_xurl_helper(clean_text)", post_body)
+        self.assertNotIn("/tweet/post", post_body)
         self.assertIn("Connect X Securely", app_text)
         self.assertIn("Connected OAuth token", app_text)
         self.assertIn("Creator Evolution note only. Posting anyway because you control what goes to X.", app_text)
@@ -319,7 +366,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         ce_ai = app_text.split("def _call_creator_evolution_ai", 1)[1].split("def _run_ce_ai", 1)[0]
         self.assertIn("_ce_selected_ai_provider", ce_ai)
         self.assertIn("_call_grok_api_key", ce_ai)
-        self.assertIn("call_claude", ce_ai)
+        self.assertIn("_call_openai_api_key", ce_ai)
+        self.assertIn("call_chatgpt_oauth", ce_ai)
+        self.assertNotIn("raw = call_claude(", ce_ai)
         self.assertIn('st.session_state["_ai_last_route"] = "grok_api_key"', ce_ai)
         self.assertNotIn("ce.build_generation_prompt(", ce_runner)
         self.assertNotIn("_generate_build_data", ce_runner)
@@ -376,14 +425,14 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("Deadpan:", prompt)
-        self.assertIn("straight-faced", prompt)
+        self.assertIn("Straight-faced", prompt)
         self.assertIn("No exclamation points", prompt)
 
     def test_format_recipe_changes_prompt_behavior(self):
         base = "Broncos fans are trying to decide if the boring roster answer is the actual tell"
         cases = {
-            "Punchy Tweet": "same punchline rhythm every time",
-            "Normal Tweet": "Vary the ending type",
+            "Punchy Tweet": "One sharp thought",
+            "Normal Tweet": "One compact phone-style post",
             "Long Tweet": "261-700 preferred characters",
             "Thread": "---TWEET---",
             "Article": "700-1,200 words",
@@ -843,34 +892,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("Amused", ce.EMOTION_LANES)
         self.assertEqual(ce.normalize_lane("Amused"), "Comedic")
         prompt = ce.build_generation_prompt("The Nuggets bench turned a lead into panic.", "Normal Tweet", "Comedic", ce.initial_state())
-        self.assertIn("COMEDIC LANE HARD RULES", prompt)
-        self.assertIn("MASTER GOAL", prompt)
-        self.assertIn("HARD STANDARD", prompt)
-        self.assertIn("joke engine", prompt)
-        self.assertIn("exact sports absurdity", prompt)
-        self.assertIn("COMEDIC CALIBRATION BAR", prompt)
-        self.assertIn("COMEDIC OVERRIDE", prompt)
-        self.assertIn("funny first", prompt.lower())
-        self.assertIn("sports-specific", prompt)
-        self.assertIn("pressure reveal", prompt)
-        self.assertIn("fan coping", prompt)
-        self.assertIn("sports-logic flip", prompt)
-        self.assertIn("Profanity is optional seasoning", prompt)
-        self.assertIn("Edge means sharper comic timing", prompt)
-        self.assertIn("Prefer sports actions and consequences", prompt)
-        self.assertIn("sports consequences over metaphor", prompt)
-        self.assertIn("Do not literalize idioms", prompt)
-        self.assertIn("No ankle press conference", prompt)
-        self.assertIn("Do not make body parts", prompt)
-        self.assertIn("If the punchline still works", prompt)
-        self.assertIn("No detached final-line label", prompt)
-        self.assertIn("Do not announce the joke", prompt)
-        self.assertIn("do not optimize the final line for response pressure", prompt)
-        self.assertIn("Do not invent crowd counts", prompt)
-        self.assertIn("do not turn that into 'five minutes'", prompt)
-        self.assertIn("Ban anger-only closers", prompt)
-        self.assertIn("do not copy any phrase", prompt.lower())
-        self.assertIn("Mechanic targets only", prompt)
+        self.assertIn("The smile you make when sports gets absurd", prompt)
+        self.assertIn("Find the weird human detail", prompt)
+        self.assertIn("A dry little walk-off line", prompt)
+        self.assertIn("do not use the old three-stacked-line template", prompt)
+        self.assertNotIn("COMEDIC LANE HARD RULES", prompt)
+        self.assertNotIn("COMEDIC OVERRIDE", prompt)
+        self.assertNotIn("joke engine", prompt)
 
     def test_comedic_lane_accepts_sports_specific_jokes(self):
         examples = [
@@ -902,9 +930,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
 
         self.assertIn("missing third act", recipe["target"])
-        self.assertIn("unresolved click tension", recipe["target"])
-        self.assertIn("No generic 'new video is up", prompt)
-        self.assertIn("PROMO VOICE - MONETIZATION-OPTIMIZED CLICK TENSION MODE", prompt)
+        self.assertIn("one unresolved tension", recipe["target"])
+        self.assertIn("No fake urgency", prompt)
+        self.assertIn("PROMO VOICE - VIDEO CLICK TENSION MODE", prompt)
         self.assertIn("LEARNED FORMAT PROFILE", prompt)
         self.assertIn("LEARNED VOICE PROFILE", prompt)
 
@@ -1021,11 +1049,12 @@ class CreatorEvolutionTests(unittest.TestCase):
             ce.initial_state(),
         )
 
-        self.assertIn("SARCASTIC VOICE - FAKE ENTHUSIASM MODE:", prompt)
+        self.assertIn("SARCASTIC VOICE", prompt)
+        self.assertIn("DRY HUMOR MODE", prompt)
         self.assertIn("Cultural Leap", prompt)
-        self.assertIn("copied examples", prompt)
-        self.assertIn("No generic sarcastic openers", prompt)
-        self.assertIn("Never explain. Sarcasm must create debate", prompt)
+        self.assertIn("old sarcastic examples", prompt)
+        self.assertIn("Never use generic openers", prompt)
+        self.assertIn("Drop it and walk away", prompt)
         self.assertNotIn("Turns out the Patriots offense", prompt)
         self.assertNotIn("That cornerback needs to call someone", prompt)
         self.assertNotIn("copy this exact energy", prompt)
@@ -1954,21 +1983,21 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("duplicate_recent_angle", decision["top_rejected"][0]["hard_blocks"])
 
     def test_voice_and_format_recipes_are_engagement_focused_without_replacing_learning(self):
-        self.assertIn("razor-sharp turn", ce.lane_recipe_text("Witty Edge"))
-        self.assertIn("leave the optimism on trial", ce.lane_recipe_text("Skeptical"))
-        self.assertIn("accountability", ce.lane_recipe_text("Critical"))
+        self.assertIn("a little dangerous", ce.lane_recipe_text("Witty Edge"))
+        self.assertIn("raised eyebrow", ce.lane_recipe_text("Skeptical"))
+        self.assertIn("accountability-minded", ce.lane_recipe_text("Critical"))
         self.assertIn("specific sports contradiction", ce.lane_recipe_text("Promo"))
         self.assertIn("source-specific wording", str(ce.validate_generation_options({
             "option1": "This Denver sports moment is where it gets interesting. The roster will tell us what matters next...",
             "option2": "This Denver sports moment is where it gets weird. The roster will tell us what matters next...",
             "option3": "This Denver sports moment is where the whole thing shifts. The roster will tell us what matters next...",
         }, "Normal Tweet", "Witty Edge")))
-        self.assertIn("one-paragraph versions are allowed", ce.format_recipe_text("Normal Tweet"))
-        self.assertIn("same punchline rhythm every time", ce.format_recipe_text("Punchy Tweet"))
-        self.assertIn("same final-turn formula", ce.format_recipe_text("Long Tweet"))
-        self.assertIn("same hook-middle-close pattern every time", ce.format_recipe_text("Thread"))
-        self.assertIn("reusable article skeleton", ce.format_recipe_text("Article"))
-        self.assertIn("each segment must earn its slot", ce.format_recipe_text("Thread"))
+        self.assertIn("One compact phone-style post", ce.format_recipe_text("Normal Tweet"))
+        self.assertIn("One sharp thought", ce.format_recipe_text("Punchy Tweet"))
+        self.assertIn("closing pressure line", ce.format_recipe_text("Long Tweet"))
+        self.assertIn("exact marker ---TWEET---", ce.format_recipe_text("Thread"))
+        self.assertIn("short caption with a headline", ce.format_recipe_text("Article"))
+        self.assertIn("at least 4 tweet segments", ce.format_recipe_text("Thread"))
 
     def test_lane_quality_gates_block_stock_engagement_and_generic_hype(self):
         witty = ce.draft_quality_report("Hot take: Broncos camp is where this roster gets interesting.", "Punchy Tweet", "Witty Edge")
@@ -2171,15 +2200,12 @@ class CreatorEvolutionTests(unittest.TestCase):
     def test_app_fallback_recipes_include_current_creator_evolution_language(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("Vary the ending type", app_text)
-        self.assertIn("Ellipsis is a strong Tyler ending, but it must not be the only ending", app_text)
-        self.assertIn("The final line must create response pressure", app_text)
-        self.assertIn("alluded question without a question mark", app_text)
-        self.assertIn("Every format has flexibility inside its shape", app_text)
-        self.assertIn("same punchline rhythm every time", app_text)
-        self.assertIn("reusable article skeleton", app_text)
+        self.assertIn("One sharp thought. One or two sentences maximum", app_text)
+        self.assertIn("One compact phone-style post", app_text)
+        self.assertIn("do not use the old three-stacked-line template", app_text)
+        self.assertIn("Headline, intro, 3-5 section headings", app_text)
+        self.assertIn("a normal tweet pretending to be a thread", app_text)
         self.assertIn("Generated options all end with ellipsis", app_text)
-        self.assertIn("each segment must earn its slot with a new beat", app_text)
         self.assertIn("Witty Edge should not lean on hot-take", app_text)
         self.assertIn("Generated options repeat the same opener", app_text)
         self.assertIn('profile.get("confidence_active") is not True', app_text)
@@ -2187,7 +2213,6 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("ACTIVE CALIBRATION", app_text)
         self.assertIn("TRACKED ONLY - not used in generation yet", app_text)
         self.assertIn("Needs a concrete sports/source detail so it does not read like generic strategy copy.", app_text)
-        self.assertIn("No polished punctuation in tweet copy", app_text)
         self.assertIn("Uses polished punctuation that does not sound like Tyler", app_text)
 
 

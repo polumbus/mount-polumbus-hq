@@ -55,14 +55,15 @@ def test_streamlit_secret_lookup_has_local_secrets_fallback():
     assert "value = _local_streamlit_secret(name)" in body
 
 
-def test_creator_evolution_grok_uses_proxy_when_direct_key_missing():
+def test_creator_evolution_grok_requires_direct_xai_key_without_proxy_fallback():
     source = APP.read_text(encoding="utf-8")
     body = source[source.index("def _call_creator_evolution_ai_for_provider") : source.index("def _call_creator_evolution_ai(")]
 
-    assert "def _call_grok_proxy" in source
-    assert "grok missing direct key; trying proxy route" in body
-    assert "_call_grok_proxy(prompt, system_prompt, max_tokens" in body
-    assert '"ready via HQ proxy"' in source
+    assert "creator_evolution_direct_xai" in body
+    assert "Proxy fallback is disabled" in body
+    assert "_call_grok_api_key(prompt, system_prompt, max_tokens" in body
+    assert "_call_grok_proxy(prompt, system_prompt, max_tokens" not in body
+    assert '"ready via HQ proxy"' not in source
 
 
 def test_voice_tuner_is_in_mobile_owner_nav():

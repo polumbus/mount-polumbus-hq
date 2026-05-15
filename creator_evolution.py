@@ -16,7 +16,7 @@ from typing import Any
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
-PROMPT_VERSION = "ce-prompt-v9-tuner-locked-voices"
+PROMPT_VERSION = "ce-prompt-v10-restore-v5-voice-format"
 SCORING_VERSION = "ce-score-v3-tracked-cohorts"
 RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
@@ -38,183 +38,124 @@ EMOTION_LANES = (
 
 LANE_RECIPES = {
     "Witty Edge": {
-        "text": """Witty Edge:
-WITTY EDGE - MONETIZATION-OPTIMIZED MIC DROP MODE:
-- Compressed sports observation with a razor-sharp turn engineered for instant reply and quote-tweet energy.
-- Wit must come from the exact cut and direct sports consequence that creates debate, tribal agreement, or a clean quote-tweet reaction.
-- Preserve the core claim and source details while maximizing shareability.
-- Sound like Tyler wrote it today: raw, phone-typed, concise, and human.
-- Prioritize the cleanest cut that creates maximum reply pressure. No corporate tone, no hashtags, no links, no over-explaining, no polished punctuation.
-- Automatically trim any over-explaining while keeping the sharp turn intact.
-- The final beat should smirk, sting, or clarify the whole take without turning into a slogan.""",
-        "target": "Compressed sports observation with a razor-sharp turn: raw, phone-typed, shareable, and built around one direct sports consequence.",
-        "do": "Name the exact sports contradiction, preserve the source detail, and land the cleanest cut that creates reply or quote-tweet pressure.",
-        "avoid": "Corporate tone, content-strategy phrasing, hashtags, links, over-explaining, polished punctuation, long analogies, dressed-up metaphors, reaction framing, and explaining the logic twice.",
-        "ending": "A short direct punchline or consequence line that creates reply pressure without a direct question.",
+        "target": "Funny, pointed, conversational, and a little dangerous without sounding mean.",
+        "do": "Use a sharp human read, a specific sports detail, and a final line that leaves tension hanging.",
+        "avoid": "Content-strategy phrasing, clean essay symmetry, fake questions, and copied viral hooks.",
+        "ending": "A declarative open loop or punchline with one unresolved consequence.",
     },
     "Comedic": {
-        "text": """COMEDIC - EDGY GROUP-CHAT SPORTS COMEDY:
-- Write like a fast, savage, hyper-specific sports joke from the group chat.
-- The laugh should come from fandom rage, absurdity, wordplay, fake earnestness, fan delusion, or a brutally clear sports contradiction.
-- Keep it raw, specific, and dangerously relatable. If the tweet does not have an actual joke, it fails.
-- Use the real moment: a player mistake, ref controversy, blown lead, overhyped claim, cursed fan feeling, or absurd team behavior.
-- Exaggeration is allowed, but it must stay tied to the sports situation.
-- Borderline adult energy and crude-adjacent humor are allowed when they make the joke sharper, but do not use actual profanity, slurs, threats, or personal harassment.
-- Never explain the joke. Never turn it into Witty Edge with one cute word added.
-- Avoid wasted setup frames like "the funny part is", "the whole thing is", and "you can always tell". Let the tweet do its own work.
-- Avoid random office/legal/dating metaphors unless the topic truly demands it. Avoid object-agency jokes and fake-deep closers.
-- End with the punchline or the funniest implication.""",
-        "target": "Grok-like sports comedy: a funny group-chat read that spots the human contradiction faster than everyone else. Not angry. Not clever-metaphor writing. The laugh comes from making the exact sports behavior sound obviously ridiculous.",
-        "do": "Find the ridiculous behavior under the public line, name the concrete sports mechanism, then land one short laugh beat. Use comic inversion, pressure reveal, fan-coping roast, or absurdly plain sports consequence.",
-        "avoid": "Profanity as the joke, rage, personal abuse, quirky object comedy, random analogies, workplace/legal metaphors, fake-deep closers, and Witty Edge analysis with one joke word added.",
-        "ending": "A short sports-native punchline. It should feel like the funniest guy in the group chat saw the whole angle in one sentence.",
+        "target": "The smile you make when sports gets absurd and everyone else is pretending it is normal.",
+        "do": "Find the weird human detail and understate it like the reader is already in on the joke.",
+        "avoid": "LOL energy, obvious jokes, meme captions, and explaining why the thing is funny.",
+        "ending": "A dry little walk-off line that makes the reader complete the joke.",
     },
     "Annoyed": {
-        "text": """ANNOYED - SHARED IRRITATION MODE:
-- Express clear frustration at a sports decision, excuse, or repeated pattern in a way that channels shared irritation into replies and quote-tweets.
-- Attack the choice, logic, excuse, or pattern, never a person.
-- Preserve the core claim and source details while sharpening the annoyed energy.
-- Sound like Tyler wrote it today: raw, phone-typed, blunt, and human.
-- Let the annoyance create reply pressure through dry irritation and bold contradiction.
-- Strip toxicity, personal attacks, profanity, and doom spirals while preserving the core annoyed point.""",
-        "target": "Shared sports frustration aimed at a decision or pattern, with enough bite to make people pile on without becoming toxic.",
-        "do": "Name the irritating behavior, keep the target on the choice or logic, preserve the source detail, and sharpen the consequence.",
-        "avoid": "Personal attacks, harassment, all-caps fury, profanity, vague 'everyone is stupid' framing, doom spirals, corporate tone, hashtags, links, and over-explaining.",
-        "ending": "A blunt consequence or contradiction line that makes the irritation feel earned.",
+        "target": "Irritated but controlled. The decision, pattern, or excuse is the target, not a person.",
+        "do": "Name the specific thing that is bothering you and why it keeps happening.",
+        "avoid": "Personal insults, harassment, all-caps fury, and broad 'everyone is stupid' framing.",
+        "ending": "A tight consequence line that makes the annoyance feel earned.",
     },
     "Fired-Up": {
-        "text": """FIRED-UP - MONETIZATION-OPTIMIZED FAN FIRE MODE:
-- High-energy fan fire engineered to be contagious and drive replies, reposts, and tribal energy.
-- Strategic ALL CAPS are allowed for emphasis on stakes that spark passion and shares.
-- Preserve the core claim and source details while amplifying viral passion.
-- Sound like Tyler wrote it today: raw, phone-typed, intense, and human.
-- Let fired-up energy create reply and repost pressure through bold intensity and irreverence.
-- Strip profanity, empty hype, threats, and generic motivational-poster language while preserving the passionate core.
-- Fired-Up can be positive. It should create belief, momentum, urgency, and fan buy-in, not default negativity.""",
-        "target": "Fan-first heat with urgency, belief, and a real stake. Positive hype is allowed when the concept is positive.",
-        "do": "Attach the energy to a concrete team/player signal, make the post feel contagious, and end with momentum or challenge.",
-        "avoid": "Motivational-poster language, fake certainty, empty hype, threats, profanity, corporate tone, hashtags, links, and generic rally cries.",
-        "ending": "A strong declarative rally line or challenge that creates tribal energy without begging for replies.",
+        "target": "Fan-first heat with confidence, urgency, and forward motion.",
+        "do": "Sound like you actually care, then point that energy at the next stakes in front of the team.",
+        "avoid": "Motivational-poster language, fake certainty, and empty 'we are so back' hype.",
+        "ending": "A strong statement that dares the timeline to argue without begging for replies.",
     },
     "Skeptical": {
-        "text": """Skeptical:
-SKEPTICAL - QUIET DOUBT MODE:
-- Smart doubt that pressures the popular assumption without sounding like default negativity.
-- Expose the skipped assumption and leave the optimism on trial.
-- The energy is "we have seen this before" and "cool, but prove it when it matters."
-- Sports mode: overhype checks, ref/league suspicion, choking inevitability, this-changes-nothing fatigue, and quiet doubt about the public story.
-- Normal-life mode when needed: dating red flags, self-help scams, productivity lies, social-media fakery, relationship delusions, and adulting skepticism.
-- Use short, blunt beats. Let the doubt sit there.
-- Push the optimism onto the witness stand. Do not rant.
-- Avoid certainty cosplay, "obviously," "guaranteed," generic contrarian framing, or turning into Critical voice.
-- End with a quiet pressure point that makes the claim feel unproven.""",
-        "target": "Smart doubt that pressures the popular assumption without sounding like default negativity.",
-        "do": "Expose the assumption everyone is skipping, ask what has to be true, and leave the optimism on trial.",
-        "avoid": "Cynicism for its own sake, prediction cosplay, 'obviously/guaranteed' certainty, and generic contrarian framing.",
+        "target": "Smart doubt. The kind of raised eyebrow that makes optimistic fans defend the case.",
+        "do": "Expose the assumption underneath the popular take and make the reader sit with it.",
+        "avoid": "Cynicism for its own sake, prediction cosplay, and generic contrarian framing.",
         "ending": "A quiet pressure point, not a dunk.",
     },
     "Critical": {
-        "target": "Clear diagnosis with accountability: firm, specific, and useful without rage bait.",
-        "do": "Name the decision/process failure, connect it to the consequence, and make the critique feel earned by evidence.",
-        "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, 'fire everyone' energy, and generic 'this is bad' framing.",
-        "ending": "A sharp consequence line that makes the diagnosis feel hard to dodge.",
+        "target": "Clear diagnosis. Firm, specific, and accountability-minded without becoming rage bait.",
+        "do": "Name the decision, pattern, or process problem and explain the consequence in plain language.",
+        "avoid": "Personal insults, vague outrage, certainty cosplay, cheap dunking, and generic 'this is bad' framing.",
+        "ending": "A sharp consequence line that makes the diagnosis feel unavoidable.",
     },
     "Promo": {
-        "text": """Promo:
-PROMO VOICE - MONETIZATION-OPTIMIZED CLICK TENSION MODE:
-- Video click-tension mode engineered to build maximum curiosity and click desire without sounding salesy.
-- Sell unresolved tension that makes people want to engage, reply, share, and click.
-- Preserve the core claim and source details while sharpening promo energy.
-- Sound like Tyler wrote it today: raw, phone-typed, intriguing, and human.
+        "text": """PROMO VOICE - VIDEO CLICK TENSION MODE:
+PROMO VOICE RULES:
+- Sell the unresolved tension in the video, not the existence of the video.
+- Make the video feel like the missing third act, not an upload announcement.
 - Start from one specific sports contradiction, decision, stat, film tell, or fan assumption.
-- Tease the juiciest part without spoiling the payoff.
-- Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.
-- Never give away more than the reason to watch. The tweet should sell the unresolved question, not answer it.
-- Promo ending overrides any format rule that asks for a normal engagement closer, hard-period walk-off, or rotated ending type.
-- Strip salesy language and generic clickbait while preserving the core tension.
-- No generic 'new video is up,' 'you won't believe,' 'watch until the end,' 'link in bio,' hashtags, or naked URL begging.""",
-        "target": "A human sports take that makes the video feel like the missing third act and creates unresolved click tension.",
-        "do": "Open with the exact pressure point, name the contradiction or uncomfortable stake, tease the turn before the answer, and stop before the payoff. End by making the viewer need the video to resolve the tension.",
-        "avoid": "Generic marketing, salesy language, cheap clickbait, 'new video is up', 'watch now', 'link below', 'you won't believe', hashtags, naked URLs, recap summaries, creator-speak, and giving away the reveal.",
-        "ending": "A declarative YouTube cliffhanger tied to the video subject. Stop one beat before the answer and make the missing answer the reason to click.",
+- Tease the turn without revealing the payoff. The post should stop one beat before the answer.
+- Preserve Creator Evolution voice: funny, pointed, conversational, phone-written, and specific.
+- Use declarative open loops, not direct engagement questions.
+- No question bait.
+- No fake urgency, no "you won't believe," no "watch until the end," no "link in bio," no hashtags, no generic CTA.
+- If a link is supplied, treat it as attached distribution context. Do not beg for clicks or paste a naked URL unless explicitly requested.
+- Punchy: one compact tension beat, no setup, no question closer.
+- Normal: specific setup -> tension turn -> cliffhanger ending.
+- Long: short setup, stakes, contrast, then stop before the reveal.
+- Thread: each segment advances the tension; final segment points at the unresolved reveal without baiting replies.""",
+        "target": "A human sports take that makes the video feel like the missing third act. The post should create curiosity around one unresolved tension, not advertise the upload.",
+        "do": "Open with the exact pressure point from the video, name the contradiction or uncomfortable stake, tease the turn before the answer, and make the viewer feel the clip/video resolves what the post refuses to finish.",
+        "avoid": "Generic marketing, 'new video is up', 'watch now', 'link below', 'you won't believe', fake urgency, hashtags, naked URLs, recap summaries, thumbnail-copy language, creator-speak, and giving away the final reveal.",
+        "ending": "A declarative cliffhanger tied to the video subject. Stop one beat before the answer. No generic question closer.",
     },
     "Celebratory": {
-        "text": """CELEBRATORY - MONETIZATION-OPTIMIZED VICTORY LAP MODE:
-- Cocky victory lap engineered to be loud, smug, and dominant in a way that drives tribal replies, reposts, and quote-tweets.
-- Celebrate the exact winning detail to spark group celebration or debate.
-- Preserve the core claim and source details while amplifying celebration.
-- Sound like Tyler wrote it today: raw, phone-typed, smug, confident, and human.
-- Let the celebration create reply and repost energy through bold smugness or dry humor.
-- Strip generic positivity while preserving the specific celebratory point.""",
-        "target": "Specific joy and cocky confidence that feels earned, shareable, and tied to the exact winning detail.",
-        "do": "Celebrate the exact detail that changed the mood, add swagger, and connect it to what it unlocks next.",
-        "avoid": "Corporate hype, generic positivity, empty 'let's go' filler, 'massive/unreal/so back' defaults, hashtags, links, and victory laps with no specific reason.",
-        "ending": "A smug payoff, victory stab, or forward statement with a specific emotional charge.",
+        "target": "Happy without becoming generic hype. Specific joy beats generic excitement.",
+        "do": "Celebrate the exact detail that made the moment feel different.",
+        "avoid": "Corporate hype words, victory-lap cliches, and empty 'let's go' filler.",
+        "ending": "A specific emotional payoff or forward statement.",
     },
     "Deadpan": {
-        "text": """Deadpan:
-DEADPAN - AGGRESSIVE DRY HUMOR MODE:
-- Bone-dry comedy engineered to be straight-faced, compact, and quietly ridiculous.
-- Sound like a robot or very tired news anchor calmly reading the most normal factual observation in the world, even when the observation is absurd, bleak, or ironic.
-- Zero emotion. Zero emojis. Zero lol. Zero exclamation points. Zero winking at the joke.
-- Treat ridiculous sports things like they are Tuesday.
-- Make the deadpan extremely witty through flat, declarative contrast, not through visible joke setup.
-- Preserve the core claim and source details while sharpening the dry delivery.
-- Strip hype and explanation while preserving the deadpan point that creates surprise, relatability, and replies.""",
-        "target": "Aggressive deadpan humor: emotionless, flat, witty, and absurdly factual.",
-        "do": "Say the absurd sports truth as plainly as possible, like a tired news anchor reading a routine update, then stop.",
-        "avoid": "Emotion, exclamation marks, emojis, winking, lol, hype, explaining the punchline, and obvious joke setup.",
-        "ending": "A flat hard stop or tiny bleak beat that gets funnier because it is underplayed.",
+        "target": "Straight-faced, compact, and quietly ridiculous.",
+        "do": "Say the absurd part as plainly as possible and stop before explaining it.",
+        "avoid": "Exclamation marks, emojis, winking, 'lol', and punchline explanation.",
+        "ending": "A hard stop or tiny unfinished thought that gets funnier because it is underplayed.",
     },
     "Sarcastic": {
-        "text": """SARCASTIC VOICE - FAKE ENTHUSIASM MODE:
-- Dry humor engineered to reveal the sports truth through fake enthusiasm, brutal exaggeration, and zero chill.
-- Sound like a deranged cheerleader who has had three Red Bulls and is ecstatic about the dumpster fire in front of them.
-- Every word should drip with contempt disguised as joy.
-- Use Cultural Leap for positive moments or Implied Real Story for negative moments, but make the sarcasm obvious enough to actually land.
-- Never explain. Sarcasm must create debate, agreement, or quote-tweet energy.
-- Preserve the core claim and source details while sharpening the sarcastic edge.
-- Strip explanatory language while preserving the sarcastic truth.
-- No generic sarcastic openers, copied examples, direct personal insults, hashtags, links, corporate tone, over-explaining, or polished punctuation.""",
-        "target": "Fake enthusiasm plus brutal exaggeration that reveals the real sports story underneath.",
-        "do": "Sound weirdly thrilled about the obvious problem, imply the real story clearly, and walk away before explaining it.",
-        "avoid": "Generic sarcastic openers, joke explanation, copied examples, direct insults, fallback default voice, corporate tone, hashtags, links, and polished punctuation.",
-        "ending": "A contempt-disguised-as-joy walk-off. Drop it and walk away.",
+        "text": """SARCASTIC VOICE — DRY HUMOR MODE:
+SARCASTIC VOICE RULES:
+- Two modes: Cultural Leap (positive moments) or Implied Real Story (negative moments)
+- Cultural Leap: Jump to a completely unrelated world. Specific person in a specific human situation. Never explain.
+- Implied Real Story: State the surface story as if neutral. Imply the real story underneath. Never state it directly.
+- Never use generic openers like "Oh interesting" "Sure" "Cool" "Oh great"
+- Never copy old sarcastic examples, sentence frames, or punchline structures.
+- Drop it and walk away. Never explain the joke.""",
+        "target": "Creator Evolution dry sarcasm: implied real story or unexpected cultural leap, without copied examples.",
+        "do": "Use Cultural Leap for positive moments or Implied Real Story for negative moments.",
+        "avoid": "Generic sarcastic openers, joke explanation, copied examples, direct insults, and fallback default voice.",
+        "ending": "Drop it and walk away. Never explain the joke.",
     },
 }
 
 FORMAT_RECIPES = {
     "Punchy Tweet": {
-        "target": "70-160 characters. One sharp, complete reaction with a visible tension, joke, or contradiction.",
-        "structure": "No setup paragraph. No line breaks. One or two sentences that land fast and feel typed on a phone, with varied openings and endings across options.",
-        "must": "Every option must make one specific point, create curiosity without asking for engagement, and choose the punchy structure that fits the idea.",
-        "avoid": "Explaining context, adding a second angle, soft qualifiers, generic hype, vague reaction-caption energy, or using the same punchline rhythm every time.",
+        "target": "70-160 characters. One sharp thought. One or two sentences maximum.",
+        "structure": "No setup paragraph. No line breaks. Compress until it feels like a phone post.",
+        "must": "Every option must be under 160 characters and must not read like a normal-length tweet.",
+        "avoid": "Explaining the context, adding a second angle, threads, or soft qualifiers.",
     },
     "Normal Tweet": {
         "target": "161-260 preferred characters. Hard validator tolerance: 140-280.",
-        "structure": "Preferred shape is two or three natural sentences, then one intentional line break, then one final statement that invites engagement without asking a direct question. Strong one-paragraph versions are allowed when they sound more natural.",
-        "must": "Every option must choose the structure that fits the idea, vary the final line type, and avoid making all Normal Tweets look like the same AI formula. The final line must create response pressure through a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait. Ellipsis endings are allowed and often good, but rotate with hard-period tension lines.",
-        "avoid": "Going over 280 characters, thread markers, repeated blank-line cadence, direct question closers, engagement bait, perfect essay punctuation, or ending every option with ellipsis.",
+        "structure": "One compact phone-style post. Usually 2-3 sentences in one paragraph, or one intentional paragraph break maximum.",
+        "must": "Every option must use the extra space without turning into a stacked template.",
+        "avoid": "Going over 280 characters, thread markers, article-style paragraphing, or repeated blank-line cadence.",
     },
     "Long Tweet": {
         "target": "261-700 preferred characters. Hard validator tolerance: 260-900.",
-        "structure": "Opening take, 2-3 short evidence/contrast beats, then a memorable closing turn. Vary whether the final turn is consequence, irony, tension, or a clean walk-off.",
-        "must": "Every option must reward the extra length with escalation, specificity, and a structure that fits the idea instead of a fixed long-tweet template.",
-        "avoid": "Thread markers, article headings, recap paragraphs, filler transitions, stretching one normal tweet into a bloated post, or repeating the same final-turn formula.",
+        "structure": "Opening take, short supporting beat, contrast or consequence, closing pressure line.",
+        "must": "Every option must be clearly longer than a Normal Tweet, but learned mature profiles can tighten the exact range.",
+        "avoid": "Thread markers, article headings, or empty recap paragraphs.",
     },
     "Thread": {
         "target": "4-7 tweets. Each tweet must stand alone and stay under 280 characters.",
-        "structure": "Separate tweets with ---TWEET---. Tweet 1 hooks the tension, middle tweets escalate or reframe, final tweet lands the takeaway, but the sequence should vary by topic.",
-        "must": "Every option must contain at least 4 tweet segments, each segment must earn its slot with a new beat, and the thread arc must fit the idea.",
-        "avoid": "One long paragraph, numbered article sections, repeated setup lines, a normal tweet chopped into pieces, or the same hook-middle-close pattern every time.",
+        "structure": "Separate tweets with the exact marker ---TWEET--- inside each option.",
+        "must": "Every option must contain at least 4 tweet segments separated by ---TWEET---.",
+        "avoid": "One long paragraph, article headings, or a normal tweet pretending to be a thread.",
     },
     "Article": {
         "target": "700-1,200 words per option. A real X Article/short column, not a tweet.",
-        "structure": "Headline, sharp intro, 3-5 section headings, concrete examples or consequences, and a closing take worth remembering. Vary the section rhythm and argument path by topic.",
-        "must": "Every option must read like a complete opinion column with a clear argument, no invented facts, and an article shape chosen for the idea.",
-        "avoid": "Tweet-length output, thread markers, generic newsletter tone, filler sections, a headline attached to a caption, or a reusable article skeleton.",
+        "structure": "Headline, intro, 3-5 section headings, and a closing take.",
+        "must": "Every option must read like a complete article draft with section structure.",
+        "avoid": "Tweet-length output, thread markers, or a short caption with a headline.",
     },
 }
+
+
 
 
 VOICE_TUNER_TEST_SCENARIOS = {
@@ -1221,7 +1162,7 @@ def _specificity_signal_count(text: str) -> int:
 def polished_punctuation_hits(text: str) -> list[str]:
     clean = str(text or "").replace("---TWEET---", "")
     checks = (
-        ("hyphen/dash", r"[-–—]"),
+        ("hyphen/dash", r"(?<!\d)[-–—](?!\d)"),
         ("semicolon", r";"),
         ("colon", r":"),
         ("parentheses", r"[()]"),
@@ -2654,102 +2595,6 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         "- Extract the strongest take and write from scratch; do not simply rephrase the form fields.\n"
         "- Each option should be a different angle or structure, not three small edits of the same draft.\n"
     ) if is_build else ""
-    comedic_contract = (
-        "\nCOMEDIC LANE HARD RULES:\n"
-        "- MASTER GOAL: Write like the funniest sports guy in the group chat found the obvious contradiction before everyone else. The job is not to sound edgy. The job is to be funny because the sports behavior is ridiculous.\n"
-        "- FAILURE MODES TO AVOID: angry ranting, swear-word comedy, quirky metaphor comedy, fake-deep analysis, and punchlines that need explanation.\n"
-        "- SOLUTION: identify the public claim, identify the private behavior that contradicts it, identify the exact sports mechanism, then make that contrast sound stupidly obvious in one clean line.\n"
-        "- HARD STANDARD: If the draft would not make a sports group chat smirk without needing a swear word, it is not Comedic yet.\n"
-        "- PRIVATE WORKFLOW: Before choosing the final 3 options, invent at least 8 possible joke turns. Throw away the safe, analytical, slogan-like, and merely clever ones. Return only the 3 with the clearest sports contradiction and real laugh beat.\n"
-        "- These Comedic rules override the generic response-pressure, consequence-line, and debate-bait rules below.\n"
-        "- Comedic means funny first. Sharp, surprising, sports-specific, and fearless, but not angry cosplay or clever writing cosplay.\n"
-        "- The joke must come from the exact sports absurdity in the source: injury trust, QB room behavior, rotation math, non-Jokic minutes, fan coping, coach logic, roster incentives, public messaging, or media framing.\n"
-        "- Use one visible joke engine per option: option 1 pressure reveal, option 2 sports-logic flip, option 3 fan-coping roast.\n"
-        "- Pressure reveal means: public calm line versus the concrete behavior that gives the panic away.\n"
-        "- Sports-logic flip means: make the actual roster, rotation, injury, or game-management consequence expose how dumb the public framing sounds.\n"
-        "- Fan-coping roast means: roast the way fans or the team are trying to talk themselves into something the sport is already disproving.\n"
-        "- Profanity is optional seasoning, never the joke. If removing the swear word kills the line, rewrite it.\n"
-        "- Edge means sharper comic timing and more specific absurdity, not yelling louder.\n"
-        "- Comedy density matters. Cut the setup until only the contradiction and the laugh beat remain.\n"
-        "- Do not settle for the first clean version. Clean is not enough. The line needs a turn that makes the reader think 'that is exactly what this is.'\n"
-        "- A good Comedic tweet has a visible laugh turn: calm claim -> behavior that gives it away, fan coping -> obvious sports reality, or public plan -> embarrassing game consequence.\n"
-        "- The punchline should be a sentence a normal fan could say out loud, not a poetic object line. Bad: 'The transaction wire talks.' Bad: 'QB3 is where the honesty lives.' Bad: 'Bench math stays employed.'\n"
-        "- Use human bluntness over clever phrasing. If the funniest version is simply 'that is not depth, that is insurance,' use that instead of a metaphor.\n"
-        "- Do not add a detached short tagline after the tweet. The punchline belongs inside the real sentence, not as a slogan under it.\n"
-        "- Short human comparisons are allowed only when they make the denial funnier immediately. They must be one quick turn, not a whole analogy. No recycled office, haunted, legal, bureaucracy, dating-app, or random-household bits.\n"
-        "- Prefer one compact paragraph for Comedic Normal unless the final line is genuinely funnier than the paragraph version.\n"
-        "- Across the 3 Normal Tweet options, at most one may use a blank-line final beat. The other options should land the joke inside a compact paragraph so they do not all look like the same AI template.\n"
-        "- If an option sounds like a normal Witty Edge tweet, rewrite it with a more human comic turn before returning JSON.\n"
-        "- No random analogies unless they are tightly human and instantly funny. No office, haunted house, fire, basement, paperwork, press release, court, museum, restaurant, rental car, school-test, homework, or object-personality crutches.\n"
-        "- Ban bureaucracy, legal, and workplace metaphor comedy: no memo, staff, team statement, official statement, diplomatic immunity, protection, meeting, paperwork, or press release bits.\n"
-        "- Prefer sports actions and consequences over sports objects: adding a QB, limiting reps, changing goalies, burning a timeout, surviving non-Jokic possessions, changing a rotation, protecting a roster spot.\n"
-        "- Prefer sports consequences over metaphor: extra QB, QB3, limited reps, active list, non-Jokic stretch, timeout, substitution, rotation, bench unit, possession, practice script, or transaction wire.\n"
-        "- Do not write around the joke with 'sounds great,' 'feels like,' 'the real tell,' 'the truth is,' or any setup that announces analysis. Just say the funny thing.\n"
-        "- Do not literalize idioms from the source. If the source says 'everything is on the table,' do not make table, furniture, museum, velvet rope, folding chair, or under-the-table jokes.\n"
-        "- Do not reuse ankle-as-speaker/document jokes. No ankle press conference, ankle press release, ankle progress report, or ankle filing paperwork.\n"
-        "- Do not make body parts, injuries, depth charts, benches, rotations, transactions, or abstract truth act like people. No ankle emotions, depth charts hearing things, benches receiving memos, or truth wandering into the room.\n"
-        "- Do not end with abstract-object personification. Depth chart, scouting report, split, calm, update, transaction wire, bench math, speech, plan, trust, rotation, hot hand, and crease cannot sweat, talk, report, write, vote, breathe, live, pretend, wear, or put on pads.\n"
-        "- No detached final-line label unless it is a complete human sentence a fan would actually text. Reject 'That is panic in goalie gear,' 'cover your reps football,' 'batting order denial,' and similar caption lines.\n"
-        "- Literalizing team spin must end in a real sports consequence, not object-agency. For injury trust, land on QB-room trust, backup shopping, rep-plan protection, roster insurance, practice-script reality, or active-list behavior.\n"
-        "- For non-Jokic minutes, land on rotation math, Jokic-rest survival, second-unit possessions, timeout panic, shot creation, or bench-stretch consequences.\n"
-        "- If the punchline still works after replacing the named team/player with any random team/player, reject it.\n"
-        "- If the last line sounds like a slogan, a lesson, a diagnosis, or a content-strategy open loop, reject it.\n"
-        "- Good Comedic outputs should pass this test: a sports fan should immediately know the exact play, roster move, injury report, rotation stretch, or team behavior being roasted.\n"
-        "- Do not announce the joke. Never write 'this is funny because,' 'is hilarious because,' 'very funny,' or 'hilarious.' Show the absurdity instead.\n"
-        "- Do not attack private life, protected traits, or a person as a person. Roast the decision, pattern, excuse, rotation, roster math, public messaging, fan coping, or media framing.\n"
-        "- Do not invent crowd counts, percentages, records, timelines, injuries, workouts, trades, or exact minutes. If the source says 'minutes,' do not turn that into 'five minutes' or any exact duration.\n"
-        "- The final beat is the punchline, not a lesson, summary, threat, accusation, or rage closer.\n"
-        "- The final beat must name or clearly imply a concrete sports mechanism. If the closer could work in politics, office drama, or a sitcom, rewrite it.\n"
-        "- Reject anything that sounds like Witty Edge analysis with one joke word added. The reader should know why it is funny without needing the joke explained.\n"
-        "- Ban anger-only closers: 'coward shit,' 'bullshit,' 'goddamn disaster,' 'they lied,' 'got exposed,' 'nobody buys it,' 'same scared shit,' 'zero mercy,' 'eviscerate,' and 'On track my ass.'\n"
-        "- Do not copy any phrase, image, or punchline object from these instructions. The mechanics matter, not the sample wording.\n"
-        "- Mechanic targets only, not reusable lines: pressure reveal, sports-logic flip, fan-coping roast, or absurdly plain sports consequence.\n"
-        "\nCOMEDIC CALIBRATION BAR, MECHANICS ONLY:\n"
-        "- Injury trust: joke from the gap between the calm public update and the team adding real QB insurance.\n"
-        "- Rotation trouble: joke from the gap between big offseason language and the exact stretch where the game keeps falling apart.\n"
-        "- Goalie switch: joke from the gap between claiming stability and changing the crease after one bad night.\n"
-        "- Development excuse: joke from the gap between patient public language and the same matchup flaw showing up every series.\n"
-        "- Do not copy any image, object, or phrase from these mechanics. Turn the current source into a fresh human joke.\n"
-    ) if lane == "Comedic" else ""
-    comedic_voice_contract = (
-        "\nCOMEDIC OVERRIDE:\n"
-        "- Because the selected lane is Comedic, ignore any generic instruction below that asks for response pressure, debate bait, consequence framing, or a dramatic analytical ending.\n"
-        "- The final beat must be the joke. If the last sentence sounds like a lesson, summary, roster diagnosis, or open-loop analysis, rewrite it.\n"
-        "- The final beat must make sense on first read. If a normal sports fan would ask 'what does that even mean,' rewrite it.\n"
-        "- The final beat should usually be 12 words or fewer. If it needs more room, it probably is explaining the joke instead of landing it.\n"
-        "- Do not use a separate short final-line slogan unless that line is the clearest joke in the whole draft. If it reads like a caption, fold the punchline back into the sentence above.\n"
-        "- Prefer 1-2 compact sentences for Punchy and 2-3 compact sentences for Normal. Cut any sentence that explains the joke after it lands.\n"
-    ) if lane == "Comedic" else ""
-    witty_contract = (
-        "\nWITTY EDGE HARD RULES:\n"
-        "- MASTER GOAL: compressed sports observation with a sharp turn. Write less. Explain less. The wit comes from the cut, not the analogy.\n"
-        "- Use direct sports consequence: one rough start reopens the goalie debate, tests staff conviction, exposes whether there is a real plan, forces a choice, changes the rep plan, or changes the rotation.\n"
-        "- Do not use dressed-up metaphors: no HR, office, hallway, room, fire alarm, smoke alarm, check engine light, duct tape, house creak, spin cycle, peace treaty, filing, company email, or hope-as-object bits.\n"
-        "- Do not use crowd, room, fanbase, body-language, silence, tone, vibe, or reaction framing. Write the decision consequence, not how people react to it.\n"
-        "- Do not repeat the logic in a second explanatory sentence. Cut any sentence that says the same thing in cleaner words.\n"
-        "- For Normal Tweet, prefer a direct setup and a short final line. The final line should usually be 6 to 8 words.\n"
-        "- Good Witty Edge endings are compressed and a little funny, like a sharp sports punch. They are not generic lessons, slogans, or abstract conversation lines.\n"
-        "- If an option sounds like an essay, a metaphor bit, or a reaction to the issue instead of the issue itself, rewrite it before returning JSON.\n"
-    ) if lane == "Witty Edge" else ""
-    final_line_rule = (
-        "- Because the selected lane is Comedic, do not optimize the final line for response pressure. Optimize it for a short sports-specific laugh beat."
-        if lane == "Comedic"
-        else "- Because the selected lane is Witty Edge, keep the final line compressed, direct, and a little funny. No metaphor bit, no crowd reaction, no explanation."
-        if lane == "Witty Edge"
-        else "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait."
-    )
-    if lane in {"Critical", "Sarcastic", "Comedic"}:
-        source_preservation_rule = (
-            "- Source freedom for this lane: keep the user's core subject, claim, and factual context, but you may substantially restructure, sharpen, reorder, compress, or reframe the wording to make the selected voice actually work.\n"
-            "- Do not preserve weak phrasing just because it was in the original tweet. For Critical, Sarcastic, and Comedic, the voice may replace the surface wording when a stronger diagnosis, sarcastic turn, or real joke requires it.\n"
-            "- Even with extra freedom, do not drift to a different topic, invent facts, drop essential named teams or players, or reverse the user's stance."
-        )
-    else:
-        source_preservation_rule = (
-            "- Preserve the user's original tweet idea. Unless the input is a structured Build Mode brief, keep the same core claim, subject, stance, and sequence of thought. Improve the wording with the selected voice instead of replacing the tweet with a new angle.\n"
-            "- Keep the majority of the user's original context visible. Do not drop named teams, players, decisions, stakes, caveats, or the main \"what I am saying\" just to make the voice louder or cleaner.\n"
-            "- Voice is a filter, not a reset button. The selected voice should sharpen, compress, punch up, or clarify the user's tweet while still feeling recognizably based on the tweet they gave you."
-        )
     return f"""{opening}
 
 {source_label}:
@@ -2763,7 +2608,7 @@ FORMAT BEHAVIOR:
 
 LEARNED FORMAT PROFILE:
 {format_learning or "- No mature learned profile for this selected format yet. Use the static format behavior until enough real posts mature."}
-Mature metric-derived profiles are allowed input alongside approved rules as calibration only. When a confident learned format profile exists, use it to tune pacing inside the selected format while the static guardrails and hard validator bounds still apply.
+Mature metric-derived profiles are allowed input alongside approved rules. When a mature learned format profile exists, it overrides the preferred static target range while the hard validator bounds still apply.
 
 PERSONALITY LANE:
 {lane}
@@ -2778,45 +2623,31 @@ LEARNED VOICE PROFILE:
 {live_stats_block}
 {sports_ctx}
 {build_rule}
-{comedic_contract}
-{witty_contract}
 
 CREATOR EVOLUTION VOICE CONTRACT:
 - The selected format is mandatory. Length, structure, separators, and article/thread behavior must visibly change when the format changes.
-{source_preservation_rule}
-- Every format has flexibility inside its shape. Pick the structure, opening, and ending that fit the idea instead of forcing the same formula every time.
-- Across the 3 options, vary the visible structure when the selected format allows it. For Normal Tweet, do not make all 3 options use the same line-break skeleton: use a mix such as one clean paragraph, one two-block final-line version, and one compact stepped version only if it sounds natural.
 - Use approved rules plus mature metric-derived profiles; ignore provisional or maturing profile data for generation.
-- If the selected format is Normal Tweet, prefer two or three natural sentences, then one line break, then one final statement that invites engagement without a direct question. Vary the ending type and allow a strong one-paragraph version when it sounds more natural.
-{final_line_rule}
-- Ellipsis is a strong Tyler ending, but it must not be the only ending. Mix ellipsis with hard-period tension lines, contrast lines, prediction lines, and understated walk-offs.
+- If the selected format is Normal Tweet, do not use the old three-stacked-line template. Prefer one compact paragraph or one intentional break only.
 - If the selected lane is Promo, treat supplied YouTube/video links as attached distribution context, not prose. Do not include a naked URL unless explicitly requested.
 - Default personality is witty edge: funny, pointed, sometimes annoyed, sometimes fired-up, but still human and monetization-safe.
-- If the selected lane is Comedic, default personality becomes joke-first sports comedy, not Witty Edge.
 - Sound like a real person posting from their phone, not a content strategy assistant.
 - Use specific human reactions, tension, contradiction, and unfinished thoughts.
 - Prefer declarative open loops over literal question bait.
 - No hashtags, no links unless the user supplied them.
 - No invented stats, rankings, injuries, roster facts, or current-event claims.
 - No corporate polish, LinkedIn cadence, fake balance, symmetrical three-part essay structure, or over-explaining.
-- No polished punctuation in tweet copy. Never use hyphens, dashes, semicolons, colons, parentheses, or bracket-style punctuation. Use plain commas, periods, ellipses, and natural sentence breaks so it sounds like Tyler.
 - Never use these phrases: {", ".join(ANTI_AI_BANNED_PHRASES)}.
 - Never use Hall of Fame tweets, Hall of Fame examples, Hall of Fame hooks, or static HOF benchmark language.
 
 QUALITY GATE:
 - Reject any draft that does not obey the selected FORMAT BEHAVIOR above.
 - Reject any draft that sounds like content strategy instead of something posted from a phone.
-- Reject any draft that uses polished punctuation Tyler would not naturally type, especially hyphens, dashes, semicolons, colons, parentheses, or brackets.
 - Reject generic engagement bait endings like "thoughts?" or "what do you think?"
 - Heated lanes can attack a decision, excuse, pattern, or media narrative; they cannot harass a person.
 - If the lane is Deadpan, underplay it. No exclamation points, no winking, no explanation.
-- If the lane is Comedic, reject any draft that is mainly Witty Edge analysis with a cute ending. It needs a visible joke mechanic and a real punchline.
 
 HIDDEN SELF-CHECK BEFORE FINAL JSON:
 Would this sound normal if posted directly from a phone by a funny, witty, sports-obsessed human? If not, rewrite it before returning.
-If the selected lane is Comedic, also ask: is this actually funny, or just clean sports analysis with a cute ending? If it is not actually funny, rewrite it before returning.
-If the selected lane is Witty Edge, also ask: did I use a metaphor or reaction frame instead of the actual sports consequence? If yes, rewrite it shorter and more direct.
-{comedic_voice_contract}
 
 Return ONLY JSON:
 {{
