@@ -2140,6 +2140,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("blocked_source_recovery", app_text)
         self.assertIn('"starter_fallback"', app_text)
         self.assertIn("camp pressure", app_text)
+        self.assertIn("Matches the Makar practice-update signal.", app_text)
 
     def test_creator_evolution_hot_feed_has_starter_fallback(self):
         app_text = Path("app.py").read_text()

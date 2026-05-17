@@ -10651,11 +10651,18 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
     ])
     text = source_text.lower()
     if "avalanche" in text or re.search(r"\bavs\b", text):
-        avs_state = _ce_avs_context_state(source_text)
-        if avs_state.get("score"):
-            options = _ce_avs_live_fallback_options(avs_state)
+        if "makar" in text:
+            options = [
+                ("Avs practice update says Cale Makar should be good to go. That is the whole board changing. When he is in, every matchup gets cleaner and every mistake gets covered faster.", "Matches the Makar practice-update signal."),
+                ("Makar being good to go is not a small Avs update. That is the difference between surviving shifts and controlling them when the game starts getting uncomfortable.", "Keeps the fallback tied to the selected Makar signal."),
+                ("The Avs getting Makar back changes the math fast. A normal practice update turns into the thing that decides how aggressive Colorado can actually be.", "Source-shaped Makar availability draft."),
+            ]
         else:
-            options = _ce_avs_no_score_fallback_options(avs_state)
+            avs_state = _ce_avs_context_state(source_text)
+            if avs_state.get("score"):
+              options = _ce_avs_live_fallback_options(avs_state)
+            else:
+                options = _ce_avs_no_score_fallback_options(avs_state)
     elif "kroenke" in text or "jokic" in text or "nuggets" in text:
         if "mvp" in text or "gilgeous" in text or "wemby" in text or "wembanyama" in text:
             options = [
