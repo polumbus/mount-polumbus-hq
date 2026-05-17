@@ -10379,6 +10379,76 @@ def _ce_avalanche_pulse_decision(sports_context: str, *, lane: str, fmt: str, re
     }
 
 
+def _ce_starter_pulse_decision(*, lane: str, fmt: str, reason: str = "") -> dict:
+    """Safe sports Pulse fallback when live feeds are polluted or blocked."""
+    try:
+        handle = get_current_handle()
+    except Exception:
+        handle = ""
+    starter = _creator_evolution_starter_hot_ideas()[0]
+    seed = str(starter.get("seed") or starter.get("hook") or starter.get("topic") or "Broncos camp pressure")
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    best = {
+        "id": hashlib.sha1(f"starter-pulse|{seed}".encode("utf-8")).hexdigest()[:14],
+        "topic": starter.get("topic", "Broncos camp pressure"),
+        "summary_text": seed,
+        "sources": ["starter_fallback"],
+        "source_basis": [{
+            "source": "starter_fallback",
+            "text": seed,
+            "url": "",
+            "freshness_status": "starter",
+            "age_hours": 0,
+            "timestamp_missing": False,
+        }],
+        "score": 62.0,
+        "raw_score": 62.0,
+        "weighted_scores": {},
+        "hard_blocks": [],
+        "risk_flags": [],
+        "recommended_action": "tweet",
+        "recommended_lane": _ce_normalize_lane(lane),
+        "recommended_action_path": "reply",
+        "target_action": "reply",
+        "candidate_fit": 62,
+        "oon_readability": 62,
+        "negative_signal_risk": 10,
+        "freshness_score": 8.0,
+        "confidence": 62.0,
+        "why_now": reason or "Live feed sources were blocked, so Pulse is using a safe sports starter angle.",
+    }
+    brief = (
+        "PULSE OPPORTUNITY:\n"
+        f"{best['topic']}\n\n"
+        "RECOMMENDED ACTION:\n"
+        "tweet\n\n"
+        "WHY NOW:\n"
+        f"{best['why_now']}\n\n"
+        "SOURCE BASIS:\n"
+        f"- starter_fallback | starter | {seed}\n\n"
+        "PULSE WRITING CONTRACT:\n"
+        "- Make the tweet about the exact starter sports angle.\n"
+        "- Do not mention crypto, AI agents, trading, betting, or non-sports source pollution.\n"
+        "- Return original standalone tweets only.\n"
+    )
+    return {
+        "version": _ce_pulse_version(),
+        "status": "best_available",
+        "handle": handle,
+        "threshold": 68.0,
+        "checked_at": now_iso,
+        "search_depth": ["blocked_source_recovery", "starter_pulse_fallback"],
+        "signals_checked": 1,
+        "clusters_checked": 1,
+        "best": best,
+        "top_rejected": [],
+        "message": reason or "Pulse used a safe starter angle after blocking polluted live sources.",
+        "brief": brief,
+        "selected_lane": best["recommended_lane"],
+        "selected_format": _normalize_tweet_format(fmt),
+    }
+
+
 def _ce_pulse_source_material(decision: dict) -> str:
     best = decision.get("best") or {}
     action = "save" if str(best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
@@ -10777,7 +10847,7 @@ def _run_creator_evolution_pulse(lane: str | None = None,
         _decision = _ce_pulse_error_decision("Pulse returned an invalid decision shape.")
     if not _ce_pulse_cached_decision_valid(_decision, _ce_pulse_version()):
         _fallback = _ce_avalanche_pulse_decision(_sports_ctx, lane=lane, fmt=fmt, reason="Pulse rejected a blocked or stale selected signal.")
-        _decision = _fallback if isinstance(_fallback, dict) else _ce_pulse_error_decision("Pulse rejected the selected signal as blocked, stale, or off-topic.")
+        _decision = _fallback if isinstance(_fallback, dict) else _ce_starter_pulse_decision(lane=lane, fmt=fmt, reason="Pulse rejected a blocked, stale, or off-topic selected signal.")
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = _ce_normalize_lane(lane or _best.get("recommended_lane"))
     _decision["selected_format"] = _normalize_tweet_format(fmt)

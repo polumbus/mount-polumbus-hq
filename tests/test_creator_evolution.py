@@ -2131,7 +2131,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("ai fund", app_text)
         self.assertIn("zk-trade", app_text)
         self.assertIn("_ce_pulse_cached_decision_valid(_decision, _ce_pulse_version())", runner_block)
-        self.assertIn("Pulse rejected the selected signal as blocked", runner_block)
+        self.assertIn("def _ce_starter_pulse_decision", app_text)
+        self.assertIn("_ce_starter_pulse_decision(lane=lane, fmt=fmt", runner_block)
+        self.assertIn("blocked_source_recovery", app_text)
 
     def test_creator_evolution_hot_feed_has_starter_fallback(self):
         app_text = Path("app.py").read_text()
