@@ -10147,9 +10147,9 @@ def _ce_pulse_meta_language(text: str) -> bool:
 
 CE_PULSE_SOURCE_STOP_TERMS = {
     "about", "after", "again", "against", "already", "and", "are", "because", "before", "being", "could", "every", "final",
-    "first", "from", "have", "headline", "here", "into", "latest", "many", "more", "news", "over", "players", "post",
-    "report", "reports", "says", "source", "sources", "sports", "that", "their", "there", "these", "they",
-    "this", "through", "today", "when", "where", "while", "with", "would",
+    "first", "from", "have", "headline", "here", "into", "keep", "latest", "many", "more", "news", "over", "players", "post",
+    "real", "report", "reports", "says", "showing", "source", "sources", "sports", "that", "their", "there", "these", "they",
+    "this", "through", "today", "under", "when", "where", "while", "with", "would",
 }
 
 CE_PULSE_BROAD_ANCHOR_TERMS = {
@@ -10171,6 +10171,16 @@ def _ce_pulse_source_signature_terms(source_text: str) -> set[str]:
         terms.add(term)
     distinctive = {term for term in terms if term not in CE_PULSE_BROAD_ANCHOR_TERMS}
     return distinctive or terms
+
+
+def _ce_pulse_required_signal_terms(best: dict) -> set[str]:
+    display_terms = _ce_pulse_source_signature_terms(_ce_pulse_display_signal(best))
+    if display_terms:
+        return display_terms
+    return _ce_pulse_source_signature_terms(" ".join([
+        str((best or {}).get("summary_text") or ""),
+        " ".join(str((src or {}).get("text") or "") for src in (best or {}).get("source_basis", []) if isinstance(src, dict)),
+    ]))
 
 
 def _ce_pulse_source_text_blocked(text: str) -> bool:
@@ -10214,7 +10224,7 @@ def _ce_pulse_draft_contract_issues(text: str, decision: dict | None = None) -> 
         str(best.get("summary_text") or ""),
         " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
     ]).lower()
-    signature_terms = _ce_pulse_source_signature_terms(source_text)
+    signature_terms = _ce_pulse_required_signal_terms(best)
     if signature_terms and not any(term in lower or (term.endswith("s") and term[:-1] in lower) for term in signature_terms):
         sample = ", ".join(sorted(signature_terms)[:4])
         issues.append(f"Pulse draft drifted away from the selected signal: {sample}.")

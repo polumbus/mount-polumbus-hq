@@ -2115,8 +2115,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         app_text = Path("app.py").read_text()
         contract_block = app_text.split("def _ce_pulse_draft_contract_issues", 1)[1].split("def _ce_pulse_cached_decision_valid", 1)[0]
 
-        self.assertIn("_ce_pulse_source_signature_terms(source_text)", contract_block)
+        self.assertIn("_ce_pulse_required_signal_terms(best)", contract_block)
         self.assertIn("Pulse draft drifted away from the selected signal", contract_block)
+        self.assertIn("def _ce_pulse_required_signal_terms", app_text)
+        self.assertIn("_ce_pulse_display_signal(best)", app_text)
         self.assertIn("CE_PULSE_BROAD_ANCHOR_TERMS", app_text)
         self.assertIn("CE_PULSE_SOURCE_STOP_TERMS", app_text)
 
