@@ -2120,6 +2120,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("CE_PULSE_BROAD_ANCHOR_TERMS", app_text)
         self.assertIn("CE_PULSE_SOURCE_STOP_TERMS", app_text)
 
+    def test_pulse_blocks_crypto_ai_agent_sources_before_drafting(self):
+        app_text = Path("app.py").read_text()
+        source_block = app_text.split("def _ce_pulse_source_text_blocked", 1)[1].split("def _ce_pulse_draft_contract_issues", 1)[0]
+        runner_block = app_text.split("def _run_creator_evolution_pulse", 1)[1].split('@st.dialog("Build a Tweet"', 1)[0]
+
+        self.assertIn("def _ce_text_has_crypto_or_ai_trading_angle", app_text)
+        self.assertIn("_ce_text_has_crypto_or_ai_trading_angle(clean)", source_block)
+        self.assertIn("on-chain", app_text)
+        self.assertIn("ai fund", app_text)
+        self.assertIn("zk-trade", app_text)
+        self.assertIn("_ce_pulse_cached_decision_valid(_decision, _ce_pulse_version())", runner_block)
+        self.assertIn("Pulse rejected the selected signal as blocked", runner_block)
+
     def test_creator_evolution_hot_feed_has_starter_fallback(self):
         app_text = Path("app.py").read_text()
         hot_block = app_text.split("def _run_creator_evolution_hot_signals", 1)[1].split("def _ce_pulse_error_decision", 1)[0]

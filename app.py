@@ -9173,6 +9173,23 @@ def _ce_text_has_betting_angle(text: str) -> bool:
     return False
 
 
+def _ce_text_has_crypto_or_ai_trading_angle(text: str) -> bool:
+    lower = str(text or "").lower()
+    blocked_terms = (
+        "on-chain", "onchain", "crypto", "blockchain", "defi", "web3", "token", "altcoin",
+        "smart contract", "wallet", "airdrop", "dao", "zk-", "zk proof", "zk-trade",
+        "fund manager", "ai fund", "ai agent", "autonomous ai", "trading strategy",
+        "trading strategies", "trade proof", "verifiability", "$avax", "avax",
+    )
+    if any(term in lower for term in blocked_terms):
+        return True
+    if re.search(r"\b[a-z0-9]+xyz\b", lower):
+        return True
+    if re.search(r"\b(agent|ai)\b.{0,80}\b(trade|trading|fund|manager|proof|verifi)", lower):
+        return True
+    return False
+
+
 def _ce_is_completed_game_context(text: str) -> bool:
     """Reject scoreboard-style finals as live Pulse context."""
     clean = re.sub(r"\s+", " ", str(text or "")).strip()
@@ -10158,7 +10175,7 @@ def _ce_pulse_source_signature_terms(source_text: str) -> set[str]:
 
 def _ce_pulse_source_text_blocked(text: str) -> bool:
     clean = str(text or "").strip()
-    if not clean or _ce_text_has_betting_angle(clean):
+    if not clean or _ce_text_has_betting_angle(clean) or _ce_text_has_crypto_or_ai_trading_angle(clean):
         return True
     english_check = getattr(pulse, "_is_english_source_text", None)
     if callable(english_check):
@@ -10758,6 +10775,9 @@ def _run_creator_evolution_pulse(lane: str | None = None,
     )
     if not isinstance(_decision, dict):
         _decision = _ce_pulse_error_decision("Pulse returned an invalid decision shape.")
+    if not _ce_pulse_cached_decision_valid(_decision, _ce_pulse_version()):
+        _fallback = _ce_avalanche_pulse_decision(_sports_ctx, lane=lane, fmt=fmt, reason="Pulse rejected a blocked or stale selected signal.")
+        _decision = _fallback if isinstance(_fallback, dict) else _ce_pulse_error_decision("Pulse rejected the selected signal as blocked, stale, or off-topic.")
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = _ce_normalize_lane(lane or _best.get("recommended_lane"))
     _decision["selected_format"] = _normalize_tweet_format(fmt)
