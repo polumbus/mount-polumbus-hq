@@ -2121,6 +2121,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_pulse_display_signal(best)", app_text)
         self.assertIn("CE_PULSE_BROAD_ANCHOR_TERMS", app_text)
         self.assertIn("CE_PULSE_SOURCE_STOP_TERMS", app_text)
+        self.assertIn('"icymi"', app_text)
+        self.assertIn('"youtube"', app_text)
 
     def test_pulse_blocks_crypto_ai_agent_sources_before_drafting(self):
         app_text = Path("app.py").read_text()

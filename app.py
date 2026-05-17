@@ -10147,9 +10147,10 @@ def _ce_pulse_meta_language(text: str) -> bool:
 
 CE_PULSE_SOURCE_STOP_TERMS = {
     "about", "after", "again", "against", "already", "and", "are", "because", "before", "being", "could", "every", "final",
-    "first", "from", "have", "headline", "here", "into", "keep", "latest", "many", "more", "news", "over", "players", "post",
-    "real", "report", "reports", "says", "showing", "source", "sources", "sports", "that", "their", "there", "these", "they",
-    "this", "through", "today", "under", "when", "where", "while", "with", "would",
+    "altitude", "first", "from", "good", "have", "headline", "here", "icymi", "into", "keep", "latest", "many", "more",
+    "altitudesr", "new", "news", "over", "player", "players", "post", "practice", "real", "report", "reports", "says", "should", "showing",
+    "source", "sources", "sports", "that", "their", "there", "these", "they", "this", "through", "today", "under",
+    "update", "via", "welcome", "when", "where", "while", "with", "would", "youtube",
 }
 
 CE_PULSE_BROAD_ANCHOR_TERMS = {
