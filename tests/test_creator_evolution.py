@@ -2080,6 +2080,60 @@ class CreatorEvolutionTests(unittest.TestCase):
             if had_terms:
                 setattr(ce, "RISK_TERMS", old_terms)
 
+    def test_pulse_ui_hides_internal_debug_language_from_main_cards(self):
+        app_text = Path("app.py").read_text()
+        pulse_dialog = app_text.split('def _ce_pulse_dialog', 1)[1].split('@st.dialog("What', 1)[0]
+
+        self.assertIn("_ce_pulse_display_signal", pulse_dialog)
+        self.assertIn("Best signal for a", pulse_dialog)
+        self.assertNotIn("Recommended {_action}", pulse_dialog)
+        self.assertNotIn("Risk flags:", pulse_dialog)
+        self.assertNotIn("Candidate fit", pulse_dialog)
+        self.assertNotIn("Anchor {html.escape", pulse_dialog)
+
+    def test_pulse_broncos_fallback_is_source_specific_not_generic(self):
+        app_text = Path("app.py").read_text()
+        fallback_block = app_text.split("def _ce_pulse_local_fallback_drafts", 1)[1].split("def _ce_pulse_finalize_drafts", 1)[0]
+
+        self.assertIn("Illinois", fallback_block)
+        self.assertIn("scouting tell", fallback_block)
+        self.assertIn("Sean Payton", fallback_block)
+        self.assertNotIn("words matter less than the next roster decision", fallback_block)
+        self.assertNotIn("sell patience for only so long", fallback_block)
+
+    def test_pulse_jokic_mvp_fallback_stays_on_mvp_signal(self):
+        app_text = Path("app.py").read_text()
+        fallback_block = app_text.split("def _ce_pulse_local_fallback_drafts", 1)[1].split("def _ce_pulse_finalize_drafts", 1)[0]
+        mvp_block = fallback_block.split('if "mvp" in text', 1)[1].split('elif "adelman" in text', 1)[0]
+
+        self.assertIn("SGA, Jokic and Wemby", mvp_block)
+        self.assertIn("MVP finalist", mvp_block)
+        self.assertNotIn("championship window", mvp_block)
+        self.assertNotIn("roster math", mvp_block)
+
+    def test_pulse_contract_blocks_selected_signal_drift_generically(self):
+        app_text = Path("app.py").read_text()
+        contract_block = app_text.split("def _ce_pulse_draft_contract_issues", 1)[1].split("def _ce_pulse_cached_decision_valid", 1)[0]
+
+        self.assertIn("_ce_pulse_source_signature_terms(source_text)", contract_block)
+        self.assertIn("Pulse draft drifted away from the selected signal", contract_block)
+        self.assertIn("CE_PULSE_BROAD_ANCHOR_TERMS", app_text)
+        self.assertIn("CE_PULSE_SOURCE_STOP_TERMS", app_text)
+
+    def test_creator_evolution_hot_feed_has_starter_fallback(self):
+        app_text = Path("app.py").read_text()
+        hot_block = app_text.split("def _run_creator_evolution_hot_signals", 1)[1].split("def _ce_pulse_error_decision", 1)[0]
+
+        self.assertIn("def _creator_evolution_starter_hot_ideas", app_text)
+        self.assertIn("def _ce_hot_signal_card_from_idea", app_text)
+        self.assertIn("_creator_evolution_starter_hot_ideas()", hot_block)
+        self.assertIn("_ce_hot_signal_card_from_idea(_idea, _lane, _fmt)", hot_block)
+        self.assertIn("starter fallback", app_text)
+        self.assertIn('"creator_relevant"', hot_block)
+        self.assertIn('and item.get("creator_relevant")', hot_block)
+        self.assertIn('if not _pool:', hot_block)
+        self.assertIn('item["negative_signal_risk"] < 80', hot_block)
+
     def test_pulse_tolerates_wrapped_string_and_mixed_signal_shapes(self):
         mixed_tweets = {
             "tweets": [

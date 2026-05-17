@@ -8384,6 +8384,83 @@ def _run_inspiration_claude(_cache_key: str = ""):
     return _ideas, len(_all_tweets), len(_rss_headlines)
 
 
+def _creator_evolution_starter_hot_ideas() -> list[dict]:
+    """Useful Creator Evolution starters when live feed discovery has no safe cards."""
+    return [
+        {
+            "topic": "Broncos camp pressure",
+            "source": "starter fallback",
+            "voice": CANONICAL_TWEET_DEFAULT_VOICE,
+            "seed": "The Broncos finally have real camp pressure at multiple roster spots, and Sean Payton is going to learn fast who can handle it.",
+            "hook": "The Broncos finally have real camp pressure at multiple roster spots.\nThe useful angle is what Payton learns when reputation stops protecting jobs...",
+            "why": "Safe starter angle when live signals are empty",
+        },
+        {
+            "topic": "Nuggets non-Jokic minutes",
+            "source": "starter fallback",
+            "voice": CANONICAL_TWEET_DEFAULT_VOICE,
+            "seed": "The Nuggets can talk about roster flexibility all summer, but the non-Jokic minutes are still the pressure point that decides everything.",
+            "hook": "The Nuggets can talk about roster flexibility all summer.\nThe sharper read is whether the non-Jokic minutes actually change...",
+            "why": "Safe starter angle when live signals are empty",
+        },
+        {
+            "topic": "Avalanche trust decisions",
+            "source": "starter fallback",
+            "voice": CANONICAL_TWEET_DEFAULT_VOICE,
+            "seed": "The Avalanche decisions that matter most are usually the trust decisions nobody wants to admit are already being made.",
+            "hook": "The Avalanche decisions that matter most are usually trust decisions.\nThat is where a lineup choice turns into a real signal...",
+            "why": "Safe starter angle when live signals are empty",
+        },
+        {
+            "topic": "Bo Nix year-two pressure",
+            "source": "starter fallback",
+            "voice": CANONICAL_TWEET_DEFAULT_VOICE,
+            "seed": "Bo Nix does not need perfect conditions in year two. He needs the Broncos to show which parts of the plan are actually built to hold up.",
+            "hook": "Bo Nix does not need perfect conditions in year two.\nThe real test is which parts of Denver's plan actually hold up...",
+            "why": "Safe starter angle when live signals are empty",
+        },
+      ]
+
+
+def _ce_hot_signal_card_from_idea(_idea: dict, lane: str, fmt: str) -> dict:
+    """Build a usable Hot Feed card without depending on live feed scoring success."""
+    _topic = str((_idea or {}).get("topic") or "Creator Evolution starter").strip()
+    _hook = str((_idea or {}).get("hook") or "").strip()
+    _seed = str((_idea or {}).get("seed") or _hook or _topic).strip()
+    _why = str((_idea or {}).get("why") or "Starter angle when live signals are empty").strip()
+    _source = str((_idea or {}).get("source") or "starter fallback").strip()
+    _source_material = _hook or _seed
+    _brief = _ce_build_hot_signal_brief(_topic, _source_material, _source, _why, lane, fmt)
+    return {
+        "topic": _topic,
+        "source": _source,
+        "seed": _seed,
+        "hook": _hook,
+        "why": _why,
+        "brief": _brief,
+        "lane": lane,
+        "format": fmt,
+        "candidate_anchor": _topic,
+        "target_action": "reply",
+        "hot_candidate_score": 58,
+        "candidate_fit": 58,
+        "oon_readability": 58,
+        "negative_signal_risk": 15,
+        "moment_key": "starter_fallback",
+        "source_basis": [_idea],
+        "public_x": {
+            "total": 58,
+            "candidate_fit": 58,
+            "oon_readability": 58,
+            "negative_signal_risk": 15,
+            "candidate_anchor": _topic,
+            "target_action": "reply",
+        },
+        "creator_relevant": True,
+        "confidence_label": "starter",
+    }
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = None,
                                        fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
@@ -8393,6 +8470,7 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
     if not _raw_ideas:
         _raw_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_studio_cache_key)
     _raw_ideas = (_raw_ideas or [])
+    _raw_ideas = _raw_ideas + _creator_evolution_starter_hot_ideas()
     _lane = _ce_normalize_lane(lane)
     _fmt = _normalize_tweet_format(fmt)
     _scored = []
@@ -8422,7 +8500,8 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             _blocked = True
         if "avs" in _combined and any(term in _combined for term in ("crypto", "avalanche token", "blockchain")) and not any(term in _combined for term in ("goalie", "hockey", "mackinnon", "makar", "puck", "nhl")):
             _blocked = True
-        if not any(term in _combined for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar")):
+        _creator_relevant = any(term in _combined for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar"))
+        if not _creator_relevant:
             _penalty += 25
         _algo["total"] = max(0, int(_algo.get("total", 0) or 0) - _penalty)
         if _blocked:
@@ -8444,24 +8523,33 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             "oon_readability": _algo.get("oon_readability", 0),
             "negative_signal_risk": _algo.get("negative_signal_risk", 0),
             "moment_key": _algo.get("moment_key", ""),
-            "source_basis": _basis,
-            "public_x": _algo,
-            "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
-        }
+              "source_basis": _basis,
+              "public_x": _algo,
+              "creator_relevant": _creator_relevant,
+              "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
+          }
         _scored.append(_card)
     _strict = [
         item for item in _scored
-        if item["hot_candidate_score"] >= 62
-        and item["candidate_fit"] >= 60
-        and item["negative_signal_risk"] < 60
-        and item["oon_readability"] >= 55
+      if item["hot_candidate_score"] >= 62
+      and item["candidate_fit"] >= 60
+      and item["negative_signal_risk"] < 60
+      and item["oon_readability"] >= 55
+      and item.get("creator_relevant")
     ]
     _pool = _strict if len(_strict) >= 3 else [
         item for item in _scored
         if item["hot_candidate_score"] >= 55
         and item["candidate_fit"] >= 50
         and item["negative_signal_risk"] < 70
+        and item.get("creator_relevant")
     ]
+    if not _pool:
+        _pool = [
+            item for item in _scored
+            if item["negative_signal_risk"] < 80
+            and item.get("creator_relevant")
+        ]
     _pool.sort(key=lambda item: (
         item.get("hot_candidate_score", 0),
         (item.get("public_x", {}) or {}).get("freshness", 0),
@@ -8470,6 +8558,11 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
         (item.get("public_x", {}) or {}).get("source_triangulation_bonus", 0),
     ), reverse=True)
     _ideas = _pool[:7]
+    if not _ideas:
+        _ideas = [
+            _ce_hot_signal_card_from_idea(_idea, _lane, _fmt)
+            for _idea in _creator_evolution_starter_hot_ideas()[:4]
+        ]
     return _ideas, _n_tweets, _n_heads
 
 
@@ -9017,6 +9110,56 @@ def _ce_pulse_version() -> str:
         return str(getattr(pulse, "PULSE_VERSION", "ce-pulse-app-fallback") or "ce-pulse-app-fallback")
     except Exception:
         return "ce-pulse-app-fallback"
+
+
+CE_PULSE_UI_VERSION = "ce-pulse-ui-v2-source-shaped"
+
+
+def _ce_pulse_clean_source_text(text: str) -> str:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    clean = re.sub(r"^here(?:'|’)s why\s+", "", clean, flags=re.I)
+    clean = re.sub(
+        r"\s+-\s+(The Denver Post|AP News|ESPN|DNVR|9NEWS|CBS Sports|Yahoo Sports|The Athletic).*$",
+        "",
+        clean,
+        flags=re.I,
+    )
+    return clean.strip(" -")
+
+
+def _ce_pulse_display_signal(best: dict) -> str:
+    summary = _ce_pulse_clean_source_text(best.get("summary_text", ""))
+    source_blob = " ".join(
+        _ce_pulse_clean_source_text((src or {}).get("text", ""))
+        for src in best.get("source_basis", [])
+        if isinstance(src, dict)
+    )
+    blob = f"{summary} {source_blob}".lower()
+    if "broncos" in blob and "illinois" in blob:
+        return "Broncos keep showing a real Illinois pipeline under Sean Payton."
+    if "broncos" in blob and "payton" in blob:
+        return "Broncos roster building is starting to show a clear Sean Payton pattern."
+    if "nuggets" in blob and ("jokic" in blob or "kroenke" in blob):
+        return "Nuggets roster pressure is turning into a real offseason decision point."
+    if summary:
+        return summary[:180]
+    return "Fresh Colorado sports signal is active."
+
+
+def _ce_pulse_display_why_now(best: dict) -> str:
+    source_count = len(best.get("source_basis") or [])
+    summary = _ce_pulse_clean_source_text(best.get("summary_text", ""))
+    blob = " ".join([summary] + [
+        _ce_pulse_clean_source_text((src or {}).get("text", ""))
+        for src in best.get("source_basis", [])
+        if isinstance(src, dict)
+    ]).lower()
+    if "broncos" in blob and "illinois" in blob:
+        return "Multiple fresh sources point at the same Broncos roster-building pattern."
+    if source_count >= 2:
+        return "Multiple fresh sources point at the same sports tension."
+    why = re.sub(r"\s+", " ", str(best.get("why_now") or "")).strip()
+    return why or "Fresh enough to consider now."
 
 
 def _ce_text_has_betting_angle(text: str) -> bool:
@@ -9985,6 +10128,34 @@ def _ce_pulse_meta_language(text: str) -> bool:
     )
 
 
+CE_PULSE_SOURCE_STOP_TERMS = {
+    "about", "after", "again", "against", "already", "and", "are", "because", "before", "being", "could", "every", "final",
+    "first", "from", "have", "headline", "here", "into", "latest", "many", "more", "news", "over", "players", "post",
+    "report", "reports", "says", "source", "sources", "sports", "that", "their", "there", "these", "they",
+    "this", "through", "today", "when", "where", "while", "with", "would",
+}
+
+CE_PULSE_BROAD_ANCHOR_TERMS = {
+    "avs", "avalanche", "broncos", "buffs", "colorado", "denver", "jokic", "mackinnon", "makar",
+    "nba", "nfl", "nhl", "nix", "nuggets", "payton", "rockies", "sean",
+}
+
+
+def _ce_pulse_source_signature_terms(source_text: str) -> set[str]:
+    """Terms a draft must carry so Pulse cannot drift into a generic team take."""
+    clean = _ce_pulse_clean_source_text(str(source_text or ""))
+    clean = re.sub(r"https?://\S+", " ", clean)
+    clean = re.sub(r"[^A-Za-z0-9' ]+", " ", clean)
+    terms: set[str] = set()
+    for raw in re.findall(r"[A-Za-z][A-Za-z0-9']{2,}", clean):
+        term = raw.lower().strip("'")
+        if not term or term in CE_PULSE_SOURCE_STOP_TERMS:
+            continue
+        terms.add(term)
+    distinctive = {term for term in terms if term not in CE_PULSE_BROAD_ANCHOR_TERMS}
+    return distinctive or terms
+
+
 def _ce_pulse_source_text_blocked(text: str) -> bool:
     clean = str(text or "").strip()
     if not clean or _ce_text_has_betting_angle(clean):
@@ -10026,6 +10197,10 @@ def _ce_pulse_draft_contract_issues(text: str, decision: dict | None = None) -> 
         str(best.get("summary_text") or ""),
         " ".join(str((src or {}).get("text") or "") for src in best.get("source_basis", []) if isinstance(src, dict)),
     ]).lower()
+    signature_terms = _ce_pulse_source_signature_terms(source_text)
+    if signature_terms and not any(term in lower or (term.endswith("s") and term[:-1] in lower) for term in signature_terms):
+        sample = ", ".join(sorted(signature_terms)[:4])
+        issues.append(f"Pulse draft drifted away from the selected signal: {sample}.")
     for handle in re.findall(r"@\w+", clean):
         if handle.lower() not in source_text:
             issues.append("Pulse draft introduces or addresses an unsupported handle.")
@@ -10382,7 +10557,13 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
         else:
             options = _ce_avs_no_score_fallback_options(avs_state)
     elif "kroenke" in text or "jokic" in text or "nuggets" in text:
-        if "adelman" in text:
+        if "mvp" in text or "gilgeous" in text or "wemby" in text or "wembanyama" in text:
+            options = [
+                ("Jokic being an MVP finalist again is the part everyone treats like background noise. That is how absurd the standard has gotten.", "Turns the MVP-finalists signal into a Jokic-standard observation."),
+                ("The MVP finalist list says SGA, Jokic and Wemby. The funniest part is Jokic making this feel normal when it is still completely ridiculous.", "Uses the exact finalists signal without drifting into roster talk."),
+                ("Jokic landing next to SGA and Wemby is the league admitting the old guard and the next wave are fighting over the same award right now.", "Source-specific MVP race angle."),
+            ]
+        elif "adelman" in text:
             options = [
                 ("The Nuggets can say the plan is stable, and maybe it is. The hard part is making stability look different from standing still when Jokic is still carrying the championship window.", "Source-grounded Nuggets press-conference tension."),
                 ("Adelman getting public confidence matters. What matters more is whether the roster around Jokic changes enough to make those words feel like a plan instead of a press conference reset.", "Uses the source topic without inventing facts."),
@@ -10395,11 +10576,18 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
                 ("The Nuggets still have the easiest part of the argument. Jokic keeps the window alive. The rest of the roster has to prove this is not just another version of the same idea.", "Clear original tweet, not a reply or source recap."),
             ]
     elif "broncos" in text or "bo nix" in text or "sean payton" in text:
-        options = [
-            ("The Broncos have reached the part of the offseason where the words matter less than the next roster decision. That is usually where a plan either starts to show up or gets exposed.", "Original Broncos decision-tension fallback."),
-            ("This is where the Broncos' plan has to start showing up in personnel, not just press conference language. The next move says more than the explanation around it.", "Source-grounded but not dependent on AI."),
-            ("The Broncos can sell patience for only so long. Eventually the roster has to show where the real priority is, and that is when the offseason gets honest.", "Reply-ready open loop without a direct question."),
-        ]
+        if "illinois" in text:
+            options = [
+                ("The Broncos going back to Illinois this much is not random. At some point that stops being a fun fact and starts looking like a real scouting tell.", "Turns the Illinois pipeline into a roster-building angle."),
+                ("If Denver keeps circling Illinois players, that is not just trivia. That is Payton showing you where he thinks the roster value is hiding.", "Source-shaped Broncos angle with a clear consequence."),
+                ("The interesting part is not that the Broncos like Illinois players. It is that one pipeline keeps showing up while Payton rebuilds the bottom of the roster.", "Specific Pulse draft from the live source pattern."),
+            ]
+        else:
+            options = [
+                ("The Broncos signal here is not the quote. It is the next roster move that shows which jobs Sean Payton actually thinks are safe.", "Source-shaped Broncos decision-tension fallback."),
+                ("Denver can talk through the plan all it wants. The useful part is watching where Payton adds competition, because that usually tells you who is really on notice.", "Turns the source into a roster-pressure angle."),
+                ("The Broncos story gets clearer when you stop listening for reassurance and start tracking where they keep adding pressure.", "Standalone original tweet from the live Broncos signal."),
+            ]
     else:
         topic = str(best.get("topic") or "Denver sports").strip().title()
         options = [
@@ -10897,26 +11085,36 @@ def _ce_pulse_dialog():
         _lane_pick = _ce_normalize_lane(_lane or _best.get("recommended_lane"))
         _pulse_risk = int(_best.get("negative_signal_risk", 0) or 0)
         _pulse_risk_label = "high" if _pulse_risk >= 70 else "medium" if _pulse_risk >= 45 else "low"
+        _signal_text = _ce_pulse_display_signal(_best)
+        _why_text = _ce_pulse_display_why_now(_best)
         st.markdown(
             f"""
 <div style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:10px;">
-  <div style="font-size:9px;font-weight:800;letter-spacing:1.3px;color:#5a7090;text-transform:uppercase;margin-bottom:6px;">Recommended {_action}</div>
-  <div style="font-size:15px;color:#E2E8F0;line-height:1.55;margin-bottom:8px;">{html.escape(_best.get("summary_text", ""))}</div>
-  <div style="font-size:11px;color:#8FA6C6;line-height:1.5;">Why now: {html.escape(_best.get("why_now", ""))}</div>
-  <div style="font-size:10px;color:#5a7090;margin-top:8px;">Score {float(_best.get("score", 0) or 0):.1f} · Candidate fit {int(_best.get("candidate_fit", 0) or 0)} · OON {int(_best.get("oon_readability", 0) or 0)} · Action path {html.escape(str(_best.get("recommended_action_path") or _best.get("target_action") or "reply"))} · Risk {_pulse_risk_label} · Lane {html.escape(_lane_pick)}</div>
+  <div style="font-size:9px;font-weight:800;letter-spacing:1.3px;color:#5a7090;text-transform:uppercase;margin-bottom:6px;">Best signal for a {_action}</div>
+  <div style="font-size:15px;color:#E2E8F0;line-height:1.55;margin-bottom:8px;">{html.escape(_signal_text)}</div>
+  <div style="font-size:11px;color:#8FA6C6;line-height:1.5;">Why now: {html.escape(_why_text)}</div>
+  <div style="font-size:10px;color:#5a7090;margin-top:8px;">Voice {html.escape(_lane_pick)} · Creator Evolution will write the post below</div>
 </div>
 """,
             unsafe_allow_html=True,
         )
         if _best.get("hard_blocks"):
             st.warning("Blocked: " + ", ".join(str(x) for x in _best.get("hard_blocks", [])[:5]))
-        if _best.get("risk_flags"):
-            st.caption("Risk flags: " + ", ".join(str(x) for x in _best.get("risk_flags", [])[:5]))
-        with st.expander("Source Basis", expanded=False):
+        with st.expander("Pulse details", expanded=False):
+            st.caption(
+                f"Score {float(_best.get('score', 0) or 0):.1f} | "
+                f"Fit {int(_best.get('candidate_fit', 0) or 0)} | "
+                f"Outside-audience readability {int(_best.get('oon_readability', 0) or 0)} | "
+                f"Action path {str(_best.get('recommended_action_path') or _best.get('target_action') or 'reply')} | "
+                f"Risk {_pulse_risk_label}"
+            )
+            if _best.get("risk_flags"):
+                st.caption("Internal flags: " + ", ".join(str(x) for x in _best.get("risk_flags", [])[:5]))
             for _src in (_best.get("source_basis") or [])[:5]:
-                st.caption(f"{_src.get('source', 'source')} | {_src.get('freshness_status', '')} | {_src.get('text', '')}")
+                st.caption(f"{_src.get('source', 'source')} | {_src.get('freshness_status', '')} | {_ce_pulse_clean_source_text(_src.get('text', ''))}")
         _draft_nonce = int(st.session_state.get("_ce_pulse_draft_nonce", 0) or 0)
         _draft_key = hashlib.sha1(json.dumps({
+            "ui_version": CE_PULSE_UI_VERSION,
             "version": _decision.get("version", ""),
             "prompt_version": _ce_prompt_version(),
             "scoring_version": _ce_scoring_version(),
@@ -10956,22 +11154,17 @@ def _ce_pulse_dialog():
         for _idx, _draft_text, _pattern in _draft_items[:3]:
             _report = _pulse_quality.get(f"option{_idx}", {}) or {}
             _char_count = _report.get("char_count", len(str(_draft_text)))
-            _public_x = _report.get("public_x", {}) if isinstance(_report.get("public_x"), dict) else {}
-            _draft_risk = int(_public_x.get("negative_signal_risk", 0) or 0)
-            _draft_risk_label = "high" if _draft_risk >= 70 else "medium" if _draft_risk >= 45 else "low"
             _pick = str(_pulse_drafts.get("pick", "1") or "1")
             st.markdown(
                 f"""
 <div style="border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.035);border-radius:8px;padding:13px;margin-bottom:9px;">
   <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;">
     <div style="font-size:9px;font-weight:800;letter-spacing:1.2px;color:#5a7090;text-transform:uppercase;">Tweet {_idx}</div>
-    <div style="font-size:9px;color:#5a7090;">{int(_char_count)} chars</div>
+      <div style="font-size:9px;color:#5a7090;">{int(_char_count)} chars</div>
+    </div>
+    <div style="font-size:15px;color:#E2E8F0;line-height:1.55;white-space:pre-wrap;">{html.escape(str(_draft_text))}</div>
   </div>
-  <div style="font-size:15px;color:#E2E8F0;line-height:1.55;white-space:pre-wrap;">{html.escape(str(_draft_text))}</div>
-  <div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:8px;">{html.escape(str(_pattern))}</div>
-  <div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:5px;">Anchor {html.escape(str(_public_x.get('candidate_anchor') or _public_x.get('sports_mechanism') or 'unclear'))} · Action {html.escape(str(_public_x.get('target_action') or 'dwell'))} · Risk {_draft_risk_label}</div>
-</div>
-""",
+  """,
                 unsafe_allow_html=True,
             )
             _use_col, _save_col = st.columns([1, 1])
