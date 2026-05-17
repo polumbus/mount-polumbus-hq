@@ -9134,6 +9134,8 @@ def _ce_pulse_display_signal(best: dict) -> str:
         for src in best.get("source_basis", [])
         if isinstance(src, dict)
     )
+    if any((src or {}).get("source") == "starter_fallback" for src in best.get("source_basis", []) if isinstance(src, dict)):
+        return summary[:180] if summary else "Safe sports starter signal is active."
     blob = f"{summary} {source_blob}".lower()
     if "broncos" in blob and "illinois" in blob:
         return "Broncos keep showing a real Illinois pipeline under Sean Payton."
@@ -10679,6 +10681,12 @@ def _ce_pulse_local_fallback_drafts(decision: dict, lane: str, fmt: str) -> list
                 ("The Broncos going back to Illinois this much is not random. At some point that stops being a fun fact and starts looking like a real scouting tell.", "Turns the Illinois pipeline into a roster-building angle."),
                 ("If Denver keeps circling Illinois players, that is not just trivia. That is Payton showing you where he thinks the roster value is hiding.", "Source-shaped Broncos angle with a clear consequence."),
                 ("The interesting part is not that the Broncos like Illinois players. It is that one pipeline keeps showing up while Payton rebuilds the bottom of the roster.", "Specific Pulse draft from the live source pattern."),
+            ]
+        elif "camp pressure" in text or ("camp" in text and "pressure" in text):
+            options = [
+                ("Broncos camp finally has real pressure at multiple spots. That changes everything. Sean Payton is going to find out who likes competition and who just likes a roster spot.", "Matches the camp-pressure starter signal."),
+                ("The Broncos having pressure across camp is the whole point. Depth stops being a slogan when jobs actually start moving.", "Keeps the starter angle on camp competition."),
+                ("Camp pressure is where the Broncos find out what is real. Not who looked safe in May. Who can still hold the job when Payton turns the reps into a problem.", "Source-shaped Broncos camp pressure draft."),
             ]
         else:
             options = [

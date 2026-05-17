@@ -2138,6 +2138,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("def _ce_starter_pulse_decision", app_text)
         self.assertIn("_ce_starter_pulse_decision(lane=lane, fmt=fmt", runner_block)
         self.assertIn("blocked_source_recovery", app_text)
+        self.assertIn('"starter_fallback"', app_text)
+        self.assertIn("camp pressure", app_text)
 
     def test_creator_evolution_hot_feed_has_starter_fallback(self):
         app_text = Path("app.py").read_text()
