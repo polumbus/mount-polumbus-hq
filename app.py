@@ -8165,7 +8165,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-05-18-hot-source-frame-v2"
+_WHATS_HOT_FORMULA_VERSION = "2026-05-18-hot-five-compact-v8"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -8540,7 +8540,24 @@ def _ce_hot_is_promo_source(text: str) -> bool:
         "playing now on youtube",
         "via @youtube",
         "subscribe",
+        "sponsored",
+        "special promotion",
         "promo code",
+        "giveaway",
+        "gift card",
+        "value play",
+        "free pool",
+        "free pools",
+        "weekly mlb pool",
+        "enter to win",
+        "chance to win",
+        "pluckers",
+        "sportspredict",
+        "moneyline",
+        "money line",
+        "parlay",
+        "betting",
+        "wager",
         "live now",
     ))
 
@@ -8869,9 +8886,12 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
         if not raw_source_basis:
             continue
         raw_source_blob = " ".join([str(best.get("summary_text") or "")] + [str(src.get("text") or "") for src in raw_source_basis])
-        if int(best.get("signal_count") or len(raw_source_basis)) < 2:
-            continue
         topic = _ce_hot_topic_from_cluster(best, raw_source_blob)
+        if not any(term in topic.lower() for term in (
+            "broncos", "nuggets", "avalanche", "avs", "rockies", "buffs", "colorado",
+            "denver", "jokic", "makar", "payton", "bo nix", "mackinnon", "coach prime", "deion", "malone",
+        )):
+            continue
         source_basis = [
             src for src in raw_source_basis
             if _ce_hot_source_matches_topic(topic, str(src.get("text") or ""))
@@ -8900,6 +8920,12 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
         best_for_angle = dict(best)
         best_for_angle["summary_text"] = str(source_basis[0].get("text") or best.get("summary_text") or "")
         hook = _ce_hot_angle_from_cluster(best_for_angle)
+        visible_card_text = f"{topic} {hook}".lower()
+        if not any(term in visible_card_text for term in (
+            "broncos", "nuggets", "avalanche", "avs", "rockies", "buffs", "colorado",
+            "denver", "jokic", "makar", "payton", "bo nix", "mackinnon", "coach prime", "deion",
+        )):
+            continue
         signature = re.sub(r"[^a-z0-9]+", " ", f"{topic} {hook}".lower()).strip()[:90]
         if signature in seen:
             continue
@@ -8942,9 +8968,10 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
             "confidence_label": "verified_hot",
         }
         card["quality_scores"] = _ce_hot_quality_scores(card)
-        if not _ce_hot_all_ten(card):
-            continue
-        card["confidence_label"] = "verified_hot"
+        if _ce_hot_all_ten(card):
+            card["confidence_label"] = "verified_hot"
+        else:
+            card["confidence_label"] = "best_available"
         cards.append(card)
         if len(cards) >= 7:
             break
@@ -8986,10 +9013,11 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             lane=_lane,
             fmt=_fmt,
         )
+        _visible_signal = " ".join([_topic, _hook, _seed]).lower()
         _combined = " ".join([_topic, _hook, _seed, _why, _source]).lower()
         _blocked = False
         _penalty = 0
-        if _ce_text_has_betting_angle(_combined) or " prop" in _combined or "props" in _combined:
+        if _ce_text_has_betting_angle(_combined) or " prop" in _combined or "props" in _combined or _ce_hot_is_promo_source(_combined):
             _blocked = True
         if re.match(r"^\s*(replying to|@)", _seed, flags=re.I) or "reply fragment" in _combined:
             _blocked = True
@@ -8997,7 +9025,8 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             _blocked = True
         if "avs" in _combined and any(term in _combined for term in ("crypto", "avalanche token", "blockchain")) and not any(term in _combined for term in ("goalie", "hockey", "mackinnon", "makar", "puck", "nhl")):
             _blocked = True
-        _creator_relevant = any(term in _combined for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar"))
+        _topic_relevant = any(term in _topic.lower() for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar", "coach prime", "deion", "cu "))
+        _creator_relevant = _topic_relevant and any(term in _visible_signal for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "colorado", "denver", "jokic", "bo nix", "mackinnon", "makar", "coach prime", "deion", "cu "))
         if not _creator_relevant:
             _penalty += 25
         _algo["total"] = max(0, int(_algo.get("total", 0) or 0) - _penalty)
@@ -9028,8 +9057,14 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
               "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
           }
         _card["quality_scores"] = _ce_hot_quality_scores(_card)
-        if _ce_hot_all_ten(_card):
-            _scored.append(_card)
+        if _ce_pulse_source_text_blocked(" ".join([_topic, _hook, _seed, _why, _source_material])):
+            continue
+        if int(_card["quality_scores"].get("No-slop safety", 0) or 0) < 8:
+            continue
+        if int(_card["quality_scores"].get("Source integrity", 0) or 0) < 8:
+            continue
+        _card["confidence_label"] = "verified_hot" if _ce_hot_all_ten(_card) else "best_available"
+        _scored.append(_card)
     _strict = [
         item for item in _scored
       if item["hot_candidate_score"] >= 62
@@ -9081,11 +9116,14 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
     if len(_ideas) < _min_hot_cards:
         for _card in _pool:
             _append_card(_card)
-            if len(_ideas) >= 7:
+            if len(_ideas) >= _min_hot_cards:
                 break
-    # Do not pad Hot Feed with starter fallbacks. A smaller all-10 set is safer than
-    # mixing evergreen ideas into a feed the owner expects to be timely and sourced.
-    _ideas = _ideas[:7]
+    if len(_ideas) < _min_hot_cards:
+        for _starter in _creator_evolution_starter_hot_ideas():
+            _append_card(_ce_hot_signal_card_from_idea(_starter, _lane, _fmt))
+            if len(_ideas) >= _min_hot_cards:
+                break
+    _ideas = _ideas[:_min_hot_cards]
     if not _ideas:
         _ideas = []
     return _ideas, _n_tweets, _n_heads
@@ -9659,7 +9697,8 @@ CE_PULSE_UI_VERSION = "ce-pulse-ui-v3-scheduled-guard"
 
 
 def _ce_pulse_clean_source_text(text: str) -> str:
-    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    clean = html.unescape(str(text or ""))
+    clean = re.sub(r"\s+", " ", clean).strip()
     clean = re.sub(r"^here(?:'|’)s why\s+", "", clean, flags=re.I)
     clean = re.sub(
         r"\s+-\s+(The Denver Post|AP News|ESPN|DNVR|9NEWS|CBS Sports|Yahoo Sports|The Athletic).*$",
@@ -11156,6 +11195,31 @@ def _ce_pulse_choice_candidates(decision: dict, *, lane: str, fmt: str, minimum:
             _add(_ce_pulse_starter_choice(idea, lane=lane, fmt=fmt, idx=idx))
             if len(choices) >= minimum:
                 break
+    if len(choices) < minimum:
+        emergency = [
+            {
+                "topic": "Broncos roster pressure",
+                "seed": "The Broncos roster pressure is the safest evergreen Denver sports angle when the live room is thin.",
+                "hook": "The Broncos roster pressure is the safest evergreen Denver sports angle when the live room is thin.",
+                "why": "Emergency Pulse backup",
+            },
+            {
+                "topic": "Nuggets offseason pressure",
+                "seed": "The Nuggets offseason pressure around Jokic is a clean fallback when live sources do not produce enough choices.",
+                "hook": "The Nuggets offseason pressure around Jokic is a clean fallback when live sources do not produce enough choices.",
+                "why": "Emergency Pulse backup",
+            },
+            {
+                "topic": "Colorado sports room read",
+                "seed": "Colorado sports has enough moving parts that Pulse can still offer a safe room-read angle.",
+                "hook": "Colorado sports has enough moving parts that Pulse can still offer a safe room-read angle.",
+                "why": "Emergency Pulse backup",
+            },
+        ]
+        for idx, idea in enumerate(emergency, len(choices) + 1):
+            _add(_ce_pulse_starter_choice(idea, lane=lane, fmt=fmt, idx=idx))
+            if len(choices) >= minimum:
+                break
     return choices[:max(minimum, 5)]
 
 
@@ -11905,7 +11969,11 @@ def _ce_pulse_dialog():
     _status = _decision.get("status", "no_op")
     if _status == "no_op":
         _raw_best = {}
-    _signal_choices = _ce_pulse_choice_candidates(_decision, lane=_lane, fmt=_fmt, minimum=3) if _raw_best else []
+    _signal_choices = _ce_pulse_choice_candidates(_decision, lane=_lane, fmt=_fmt, minimum=3)[:3]
+    if not _raw_best and _signal_choices:
+        _decision = _ce_pulse_decision_for_choice(_decision, _signal_choices[0], lane=_lane, fmt=_fmt)
+        _raw_best = _decision.get("best") or {}
+        _status = _decision.get("status", "best_available")
     if _signal_choices:
         _choice_ids = [str(item.get("_choice_id") or item.get("id") or idx) for idx, item in enumerate(_signal_choices)]
         _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _choice_ids[0])
@@ -11915,7 +11983,7 @@ def _ce_pulse_dialog():
         if st.session_state.get("ce_pulse_signal_choice") not in _choice_ids:
             st.session_state["ce_pulse_signal_choice"] = _selected_signal_id
         _previous_signal_id = st.session_state.get("ce_pulse_selected_signal_id")
-        _selected_signal_id = st.radio(
+        _selected_signal_id = st.selectbox(
             "Choose Pulse Signal",
             _choice_ids,
             index=_selected_idx,
@@ -12170,19 +12238,14 @@ def _ce_inspiration_dialog():
     _all_ideas = st.session_state["ce_inspo_ideas"]
     _n_tweets, _n_heads = st.session_state.get("ce_inspo_meta", (0, 0))
     _page = st.session_state.get("ce_inspo_page", 0)
-    _per_page = 7
+    _per_page = 5
     if _page > 0 and _page * _per_page >= len(_all_ideas):
         _page = 0
         st.session_state["ce_inspo_page"] = 0
     _start = (_page * _per_page) % max(len(_all_ideas), 1)
     _ideas = _all_ideas if len(_all_ideas) <= _per_page else (_all_ideas + _all_ideas)[_start:_start + _per_page]
 
-    st.markdown(
-        f'<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:3px;">What\'s Hot For Creator Evolution</div>'
-        f'<div style="font-size:10px;color:rgba(255,255,255,0.22);margin-bottom:16px;">'
-        f'{_n_tweets} timeline tweets · {_n_heads} news headlines · {_fmt} · {html.escape(_lane)}</div>',
-        unsafe_allow_html=True,
-    )
+    st.caption(f"{len(_all_ideas)} options · {_n_tweets} timeline tweets · {_n_heads} news headlines · {_fmt} · {_lane}")
 
     _badge_styles = {
         "twitter": ("rgba(45,212,191,0.1)", "rgba(45,212,191,0.65)", "rgba(45,212,191,0.18)", "TIMELINE"),
@@ -12232,32 +12295,28 @@ def _ce_inspiration_dialog():
             f"Target action: {_action_label} | "
             f"Why it can rank: {_why_rank or 'fresh source-backed local sports tension'}"
         )
-        _grades_html = _ce_hot_grading_html(_quality_scores)
         _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
+        _hook_preview = re.sub(r"\s+", " ", str(_hook or _seed)).strip()
+        if len(_hook_preview) > 190:
+            _hook_preview = _hook_preview[:187].rstrip(" ,;:") + "..."
+        _why_preview = re.sub(r"\s+", " ", str(_why or _signal_detail or _default_signal_detail)).strip()
+        if len(_why_preview) > 120:
+            _why_preview = _why_preview[:117].rstrip(" ,;:") + "..."
         st.markdown(
-            f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
-              f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">'
-                f'<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.38);">{html.escape(_topic)}</span>'
-                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{html.escape(_source_label)}</span>'
-                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);">{html.escape(_confidence or "Verified Hot")}</span>'
-                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);margin-left:4px;">CE · {html.escape(_lane.upper())}</span>'
+            f'<div style="border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.025);padding:12px 13px;margin-bottom:6px;">'
+              f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">'
+                f'<span style="font-size:10px;font-weight:800;color:#AFC1D8;">{_i + 1}. {html.escape(str(_topic))}</span>'
+                f'<span style="font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px;letter-spacing:0.04em;background:{_bg};color:{_fg};border:1px solid {_border};">{html.escape(_source_label)}</span>'
+                f'<span style="font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px;letter-spacing:0.04em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.74);border:1px solid rgba(45,212,191,0.18);">{html.escape(_confidence or "Hot")}</span>'
+                f'<span style="font-size:8px;color:#6F85A5;margin-left:auto;">{html.escape(_grade_summary)}</span>'
               f'</div>'
-              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:520])}</div>'
-              f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
-              f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
-              f'<div style="font-size:10px;color:rgba(255,255,255,0.50);line-height:1.45;margin-bottom:7px;">{html.escape(_signal_detail or _default_signal_detail)}</div>'
-              f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or _default_action_prompt)}</div>'
-              f'<div style="font-size:10px;color:rgba(175,193,216,0.74);line-height:1.45;margin-bottom:7px;">{html.escape(_public_x_detail)}</div>'
-              f'<div style="border:1px solid rgba(255,255,255,0.06);border-radius:7px;background:rgba(8,14,24,0.42);padding:8px 10px;margin:8px 0;">'
-                f'<div style="font-size:9px;font-weight:900;letter-spacing:1.1px;color:#2DD4BF;text-transform:uppercase;margin-bottom:3px;">1-10 grading system</div>'
-                f'{_grades_html}'
-              f'</div>'
-              f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
+              f'<div style="font-size:14px;color:#E2E8F0;line-height:1.45;margin-bottom:6px;">{html.escape(_hook_preview)}</div>'
+              f'<div style="font-size:10px;color:#7E91AD;line-height:1.35;">{html.escape(_why_preview)}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
 
-        _use_col, _verify_col = st.columns([2, 1])
+        _use_col, _detail_col, _verify_col = st.columns([2, 1, 1])
         with _use_col:
             if st.button("Build With Evolution", key=f"ce_inspo_use_{_i}", use_container_width=True, type="primary"):
                 _build_source = _ce_hot_build_source_text(_idea)
@@ -12266,6 +12325,10 @@ def _ce_inspiration_dialog():
                 st.session_state["ce_lane"] = _lane
                 st.session_state["_ce_pending"] = ("build", _build_source, _fmt, _lane)
                 st.rerun(scope="app")
+        with _detail_col:
+            _show_key = f"ce_inspo_detail_open_{_i}"
+            if st.button("Details", key=f"ce_inspo_details_{_i}", use_container_width=True):
+                st.session_state[_show_key] = not bool(st.session_state.get(_show_key))
         with _verify_col:
             if pplx_available() and st.button("Verify", key=f"ce_inspo_verify_{_i}", use_container_width=True):
                 with st.spinner("Checking..."):
@@ -12274,6 +12337,19 @@ def _ce_inspiration_dialog():
                     st.session_state[f"_ce_inspo_v_{_i}"] = _fci
                 else:
                     st.warning("Verify failed.")
+        if st.session_state.get(f"ce_inspo_detail_open_{_i}"):
+            st.markdown(
+                f'<div style="border-left:2px solid rgba(45,212,191,0.28);padding:7px 10px;margin:0 0 8px 2px;background:rgba(8,14,24,0.24);">'
+                f'<div style="font-size:10px;color:#8FA6C6;line-height:1.45;margin-bottom:5px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
+                f'<div style="font-size:10px;color:#8FA6C6;line-height:1.45;margin-bottom:5px;">{html.escape(_signal_detail or _default_signal_detail)}</div>'
+                f'<div style="font-size:10px;color:#2DD4BF;line-height:1.45;margin-bottom:5px;">Creator action: {html.escape(_action_prompt or _default_action_prompt)}</div>'
+                f'<div style="font-size:10px;color:#AFC1D8;line-height:1.45;margin-bottom:7px;">{html.escape(_public_x_detail)}</div>'
+                f'<div style="font-size:9px;font-weight:900;letter-spacing:1.1px;color:#2DD4BF;text-transform:uppercase;margin-bottom:3px;">1-10 grading system</div>'
+                f'{_ce_hot_grading_html(_quality_scores)}'
+                f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;margin-top:6px;">{html.escape(_diagnostic)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
         _ivr = st.session_state.get(f"_ce_inspo_v_{_i}")
         if _ivr:
             _iva = _ivr["answer"]
@@ -15436,9 +15512,9 @@ def page_creator_evolution():
     st.markdown(
         """
 	<style>
-	[class*="st-key-ce_evolve"], [class*="st-key-ce_build"],
-	[class*="st-key-ce_pulse"], [class*="st-key-ce_whats_hot"], [class*="st-key-ce_save"],
-	[class*="st-key-ce_post_direct"] {
+	[class~="st-key-ce_evolve"], [class~="st-key-ce_build"],
+	[class~="st-key-ce_pulse"], [class~="st-key-ce_whats_hot"], [class~="st-key-ce_save"],
+	[class~="st-key-ce_post_direct"] {
 	  position:absolute!important;width:1px!important;height:1px!important;
 	  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
   padding:0!important;margin:0!important;border:0!important;
