@@ -10,10 +10,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import math
+from pathlib import Path
 import re
 from typing import Any
 
 import creator_evolution_algorithm as cexa
+
+# Keep the legacy `creator_evolution.py` module importable while allowing
+# Creator Evolution-only subpackages such as `creator_evolution.voice_profile_harness`.
+__path__ = [str(Path(__file__).resolve().with_suffix(""))]
 
 STATE_FILENAME = "creator_evolution_state.json"
 GIST_FILENAME = "hq_creator_evolution.json"
@@ -2795,6 +2800,12 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
     lane_behavior = lane_recipe_text(lane)
     format_behavior = format_recipe_text(fmt)
     format_learning = format_learning_text(state, fmt)
+    try:
+        from creator_evolution.profile_loader import approved_profile_prompt_insert
+
+        approved_voice_profile = approved_profile_prompt_insert()
+    except Exception:
+        approved_voice_profile = ""
     action = (action or "evolve").strip().lower()
     is_build = action == "build"
     source_label = "SOURCE MATERIAL" if is_build else "CONCEPT"
@@ -2928,6 +2939,8 @@ LANE BEHAVIOR:
 
 LEARNED VOICE PROFILE:
 {voice_learning_text(state, lane) or "- No mature learned voice profile yet. Use the selected lane behavior and approved rules."}
+
+{approved_voice_profile}
 
 {context}
 {live_stats_block}

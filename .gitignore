@@ -10,6 +10,7 @@ __pycache__/
 .codex_cleanup/
 .harness/
 proxy.log
+data/creator_evolution/voice_profile/
 
 # Local restore/screenshot/tutorial artifacts
 restore_points/
