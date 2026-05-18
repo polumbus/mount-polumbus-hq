@@ -2228,6 +2228,14 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("except TypeError as exc", app_text)
         self.assertNotIn("pulse.pulse_error_decision", app_text)
         self.assertNotIn("pulse.safe_find_pulse(", app_text)
+        self.assertIn("def _ce_pulse_choice_candidates", app_text)
+        self.assertIn("Choose Pulse Signal", app_text)
+        self.assertIn("ce_pulse_use_signal_", app_text)
+        self.assertIn("open_pulse", app_text)
+        self.assertIn("pulse_signal", app_text)
+        self.assertIn("_ce_pulse_decision_for_choice", app_text)
+        self.assertIn("ce_pulse_selected_signal_id", app_text)
+        self.assertIn("minimum: int = 3", app_text)
         self.assertEqual(app_text.count('_append_debug_event("creator_evolution_pulse"'), 1)
 
     def test_pulse_suppresses_duplicate_recent_angle(self):

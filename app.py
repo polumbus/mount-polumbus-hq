@@ -10981,6 +10981,114 @@ def _ce_starter_pulse_decision(*, lane: str, fmt: str, reason: str = "") -> dict
     }
 
 
+def _ce_pulse_choice_signature(best: dict) -> str:
+    return re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        f"{best.get('topic', '')} {best.get('summary_text', '')} {best.get('candidate_anchor', '')}".lower(),
+    ).strip()[:110]
+
+
+def _ce_pulse_choice_label(best: dict, idx: int) -> str:
+    topic = str(best.get("topic") or best.get("candidate_anchor") or "Pulse signal").strip()
+    action = str(best.get("recommended_action_path") or best.get("target_action") or best.get("recommended_action") or "tweet").replace("_", " ")
+    score = float(best.get("score", 0) or 0)
+    summary = _ce_pulse_clean_source_text(str(best.get("summary_text") or ""))
+    if len(summary) > 84:
+        summary = summary[:81].rstrip(" ,;:") + "..."
+    return f"Signal {idx}: {topic} | {action} | {score:.0f} - {summary}"
+
+
+def _ce_pulse_starter_choice(idea: dict, *, lane: str, fmt: str, idx: int) -> dict:
+    seed = str((idea or {}).get("seed") or (idea or {}).get("hook") or (idea or {}).get("topic") or "Colorado sports signal").strip()
+    topic = str((idea or {}).get("topic") or f"Pulse backup {idx}").strip()
+    return {
+        "id": hashlib.sha1(f"pulse-choice-starter|{topic}|{seed}".encode("utf-8")).hexdigest()[:14],
+        "topic": topic,
+        "summary_text": seed,
+        "sources": ["starter_fallback"],
+        "source_basis": [{
+            "source": "starter_fallback",
+            "text": seed,
+            "url": "",
+            "freshness_status": "starter",
+            "age_hours": 0,
+            "timestamp_missing": False,
+        }],
+        "score": max(55.0, 62.0 - idx),
+        "raw_score": max(55.0, 62.0 - idx),
+        "weighted_scores": {},
+        "hard_blocks": [],
+        "risk_flags": ["starter_choice"],
+        "recommended_action": "tweet",
+        "recommended_lane": _ce_normalize_lane(lane),
+        "recommended_action_path": "reply",
+        "target_action": "reply",
+        "candidate_fit": 62,
+        "oon_readability": 62,
+        "negative_signal_risk": 15,
+        "freshness_score": 8.0,
+        "confidence": 62.0,
+        "why_now": "Backup Pulse signal used only when fewer than three live-safe choices are available.",
+    }
+
+
+def _ce_pulse_choice_candidates(decision: dict, *, lane: str, fmt: str, minimum: int = 3) -> list[dict]:
+    choices: list[dict] = []
+    seen: set[str] = set()
+
+    def _add(candidate: dict | None) -> None:
+        if not isinstance(candidate, dict) or not candidate.get("summary_text"):
+            return
+        if candidate.get("hard_blocks"):
+            return
+        source_text = " ".join([
+            str(candidate.get("summary_text") or ""),
+            " ".join(str((src or {}).get("text") or "") for src in candidate.get("source_basis", []) if isinstance(src, dict)),
+        ])
+        if _ce_pulse_source_text_blocked(source_text):
+            return
+        sig = _ce_pulse_choice_signature(candidate)
+        if not sig or sig in seen:
+            return
+        item = dict(candidate)
+        item["_choice_id"] = str(item.get("id") or hashlib.sha1(sig.encode("utf-8")).hexdigest()[:14])
+        seen.add(sig)
+        choices.append(item)
+
+    _add((decision or {}).get("best") or {})
+    for item in (decision or {}).get("top_rejected") or []:
+        _add(item)
+        if len(choices) >= max(minimum, 5):
+            break
+    if len(choices) < minimum:
+        for idx, idea in enumerate(_creator_evolution_starter_hot_ideas(), 1):
+            _add(_ce_pulse_starter_choice(idea, lane=lane, fmt=fmt, idx=idx))
+            if len(choices) >= minimum:
+                break
+    return choices[:max(minimum, 5)]
+
+
+def _ce_pulse_decision_for_choice(decision: dict, choice: dict, *, lane: str, fmt: str) -> dict:
+    selected = dict(decision or {})
+    best = dict(choice or {})
+    best.pop("_choice_id", None)
+    if str(best.get("recommended_action") or "").strip().lower() not in {"save", "tweet"}:
+        best["recommended_action"] = "tweet"
+    best["recommended_lane"] = _ce_normalize_lane(best.get("recommended_lane") or lane)
+    selected["best"] = best
+    selected["selected_lane"] = _ce_normalize_lane(lane or best.get("recommended_lane"))
+    selected["selected_format"] = _normalize_tweet_format(fmt)
+    selected["selected_signal_id"] = str(choice.get("_choice_id") or best.get("id") or "")
+    if selected.get("status") in ("no_op", "pulse_error"):
+        selected["status"] = "best_available"
+    try:
+        selected["brief"] = build_pulse_brief(best, _creator_evolution_state())
+    except Exception:
+        selected["brief"] = str(selected.get("brief") or "")
+    return selected
+
+
 def _ce_pulse_source_material(decision: dict) -> str:
     best = decision.get("best") or {}
     action = "save" if str(best.get("recommended_action") or "").strip().lower() == "save" else "tweet"
@@ -11669,9 +11777,91 @@ def _ce_pulse_dialog():
 
     _decision = st.session_state.get("ce_pulse_decision") or {}
     _n_tweets, _n_heads = st.session_state.get("ce_pulse_meta", (0, 0))
-    _best = _decision.get("best") or {}
+    _raw_best = _decision.get("best") or {}
     _status = _decision.get("status", "no_op")
     if _status == "no_op":
+        _raw_best = {}
+    _signal_choices = _ce_pulse_choice_candidates(_decision, lane=_lane, fmt=_fmt, minimum=3) if _raw_best else []
+    if _signal_choices:
+        _choice_ids = [str(item.get("_choice_id") or item.get("id") or idx) for idx, item in enumerate(_signal_choices)]
+        _query_signal_id = str(st.query_params.get("pulse_signal") or "").strip()
+        _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _query_signal_id or _choice_ids[0])
+        if _query_signal_id in _choice_ids:
+            _selected_signal_id = _query_signal_id
+        if _selected_signal_id not in _choice_ids:
+            _selected_signal_id = _choice_ids[0]
+        _selected_idx = _choice_ids.index(_selected_signal_id)
+        if st.session_state.get("ce_pulse_signal_choice") not in _choice_ids:
+            st.session_state["ce_pulse_signal_choice"] = _selected_signal_id
+        _previous_signal_id = st.session_state.get("ce_pulse_selected_signal_id")
+        _selected_signal_id = st.radio(
+            "Choose Pulse Signal",
+            _choice_ids,
+            index=_selected_idx,
+            key="ce_pulse_signal_choice",
+            format_func=lambda cid: _ce_pulse_choice_label(_signal_choices[_choice_ids.index(str(cid))], _choice_ids.index(str(cid)) + 1),
+            help="Pick the timely signal first; Creator Evolution writes tweets from the selected signal below.",
+        )
+        def _select_pulse_signal(_choice_id: str) -> None:
+            st.session_state["ce_pulse_selected_signal_id"] = _choice_id
+            st.session_state["ce_pulse_signal_choice"] = _choice_id
+            st.session_state.pop("ce_pulse_drafts_key", None)
+            st.session_state.pop("ce_pulse_drafts", None)
+            st.session_state.pop("ce_pulse_draft_quality", None)
+            st.session_state.pop("ce_pulse_draft_raw", None)
+
+        _signal_cols = st.columns(min(3, len(_choice_ids)))
+        for _choice_idx, _choice_id in enumerate(_choice_ids):
+            with _signal_cols[_choice_idx % len(_signal_cols)]:
+                _is_selected_choice = _choice_id == _selected_signal_id
+                st.button(
+                    f"{'Selected' if _is_selected_choice else 'Use'} Signal {_choice_idx + 1}",
+                    key=f"ce_pulse_use_signal_{_choice_idx}",
+                    use_container_width=True,
+                    type="primary" if _is_selected_choice else "secondary",
+                    disabled=_is_selected_choice,
+                    on_click=_select_pulse_signal,
+                    args=(_choice_id,),
+                )
+        _link_bits = []
+        _base_params = {
+            "token": str(st.query_params.get("token") or ""),
+            "user": str(st.query_params.get("user") or "owner"),
+            "page": "Creator Evolution",
+            "open_pulse": "1",
+        }
+        for _choice_idx, _choice_id in enumerate(_choice_ids):
+            _params = dict(_base_params)
+            _params["pulse_signal"] = _choice_id
+            _href = "/?" + urllib.parse.urlencode({k: v for k, v in _params.items() if v})
+            _is_selected_choice = _choice_id == _selected_signal_id
+            _link_bits.append(
+                f'<a href="{html.escape(_href, quote=True)}" target="_self" '
+                f'style="display:inline-block;margin:0 6px 8px 0;padding:7px 10px;border-radius:6px;text-decoration:none;font-size:10px;font-weight:800;letter-spacing:.7px;'
+                f'border:1px solid {"rgba(45,212,191,.45)" if _is_selected_choice else "rgba(255,255,255,.12)"};'
+                f'background:{"rgba(45,212,191,.14)" if _is_selected_choice else "rgba(255,255,255,.04)"};'
+                f'color:{"#2DD4BF" if _is_selected_choice else "#8FA6C6"};">'
+                f'{"Selected" if _is_selected_choice else "Open"} Signal {_choice_idx + 1}</a>'
+            )
+        st.markdown(
+            '<div style="margin:4px 0 12px;">' + ''.join(_link_bits) + '</div>',
+            unsafe_allow_html=True,
+        )
+        _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _selected_signal_id)
+        if _query_signal_id in _choice_ids:
+            _selected_signal_id = _query_signal_id
+        if _previous_signal_id != _selected_signal_id:
+            st.session_state["ce_pulse_selected_signal_id"] = _selected_signal_id
+            st.session_state.pop("ce_pulse_drafts_key", None)
+            st.session_state.pop("ce_pulse_drafts", None)
+            st.session_state.pop("ce_pulse_draft_quality", None)
+            st.session_state.pop("ce_pulse_draft_raw", None)
+            if _previous_signal_id is not None:
+                st.rerun(scope="app")
+        _selected_choice = _signal_choices[_choice_ids.index(_selected_signal_id)]
+        _decision = _ce_pulse_decision_for_choice(_decision, _selected_choice, lane=_lane, fmt=_fmt)
+        _best = _decision.get("best") or {}
+    else:
         _best = {}
     _status_label = {
         "ready": "READY",
@@ -13884,6 +14074,8 @@ def _ce_clear_pulse_state(clear_nonce: bool = False) -> None:
         "ce_pulse_drafts",
         "ce_pulse_draft_quality",
         "ce_pulse_draft_raw",
+        "ce_pulse_selected_signal_id",
+        "ce_pulse_signal_choice",
     ):
         st.session_state.pop(key, None)
     if clear_nonce:
@@ -15163,6 +15355,9 @@ def page_creator_evolution():
 
     if st.session_state.get("_ce_show_build_dialog"):
         _ce_build_dialog()
+
+    if str(st.query_params.get("open_pulse") or "").strip() == "1":
+        st.session_state["_ce_show_pulse"] = True
 
     if st.session_state.pop("_ce_show_pulse", False):
         _ce_pulse_dialog()
