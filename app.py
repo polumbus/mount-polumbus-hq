@@ -10156,6 +10156,13 @@ def _ce_is_promo_lane(lane: str) -> bool:
 
 
 def _ce_source_subject_for_promo(source_text: str) -> str:
+    raw_lines = [
+        line.strip()
+        for line in str(source_text or "").splitlines()
+        if line.strip()
+        and not re.match(r"(?i)^(signal detail|ready hook|ready frame|ready tweet|source proof|qc source-backed|creator action)\s*:", line.strip())
+    ]
+    source_text = "\n".join(raw_lines) if raw_lines else str(source_text or "")
     clean = re.sub(r"https?://\S+", "", str(source_text or ""))
     clean = re.sub(r"#\w+", "", clean)
     clean = re.sub(r"[\[\]{}()]", "", clean)
@@ -10164,6 +10171,14 @@ def _ce_source_subject_for_promo(source_text: str) -> str:
     if not clean:
         return "this roster decision"
     lower_clean = clean.lower()
+    if "sean payton" in lower_clean and "illinois" in lower_clean:
+        return "Sean Payton targeting Illinois players"
+    if "senzatela" in lower_clean and "deadline" in lower_clean:
+        return "Senzatela becoming a Rockies deadline chip"
+    if "broncos" in lower_clean and ("afc west" in lower_clean or "afcw" in lower_clean or "vulnerable" in lower_clean):
+        return "the Broncos AFC West vulnerability question"
+    if "makar" in lower_clean and ("good to go" in lower_clean or "availability" in lower_clean):
+        return "the Cale Makar availability question"
     if "broncos" in lower_clean and "depth" in lower_clean:
         return "the Broncos roster depth claim"
     if "broncos" in lower_clean and ("quarterback" in lower_clean or "qb" in lower_clean or "bo nix" in lower_clean):
