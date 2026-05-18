@@ -2167,6 +2167,9 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("Source proof:", ui_block)
         self.assertIn("QC source-backed", ui_block)
         self.assertIn("_ce_hot_quality_scores", app_text)
+        self.assertIn("def _ce_hot_build_source_text", app_text)
+        self.assertIn("_build_source = _ce_hot_build_source_text(_idea)", ui_block)
+        self.assertIn('st.session_state["_ce_pending"] = ("build", _build_source, _fmt, _lane)', ui_block)
 
     def test_creator_evolution_never_renders_blank_option_shells(self):
         app_text = Path("app.py").read_text()

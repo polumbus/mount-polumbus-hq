@@ -8461,6 +8461,26 @@ def _ce_hot_signal_card_from_idea(_idea: dict, lane: str, fmt: str) -> dict:
     }
 
 
+def _ce_hot_build_source_text(card: dict) -> str:
+    """Human-facing source text for Build With Evolution; excludes internal prompt labels."""
+    topic = str((card or {}).get("topic") or "").strip()
+    hook = str((card or {}).get("hook") or (card or {}).get("seed") or "").strip()
+    action = str((card or {}).get("action_prompt") or "").strip()
+    detail = str((card or {}).get("signal_detail") or "").strip()
+    parts = []
+    if topic:
+        parts.append(topic)
+    if hook:
+        parts.append(hook)
+    if detail and not detail.lower().startswith("starter detail"):
+        parts.append(detail)
+    if action:
+        parts.append(action)
+    clean = "\n".join(parts).strip()
+    clean = re.sub(r"(?im)^(HOT SIGNAL|SOURCE MATERIAL|WHY THIS IS MOVING|FORMAT|PERSONALITY LANE|LANE BEHAVIOR|CREATOR EVOLUTION BUILD RULES):\s*", "", clean)
+    return clean or hook or topic
+
+
 def _ce_hot_quality_scores(card: dict) -> dict:
     source_basis = [src for src in (card.get("source_basis") or []) if isinstance(src, dict)]
     source_text = " ".join(str(src.get("text") or "") for src in source_basis)
@@ -11819,10 +11839,11 @@ def _ce_inspiration_dialog():
         _use_col, _verify_col = st.columns([2, 1])
         with _use_col:
             if st.button("Build With Evolution", key=f"ce_inspo_use_{_i}", use_container_width=True, type="primary"):
-                st.session_state["_ce_text_stage"] = _brief
+                _build_source = _ce_hot_build_source_text(_idea)
+                st.session_state["_ce_text_stage"] = _build_source
                 st.session_state["ce_format"] = _fmt
                 st.session_state["ce_lane"] = _lane
-                st.session_state["_ce_pending"] = ("build", _brief, _fmt, _lane)
+                st.session_state["_ce_pending"] = ("build", _build_source, _fmt, _lane)
                 st.rerun(scope="app")
         with _verify_col:
             if pplx_available() and st.button("Verify", key=f"ce_inspo_verify_{_i}", use_container_width=True):
