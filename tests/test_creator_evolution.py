@@ -2137,6 +2137,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_pulse\")", ce_editor)
         self.assertIn("_ce_clear_pulse_state(clear_nonce=True)", ce_editor)
         self.assertIn("_ce_reset_main_action_state(keep=\"_ce_show_inspiration\")", ce_editor)
+        self.assertIn('data-dock="ce_grades"', ce_editor)
+        self.assertIn('st.button("ce_grades", key="ce_grades")', ce_editor)
+        self.assertIn("_ce_reset_main_action_state(keep=\"_ce_grade_pending\")", ce_editor)
+        self.assertIn("_ce_grades_panel", app_text)
+        self.assertIn("Creator Evolution is grading", app_text)
         self.assertNotIn("var prefixed='dock_'+raw", app_text)
         self.assertNotIn("var prefixed='bot_'+raw", app_text)
 

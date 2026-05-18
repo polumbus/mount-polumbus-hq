@@ -13639,6 +13639,11 @@ def _ce_output_panel(_nonce, action, tweet_text, fmt, lane):
     _ce_output_panel_impl(action, tweet_text, fmt, lane)
 
 
+@st.dialog("Creator Evolution Grades", width="large")
+def _ce_grades_panel(_nonce, action, tweet_text, fmt, lane):
+    _ci_output_panel_impl(action, tweet_text, fmt, lane)
+
+
 @st.dialog("Idea Bank", width="large")
 def _ci_bank_dialog():
     """Idea Bank as a popup modal."""
@@ -14347,6 +14352,7 @@ def _ce_reset_main_action_state(keep: str | None = None) -> None:
         "_ce_show_pulse",
         "_ce_show_inspiration",
         "_ce_pending",
+        "_ce_grade_pending",
         "_ce_reopen_dialog",
     }
     for key in action_flags:
@@ -15559,6 +15565,10 @@ def _render_creator_evolution_editor():
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 14c0-4 4-5 4-10 4 3 6 7 4 11 1-1 2-2 2-4 2 3 2 8-3 10-5 2-10-1-10-6 0-3 2-5 4-7-1 3-1 5-1 6z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">HOT</span><span class="pa-tip">Use Trending Signals With Creator Evolution Voice Rules</span>
           </div>
+          <div class="cs-idock-btn" data-dock="ce_grades" title="Grade your current Creator Evolution draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#5a7090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">GRADES</span><span class="pa-tip">Grade Your Draft On Hook, Voice, And Viral Potential</span>
+          </div>
           <div class="cs-idock-btn" data-dock="ce_save" title="Save draft" style="width:52px;height:52px;border-radius:14px;border:1px solid #1a2a45;background:#0a1220;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 21v-8H7v8M7 3v5h8" stroke="#5a7090" stroke-width="1.8" stroke-linejoin="round"/></svg>
             <span style="position:absolute;bottom:-20px;font-size:10px;color:#5a7090;white-space:nowrap;letter-spacing:0.04em;font-weight:600;">SAVE</span><span class="pa-tip">Save Draft To Idea Bank</span>
@@ -15589,6 +15599,16 @@ def _render_creator_evolution_editor():
             _ce_reset_main_action_state(keep="_ce_show_inspiration")
             st.session_state["_ce_show_inspiration"] = True
             st.rerun(scope="app")
+        if st.button("ce_grades", key="ce_grades"):
+            if tweet_text.strip():
+                _ce_reset_main_action_state(keep="_ce_grade_pending")
+                st.session_state["_ce_grade_pending"] = (
+                    "grades",
+                    tweet_text.strip(),
+                    cur_fmt,
+                    cur_lane,
+                )
+                st.rerun(scope="app")
         if st.button("ce_save", key="ce_save"):
             if tweet_text.strip():
                 ideas = load_json("saved_ideas.json", [])
@@ -15625,14 +15645,14 @@ def page_creator_evolution():
     st.markdown('<div class="tool-desc">A separate learning studio powered by live tweet performance, not Hall of Fame imitation.</div>', unsafe_allow_html=True)
     st.markdown(
         """
-	<style>
-	[class~="st-key-ce_evolve"], [class~="st-key-ce_build"],
-	[class~="st-key-ce_pulse"], [class~="st-key-ce_whats_hot"], [class~="st-key-ce_save"],
-	[class~="st-key-ce_post_direct"] {
-	  position:absolute!important;width:1px!important;height:1px!important;
-	  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
-  padding:0!important;margin:0!important;border:0!important;
-}
+		<style>
+		[class~="st-key-ce_evolve"], [class~="st-key-ce_build"],
+		[class~="st-key-ce_pulse"], [class~="st-key-ce_whats_hot"], [class~="st-key-ce_save"],
+		[class~="st-key-ce_grades"], [class~="st-key-ce_post_direct"] {
+		  position:absolute!important;width:1px!important;height:1px!important;
+		  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
+	  padding:0!important;margin:0!important;border:0!important;
+	}
 </style>
 """,
         unsafe_allow_html=True,
@@ -15669,6 +15689,13 @@ def page_creator_evolution():
         with st.spinner("Creator Evolution is working..."):
             _run_ce_ai(action, text, fmt, lane)
         _ce_output_panel(str(time.time()), action, text, fmt, lane)
+
+    grade_pending = st.session_state.pop("_ce_grade_pending", None)
+    if grade_pending:
+        action, text, fmt, lane = grade_pending
+        with st.spinner("Creator Evolution is grading..."):
+            _run_ci_ai(action, text, fmt, lane)
+        _ce_grades_panel(str(time.time()), action, text, fmt, lane)
 
     reopen = st.session_state.pop("_ce_reopen_dialog", None)
     if reopen:
