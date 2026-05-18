@@ -2161,7 +2161,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('if not _pool:', hot_block)
         self.assertIn('_ideas = []', hot_block)
         self.assertIn("Source proof:", ui_block)
-        self.assertIn("Source-backed grade", ui_block)
+        self.assertIn("QC source-backed", ui_block)
         self.assertIn("_ce_hot_quality_scores", app_text)
 
     def test_pulse_tolerates_wrapped_string_and_mixed_signal_shapes(self):

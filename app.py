@@ -8531,6 +8531,32 @@ def _ce_hot_source_host(url: str) -> str:
     return match.group(1).replace("twitter.com", "x.com")
 
 
+def _ce_hot_source_name(src: dict) -> str:
+    text = str((src or {}).get("text") or "")
+    source = str((src or {}).get("source") or "source").strip()
+    lower = text.lower()
+    if "altitudesr" in lower:
+        return "Altitude Sports Radio"
+    if "denver post" in lower:
+        return "The Denver Post"
+    if "csgazette" in lower or "csgazette" in str((src or {}).get("url") or "").lower():
+        return "Colorado Springs Gazette"
+    if "denvergazette" in lower or "denvergazette" in str((src or {}).get("url") or "").lower():
+        return "Denver Gazette"
+    if "milehighhuddle" in lower or "mhh podcast" in lower:
+        return "Mile High Huddle"
+    if "masedenver" in lower or "@masedenver" in lower:
+        return "MaseDenver"
+    if "dnvr" in lower:
+        return "DNVR"
+    if "espn" in lower:
+        return "ESPN"
+    host = _ce_hot_source_host(str((src or {}).get("url") or ""))
+    if host and host != "news.google.com":
+        return host
+    return source.upper().replace("TWITTER", "TIMELINE")
+
+
 def _ce_hot_source_proof(card: dict) -> str:
     pieces = []
     seen_sources = set()
@@ -8541,11 +8567,12 @@ def _ce_hot_source_proof(card: dict) -> str:
         if not text:
             continue
         source = str(src.get("source") or "source").upper().replace("TWITTER", "TIMELINE")
+        source_name = _ce_hot_source_name(src)
         age = src.get("age_hours")
-        age_text = f"{float(age):.1f}h" if isinstance(age, (int, float)) else ""
+        age_text = f"seen {float(age):.1f}h ago" if isinstance(age, (int, float)) else ""
         host = _ce_hot_source_host(str(src.get("url") or ""))
-        prefix = " ".join(part for part in (source, age_text, host) if part)
-        pieces.append(f"{prefix}: {text[:190]}".strip(": "))
+        prefix = " · ".join(part for part in (source, source_name, age_text, host) if part)
+        pieces.append(f"{prefix}: {text[:320]}".strip(": "))
         seen_sources.add(source.lower())
         if len(pieces) >= 2:
             break
@@ -8576,13 +8603,13 @@ def _ce_hot_why_now(best: dict, source_basis: list[dict]) -> str:
 def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     lower = source_blob.lower()
     if "makar" in lower:
-        return "Build the post around availability vs actual impact, not just the injury update."
+        return "Ready frame: cleared to play is not the same as driving PP1, transition, and top-pair minutes."
     if "senzatela" in lower:
-        return "Build the post around whether Colorado should sell high before the deadline."
+        return "Ready frame: bad teams still create value; the deadline mistake is refusing to sell high."
     if "vulnerable" in lower and "broncos" in lower:
-        return "Build the post around whether Denver's offseason hype survives real AFC West pressure."
+        return "Ready frame: national doubt is only useful if Denver answers it when the AFC West pressure hits."
     if "illinois" in lower and "payton" in lower:
-        return "Build the post around Payton's roster pattern and what it says about trust."
+        return "Ready frame: Payton is not collecting Illini trivia; he is shopping for a type."
     return f"Build the post around the current {topic} tension."
 
 
@@ -8617,8 +8644,8 @@ def _ce_hot_angle_from_cluster(best: dict) -> str:
     lower = combined.lower()
     lead = text or str(best.get("topic") or "Colorado sports signal").strip()
     lead = re.sub(r"\s+", " ", lead).strip()
-    if len(lead) > 150:
-        lead = lead[:147].rstrip(" ,;:") + "..."
+    if len(lead) > 230:
+        lead = lead[:227].rstrip(" ,;:") + "..."
     if "illinois" in lower and "payton" in lower:
         follow = "That is a Sean Payton roster-preference signal, not a random college-football footnote."
     elif "vulnerable" in lower and "broncos" in lower:
@@ -8692,6 +8719,8 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
             if _ce_hot_source_matches_topic(topic, str(src.get("text") or ""))
         ]
         if not source_basis:
+            continue
+        if "payton" in topic.lower() and "illinois" in raw_source_blob.lower():
             continue
         source_blob = " ".join([str(best.get("summary_text") or "")] + [str(src.get("text") or "") for src in source_basis])
         if _ce_pulse_source_text_blocked(source_blob):
@@ -11697,7 +11726,6 @@ def _ce_inspiration_dialog():
         _why = _idea.get("why", "")
         _brief = _idea.get("brief", "")
         _quality_scores = _idea.get("quality_scores") or _ce_hot_quality_scores(_idea)
-        _overall_grade = int(round(sum(int(v or 0) for v in _quality_scores.values()) / max(len(_quality_scores), 1)))
         _source_evidence = _ce_hot_source_proof(_idea)
         _action_prompt = str(_idea.get("action_prompt") or "").strip()
         _confidence = str(_idea.get("confidence_label") or "").replace("_", " ").title()
@@ -11705,9 +11733,10 @@ def _ce_inspiration_dialog():
         _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
         _action_label = str(_idea.get("target_action") or "dwell").replace("_", " ")
         _source_label = _ce_hot_source_label(_idea)
-        _grade_line = " · ".join(f"{html.escape(str(k))} {int(v or 0)}/10" for k, v in _quality_scores.items())
+        _passed_categories = sum(1 for v in _quality_scores.values() if int(v or 0) >= 10)
+        _total_categories = len(_quality_scores)
         _diagnostic = (
-            f"Source-backed grade {_overall_grade}/10 · "
+            f"QC source-backed · {_passed_categories}/{_total_categories} checks passed · "
             f"Pulse score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
             f"Best for {_action_label} · "
             f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
@@ -11727,7 +11756,6 @@ def _ce_inspiration_dialog():
               f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
               f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or "Build the post around this exact source-backed tension.")}</div>'
               f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
-              f'<div style="font-size:9px;color:rgba(111,133,165,0.85);line-height:1.45;margin-top:4px;">{_grade_line}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
