@@ -2084,6 +2084,46 @@ def _x_oauth2_status() -> dict:
     }
 
 
+def _x_direct_post_readiness() -> dict:
+    """Return direct-post readiness without exposing any secret values."""
+    oauth2_status = _x_oauth2_status()
+    oauth1_creds = _x_native_post_credentials()
+    oauth1_ready = all(
+        bool(oauth1_creds.get(name))
+        for name in ("consumer_key", "consumer_secret", "access_token", "access_secret")
+    )
+    oauth2_ready = bool(oauth2_status.get("connected"))
+    missing_oauth1 = [
+        name for name, present in {
+            "X_API_KEY / TWITTER_API_KEY": bool(oauth1_creds.get("consumer_key")),
+            "X_API_SECRET / TWITTER_API_SECRET": bool(oauth1_creds.get("consumer_secret")),
+            "X_ACCESS_TOKEN / TWITTER_ACCESS_TOKEN": bool(oauth1_creds.get("access_token")),
+            "X_ACCESS_TOKEN_SECRET / TWITTER_ACCESS_TOKEN_SECRET": bool(oauth1_creds.get("access_secret")),
+        }.items()
+        if not present
+    ]
+    if oauth2_ready:
+        mode = "official_oauth2"
+        status_text = "Official X OAuth2 is connected."
+    elif oauth2_status.get("configured"):
+        mode = "oauth2_connect_required"
+        status_text = "Official X OAuth2 is configured but your X account is not connected yet."
+    elif oauth1_ready:
+        mode = "oauth1_ready"
+        status_text = "OAuth1 user-context posting credentials are configured."
+    else:
+        mode = "setup_required"
+        status_text = "Direct posting needs a secure X connection before the app can send tweets."
+    return {
+        "ready": oauth2_ready or oauth1_ready,
+        "mode": mode,
+        "status_text": status_text,
+        "oauth2": oauth2_status,
+        "oauth1_ready": oauth1_ready,
+        "missing_oauth1": missing_oauth1,
+    }
+
+
 def _render_x_oauth2_connect_card(*, compact: bool = False) -> None:
     status = _x_oauth2_status()
     if compact:
@@ -2117,6 +2157,35 @@ def _render_x_oauth2_connect_card(*, compact: bool = False) -> None:
         unsafe_allow_html=True,
     )
     st.caption("This opens X's consent screen for tweet.write, tweet.read, users.read, and offline.access.")
+
+
+def _render_x_direct_post_setup(*, intent_url: str = "", expanded: bool = True) -> None:
+    readiness = _x_direct_post_readiness()
+    st.warning(readiness["status_text"])
+    st.caption("No tweet was sent. The secure path is official X OAuth2 with tweet.write permission; browser cookies and proxy posting stay disabled.")
+    with st.expander("Secure X direct-post setup", expanded=expanded):
+        oauth2 = readiness.get("oauth2") or {}
+        st.markdown("**Recommended: Official X OAuth2**")
+        st.dataframe([
+            {"item": "X OAuth app client ID", "ready": bool(oauth2.get("client_id"))},
+            {"item": "Redirect URI", "ready": bool(oauth2.get("redirect_uri"))},
+            {"item": "Encrypted token key", "ready": bool(oauth2.get("token_key"))},
+            {"item": "Connected X account token", "ready": bool(oauth2.get("connected"))},
+            {"item": "Refresh token", "ready": bool(oauth2.get("refresh_token"))},
+        ], use_container_width=True, hide_index=True)
+        if oauth2.get("configured"):
+            _render_x_oauth2_connect_card(compact=True)
+        else:
+            st.info("Add these Streamlit secrets, then redeploy: X_OAUTH2_CLIENT_ID, X_OAUTH2_REDIRECT_URI, and X_OAUTH_TOKEN_KEY. X_OAUTH2_CLIENT_SECRET is recommended for a confidential X app.")
+        if readiness.get("missing_oauth1"):
+            st.caption("Legacy OAuth1 fallback is also not ready. Missing: " + ", ".join(readiness["missing_oauth1"]))
+    if intent_url:
+        st.markdown(
+            f'<a href="{html.escape(intent_url)}" target="_blank" '
+            'style="display:inline-block;padding:8px 14px;border:1px solid rgba(45,212,191,0.45);'
+            'border-radius:8px;color:#2DD4BF;text-decoration:none;font-weight:700;">Manual X Composer Fallback</a>',
+            unsafe_allow_html=True,
+        )
 
 
 def _handle_x_oauth2_callback() -> None:
@@ -2237,20 +2306,15 @@ def _render_post_failure(detail: str, *, prefix: str = "Post failed") -> None:
     if match:
         url = match.group(0)
         clean_detail = detail.replace(url, "").replace("Open in X to post:", "").strip()
-        st.warning(f"{prefix}. Direct posting is unavailable right now, so use the X composer fallback.")
-        st.markdown(
-            f'<a href="{html.escape(url)}" target="_blank" '
-            'style="display:inline-block;padding:9px 16px;background:#2DD4BF;border-radius:9px;'
-            'color:#050810;font-weight:700;text-decoration:none;">Open in X to Post</a>',
-            unsafe_allow_html=True,
-        )
+        st.warning(f"{prefix}. Direct posting needs a secure X connection before this app can send tweets.")
+        _render_x_direct_post_setup(intent_url=url, expanded=True)
         if clean_detail:
             if "No Twitter cookies available" in clean_detail:
                 st.error("Direct X posting needs a fresh X browser session. Open x.com in Chrome while logged in, then wait for the Post Ascend extension to sync cookies or click its extension popup.")
             if "Native X OAuth2:" in clean_detail or "X_OAUTH2" in clean_detail:
-                with st.expander("Connect X securely", expanded=True):
+                with st.expander("Full OAuth diagnostics", expanded=False):
                     _render_x_oauth2_connect_card(compact=True)
-            with st.expander("Why direct posting failed", expanded=True):
+            with st.expander("Why direct posting failed", expanded=False):
                 st.code(clean_detail, language="text")
         return
     st.error(f"{prefix}: {detail}")
@@ -13929,18 +13993,22 @@ def _render_creator_studio_editor():
                 _enc_post = _up_post.quote(tweet_text.strip()[:280])
                 st.markdown(f'<a href="https://twitter.com/intent/tweet?text={_enc_post}" target="_blank" style="display:inline-block;padding:8px 16px;background:#2DD4BF;border-radius:8px;color:#000;font-weight:600;text-decoration:none;">Open in X to Post</a>', unsafe_allow_html=True)
             elif tweet_text.strip():
-                with st.spinner("Posting..."):
-                    _ok, _detail = _post_tweet(tweet_text.strip())
-                if _ok:
-                    if _detail.startswith("https://"):
-                        st.success("Posted to X.")
-                        st.markdown(f"[Open posted tweet]({_detail})")
-                    elif _detail:
-                        st.success(f"Posted to X as @{_detail}.")
-                    else:
-                        st.success("Posted to X.")
+                _post_text = tweet_text.strip()
+                if not _x_direct_post_readiness().get("ready"):
+                    _render_x_direct_post_setup(intent_url=_x_intent_url(_post_text), expanded=True)
                 else:
-                    _render_post_failure(_detail)
+                    with st.spinner("Posting..."):
+                        _ok, _detail = _post_tweet(_post_text)
+                    if _ok:
+                        if _detail.startswith("https://"):
+                            st.success("Posted to X.")
+                            st.markdown(f"[Open posted tweet]({_detail})")
+                        elif _detail:
+                            st.success(f"Posted to X as @{_detail}.")
+                        else:
+                            st.success("Posted to X.")
+                    else:
+                        _render_post_failure(_detail)
 
 
 def page_compose_ideas():
@@ -15493,17 +15561,21 @@ def _render_creator_evolution_editor():
                 st.success("Saved.")
         if st.button("ce_post_direct", key="ce_post_direct"):
             if tweet_text.strip():
+                _post_text = tweet_text.strip()
                 quality = _ce_draft_quality_report(tweet_text.strip(), cur_fmt, cur_lane)
                 if not quality.get("ok"):
                     st.warning("Creator Evolution note only. Posting anyway because you control what goes to X. Note: " + " | ".join(quality.get("issues", [])[:3]))
-                with st.spinner("Posting..."):
-                    ok, detail = _post_tweet(tweet_text.strip())
-                if ok:
-                    st.success("Posted to X.")
-                    if str(detail).startswith("https://"):
-                        st.markdown(f"[Open posted tweet]({detail})")
+                if not _x_direct_post_readiness().get("ready"):
+                    _render_x_direct_post_setup(intent_url=_x_intent_url(_post_text), expanded=True)
                 else:
-                    _render_post_failure(detail)
+                    with st.spinner("Posting..."):
+                        ok, detail = _post_tweet(_post_text)
+                    if ok:
+                        st.success("Posted to X.")
+                        if str(detail).startswith("https://"):
+                            st.markdown(f"[Open posted tweet]({detail})")
+                    else:
+                        _render_post_failure(detail)
 
 
 def page_creator_evolution():
@@ -20080,6 +20152,8 @@ def _gd_render_inline_drafts(prefix: str = "gd_inline") -> None:
                 elif is_guest():
                     enc = urllib.parse.quote(draft)
                     st.session_state["gd_post_message"] = ("success", f"Guest mode: open X composer manually: https://twitter.com/intent/tweet?text={enc}")
+                elif not _x_direct_post_readiness().get("ready"):
+                    st.session_state["gd_post_message"] = ("error", "Direct posting needs a secure X connection first. Open Creator Evolution or Debug and connect official X OAuth2 before posting from Gameday.")
                 else:
                     success, detail = _post_tweet(draft)
                     st.session_state["gd_post_message"] = (
@@ -20255,6 +20329,8 @@ def _gd_draft_dialog(_nonce):
                 if is_guest():
                     enc = urllib.parse.quote(draft)
                     st.markdown(f'<a href="https://twitter.com/intent/tweet?text={enc}" target="_blank">Open in X to Post</a>', unsafe_allow_html=True)
+                elif not _x_direct_post_readiness().get("ready"):
+                    _render_x_direct_post_setup(intent_url=_x_intent_url(draft), expanded=True)
                 else:
                     with st.spinner("Posting..."):
                         post_ok, detail = _post_tweet(draft)
