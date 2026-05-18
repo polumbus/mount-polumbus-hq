@@ -8143,7 +8143,7 @@ def _fetch_inspiration_feed():
 
 
 # ── Format Pattern Analysis ──────────────────────────────────────────────
-_WHATS_HOT_FORMULA_VERSION = "2026-05-15-public-x-action-profile-v1"
+_WHATS_HOT_FORMULA_VERSION = "2026-05-18-hot-source-frame-v2"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_inspo_from_gist(_cache_key: str = "") -> tuple:
@@ -8467,6 +8467,10 @@ def _ce_hot_build_source_text(card: dict) -> str:
     hook = str((card or {}).get("hook") or (card or {}).get("seed") or "").strip()
     action = str((card or {}).get("action_prompt") or "").strip()
     detail = str((card or {}).get("signal_detail") or "").strip()
+    topic_hook_blob = f"{topic} {hook}".lower()
+    if "illinois" in topic_hook_blob and "payton" in topic_hook_blob:
+        detail = "Sean Payton roster-preference pattern; creator angle is player type, not random college trivia."
+        action = "Payton is not collecting Illini trivia; he is shopping for a type."
     parts = []
     if topic:
         parts.append(topic)
@@ -8629,7 +8633,7 @@ def _ce_hot_why_now(best: dict, source_basis: list[dict]) -> str:
 
 
 def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
-    lower = source_blob.lower()
+    lower = f"{topic} {source_blob}".lower()
     if "makar" in lower:
         return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
@@ -8642,7 +8646,7 @@ def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
 
 
 def _ce_hot_signal_detail(topic: str, source_blob: str) -> str:
-    lower = source_blob.lower()
+    lower = f"{topic} {source_blob}".lower()
     if "starter fallback" in lower:
         return "Starter detail: evergreen build idea used only when live source-backed cards are below five."
     if "senzatela" in lower:
