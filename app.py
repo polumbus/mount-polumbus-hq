@@ -8485,6 +8485,71 @@ def _ce_hot_build_source_text(card: dict) -> str:
     return clean or hook or topic
 
 
+CE_HOT_GRADING_CRITERIA = {
+    "Timeliness": "Newest usable source must be inside 24 hours for a 10.",
+    "Relevance": "Must fit the Colorado sports creator audience.",
+    "Signal clarity": "Must name the real sports tension and why it matters.",
+    "Source integrity": "Must have source-backed proof, not evergreen or promo filler.",
+    "Voice fit": "Must fit the selected Creator Evolution voice lane.",
+    "Format fit": "Must fit the selected tweet format.",
+    "Specificity": "Must include named people, team, move, role, or decision pressure.",
+    "Actionability": "Must point to one clear creator action path.",
+    "No-slop safety": "Must avoid stale, blocked, betting, promo, and fallback language.",
+    "Overall quality": "All grading rows must be 10 before the card is promoted.",
+}
+
+
+def _ce_hot_source_age_hours(src: dict) -> float | None:
+    age = (src or {}).get("age_hours")
+    if isinstance(age, (int, float)):
+        return float(age)
+    return None
+
+
+def _ce_hot_source_is_fresh(src: dict, *, max_hours: float = 24.0) -> bool:
+    age = _ce_hot_source_age_hours(src)
+    return age is not None and age <= max_hours
+
+
+def _ce_hot_is_promo_source(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(term in lower for term in (
+        "watch here:",
+        "playing now on youtube",
+        "via @youtube",
+        "subscribe",
+        "promo code",
+        "live now",
+    ))
+
+
+def _ce_hot_all_ten(card: dict) -> bool:
+    scores = card.get("quality_scores") or _ce_hot_quality_scores(card)
+    return bool(scores) and all(int(v) == 10 for v in scores.values())
+
+
+def _ce_hot_grading_html(scores: dict) -> str:
+    rows = []
+    for label, meaning in CE_HOT_GRADING_CRITERIA.items():
+        value = int((scores or {}).get(label, 0) or 0)
+        color = "#2DD4BF" if value == 10 else "#FBBF24" if value >= 8 else "#F87171"
+        rows.append(
+            f'<div style="display:grid;grid-template-columns:minmax(96px,1fr) 34px;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.05);padding:5px 0;">'
+            f'<div><span style="color:#AFC1D8;font-size:10px;font-weight:700;">{html.escape(label)}</span>'
+            f'<div style="color:#5f748f;font-size:9px;line-height:1.35;">{html.escape(meaning)}</div></div>'
+            f'<div style="color:{color};font-size:11px;font-weight:900;text-align:right;">{value}/10</div>'
+            f'</div>'
+        )
+    return "".join(rows)
+
+
+def _ce_hot_grade_summary(scores: dict) -> str:
+    if scores and all(int(v) == 10 for v in scores.values()):
+        return "10/10 across every grade"
+    weak = [f"{k} {int(v)}/10" for k, v in (scores or {}).items() if int(v) < 10]
+    return "Needs: " + ", ".join(weak[:4])
+
+
 def _ce_hot_quality_scores(card: dict) -> dict:
     source_basis = [src for src in (card.get("source_basis") or []) if isinstance(src, dict)]
     source_text = " ".join(str(src.get("text") or "") for src in source_basis)
@@ -8493,6 +8558,8 @@ def _ce_hot_quality_scores(card: dict) -> dict:
         str(card.get("seed") or ""),
         str(card.get("hook") or ""),
         str(card.get("why") or ""),
+        str(card.get("action_prompt") or ""),
+        str(card.get("signal_detail") or ""),
         source_text,
     ])
     lower = combined.lower()
@@ -8505,30 +8572,42 @@ def _ce_hot_quality_scores(card: dict) -> dict:
     has_specific_sports_event = any(term in lower for term in (
         "targeting", "practice", "good to go", "recalled", "deadline", "mvp", "schedule",
         "vulnerable", "roster", "camp", "minutes", "starter", "reliever", "quote", "coach",
+        "trade", "contract", "front office", "cost", "apron", "bench", "lineup", "depth",
     ))
     signal_count = int(card.get("signal_count") or 0)
+    ages = [_ce_hot_source_age_hours(src) for src in source_basis]
+    ages = [age for age in ages if age is not None]
+    newest_age = min(ages) if ages else None
+    accepted_ages = [age for age in ages if age <= 24]
+    has_fresh_source = newest_age is not None and newest_age <= 6
+    has_recent_source = newest_age is not None and newest_age <= 24
+    has_stale_source = bool(ages) and max(ages) > 72
     has_source_depth = len(source_basis) >= 2 or len(sources) >= 2 or signal_count >= 2
+    has_accepted_depth = len(accepted_ages) >= 2 or (len(sources) >= 2 and has_recent_source)
+    has_promo_source = any(_ce_hot_is_promo_source(src.get("text", "")) for src in source_basis)
+    is_starter = str(card.get("confidence_label") or "").lower() == "starter" or "starter fallback" in lower
+    action = str(card.get("target_action") or "").strip()
+    has_single_action = action in {"reply", "dwell", "click", "quote", "share", "repost", "profile_click", "follow", "photo_expand", "video_view"}
     score = {
-        "Timeliness": 10 if "newest signal" in lower or any((src.get("age_hours") or 99) <= 6 for src in source_basis) else 8,
+        "Timeliness": 10 if has_recent_source else 5 if ages else 3,
         "Relevance": 10 if any(term in lower for term in ("broncos", "nuggets", "avalanche", "avs", "rockies", "buffs", "colorado", "denver", "jokic", "makar", "payton")) else 5,
         "Signal clarity": 10 if has_named_trigger and has_specific_sports_event else 7 if has_named_trigger else 4,
-        "Source integrity": 10 if has_source_depth else 8 if source_basis else 3,
+        "Source integrity": 10 if source_basis and has_recent_source and not has_stale_source and not has_promo_source and not is_starter else 8 if source_basis and not is_starter else 3,
         "Voice fit": 10 if card.get("lane") else 7,
         "Format fit": 10 if card.get("format") else 7,
         "Specificity": 10 if has_named_trigger and has_specific_sports_event else 7,
-        "Actionability": 10 if card.get("target_action") in {"reply", "dwell", "click", "quote"} else 8,
-        "No-slop safety": 10 if not _ce_pulse_source_text_blocked(combined) and "starter fallback" not in lower else 3,
+        "Actionability": 10 if has_single_action and card.get("action_prompt") else 8 if has_single_action else 6,
+        "No-slop safety": 10 if not _ce_pulse_source_text_blocked(combined) and not is_starter and not has_stale_source and not has_promo_source else 3,
         "Overall quality": 9,
     }
-    if card.get("confidence_label") == "verified_hot" and min(score.values()) >= 8:
+    core_scores = [value for key, value in score.items() if key != "Overall quality"]
+    if card.get("confidence_label") == "verified_hot" and min(core_scores) >= 10:
         score = {key: 10 for key in score}
-        score["Overall quality"] = 10
-    elif card.get("confidence_label") == "starter":
+    elif is_starter:
         score["Overall quality"] = min(score["Overall quality"], 4)
     else:
-        score["Overall quality"] = min(score["Overall quality"], 8)
+        score["Overall quality"] = min(score["Overall quality"], min(core_scores, default=8))
     return score
-
 
 def _ce_hot_source_label(card: dict) -> str:
     sources = []
@@ -8635,6 +8714,8 @@ def _ce_hot_why_now(best: dict, source_basis: list[dict]) -> str:
 def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     lower = f"{topic} {source_blob}".lower()
     if "makar" in lower:
+        if any(term in lower for term in ("injured", "injury", "less games", "workload")):
+            return "Ready hook: The Makar argument is not points; it is whether injury context is hiding the real impact."
         return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
         return "Ready tweet: Senzatela becoming a deadline chip is exactly why bad teams still have adult decisions to make. If the Rockies can turn a revived relief role into real value, holding just to hold is how you stay stuck."
@@ -8656,6 +8737,8 @@ def _ce_hot_signal_detail(topic: str, source_blob: str) -> str:
     if "vulnerable" in lower and "broncos" in lower:
         return "Signal detail: AFC West vulnerability discussion; use only when the source states the pressure point."
     if "makar" in lower:
+        if any(term in lower for term in ("injured", "injury", "less games", "workload")):
+            return "Signal detail: Makar injury-context debate; creator angle is impact beyond raw points."
         return "Signal detail: reported availability watch; creator angle is workload and full-impact usage."
     return "Signal detail: source-backed topic; creator angle must stay tied to the visible proof."
 
@@ -8672,7 +8755,11 @@ def _ce_hot_source_matches_topic(topic: str, text: str) -> bool:
             return False
         return "broncos" in lower and any(term in lower for term in ("afcw", "afc west", "vulnerable", "nfl", "bonitto", "von miller", "denver"))
     if "makar" in topic_lower or "makar" in lower:
-        return "makar" in lower or ("avalanche" in lower and "practice" in lower) or ("avs" in lower and "practice" in lower)
+        if "trade makar" in lower or "wants to trade makar" in lower:
+            return False
+        if any(term in lower for term in ("top-", "top ", "ranking", "rankings", "quinn hughes", "defensemen")) and not any(term in lower for term in ("injured", "injury", "practice", "good to go", "workload", "less games")):
+            return False
+        return "makar" in lower and any(term in lower for term in ("injured", "injury", "practice", "good to go", "workload", "less games", "points"))
     if "senzatela" in topic_lower or "senzatela" in lower:
         return "senzatela" in lower or ("rockies" in lower and "deadline" in lower and "reliever" in lower)
     if "gagne" in topic_lower or "gagne" in lower:
@@ -8766,6 +8853,8 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
         source_basis = [
             src for src in raw_source_basis
             if _ce_hot_source_matches_topic(topic, str(src.get("text") or ""))
+            and _ce_hot_source_is_fresh(src, max_hours=24)
+            and not _ce_hot_is_promo_source(str(src.get("text") or ""))
         ]
         if not source_basis:
             continue
@@ -8831,8 +8920,9 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
             "confidence_label": "verified_hot",
         }
         card["quality_scores"] = _ce_hot_quality_scores(card)
-        if min(card["quality_scores"].values()) < 8:
+        if not _ce_hot_all_ten(card):
             continue
+        card["confidence_label"] = "verified_hot"
         cards.append(card)
         if len(cards) >= 7:
             break
@@ -8909,12 +8999,15 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             "negative_signal_risk": _algo.get("negative_signal_risk", 0),
             "moment_key": _algo.get("moment_key", ""),
               "source_basis": _basis,
+              "action_prompt": _ce_hot_action_prompt(_topic, _source_material),
+              "signal_detail": _ce_hot_signal_detail(_topic, _source_material),
               "public_x": _algo,
               "creator_relevant": _creator_relevant,
               "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
           }
         _card["quality_scores"] = _ce_hot_quality_scores(_card)
-        _scored.append(_card)
+        if _ce_hot_all_ten(_card):
+            _scored.append(_card)
     _strict = [
         item for item in _scored
       if item["hot_candidate_score"] >= 62
@@ -8968,14 +9061,8 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
             _append_card(_card)
             if len(_ideas) >= 7:
                 break
-    if len(_ideas) < _min_hot_cards:
-        for _starter in _creator_evolution_starter_hot_ideas():
-            _card = _ce_hot_signal_card_from_idea(_starter, _lane, _fmt)
-            _card["action_prompt"] = f"Ready hook: {str(_card.get('hook') or _card.get('seed') or '').splitlines()[0]}"
-            _card["signal_detail"] = "Starter detail: evergreen Creator Evolution build idea, not a verified live trend."
-            _append_card(_card)
-            if len(_ideas) >= _min_hot_cards:
-                break
+    # Do not pad Hot Feed with starter fallbacks. A smaller all-10 set is safer than
+    # mixing evergreen ideas into a feed the owner expects to be timely and sourced.
     _ideas = _ideas[:7]
     if not _ideas:
         _ideas = []
@@ -11847,12 +11934,20 @@ def _ce_inspiration_dialog():
             if _is_starter
             else "Build the post around this exact source-backed tension."
         )
+        _grade_summary = _ce_hot_grade_summary(_quality_scores)
+        _why_rank = str((_idea.get("public_x") or {}).get("why_this_can_rank") or _idea.get("why") or "").strip()
         _diagnostic = (
             f"{_diagnostic_prefix} | "
             f"Best for {_action_label} | "
             f"Anchor {_idea.get('candidate_anchor') or 'unclear'} | "
-            f"Risk {_risk_label}"
+            f"Risk {_risk_label} | {_grade_summary}"
         )
+        _public_x_detail = (
+            f"Candidate anchor: {_idea.get('candidate_anchor') or 'unclear'} | "
+            f"Target action: {_action_label} | "
+            f"Why it can rank: {_why_rank or 'fresh source-backed local sports tension'}"
+        )
+        _grades_html = _ce_hot_grading_html(_quality_scores)
         _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
         st.markdown(
             f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
@@ -11867,6 +11962,11 @@ def _ce_inspiration_dialog():
               f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
               f'<div style="font-size:10px;color:rgba(255,255,255,0.50);line-height:1.45;margin-bottom:7px;">{html.escape(_signal_detail or _default_signal_detail)}</div>'
               f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or _default_action_prompt)}</div>'
+              f'<div style="font-size:10px;color:rgba(175,193,216,0.74);line-height:1.45;margin-bottom:7px;">{html.escape(_public_x_detail)}</div>'
+              f'<div style="border:1px solid rgba(255,255,255,0.06);border-radius:7px;background:rgba(8,14,24,0.42);padding:8px 10px;margin:8px 0;">'
+                f'<div style="font-size:9px;font-weight:900;letter-spacing:1.1px;color:#2DD4BF;text-transform:uppercase;margin-bottom:3px;">1-10 grading system</div>'
+                f'{_grades_html}'
+              f'</div>'
               f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
             f'</div>',
             unsafe_allow_html=True,
