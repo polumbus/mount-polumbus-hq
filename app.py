@@ -2818,6 +2818,12 @@ if _x_oauth2_notice_once:
     else:
         st.success(_x_oauth2_notice_once)
 
+if str(st.query_params.get("x_oauth", "") or "").strip().lower() == "setup":
+    st.title("Secure X Direct Posting")
+    st.caption("Connect the official X OAuth2 account before direct posting. This setup screen does not send tweets.")
+    _render_x_direct_post_setup(expanded=True)
+    st.stop()
+
 
 # Single source for every Streamlit surface that builds tweet copy with AI.
 # Creator Studio owns the actual prompt formula; these helpers prevent What Hot,
