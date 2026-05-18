@@ -1058,16 +1058,17 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("joke engine", prompt)
 
     def test_tyler_profile_is_creator_evolution_voice_lane(self):
-        self.assertIn("Tyler", ce.EMOTION_LANES)
-        self.assertEqual(ce.DEFAULT_LANE, "Tyler")
-        self.assertIn('"Tyler"', Path("app.py").read_text())
-        self.assertIn('"DEFAULT_LANE": "Tyler"', Path("app.py").read_text())
-        self.assertIn("_ce_tyler_lane_default_applied", Path("app.py").read_text())
+        self.assertIn("Tyler Voice", ce.EMOTION_LANES)
+        self.assertEqual(ce.DEFAULT_LANE, "Witty Edge")
+        self.assertEqual(ce.normalize_lane("Tyler"), "Tyler Voice")
+        self.assertIn('"Tyler Voice"', Path("app.py").read_text())
+        self.assertIn('"DEFAULT_LANE": "Witty Edge"', Path("app.py").read_text())
+        self.assertIn("_ce_tyler_lane_default_removed", Path("app.py").read_text())
 
         prompt = ce.build_generation_prompt(
             "The Broncos keep calling this depth, but it feels more like insurance.",
             "Punchy Tweet",
-            "Tyler",
+            "Tyler Voice",
             ce.initial_state(),
         )
 

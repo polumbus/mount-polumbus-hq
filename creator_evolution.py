@@ -28,10 +28,10 @@ RULE_VERSION = "ce-rules-v2-approval-rollback"
 API_ESTIMATED_COST_PER_1000_TWEETS = 0.15
 DEFAULT_DAILY_API_BUDGET_USD = 0.75
 DEFAULT_WEEKLY_API_BUDGET_USD = 3.00
-DEFAULT_LANE = "Tyler"
+DEFAULT_LANE = "Witty Edge"
 EMOTION_LANES = (
     "Witty Edge",
-    "Tyler",
+    "Tyler Voice",
     "Comedic",
     "Annoyed",
     "Fired-Up",
@@ -44,7 +44,7 @@ EMOTION_LANES = (
 )
 
 LANE_RECIPES = {
-    "Tyler": {
+    "Tyler Voice": {
         "text": """TYLER - REAL ACCOUNT VOICE PROFILE MODE:
 - Built from the last-year Creator Evolution voice harness profile: 479 usable original posts, 79.3% Punchy, 18.6% Normal, 2.1% Thread.
 - Core identity: funny, blunt, sports-radio sharp former NFL lineman posting from his phone. Specific, witty, sometimes annoyed, sometimes fired-up, usually less polished than an AI wants to be.
@@ -245,7 +245,7 @@ FORMAT_RECIPES = {
 
 
 VOICE_TUNER_TEST_SCENARIOS = {
-    "Tyler": (
+    "Tyler Voice": (
         "The Broncos keep calling this depth. Looks a lot more like insurance with a helmet.",
         "The Avs can say the goalie thing is settled, but one ugly start turns that whole sentence into a suggestion.",
         "The Nuggets bench math gets real spiritual the second Jokic sits down.",
@@ -835,6 +835,7 @@ COMEDIC_SLOGAN_CLOSER_PREFIXES = (
 
 LANE_ALIASES = {
     "Amused": "Comedic",
+    "Tyler": "Tyler Voice",
 }
 
 
@@ -853,7 +854,7 @@ def lane_recipe_text(lane: str) -> str:
     lane = normalize_lane(lane)
     recipe = lane_recipe(lane)
     public_x_addenda = {
-        "Tyler": "PUBLIC X ADDENDUM: Target reply, quote, repost, or dwell through real-account specificity. Use a natural team/player/mechanism anchor early. Default compact. Do not chase engagement-bait questions. The post should feel like Tyler saw the sports contradiction and typed the cleanest version from his phone.",
+        "Tyler Voice": "PUBLIC X ADDENDUM: Target reply, quote, repost, or dwell through real-account specificity. Use a natural team/player/mechanism anchor early. Default compact. Do not chase engagement-bait questions. The post should feel like Tyler saw the sports contradiction and typed the cleanest version from his phone.",
         "Witty Edge": "PUBLIC X ADDENDUM: Target reply, quote, or dwell. Use a natural retrieval anchor early unless it ruins the line. The final beat should create a consequence the reader can argue with or complete. Avoid vague room/vibes/crowd reaction framing. Name the sports mechanism before the punchline.",
         "Comedic": "PUBLIC X ADDENDUM: Target quote/repost/share first. Reply is secondary. The joke must be understandable to out-of-network sports fans. Add one concrete sports anchor when local context is required. Reject mute/block/report risk. Keep it sports-native.",
         "Annoyed": "PUBLIC X ADDENDUM: Target reply pressure without mute risk. Attack the decision, excuse, pattern, logic, public message, or process. Never attack personal character, intelligence, body, family, injury, or private life. Irritation should feel shared and earned.",

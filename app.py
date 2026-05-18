@@ -92,10 +92,10 @@ CE_COMPAT_DEFAULTS = {
     "PROMPT_VERSION": getattr(ce, "PROMPT_VERSION", "ce-prompt-v10-public-x-action-profile"),
     "SCORING_VERSION": getattr(ce, "SCORING_VERSION", "ce-score-v4-public-x-action-profile"),
     "RULE_VERSION": "ce-rules-v2-approval-rollback",
-    "DEFAULT_LANE": "Tyler",
+    "DEFAULT_LANE": "Witty Edge",
     "EMOTION_LANES": (
         "Witty Edge",
-        "Tyler",
+        "Tyler Voice",
         "Comedic",
         "Annoyed",
         "Fired-Up",
@@ -9128,6 +9128,8 @@ def _ce_normalize_lane(lane: str | None) -> str:
     lane = str(lane or "").strip()
     if lane == "Amused" and "Comedic" in lanes:
         lane = "Comedic"
+    if lane == "Tyler" and "Tyler Voice" in lanes:
+        lane = "Tyler Voice"
     return lane if lane in lanes else _ce_default_lane()
 
 
@@ -15190,11 +15192,14 @@ def _render_creator_evolution_editor():
                     st.rerun(scope="fragment")
 
         cur_lane = _ce_normalize_lane(st.session_state.get("ce_lane", _ce_default_lane()))
-        if st.session_state.get("_ce_tyler_lane_default_applied") != "v1":
-            if cur_lane == "Witty Edge" and "Tyler" in _ce_emotion_lanes():
-                st.session_state["ce_lane"] = "Tyler"
-                cur_lane = "Tyler"
-            st.session_state["_ce_tyler_lane_default_applied"] = "v1"
+        if (
+            st.session_state.get("_ce_tyler_lane_default_applied") == "v1"
+            and st.session_state.get("_ce_tyler_lane_default_removed") != "v1"
+            and cur_lane in {"Tyler", "Tyler Voice"}
+        ):
+            st.session_state["ce_lane"] = _ce_default_lane()
+            cur_lane = _ce_default_lane()
+            st.session_state["_ce_tyler_lane_default_removed"] = "v1"
         st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:#3a5070;text-transform:uppercase;margin-bottom:4px;margin-top:8px;">Voice</div>', unsafe_allow_html=True)
         _lane_opts = list(_ce_emotion_lanes())
         _lane_idx = _lane_opts.index(cur_lane) if cur_lane in _lane_opts else 0
