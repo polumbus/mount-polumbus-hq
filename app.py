@@ -8535,15 +8535,16 @@ def _ce_hot_source_name(src: dict) -> str:
     text = str((src or {}).get("text") or "")
     source = str((src or {}).get("source") or "source").strip()
     lower = text.lower()
+    url_lower = str((src or {}).get("url") or "").lower()
     if "altitudesr" in lower:
         return "Altitude Sports Radio"
     if "denver post" in lower:
         return "The Denver Post"
-    if "csgazette" in lower or "csgazette" in str((src or {}).get("url") or "").lower():
+    if "csgazette" in lower or "csgazette" in url_lower:
         return "Colorado Springs Gazette"
-    if "denvergazette" in lower or "denvergazette" in str((src or {}).get("url") or "").lower():
+    if "denvergazette" in lower or "denvergazette" in url_lower:
         return "Denver Gazette"
-    if "milehighhuddle" in lower or "mhh podcast" in lower:
+    if "milehighhuddle" in lower or "milehighhuddle" in url_lower or "mhh podcast" in lower:
         return "Mile High Huddle"
     if "masedenver" in lower or "@masedenver" in lower:
         return "MaseDenver"
@@ -8559,27 +8560,32 @@ def _ce_hot_source_name(src: dict) -> str:
 
 def _ce_hot_source_proof(card: dict) -> str:
     pieces = []
-    seen_sources = set()
+    checked_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     for src in card.get("source_basis") or []:
         if not isinstance(src, dict):
             continue
         text = _ce_pulse_clean_source_text(str(src.get("text") or ""))
         if not text:
             continue
+        if "makar" in text.lower() and "avs welcome new player" in text.lower():
+            text = re.sub(r",\s*Avs welcome new player.*?(?=\s+-|\s+https?://|$)", "", text, flags=re.I)
         source = str(src.get("source") or "source").upper().replace("TWITTER", "TIMELINE")
         source_name = _ce_hot_source_name(src)
         age = src.get("age_hours")
         age_text = f"seen {float(age):.1f}h ago" if isinstance(age, (int, float)) else ""
-        host = _ce_hot_source_host(str(src.get("url") or ""))
-        prefix = " · ".join(part for part in (source, source_name, age_text, host) if part)
-        pieces.append(f"{prefix}: {text[:320]}".strip(": "))
-        seen_sources.add(source.lower())
+        source_url = str(src.get("url") or "").strip()
+        post_id = ""
+        match = re.search(r"/status/(\d+)", source_url)
+        if match:
+            post_id = f"post {match.group(1)}"
+        direct = source_url or post_id
+        prefix = " · ".join(part for part in (source, source_name, age_text, f"checked {checked_at}", post_id) if part)
+        if direct and direct != post_id:
+            pieces.append(f"{prefix}: {text[:280]} | direct: {direct}".strip(": "))
+        else:
+            pieces.append(f"{prefix}: {text[:280]}".strip(": "))
         if len(pieces) >= 2:
             break
-    signal_count = int(card.get("signal_count") or len(pieces))
-    cluster_label = _ce_hot_source_label(card)
-    if signal_count >= 2:
-        pieces.append(f"Cluster check: {signal_count} related signals; visible proof is {cluster_label.lower()}.")
     return " | ".join(pieces) or "Source-backed cluster."
 
 
@@ -8594,16 +8600,16 @@ def _ce_hot_why_now(best: dict, source_basis: list[dict]) -> str:
     ]
     newest = min(ages) if ages else None
     source_phrase = " + ".join(src.upper().replace("TWITTER", "TIMELINE") for src in unique) if unique else "SOURCE"
-    newest_phrase = f"; newest visible proof {newest:.1f}h old" if newest is not None else ""
+    newest_phrase = f" seen {newest:.1f}h old" if newest is not None else ""
     if signal_count >= 2:
-        return f"{source_phrase} cluster with {signal_count} related signals{newest_phrase}."
+        return f"{source_phrase} proof{newest_phrase}; claim is source-attributed, not inferred."
     return str(best.get("why_now") or "Source-backed Colorado sports signal is active.").strip()
 
 
 def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     lower = source_blob.lower()
     if "makar" in lower:
-        return "Ready frame: reported availability is not the same as driving PP1, transition, and top-pair minutes."
+        return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
         return "Ready frame: bad teams still create value; the deadline mistake is refusing to sell high."
     if "vulnerable" in lower and "broncos" in lower:
@@ -8651,7 +8657,7 @@ def _ce_hot_angle_from_cluster(best: dict) -> str:
     elif "vulnerable" in lower and "broncos" in lower:
         follow = "The angle is whether Denver's hype survives the first real schedule pressure."
     elif "makar" in lower and ("good to go" in lower or "practice" in lower):
-        follow = "The update is not just availability. It is whether Colorado gets Makar the weapon or Makar the decoy."
+        follow = "Reported status signal: Makar is expected to be available, but workload and full-impact usage are the real question."
     elif "senzatela" in lower and ("reliever" in lower or "deadline" in lower):
         follow = "That turns a bad Rockies season into a real trade-deadline decision: sell high or pretend the value is not there."
     elif "lorenzen" in lower and "unacceptable" in lower:
@@ -11739,7 +11745,6 @@ def _ce_inspiration_dialog():
         _source_label = _ce_hot_source_label(_idea)
         _diagnostic = (
             f"QC source-backed · "
-            f"Pulse score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
             f"Best for {_action_label} · "
             f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
             f"Risk {_risk_label}"
