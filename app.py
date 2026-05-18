@@ -8643,6 +8643,8 @@ def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
 
 def _ce_hot_signal_detail(topic: str, source_blob: str) -> str:
     lower = source_blob.lower()
+    if "starter fallback" in lower:
+        return "Starter detail: evergreen build idea used only when live source-backed cards are below five."
     if "senzatela" in lower:
         return "Signal detail: deadline-value report; creator angle is sell-high pressure, not a confirmed trade."
     if "vulnerable" in lower and "broncos" in lower:
@@ -11826,10 +11828,22 @@ def _ce_inspiration_dialog():
         _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
         _action_label = str(_idea.get("target_action") or "dwell").replace("_", " ")
         _source_label = _ce_hot_source_label(_idea)
+        _is_starter = str(_idea.get("confidence_label") or "").lower() == "starter"
+        _diagnostic_prefix = "Starter fallback" if _is_starter else "QC source-backed"
+        _default_signal_detail = (
+            "Starter detail: evergreen build idea used only because fewer than five live source-backed cards are available."
+            if _is_starter
+            else "Signal detail: source-backed and ready for Creator Evolution."
+        )
+        _default_action_prompt = (
+            "Use this as a safe starter angle, not as a verified live trend."
+            if _is_starter
+            else "Build the post around this exact source-backed tension."
+        )
         _diagnostic = (
-            f"QC source-backed · "
-            f"Best for {_action_label} · "
-            f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
+            f"{_diagnostic_prefix} | "
+            f"Best for {_action_label} | "
+            f"Anchor {_idea.get('candidate_anchor') or 'unclear'} | "
             f"Risk {_risk_label}"
         )
         _bg, _fg, _border, _label = _badge_styles.get(_source, _badge_default)
@@ -11844,8 +11858,8 @@ def _ce_inspiration_dialog():
               f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:520])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
               f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
-              f'<div style="font-size:10px;color:rgba(255,255,255,0.50);line-height:1.45;margin-bottom:7px;">{html.escape(_signal_detail or "Signal detail: source-backed and ready for Creator Evolution.")}</div>'
-              f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or "Build the post around this exact source-backed tension.")}</div>'
+              f'<div style="font-size:10px;color:rgba(255,255,255,0.50);line-height:1.45;margin-bottom:7px;">{html.escape(_signal_detail or _default_signal_detail)}</div>'
+              f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or _default_action_prompt)}</div>'
               f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
             f'</div>',
             unsafe_allow_html=True,
