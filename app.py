@@ -95,6 +95,7 @@ CE_COMPAT_DEFAULTS = {
     "DEFAULT_LANE": "Witty Edge",
     "EMOTION_LANES": (
         "Witty Edge",
+        "Tyler",
         "Comedic",
         "Annoyed",
         "Fired-Up",

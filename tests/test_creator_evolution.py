@@ -1057,6 +1057,25 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("COMEDIC OVERRIDE", prompt)
         self.assertIn("joke engine", prompt)
 
+    def test_tyler_profile_is_creator_evolution_voice_lane(self):
+        self.assertIn("Tyler", ce.EMOTION_LANES)
+        self.assertIn('"Tyler"', Path("app.py").read_text())
+
+        prompt = ce.build_generation_prompt(
+            "The Broncos keep calling this depth, but it feels more like insurance.",
+            "Punchy Tweet",
+            "Tyler",
+            ce.initial_state(),
+        )
+
+        self.assertIn("TYLER - REAL ACCOUNT VOICE PROFILE MODE", prompt)
+        self.assertIn("479 usable original posts", prompt)
+        self.assertIn("79.3% Punchy", prompt)
+        self.assertIn("average sentence length is 10.52 words", prompt)
+        self.assertIn("posted it from his phone", prompt)
+        self.assertIn("PUBLIC X ADDENDUM", prompt)
+        self.assertNotIn("HALL OF FAME REFERENCE TWEETS", prompt)
+
     def test_comedic_lane_accepts_sports_specific_jokes(self):
         examples = [
             "If the Broncos add another quarterback after saying Bo is fine, nobody is calling that a camp body with a straight face.",
