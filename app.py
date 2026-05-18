@@ -8603,7 +8603,7 @@ def _ce_hot_why_now(best: dict, source_basis: list[dict]) -> str:
 def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     lower = source_blob.lower()
     if "makar" in lower:
-        return "Ready frame: cleared to play is not the same as driving PP1, transition, and top-pair minutes."
+        return "Ready frame: reported availability is not the same as driving PP1, transition, and top-pair minutes."
     if "senzatela" in lower:
         return "Ready frame: bad teams still create value; the deadline mistake is refusing to sell high."
     if "vulnerable" in lower and "broncos" in lower:
@@ -8723,6 +8723,10 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
         if "payton" in topic.lower() and "illinois" in raw_source_blob.lower():
             continue
         source_blob = " ".join([str(best.get("summary_text") or "")] + [str(src.get("text") or "") for src in source_basis])
+        if "according to one report" in source_blob.lower():
+            named_sources = [_ce_hot_source_name(src).lower() for src in source_basis]
+            if all(name in {"timeline", "x.com", "twitter"} for name in named_sources):
+                continue
         if _ce_pulse_source_text_blocked(source_blob):
             continue
         if best.get("hard_blocks"):
@@ -11733,10 +11737,8 @@ def _ce_inspiration_dialog():
         _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
         _action_label = str(_idea.get("target_action") or "dwell").replace("_", " ")
         _source_label = _ce_hot_source_label(_idea)
-        _passed_categories = sum(1 for v in _quality_scores.values() if int(v or 0) >= 10)
-        _total_categories = len(_quality_scores)
         _diagnostic = (
-            f"QC source-backed · {_passed_categories}/{_total_categories} checks passed · "
+            f"QC source-backed · "
             f"Pulse score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
             f"Best for {_action_label} · "
             f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
