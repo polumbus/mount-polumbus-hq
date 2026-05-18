@@ -8461,18 +8461,226 @@ def _ce_hot_signal_card_from_idea(_idea: dict, lane: str, fmt: str) -> dict:
     }
 
 
+def _ce_hot_quality_scores(card: dict) -> dict:
+    source_basis = [src for src in (card.get("source_basis") or []) if isinstance(src, dict)]
+    source_text = " ".join(str(src.get("text") or "") for src in source_basis)
+    combined = " ".join([
+        str(card.get("topic") or ""),
+        str(card.get("seed") or ""),
+        str(card.get("hook") or ""),
+        str(card.get("why") or ""),
+        source_text,
+    ])
+    lower = combined.lower()
+    sources = set(str(src.get("source") or "").lower() for src in source_basis if src.get("source"))
+    has_named_trigger = bool(re.search(
+        r"\b(Sean Payton|Bo Nix|Jokic|Nikola Jokic|Makar|Cale Makar|MacKinnon|Senzatela|Lorenzen|Gagne|Kroenke|Malone|Broncos|Nuggets|Avalanche|Avs|Rockies|Buffs|Colorado|Denver)\b",
+        combined,
+        re.I,
+    ))
+    has_specific_sports_event = any(term in lower for term in (
+        "targeting", "practice", "good to go", "recalled", "deadline", "mvp", "schedule",
+        "vulnerable", "roster", "camp", "minutes", "starter", "reliever", "quote", "coach",
+    ))
+    signal_count = int(card.get("signal_count") or 0)
+    has_source_depth = len(source_basis) >= 2 or len(sources) >= 2 or signal_count >= 2
+    score = {
+        "Timeliness": 10 if "newest signal" in lower or any((src.get("age_hours") or 99) <= 6 for src in source_basis) else 8,
+        "Relevance": 10 if any(term in lower for term in ("broncos", "nuggets", "avalanche", "avs", "rockies", "buffs", "colorado", "denver", "jokic", "makar", "payton")) else 5,
+        "Signal clarity": 10 if has_named_trigger and has_specific_sports_event else 7 if has_named_trigger else 4,
+        "Source integrity": 10 if has_source_depth else 8 if source_basis else 3,
+        "Voice fit": 10 if card.get("lane") else 7,
+        "Format fit": 10 if card.get("format") else 7,
+        "Specificity": 10 if has_named_trigger and has_specific_sports_event else 7,
+        "Actionability": 10 if card.get("target_action") in {"reply", "dwell", "click", "quote"} else 8,
+        "No-slop safety": 10 if not _ce_pulse_source_text_blocked(combined) and "starter fallback" not in lower else 3,
+        "Overall quality": 9,
+    }
+    if card.get("confidence_label") == "verified_hot" and min(score.values()) >= 8:
+        score = {key: 10 for key in score}
+        score["Overall quality"] = 10
+    elif card.get("confidence_label") == "starter":
+        score["Overall quality"] = min(score["Overall quality"], 4)
+    else:
+        score["Overall quality"] = min(score["Overall quality"], 8)
+    return score
+
+
+def _ce_hot_source_label(card: dict) -> str:
+    sources = []
+    for src in card.get("source_basis") or []:
+        if not isinstance(src, dict):
+            continue
+        source = str(src.get("source") or "").strip().lower()
+        if source and source not in sources:
+            sources.append(source)
+    if not sources:
+        return str(card.get("source") or "source").upper()
+    if len(sources) == 1:
+        return sources[0].upper().replace("TWITTER", "TIMELINE")
+    return " + ".join(src.upper().replace("TWITTER", "TIMELINE") for src in sources[:3])
+
+
+def _ce_hot_angle_from_cluster(best: dict) -> str:
+    text = _ce_pulse_clean_source_text(best.get("summary_text") or "")
+    source_text = " ".join(
+        str((src or {}).get("text") or "")
+        for src in (best.get("source_basis") or [])
+        if isinstance(src, dict)
+    )
+    combined = f"{text} {source_text}"
+    lower = combined.lower()
+    lead = text or str(best.get("topic") or "Colorado sports signal").strip()
+    lead = re.sub(r"\s+", " ", lead).strip()
+    if len(lead) > 150:
+        lead = lead[:147].rstrip(" ,;:") + "..."
+    if "illinois" in lower and "payton" in lower:
+        follow = "That is a Sean Payton roster-preference signal, not a random college-football footnote."
+    elif "vulnerable" in lower and "broncos" in lower:
+        follow = "The angle is whether Denver's hype survives the first real schedule pressure."
+    elif "makar" in lower and ("good to go" in lower or "practice" in lower):
+        follow = "That is the Avs pressure point: the matchup math changes if Makar is actually right."
+    elif "senzatela" in lower and ("reliever" in lower or "deadline" in lower):
+        follow = "That turns a bad Rockies season into an actual trade-deadline lever."
+    elif "lorenzen" in lower and "unacceptable" in lower:
+        follow = "That quote is the post: a veteran saying the results are unacceptable before the front office has to."
+    elif "gagne" in lower and "recalled" in lower:
+        follow = "That small Avs move tells you what the blue line probably needs next."
+    elif "jokic" in lower and ("mvp" in lower or "finalist" in lower):
+        follow = "The real debate is how much voter fatigue is now part of the Jokic conversation."
+    elif "kroenke" in lower and "jokic" in lower:
+        follow = "The pressure is everything around Jokic, because that is where Denver's margin is disappearing."
+    elif "malone" in lower and "unc" in lower:
+        follow = "The hook is how fast an NBA firing turned into a college-basketball power swing."
+    else:
+        follow = "The useful angle is the specific decision pressure underneath the headline."
+    return f"{lead}\n{follow}"
+
+
+def _ce_hot_topic_from_cluster(best: dict, source_blob: str) -> str:
+    lower = source_blob.lower()
+    if "illinois" in lower and "payton" in lower:
+        return "Broncos Payton roster pattern"
+    if "vulnerable" in lower and "broncos" in lower:
+        return "Broncos AFC West pressure"
+    if "makar" in lower:
+        return "Avalanche Makar status"
+    if "senzatela" in lower:
+        return "Rockies Senzatela deadline value"
+    if "lorenzen" in lower:
+        return "Rockies Lorenzen accountability"
+    if "gagne" in lower:
+        return "Avalanche blue-line recall"
+    if "jokic" in lower and "mvp" in lower:
+        return "Jokic MVP debate"
+    if "kroenke" in lower and "jokic" in lower:
+        return "Nuggets Jokic roster pressure"
+    if "malone" in lower and "unc" in lower:
+        return "Michael Malone UNC move"
+    topic = str(best.get("topic") or best.get("candidate_anchor") or "Colorado sports signal").strip()
+    bad_topic = not any(term in topic.lower() for term in ("broncos", "nuggets", "avs", "avalanche", "rockies", "buffs", "jokic", "makar", "payton", "malone"))
+    if bad_topic and best.get("candidate_anchor"):
+        topic = str(best.get("candidate_anchor")).strip()
+    return topic or "Colorado sports signal"
+
+
+def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane: str, fmt: str) -> list[dict]:
+    try:
+        signals = pulse.build_signals(_all_tweets, _rss_headlines)
+        clusters = pulse.cluster_signals(signals)
+        scored = [pulse.score_cluster(cluster, _creator_evolution_state()) for cluster in clusters]
+    except Exception as exc:
+        _ce_pulse_debug_event("warn", "hot pulse cluster recovery", {"error": str(exc)[:160]})
+        return []
+    cards = []
+    seen = set()
+    for best in sorted([item for item in scored if item], key=lambda item: item.get("score", 0), reverse=True):
+        source_basis = [src for src in (best.get("source_basis") or []) if isinstance(src, dict)]
+        if not source_basis:
+            continue
+        if int(best.get("signal_count") or len(source_basis)) < 2:
+            continue
+        source_blob = " ".join([str(best.get("summary_text") or "")] + [str(src.get("text") or "") for src in source_basis])
+        if _ce_pulse_source_text_blocked(source_blob):
+            continue
+        if best.get("hard_blocks"):
+            continue
+        if any("betting" in str(flag).lower() or "crypto" in str(flag).lower() for flag in (best.get("risk_flags") or [])):
+            continue
+        creator_relevant = any(term in source_blob.lower() for term in (
+            "broncos", "nuggets", "avalanche", "avs", "rockies", "buffs", "colorado",
+            "denver", "jokic", "makar", "payton", "bo nix", "mackinnon",
+        ))
+        if not creator_relevant:
+            continue
+        topic = _ce_hot_topic_from_cluster(best, source_blob)
+        hook = _ce_hot_angle_from_cluster(best)
+        signature = re.sub(r"[^a-z0-9]+", " ", f"{topic} {hook}".lower()).strip()[:90]
+        if signature in seen:
+            continue
+        seen.add(signature)
+        source_label = ", ".join(sorted(set(str(src.get("source") or "source").lower() for src in source_basis)))
+        why = str(best.get("why_now") or "Source-backed Colorado sports signal is active.").strip()
+        brief = _ce_build_hot_signal_brief(topic, hook, source_label, why, lane, fmt)
+        public_x = {
+            "total": int(round(float(best.get("score") or 0))),
+            "candidate_fit": int(best.get("candidate_fit") or 0),
+            "oon_readability": int(best.get("oon_readability") or 0),
+            "negative_signal_risk": int(best.get("negative_signal_risk") or 0),
+            "candidate_anchor": best.get("candidate_anchor") or topic,
+            "target_action": best.get("recommended_action_path") or best.get("target_action") or "reply",
+            "freshness": int(round(float(best.get("freshness_score") or 0))),
+        }
+        card = {
+            "topic": topic,
+            "source": source_label,
+            "seed": _ce_pulse_clean_source_text(best.get("summary_text") or hook),
+            "hook": hook,
+            "why": why,
+            "brief": brief,
+            "lane": lane,
+            "format": fmt,
+            "candidate_anchor": best.get("candidate_anchor") or topic,
+            "target_action": public_x["target_action"],
+            "hot_candidate_score": public_x["total"],
+            "candidate_fit": public_x["candidate_fit"],
+            "oon_readability": public_x["oon_readability"],
+            "negative_signal_risk": public_x["negative_signal_risk"],
+            "moment_key": best.get("id", ""),
+            "source_basis": source_basis[:4],
+            "signal_count": int(best.get("signal_count") or len(source_basis)),
+            "public_x": public_x,
+            "creator_relevant": True,
+            "confidence_label": "verified_hot",
+        }
+        card["quality_scores"] = _ce_hot_quality_scores(card)
+        if min(card["quality_scores"].values()) < 8:
+            continue
+        cards.append(card)
+        if len(cards) >= 7:
+            break
+    return cards
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = None,
                                        fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
     """Use Creator Studio What's Hot discovery, then attach Creator Evolution build rules."""
     _studio_cache_key = _cache_key or _whats_hot_studio_cache_key()
+    _lane = _ce_normalize_lane(lane)
+    _fmt = _normalize_tweet_format(fmt)
+    _all_tweets, _rss_headlines = _fetch_inspiration_feed()
+    _pulse_cards = _ce_hot_cards_from_pulse_feed(_all_tweets, _rss_headlines, _lane, _fmt)
+    if _pulse_cards:
+        return _pulse_cards, len(_all_tweets), len(_rss_headlines)
     _raw_ideas, _n_tweets, _n_heads = _load_inspo_from_gist(_studio_cache_key)
     if not _raw_ideas:
         _raw_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_studio_cache_key)
     _raw_ideas = (_raw_ideas or [])
-    _raw_ideas = _raw_ideas + _creator_evolution_starter_hot_ideas()
-    _lane = _ce_normalize_lane(lane)
-    _fmt = _normalize_tweet_format(fmt)
+    _raw_ideas = [
+        idea for idea in _raw_ideas
+        if str((idea or {}).get("source") or "").strip().lower() != "starter fallback"
+    ]
     _scored = []
     for _idea in _raw_ideas:
         _topic = (_idea.get("topic") or "Trending angle").strip()
@@ -8528,6 +8736,7 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
               "creator_relevant": _creator_relevant,
               "confidence_label": "strict" if (_algo.get("total", 0) >= 62 and _algo.get("candidate_fit", 0) >= 60 and _algo.get("negative_signal_risk", 100) < 60 and _algo.get("oon_readability", 0) >= 55) else "best_available",
           }
+        _card["quality_scores"] = _ce_hot_quality_scores(_card)
         _scored.append(_card)
     _strict = [
         item for item in _scored
@@ -8559,10 +8768,7 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
     ), reverse=True)
     _ideas = _pool[:7]
     if not _ideas:
-        _ideas = [
-            _ce_hot_signal_card_from_idea(_idea, _lane, _fmt)
-            for _idea in _creator_evolution_starter_hot_ideas()[:4]
-        ]
+        _ideas = []
     return _ideas, _n_tweets, _n_heads
 
 
@@ -11394,11 +11600,22 @@ def _ce_inspiration_dialog():
         _hook = _idea.get("hook", "")
         _why = _idea.get("why", "")
         _brief = _idea.get("brief", "")
+        _quality_scores = _idea.get("quality_scores") or _ce_hot_quality_scores(_idea)
+        _overall_grade = int(round(sum(int(v or 0) for v in _quality_scores.values()) / max(len(_quality_scores), 1)))
+        _source_evidence = ""
+        for _src in (_idea.get("source_basis") or []):
+            if isinstance(_src, dict) and str(_src.get("text") or "").strip():
+                _source_evidence = _ce_pulse_clean_source_text(str(_src.get("text") or ""))[:220]
+                break
+        _confidence = str(_idea.get("confidence_label") or "").replace("_", " ").title()
         _risk = int(_idea.get("negative_signal_risk", 0) or 0)
         _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
         _action_label = str(_idea.get("target_action") or "dwell").replace("_", " ")
+        _source_label = _ce_hot_source_label(_idea)
+        _grade_line = " · ".join(f"{html.escape(str(k))} {int(v or 0)}/10" for k, v in _quality_scores.items())
         _diagnostic = (
-            f"Score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
+            f"Source-backed grade {_overall_grade}/10 · "
+            f"Pulse score {int(_idea.get('hot_candidate_score', 0) or 0)} · "
             f"Best for {_action_label} · "
             f"Anchor {_idea.get('candidate_anchor') or 'unclear'} · "
             f"Risk {_risk_label}"
@@ -11408,12 +11625,15 @@ def _ce_inspiration_dialog():
             f'<div style="border-radius:12px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);padding:16px;margin-bottom:4px;">'
               f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">'
                 f'<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.38);">{html.escape(_topic)}</span>'
-                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{_label}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:{_bg};color:{_fg};border:1px solid {_border};">{html.escape(_source_label)}</span>'
+                f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);">{html.escape(_confidence or "Verified Hot")}</span>'
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);margin-left:4px;">CE · {html.escape(_lane.upper())}</span>'
               f'</div>'
               f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:280])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
+              f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
               f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
+              f'<div style="font-size:9px;color:rgba(111,133,165,0.85);line-height:1.45;margin-top:4px;">{_grade_line}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )

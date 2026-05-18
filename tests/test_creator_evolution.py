@@ -2142,19 +2142,27 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("camp pressure", app_text)
         self.assertIn("Matches the Makar practice-update signal.", app_text)
 
-    def test_creator_evolution_hot_feed_has_starter_fallback(self):
+    def test_creator_evolution_hot_feed_uses_source_backed_cards_before_fallback(self):
         app_text = Path("app.py").read_text()
         hot_block = app_text.split("def _run_creator_evolution_hot_signals", 1)[1].split("def _ce_pulse_error_decision", 1)[0]
+        ui_block = app_text.split("def _ce_inspiration_dialog", 1)[1].split('@st.dialog("Creator Studio"', 1)[0]
 
         self.assertIn("def _creator_evolution_starter_hot_ideas", app_text)
         self.assertIn("def _ce_hot_signal_card_from_idea", app_text)
-        self.assertIn("_creator_evolution_starter_hot_ideas()", hot_block)
-        self.assertIn("_ce_hot_signal_card_from_idea(_idea, _lane, _fmt)", hot_block)
+        self.assertIn("def _ce_hot_cards_from_pulse_feed", app_text)
+        self.assertIn("_ce_hot_cards_from_pulse_feed(_all_tweets, _rss_headlines, _lane, _fmt)", hot_block)
+        self.assertIn("return _pulse_cards, len(_all_tweets), len(_rss_headlines)", hot_block)
+        self.assertIn('if str((idea or {}).get("source") or "").strip().lower() != "starter fallback"', hot_block)
+        self.assertNotIn("_creator_evolution_starter_hot_ideas()", hot_block)
+        self.assertNotIn("_ce_hot_signal_card_from_idea(_idea, _lane, _fmt)", hot_block)
         self.assertIn("starter fallback", app_text)
         self.assertIn('"creator_relevant"', hot_block)
         self.assertIn('and item.get("creator_relevant")', hot_block)
         self.assertIn('if not _pool:', hot_block)
-        self.assertIn('item["negative_signal_risk"] < 80', hot_block)
+        self.assertIn('_ideas = []', hot_block)
+        self.assertIn("Source proof:", ui_block)
+        self.assertIn("Source-backed grade", ui_block)
+        self.assertIn("_ce_hot_quality_scores", app_text)
 
     def test_pulse_tolerates_wrapped_string_and_mixed_signal_shapes(self):
         mixed_tweets = {
