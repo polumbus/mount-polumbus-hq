@@ -2087,12 +2087,16 @@ def _x_oauth2_status() -> dict:
 def _x_direct_post_readiness() -> dict:
     """Return direct-post readiness without exposing any secret values."""
     oauth2_status = _x_oauth2_status()
+    oauth2_token, _oauth2_token_err = _x_oauth2_load_token()
+    oauth2_expires_at = float((oauth2_token or {}).get("expires_at") or 0)
+    oauth2_has_access = bool((oauth2_token or {}).get("access_token"))
+    oauth2_has_refresh = bool((oauth2_token or {}).get("refresh_token"))
     oauth1_creds = _x_native_post_credentials()
     oauth1_ready = all(
         bool(oauth1_creds.get(name))
         for name in ("consumer_key", "consumer_secret", "access_token", "access_secret")
     )
-    oauth2_ready = bool(oauth2_status.get("connected"))
+    oauth2_ready = oauth2_has_access and (oauth2_expires_at > time.time() + 120 or oauth2_has_refresh)
     missing_oauth1 = [
         name for name, present in {
             "X_API_KEY / TWITTER_API_KEY": bool(oauth1_creds.get("consumer_key")),
@@ -2105,6 +2109,9 @@ def _x_direct_post_readiness() -> dict:
     if oauth2_ready:
         mode = "official_oauth2"
         status_text = "Official X OAuth2 is connected."
+    elif oauth2_has_access:
+        mode = "oauth2_reconnect_required"
+        status_text = "Official X OAuth2 needs to be reconnected before posting."
     elif oauth2_status.get("configured"):
         mode = "oauth2_connect_required"
         status_text = "Official X OAuth2 is configured but your X account is not connected yet."
@@ -2188,8 +2195,15 @@ def _render_x_direct_post_setup(*, intent_url: str = "", expanded: bool = True) 
         )
 
 
+def _x_oauth2_callback_requested() -> bool:
+    marker = str(st.query_params.get("x_oauth", "") or "").strip().lower()
+    if marker == "callback":
+        return True
+    return bool(str(st.query_params.get("code", "") or "").strip() and str(st.query_params.get("state", "") or "").strip())
+
+
 def _handle_x_oauth2_callback() -> None:
-    if str(st.query_params.get("x_oauth", "")).strip() != "callback":
+    if not _x_oauth2_callback_requested():
         return
     error = str(st.query_params.get("error", "") or "").strip()
     if error:
