@@ -1059,7 +1059,10 @@ class CreatorEvolutionTests(unittest.TestCase):
 
     def test_tyler_profile_is_creator_evolution_voice_lane(self):
         self.assertIn("Tyler", ce.EMOTION_LANES)
+        self.assertEqual(ce.DEFAULT_LANE, "Tyler")
         self.assertIn('"Tyler"', Path("app.py").read_text())
+        self.assertIn('"DEFAULT_LANE": "Tyler"', Path("app.py").read_text())
+        self.assertIn("_ce_tyler_lane_default_applied", Path("app.py").read_text())
 
         prompt = ce.build_generation_prompt(
             "The Broncos keep calling this depth, but it feels more like insurance.",
