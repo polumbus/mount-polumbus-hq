@@ -8611,9 +8611,9 @@ def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     if "makar" in lower:
         return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
-        return "Ready frame: bad teams still create value; the deadline mistake is refusing to sell high."
+        return "Ready hook: The Rockies being bad does not make Senzatela worthless. It makes selling high the only adult conversation."
     if "vulnerable" in lower and "broncos" in lower:
-        return "Ready frame: national doubt is only useful if Denver answers it when the AFC West pressure hits."
+        return "Ready hook: If the Broncos are vulnerable, it will show up in AFC West pressure, not May power rankings."
     if "illinois" in lower and "payton" in lower:
         return "Ready frame: Payton is not collecting Illini trivia; he is shopping for a type."
     return f"Build the post around the current {topic} tension."
@@ -11758,7 +11758,7 @@ def _ce_inspiration_dialog():
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);">{html.escape(_confidence or "Verified Hot")}</span>'
                 f'<span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:0.05em;background:rgba(45,212,191,0.08);color:rgba(45,212,191,0.72);border:1px solid rgba(45,212,191,0.18);margin-left:4px;">CE · {html.escape(_lane.upper())}</span>'
               f'</div>'
-              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:280])}</div>'
+              f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:520])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
               f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
               f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or "Build the post around this exact source-backed tension.")}</div>'
