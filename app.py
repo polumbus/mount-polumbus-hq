@@ -11784,10 +11784,7 @@ def _ce_pulse_dialog():
     _signal_choices = _ce_pulse_choice_candidates(_decision, lane=_lane, fmt=_fmt, minimum=3) if _raw_best else []
     if _signal_choices:
         _choice_ids = [str(item.get("_choice_id") or item.get("id") or idx) for idx, item in enumerate(_signal_choices)]
-        _query_signal_id = str(st.query_params.get("pulse_signal") or "").strip()
-        _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _query_signal_id or _choice_ids[0])
-        if _query_signal_id in _choice_ids:
-            _selected_signal_id = _query_signal_id
+        _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _choice_ids[0])
         if _selected_signal_id not in _choice_ids:
             _selected_signal_id = _choice_ids[0]
         _selected_idx = _choice_ids.index(_selected_signal_id)
@@ -11823,33 +11820,7 @@ def _ce_pulse_dialog():
                     on_click=_select_pulse_signal,
                     args=(_choice_id,),
                 )
-        _link_bits = []
-        _base_params = {
-            "token": str(st.query_params.get("token") or ""),
-            "user": str(st.query_params.get("user") or "owner"),
-            "page": "Creator Evolution",
-            "open_pulse": "1",
-        }
-        for _choice_idx, _choice_id in enumerate(_choice_ids):
-            _params = dict(_base_params)
-            _params["pulse_signal"] = _choice_id
-            _href = "/?" + urllib.parse.urlencode({k: v for k, v in _params.items() if v})
-            _is_selected_choice = _choice_id == _selected_signal_id
-            _link_bits.append(
-                f'<a href="{html.escape(_href, quote=True)}" target="_self" '
-                f'style="display:inline-block;margin:0 6px 8px 0;padding:7px 10px;border-radius:6px;text-decoration:none;font-size:10px;font-weight:800;letter-spacing:.7px;'
-                f'border:1px solid {"rgba(45,212,191,.45)" if _is_selected_choice else "rgba(255,255,255,.12)"};'
-                f'background:{"rgba(45,212,191,.14)" if _is_selected_choice else "rgba(255,255,255,.04)"};'
-                f'color:{"#2DD4BF" if _is_selected_choice else "#8FA6C6"};">'
-                f'{"Selected" if _is_selected_choice else "Open"} Signal {_choice_idx + 1}</a>'
-            )
-        st.markdown(
-            '<div style="margin:4px 0 12px;">' + ''.join(_link_bits) + '</div>',
-            unsafe_allow_html=True,
-        )
         _selected_signal_id = str(st.session_state.get("ce_pulse_selected_signal_id") or _selected_signal_id)
-        if _query_signal_id in _choice_ids:
-            _selected_signal_id = _query_signal_id
         if _previous_signal_id != _selected_signal_id:
             st.session_state["ce_pulse_selected_signal_id"] = _selected_signal_id
             st.session_state.pop("ce_pulse_drafts_key", None)
@@ -15355,9 +15326,6 @@ def page_creator_evolution():
 
     if st.session_state.get("_ce_show_build_dialog"):
         _ce_build_dialog()
-
-    if str(st.query_params.get("open_pulse") or "").strip() == "1":
-        st.session_state["_ce_show_pulse"] = True
 
     if st.session_state.pop("_ce_show_pulse", False):
         _ce_pulse_dialog()
