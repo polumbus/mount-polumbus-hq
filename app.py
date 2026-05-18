@@ -114,6 +114,27 @@ CE_COMPAT_DEFAULTS = {
     },
 }
 
+CE_TYLER_VOICE_RECIPE = {
+    "text": """TYLER - REAL ACCOUNT VOICE PROFILE MODE:
+- Built from the last-year Creator Evolution voice harness profile: 479 usable original posts, 79.3% Punchy, 18.6% Normal, 2.1% Thread.
+- Core identity: funny, blunt, sports-radio sharp former NFL lineman posting from his phone. Specific, witty, sometimes annoyed, sometimes fired-up, usually less polished than an AI wants to be.
+- Corpus rhythm: average sentence length is 10.52 words. 69.3% of used posts are one-line posts. Multi-line posts are selective, not the default.
+- Default shape: compact Punchy or Normal. One clean block usually beats an AI-looking blank-line formula.
+- Natural endings: hard-period walkoffs and short punchlines dominate. Questions and ellipses are occasional tools, not defaults.
+- Start from the exact sports mechanism: team, player, roster decision, game state, coach logic, rotation math, injury trust, fan assumption, or media narrative.
+- Use compressed declarative tension. Let the final beat do the work.
+- Prefer blunt human phrasing over clever metaphor. If the line sounds dressed up, cut it.
+- Sarcasm should come from fake calm, fake enthusiasm, or the obvious sports contradiction, not from explaining the joke.
+- Keep the audience in the argument by leaving a consequence or contradiction hanging.
+- No corporate polish, LinkedIn cadence, content strategy voice, generic hot-take templates, fake questions, "Here is the thing", symmetrical three-part AI structure, over-explained jokes, stale hooks, or engagement bait.
+- No copied old Tyler tweets, old punchlines, or uncommon phrases. Learn the mechanics, not the wording.
+- Self-check before final: would this sound normal if Tyler posted it from his phone? If not, rewrite shorter and more specific.""",
+    "target": "The closest real-account Tyler voice: compact, blunt, sports-specific, phone-typed, witty, and driven by one exact sports mechanism.",
+    "do": "Anchor the post in the concrete sports mechanism, use one clean block unless the thought needs a selective final beat, and land a hard-period walkoff or short punchline.",
+    "avoid": "Generic reaction framing, content strategy voice, polished essay cadence, constant questions, constant ellipses, over-explaining, clever-for-clever metaphor, and copying old tweet language.",
+    "ending": "A hard-period walkoff, short punchline, or compact unresolved consequence. Usually not a direct question.",
+}
+
 CE_AI_PROVIDER_OPTIONS = ("ChatGPT", "Grok")
 CE_AI_PROVIDER_DEFAULT = "Grok"
 CE_TESTING_STATE_FILENAME = "creator_evolution_testing_lab.json"
@@ -9106,31 +9127,47 @@ def _ce_pulse_debug_event(status: str, detail: str, meta: dict | None = None) ->
 
 
 def _ce_default_lane() -> str:
-    return str(getattr(ce, "DEFAULT_LANE", CE_COMPAT_DEFAULTS["DEFAULT_LANE"]) or CE_COMPAT_DEFAULTS["DEFAULT_LANE"])
+    return CE_COMPAT_DEFAULTS["DEFAULT_LANE"]
 
 
 def _ce_emotion_lanes() -> tuple[str, ...]:
     lanes = getattr(ce, "EMOTION_LANES", CE_COMPAT_DEFAULTS["EMOTION_LANES"])
     if not isinstance(lanes, (list, tuple)) or not lanes:
         lanes = CE_COMPAT_DEFAULTS["EMOTION_LANES"]
-    clean = tuple(str(lane).strip() for lane in lanes if str(lane).strip())
-    return clean or tuple(CE_COMPAT_DEFAULTS["EMOTION_LANES"])
+    clean: list[str] = []
+    for raw_lane in lanes:
+        lane = str(raw_lane).strip()
+        if lane == "Tyler":
+            lane = "Tyler Voice"
+        if lane and lane not in clean:
+            clean.append(lane)
+    for fallback_lane in CE_COMPAT_DEFAULTS["EMOTION_LANES"]:
+        if fallback_lane not in clean:
+            clean.append(fallback_lane)
+    return tuple(clean) or tuple(CE_COMPAT_DEFAULTS["EMOTION_LANES"])
 
 
 def _ce_normalize_lane(lane: str | None) -> str:
+    lanes = _ce_emotion_lanes()
+    raw_lane = str(lane or "").strip()
+    if raw_lane == "Amused" and "Comedic" in lanes:
+        raw_lane = "Comedic"
+    if raw_lane == "Tyler" and "Tyler Voice" in lanes:
+        raw_lane = "Tyler Voice"
+    if raw_lane in lanes:
+        return raw_lane
+
     normalizer = getattr(ce, "normalize_lane", None)
     if callable(normalizer):
         try:
-            return str(normalizer(lane) or _ce_default_lane())
+            normalized = str(normalizer(lane) or _ce_default_lane()).strip()
+            if normalized == "Tyler" and "Tyler Voice" in lanes:
+                normalized = "Tyler Voice"
+            if normalized in lanes:
+                return normalized
         except Exception:
             pass
-    lanes = _ce_emotion_lanes()
-    lane = str(lane or "").strip()
-    if lane == "Amused" and "Comedic" in lanes:
-        lane = "Comedic"
-    if lane == "Tyler" and "Tyler Voice" in lanes:
-        lane = "Tyler Voice"
-    return lane if lane in lanes else _ce_default_lane()
+    return _ce_default_lane()
 
 
 def _ce_live_voice_override_text(lane: str, fmt: str | None = None) -> str:
@@ -12381,6 +12418,8 @@ def _ce_lane_recipe_text(lane: str) -> str:
         try:
             text = str(formatter(lane) or "").strip()
             if text:
+                if lane == "Tyler Voice" and "TYLER - REAL ACCOUNT VOICE PROFILE MODE" not in text:
+                    raise ValueError("stale Tyler Voice lane recipe")
                 if live_override_text:
                     return f"{text}\n\n{live_override_text}"
                 return text
@@ -12388,12 +12427,18 @@ def _ce_lane_recipe_text(lane: str) -> str:
             _ce_pulse_debug_event("warn", "lane recipe helper recovered", {"error": str(exc)[:160]})
 
     recipes = getattr(ce, "LANE_RECIPES", {}) or {}
-    recipe = recipes.get(lane) or recipes.get(_ce_default_lane()) or {
+    app_recipes = {"Tyler Voice": CE_TYLER_VOICE_RECIPE}
+    recipe = recipes.get(lane) or app_recipes.get(lane) or recipes.get(_ce_default_lane()) or {
         "target": "Funny, pointed, conversational, and human.",
         "do": "Use a specific sports detail and a sharp human reaction.",
         "avoid": "Content-strategy phrasing, generic templates, fake questions, and invented facts.",
         "ending": "A declarative open loop or punchline that leaves the tension alive.",
     }
+    if isinstance(recipe, dict) and str(recipe.get("text") or "").strip():
+        recipe_text = str(recipe.get("text") or "").strip()
+        if live_override_text:
+            recipe_text = f"{recipe_text}\n\n{live_override_text}"
+        return recipe_text
     recipe_text = "\n".join([
         f"{lane}:",
         f"- Target: {recipe.get('target', '')}",

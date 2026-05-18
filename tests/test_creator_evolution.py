@@ -1064,6 +1064,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('"Tyler Voice"', Path("app.py").read_text())
         self.assertIn('"DEFAULT_LANE": "Witty Edge"', Path("app.py").read_text())
         self.assertIn("_ce_tyler_lane_default_removed", Path("app.py").read_text())
+        self.assertIn("CE_TYLER_VOICE_RECIPE", Path("app.py").read_text())
+        self.assertIn('if lane == "Tyler":', Path("app.py").read_text())
+        self.assertIn('stale Tyler Voice lane recipe', Path("app.py").read_text())
+        self.assertIn('return CE_COMPAT_DEFAULTS["DEFAULT_LANE"]', Path("app.py").read_text())
 
         prompt = ce.build_generation_prompt(
             "The Broncos keep calling this depth, but it feels more like insurance.",
