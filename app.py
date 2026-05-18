@@ -8477,7 +8477,7 @@ def _ce_hot_build_source_text(card: dict) -> str:
     if action:
         parts.append(action)
     clean = "\n".join(parts).strip()
-    clean = re.sub(r"(?im)^(HOT SIGNAL|SOURCE MATERIAL|WHY THIS IS MOVING|FORMAT|PERSONALITY LANE|LANE BEHAVIOR|CREATOR EVOLUTION BUILD RULES):\s*", "", clean)
+    clean = re.sub(r"(?im)^(HOT SIGNAL|SOURCE MATERIAL|WHY THIS IS MOVING|FORMAT|PERSONALITY LANE|LANE BEHAVIOR|CREATOR EVOLUTION BUILD RULES|SIGNAL DETAIL|READY HOOK|READY FRAME|READY TWEET|CREATOR ACTION):\s*", "", clean)
     return clean or hook or topic
 
 
@@ -8634,10 +8634,10 @@ def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
         return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
         return "Ready tweet: Senzatela becoming a deadline chip is exactly why bad teams still have adult decisions to make. If the Rockies can turn a revived relief role into real value, holding just to hold is how you stay stuck."
-    if "vulnerable" in lower and "broncos" in lower:
-        return "Ready hook: If the Broncos are vulnerable, it will show up in AFC West pressure, not May power rankings."
     if "illinois" in lower and "payton" in lower:
         return "Ready frame: Payton is not collecting Illini trivia; he is shopping for a type."
+    if "vulnerable" in lower and "broncos" in lower:
+        return "Ready hook: If the Broncos are vulnerable, it will show up in AFC West pressure, not May power rankings."
     return f"Ready hook: Build the post around the current {topic} tension."
 
 
@@ -8647,6 +8647,8 @@ def _ce_hot_signal_detail(topic: str, source_blob: str) -> str:
         return "Starter detail: evergreen build idea used only when live source-backed cards are below five."
     if "senzatela" in lower:
         return "Signal detail: deadline-value report; creator angle is sell-high pressure, not a confirmed trade."
+    if "illinois" in lower and "payton" in lower:
+        return "Signal detail: Sean Payton roster-preference pattern; creator angle is player type, not random college trivia."
     if "vulnerable" in lower and "broncos" in lower:
         return "Signal detail: AFC West vulnerability discussion; use only when the source states the pressure point."
     if "makar" in lower:
@@ -10376,7 +10378,8 @@ def _ce_build_fallback_text(opening: str, middle: str, ending: str, fmt: str, la
     opening = str(opening or "").strip().rstrip(".")
     middle = str(middle or "").strip().rstrip(".")
     ending = str(ending or "").strip()
-    middle_lower = middle[:1].lower() + middle[1:] if middle else ""
+    preserve_middle_case = bool(re.match(r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", middle or ""))
+    middle_join = middle if preserve_middle_case else (middle[:1].lower() + middle[1:] if middle else "")
     if fmt == "Punchy Tweet":
         return re.sub(r"\s+", " ", f"{middle}. {ending}").strip()[:158].rstrip(" ,")
     if fmt == "Long Tweet":
@@ -10405,7 +10408,7 @@ def _ce_build_fallback_text(opening: str, middle: str, ending: str, fmt: str, la
     if lane == "Comedic":
         return f"{opening}. {middle}.\n\n{ending}"
     if opening.endswith((" is", " is simple", " is not the headline", " is pretty clear")):
-        lead = f"{opening} {middle_lower}".strip()
+        lead = f"{opening} {middle_join}".strip()
     else:
         lead = f"{opening}. {middle[:1].upper() + middle[1:] if middle else ''}".strip()
     return f"{lead}.\n\n{ending}"
