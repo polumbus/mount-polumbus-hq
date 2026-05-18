@@ -12547,6 +12547,28 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
     max_tokens = 3500 if fmt == "Article" else 2200 if fmt == "Thread" else 1400 if fmt == "Long Tweet" else 700
     raw = _call_creator_evolution_ai(prompt, lane, max_tokens, timeout_seconds=35)
     data = _parse_banger_json(raw or "")
+    displayable_count = sum(
+        1 for option_key in ("option1", "option2", "option3")
+        if str((data or {}).get(option_key) or "").strip()
+    )
+    if displayable_count < 3:
+        fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(
+            tweet_text,
+            fmt,
+            lane,
+        )
+        if fallback_data and len(fallback_passing) >= 3:
+            data = fallback_data
+            st.session_state["ce_quality_report"] = fallback_quality
+            st.session_state["ce_banger_data"] = fallback_data
+            st.session_state["ce_last_action"] = {
+                "type": action,
+                "text": tweet_text,
+                "fmt": fmt,
+                "lane": lane,
+                "source": "blank_option_fallback",
+            }
+            return
     if data and data.get("option1"):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
@@ -12856,6 +12878,19 @@ def _ce_output_panel_impl(action, tweet_text, fmt, lane):
         quality_reports = st.session_state.get("ce_quality_report", {}) or {}
         ai_pick = str(bd.get("pick", "1")).strip()
         opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
+        if not any(str(opt_text or "").strip() for opt_text, _ in opts):
+            fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(
+                tweet_text,
+                fmt,
+                lane,
+            )
+            if fallback_data and len(fallback_passing) >= 3:
+                bd = fallback_data
+                quality_reports = fallback_quality
+                st.session_state["ce_banger_data"] = fallback_data
+                st.session_state["ce_quality_report"] = fallback_quality
+                ai_pick = str(bd.get("pick", "1")).strip()
+                opts = [(bd.get(f"option{i}", ""), bd.get(f"option{i}_pattern", "")) for i in [1, 2, 3] if bd.get(f"option{i}")]
         left, right = st.columns([1, 1])
         with left:
             if st.button("Refresh Options", key="ce_refresh_options", use_container_width=True):

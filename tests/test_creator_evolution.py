@@ -2168,6 +2168,17 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("QC source-backed", ui_block)
         self.assertIn("_ce_hot_quality_scores", app_text)
 
+    def test_creator_evolution_never_renders_blank_option_shells(self):
+        app_text = Path("app.py").read_text()
+        run_block = app_text.split("def _run_ce_ai", 1)[1].split('@st.dialog("Build a Creator Evolution Tweet"', 1)[0]
+        output_block = app_text.split("def _ce_output_panel_impl", 1)[1].split("def _ce_output_panel", 1)[0]
+
+        self.assertIn("displayable_count = sum", run_block)
+        self.assertIn('"blank_option_fallback"', run_block)
+        self.assertIn("_ce_force_safe_lane_fallback", run_block)
+        self.assertIn("if not any(str(opt_text or \"\").strip() for opt_text, _ in opts):", output_block)
+        self.assertIn("st.session_state[\"ce_banger_data\"] = fallback_data", output_block)
+
     def test_pulse_tolerates_wrapped_string_and_mixed_signal_shapes(self):
         mixed_tweets = {
             "tweets": [
