@@ -8559,6 +8559,8 @@ def _ce_hot_source_name(src: dict) -> str:
 
 
 def _ce_hot_source_proof(card: dict) -> str:
+    if str(card.get("confidence_label") or "").lower() == "starter":
+        return "Starter idea: safe evergreen build option used only when the live source pool has fewer than five usable cards."
     pieces = []
     checked_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     for src in card.get("source_basis") or []:
@@ -8813,17 +8815,17 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
 def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = None,
                                        fmt: str = CANONICAL_TWEET_DEFAULT_FORMAT):
     """Use Creator Studio What's Hot discovery, then attach Creator Evolution build rules."""
+    _min_hot_cards = 5
     _studio_cache_key = _cache_key or _whats_hot_studio_cache_key()
     _lane = _ce_normalize_lane(lane)
     _fmt = _normalize_tweet_format(fmt)
     _all_tweets, _rss_headlines = _fetch_inspiration_feed()
     _pulse_cards = _ce_hot_cards_from_pulse_feed(_all_tweets, _rss_headlines, _lane, _fmt)
-    if _pulse_cards:
-        return _pulse_cards, len(_all_tweets), len(_rss_headlines)
     _raw_ideas, _n_tweets, _n_heads = _load_inspo_from_gist(_studio_cache_key)
     if not _raw_ideas:
         _raw_ideas, _n_tweets, _n_heads = _run_inspiration_claude(_studio_cache_key)
     _raw_ideas = (_raw_ideas or [])
+    _raw_ideas = _raw_ideas + _build_inspiration_fallback(_all_tweets, _rss_headlines)
     _raw_ideas = [
         idea for idea in _raw_ideas
         if str((idea or {}).get("source") or "").strip().lower() != "starter fallback"
@@ -8913,7 +8915,40 @@ def _run_creator_evolution_hot_signals(_cache_key: str = "", lane: str | None = 
         (item.get("public_x", {}) or {}).get("positive_action_fit", 0),
         (item.get("public_x", {}) or {}).get("source_triangulation_bonus", 0),
     ), reverse=True)
-    _ideas = _pool[:7]
+    _ideas = []
+    _seen_signatures = set()
+
+    def _append_card(card: dict) -> None:
+        if not isinstance(card, dict):
+            return
+        _signature = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            f"{card.get('topic', '')} {card.get('hook', '')} {card.get('seed', '')}".lower(),
+        ).strip()[:120]
+        if not _signature or _signature in _seen_signatures:
+            return
+        _seen_signatures.add(_signature)
+        _ideas.append(card)
+
+    for _card in (_pulse_cards or []):
+        _append_card(_card)
+        if len(_ideas) >= 7:
+            break
+    if len(_ideas) < _min_hot_cards:
+        for _card in _pool:
+            _append_card(_card)
+            if len(_ideas) >= 7:
+                break
+    if len(_ideas) < _min_hot_cards:
+        for _starter in _creator_evolution_starter_hot_ideas():
+            _card = _ce_hot_signal_card_from_idea(_starter, _lane, _fmt)
+            _card["action_prompt"] = f"Ready hook: {str(_card.get('hook') or _card.get('seed') or '').splitlines()[0]}"
+            _card["signal_detail"] = "Starter detail: evergreen Creator Evolution build idea, not a verified live trend."
+            _append_card(_card)
+            if len(_ideas) >= _min_hot_cards:
+                break
+    _ideas = _ideas[:7]
     if not _ideas:
         _ideas = []
     return _ideas, _n_tweets, _n_heads
