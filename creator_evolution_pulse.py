@@ -20,7 +20,7 @@ import creator_evolution_algorithm as cexa
 import creator_evolution as ce
 
 
-PULSE_VERSION = "ce-pulse-v10-public-x-opportunity"
+PULSE_VERSION = "ce-pulse-v11-scheduled-game-guard"
 DEFAULT_THRESHOLD = 68.0
 SAVE_THRESHOLD = 58.0
 BLOCKING_HARD_BLOCKS = {
@@ -36,6 +36,7 @@ BLOCKING_HARD_BLOCKS = {
     "duplicate_recent_angle",
     "reply_fragment_context",
     "unresolved_pronoun_context",
+    "scheduled_scoreboard_context",
 }
 SOURCE_RELIABILITY = {
     "trusted_list": 7.2,
@@ -93,7 +94,10 @@ LIVE_TERMS = (
 )
 LIVE_GAME_TERMS = (
     "period", "quarter", "half", "halftime", "intermission", "in progress",
-    "end of", "puck drop", "kickoff", "tipoff", "starts", "scheduled",
+    "end of",
+)
+SCHEDULED_GAME_TERMS = (
+    "scheduled", "pregame", "pre-game", "puck drop", "kickoff", "tipoff", "starts",
 )
 COLORADO_TEAM_TERMS = (
     "broncos", "denver broncos", "nuggets", "denver nuggets",
@@ -468,10 +472,55 @@ def _is_completed_game_context(text: str) -> bool:
     return bool(has_game_label and has_final_status)
 
 
-def _is_live_game_context(text: str) -> bool:
+def _is_scheduled_game_context(text: str) -> bool:
     clean = _text(text)
     lower = clean.lower()
     if not clean or _is_completed_game_context(clean):
+        return False
+    has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
+    has_game_label = bool(
+        re.match(r"^(avalanche game|nuggets game|broncos game|rockies game|buffs game|nba|nhl|nfl|mlb|ncaa):", lower)
+        or " game:" in lower
+        or has_matchup_shape
+    )
+    if not has_game_label:
+        return False
+    if not (
+        re.search(r"\((?:scheduled|pregame|pre-game)[^)]*\)", lower)
+        or _contains_any(lower, SCHEDULED_GAME_TERMS)
+    ):
+        return False
+    return not (
+        "in progress" in lower
+        or re.search(r"\b(?:q[1-4]|[1-4](?:st|nd|rd|th)\s+(?:period|quarter)|period\s+[1-4]|quarter\s+[1-4]|halftime|intermission)\b", lower)
+    )
+
+
+def _is_scheduled_scoreboard_context(text: str) -> bool:
+    clean = _text(text)
+    lower = clean.lower()
+    if not _is_scheduled_game_context(clean):
+        return False
+    has_scoreless_marker = bool(re.search(r"\b0\s*(?:@|-|to)\s*0\b", clean, re.I))
+    has_detail = _contains_any(
+        lower,
+        (
+            "lineup", "starter", "scratch", "injury", "quote", "coach", "report",
+            "breaking", "news", "goalie", "rotation", "roster", "trade",
+        ),
+    )
+    has_countdown_or_start_time = bool(
+        re.search(r"\bin\s+\d+\s+(?:minutes?|mins?|hours?)\b", lower)
+        or re.search(r"\b\d{1,2}:\d{2}\s*(?:am|pm|mt|et|ct|pt)\b", lower)
+        or "puck drop tonight" in lower
+    )
+    return has_scoreless_marker or (not has_detail and not has_countdown_or_start_time)
+
+
+def _is_live_game_context(text: str) -> bool:
+    clean = _text(text)
+    lower = clean.lower()
+    if not clean or _is_completed_game_context(clean) or _is_scheduled_game_context(clean):
         return False
     has_game_label = bool(re.match(r"^(avalanche game|nuggets game|broncos game|rockies game|buffs game|nba|nhl|nfl|mlb|ncaa):", lower))
     has_score = bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
@@ -527,7 +576,7 @@ def _has_colorado_sports_entity(text: str) -> bool:
 
 def _is_colorado_current_context(text: str) -> bool:
     lower = _text(text).lower()
-    if _is_completed_game_context(lower):
+    if _is_completed_game_context(lower) or _is_scheduled_scoreboard_context(lower):
         return False
     has_colorado = _has_colorado_sports_entity(lower)
     if not has_colorado:
@@ -655,6 +704,8 @@ def _context_flags(text: str) -> list[str]:
     clean = _text(text)
     lower = clean.lower()
     flags = []
+    if _is_scheduled_scoreboard_context(clean):
+        flags.append("scheduled_scoreboard_context")
     if re.match(r"^@\w+", clean):
         flags.append("reply_fragment_context")
         if any(re.search(rf"\b{re.escape(term)}\b", lower) for term in UNRESOLVED_PRONOUN_TERMS):
@@ -676,6 +727,8 @@ def _source_reliability(source: str) -> float:
 def _freshness_status(source: str, timestamp: datetime | None, text: str, now: datetime | None = None) -> str:
     source_key = (source or "news").lower()
     if timestamp is None:
+        if _is_scheduled_scoreboard_context(text):
+            return "unknown_time"
         if source_key == "sports_context" and (_is_live_game_context(text) or _is_colorado_current_context(text)):
             return "fresh"
         return "unknown_time"
@@ -827,6 +880,8 @@ def build_signals(tweets: list[dict[str, Any]] | None,
                 if _is_betting_signal_text(line):
                     continue
                 if _is_completed_game_context(line):
+                    continue
+                if _is_scheduled_scoreboard_context(line):
                     continue
                 if len(line) >= 24 and _contains_any(line, SPORTS_TERMS + PRIMARY_AUDIENCE_TERMS):
                     timestamp = _now(now) if (_is_live_game_context(line) or _is_colorado_current_context(line)) else None
@@ -1116,6 +1171,8 @@ def score_cluster(cluster: dict[str, Any], state: dict[str, Any] | None = None,
         hard_blocks.append("out_of_market_context")
     if "non_sports_avs_context" in risk_flags:
         hard_blocks.append("non_sports_avs_context")
+    if "scheduled_scoreboard_context" in context_flags:
+        hard_blocks.append("scheduled_scoreboard_context")
     if "promo_source" in risk_flags:
         hard_blocks.append("promo_source")
     if "commerce_source" in risk_flags:

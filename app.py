@@ -9655,7 +9655,7 @@ def _ce_pulse_version() -> str:
         return "ce-pulse-app-fallback"
 
 
-CE_PULSE_UI_VERSION = "ce-pulse-ui-v2-source-shaped"
+CE_PULSE_UI_VERSION = "ce-pulse-ui-v3-scheduled-guard"
 
 
 def _ce_pulse_clean_source_text(text: str) -> str:
@@ -9751,6 +9751,51 @@ def _ce_is_completed_game_context(text: str) -> bool:
         or re.search(r"\b(final score|game final|went final|completed)\b", lower)
     )
     return bool(has_game_label and has_final_status)
+
+
+def _ce_is_scheduled_game_context(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    if not clean or _ce_is_completed_game_context(clean):
+        return False
+    has_matchup_shape = " @ " in clean or bool(re.search(r"\b\d+\s*[-@]\s*\d+\b", clean))
+    has_game_label = bool(
+        re.match(r"^(avalanche game|nuggets game|broncos game|rockies game|buffs game|nba|nhl|nfl|mlb|ncaa):", lower)
+        or " game:" in lower
+        or has_matchup_shape
+    )
+    if not has_game_label:
+        return False
+    if not (
+        re.search(r"\((?:scheduled|pregame|pre-game)[^)]*\)", lower)
+        or any(term in lower for term in ("scheduled", "pregame", "pre-game", "puck drop", "kickoff", "tipoff", "starts"))
+    ):
+        return False
+    return not (
+        "in progress" in lower
+        or re.search(r"\b(?:q[1-4]|[1-4](?:st|nd|rd|th)\s+(?:period|quarter)|period\s+[1-4]|quarter\s+[1-4]|halftime|intermission)\b", lower)
+    )
+
+
+def _ce_is_scheduled_scoreboard_context(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = clean.lower()
+    if not _ce_is_scheduled_game_context(clean):
+        return False
+    has_scoreless_marker = bool(re.search(r"\b0\s*(?:@|-|to)\s*0\b", clean, re.I))
+    has_detail = any(
+        term in lower
+        for term in (
+            "lineup", "starter", "scratch", "injury", "quote", "coach", "report",
+            "breaking", "news", "goalie", "rotation", "roster", "trade",
+        )
+    )
+    has_countdown_or_start_time = bool(
+        re.search(r"\bin\s+\d+\s+(?:minutes?|mins?|hours?)\b", lower)
+        or re.search(r"\b\d{1,2}:\d{2}\s*(?:am|pm|mt|et|ct|pt)\b", lower)
+        or "puck drop tonight" in lower
+    )
+    return has_scoreless_marker or (not has_detail and not has_countdown_or_start_time)
 
 
 def _ce_format_quality_findings(text: str, fmt: str) -> tuple[list[str], list[str]]:
@@ -10747,7 +10792,12 @@ def _ce_pulse_required_signal_terms(best: dict) -> set[str]:
 
 def _ce_pulse_source_text_blocked(text: str) -> bool:
     clean = str(text or "").strip()
-    if not clean or _ce_text_has_betting_angle(clean) or _ce_text_has_crypto_or_ai_trading_angle(clean):
+    if (
+        not clean
+        or _ce_text_has_betting_angle(clean)
+        or _ce_text_has_crypto_or_ai_trading_angle(clean)
+        or _ce_is_scheduled_scoreboard_context(clean)
+    ):
         return True
     english_check = getattr(pulse, "_is_english_source_text", None)
     if callable(english_check):
@@ -11109,6 +11159,35 @@ def _ce_pulse_choice_candidates(decision: dict, *, lane: str, fmt: str, minimum:
     return choices[:max(minimum, 5)]
 
 
+def _ce_pulse_rescue_unblocked_decision(decision: dict, *, lane: str, fmt: str) -> dict | None:
+    """If a stale Pulse engine picked a blocked signal, promote the best clean alternative."""
+    if not isinstance(decision, dict):
+        return None
+    candidates = []
+    if isinstance(decision.get("best"), dict):
+        candidates.append(decision.get("best"))
+    candidates.extend([item for item in (decision.get("top_rejected") or []) if isinstance(item, dict)])
+    for candidate in candidates:
+        if not candidate or candidate.get("hard_blocks"):
+            continue
+        source_text = " ".join([
+            str(candidate.get("summary_text") or ""),
+            " ".join(str((src or {}).get("text") or "") for src in candidate.get("source_basis", []) if isinstance(src, dict)),
+        ])
+        if _ce_pulse_source_text_blocked(source_text):
+            continue
+        rescued = _ce_pulse_decision_for_choice(decision, candidate, lane=lane, fmt=fmt)
+        rescued["status"] = "ready" if float(candidate.get("score", 0) or 0) >= 68 else "best_available"
+        best = rescued.get("best") or {}
+        best["why_now"] = (
+            f"{best.get('why_now', 'Fresh timeline context is active.')}; "
+            "promoted after filtering a scheduled scoreboard-only signal"
+        )
+        rescued["best"] = best
+        return rescued
+    return None
+
+
 def _ce_pulse_decision_for_choice(decision: dict, choice: dict, *, lane: str, fmt: str) -> dict:
     selected = dict(decision or {})
     best = dict(choice or {})
@@ -11393,7 +11472,7 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         raw = str((data or {}).get(f"option{idx}") or "").strip()
         if not raw:
             continue
-        draft = _sanitize_output(raw).strip()
+        draft = _ce_prepare_generated_option(raw, fmt, lane).strip()
         if not draft or _ce_text_has_betting_angle(draft) or _ce_pulse_meta_language(draft):
             continue
         if _ce_pulse_draft_contract_issues(draft, decision):
@@ -11410,6 +11489,7 @@ def _ce_pulse_finalize_drafts(data: dict, decision: dict, fmt: str, lane: str) -
         if slot > 3:
             break
     for fallback_text, fallback_pattern in _ce_pulse_local_fallback_drafts(decision, lane, fmt):
+        fallback_text = _ce_prepare_generated_option(fallback_text, fmt, lane).strip()
         if slot > 3:
             break
         if any(fallback_text == final.get(f"option{i}") for i in range(1, slot)):
@@ -11539,8 +11619,12 @@ def _run_creator_evolution_pulse(lane: str | None = None,
     if not isinstance(_decision, dict):
         _decision = _ce_pulse_error_decision("Pulse returned an invalid decision shape.")
     if not _ce_pulse_cached_decision_valid(_decision, _ce_pulse_version()):
-        _fallback = _ce_avalanche_pulse_decision(_sports_ctx, lane=lane, fmt=fmt, reason="Pulse rejected a blocked or stale selected signal.")
-        _decision = _fallback if isinstance(_fallback, dict) else _ce_starter_pulse_decision(lane=lane, fmt=fmt, reason="Pulse rejected a blocked, stale, or off-topic selected signal.")
+        _rescued = _ce_pulse_rescue_unblocked_decision(_decision, lane=lane, fmt=fmt)
+        if isinstance(_rescued, dict):
+            _decision = _rescued
+        else:
+            _fallback = _ce_avalanche_pulse_decision(_sports_ctx, lane=lane, fmt=fmt, reason="Pulse rejected a blocked or stale selected signal.")
+            _decision = _fallback if isinstance(_fallback, dict) else _ce_starter_pulse_decision(lane=lane, fmt=fmt, reason="Pulse rejected a blocked, stale, or off-topic selected signal.")
     _best = _decision.get("best") or {}
     _decision["selected_lane"] = _ce_normalize_lane(lane or _best.get("recommended_lane"))
     _decision["selected_format"] = _normalize_tweet_format(fmt)

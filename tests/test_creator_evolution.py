@@ -1360,7 +1360,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIsNone(decision["best"])
 
     def test_pulse_finds_avalanche_pregame_from_sports_context(self):
-        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v10-public-x-opportunity")
+        self.assertEqual(pulse.PULSE_VERSION, "ce-pulse-v11-scheduled-game-guard")
 
         sports_context = (
             "AVALANCHE GAME: Minnesota Wild @ Colorado Avalanche "
@@ -1386,7 +1386,28 @@ class CreatorEvolutionTests(unittest.TestCase):
         )
         self.assertEqual(news_decision["status"], "ready")
         self.assertEqual(news_decision["best"]["hard_blocks"], [])
-        self.assertIn("newest signal 0.0h old", news_decision["best"]["why_now"])
+
+    def test_pulse_does_not_promote_scoreless_scheduled_scoreboard_over_real_news(self):
+        scheduled = "ROCKIES GAME: Texas Rangers 0 @ Colorado Rockies 0 (Scheduled, 0:00)"
+        nuggets_news = (
+            "NUGGETS NEWS: Nuggets general manager Josh Kroenke says everything is on the table "
+            "except a Nikola Jokic trade as Denver looks at the offseason roster."
+        )
+        sports_context = f"{scheduled}\n{nuggets_news}"
+
+        self.assertFalse(pulse._is_live_game_context(scheduled))
+        self.assertTrue(pulse._is_scheduled_scoreboard_context(scheduled))
+
+        signals = pulse.build_signals([], [], sports_context=sports_context, now=NOW)
+        self.assertTrue(any("NUGGETS NEWS" in item["text"] for item in signals))
+        self.assertFalse(any("ROCKIES GAME" in item["text"] for item in signals))
+
+        decision = pulse.find_pulse([], [], ce.initial_state(), sports_context=sports_context, handle="polfam", now=NOW)
+
+        self.assertEqual(decision["status"], "ready")
+        self.assertIn("NUGGETS NEWS", decision["best"]["summary_text"])
+        self.assertNotIn("ROCKIES GAME", decision["best"]["summary_text"])
+        self.assertIn("newest signal 0.0h old", decision["best"]["why_now"])
 
     def test_pulse_rejects_cavs_false_avs_and_prefers_nuggets_presser(self):
         tweets = [
@@ -2071,7 +2092,13 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("NO SAFE SOURCE", pulse_dialog)
         pulse_text = Path("creator_evolution_pulse.py").read_text()
         self.assertIn("best tweet available right now", pulse_text)
-        self.assertIn("ce-pulse-v10-public-x-opportunity", pulse_text)
+        self.assertIn("ce-pulse-v11-scheduled-game-guard", pulse_text)
+        self.assertIn("def _is_scheduled_scoreboard_context", pulse_text)
+        self.assertIn("scheduled_scoreboard_context", pulse_text)
+        self.assertIn("ce-pulse-ui-v3-scheduled-guard", app_text)
+        self.assertIn("def _ce_pulse_rescue_unblocked_decision", app_text)
+        self.assertIn("promoted after filtering a scheduled scoreboard-only signal", app_text)
+        self.assertIn("_ce_prepare_generated_option(raw, fmt, lane)", app_text)
         self.assertIn("def _is_completed_game_context", pulse_text)
         self.assertIn("if _is_completed_game_context(line):", pulse_text)
         self.assertIn("if _ce_is_completed_game_context(line):", app_text)
