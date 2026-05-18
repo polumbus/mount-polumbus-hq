@@ -8611,12 +8611,23 @@ def _ce_hot_action_prompt(topic: str, source_blob: str) -> str:
     if "makar" in lower:
         return "Ready hook: Good to go is the headline; good enough to tilt the ice is the post."
     if "senzatela" in lower:
-        return "Ready hook: The Rockies being bad does not make Senzatela worthless. It makes selling high the only adult conversation."
+        return "Ready tweet: Senzatela becoming a deadline chip is exactly why bad teams still have adult decisions to make. If the Rockies can turn a revived relief role into real value, holding just to hold is how you stay stuck."
     if "vulnerable" in lower and "broncos" in lower:
         return "Ready hook: If the Broncos are vulnerable, it will show up in AFC West pressure, not May power rankings."
     if "illinois" in lower and "payton" in lower:
         return "Ready frame: Payton is not collecting Illini trivia; he is shopping for a type."
-    return f"Build the post around the current {topic} tension."
+    return f"Ready hook: Build the post around the current {topic} tension."
+
+
+def _ce_hot_signal_detail(topic: str, source_blob: str) -> str:
+    lower = source_blob.lower()
+    if "senzatela" in lower:
+        return "Signal detail: deadline-value report; creator angle is sell-high pressure, not a confirmed trade."
+    if "vulnerable" in lower and "broncos" in lower:
+        return "Signal detail: AFC West vulnerability discussion; use only when the source states the pressure point."
+    if "makar" in lower:
+        return "Signal detail: reported availability watch; creator angle is workload and full-impact usage."
+    return "Signal detail: source-backed topic; creator angle must stay tied to the visible proof."
 
 
 def _ce_hot_source_matches_topic(topic: str, text: str) -> bool:
@@ -8627,6 +8638,8 @@ def _ce_hot_source_matches_topic(topic: str, text: str) -> bool:
     if "payton" in topic_lower or ("illinois" in lower and "payton" in lower):
         return "payton" in lower or ("denver" in lower and "broncos" in lower) or "nfl" in lower
     if "afc west" in topic_lower or "vulnerable" in lower:
+        if "break down:" in lower or "live now" in lower:
+            return False
         return "broncos" in lower and any(term in lower for term in ("afcw", "afc west", "vulnerable", "nfl", "bonitto", "von miller", "denver"))
     if "makar" in topic_lower or "makar" in lower:
         return "makar" in lower or ("avalanche" in lower and "practice" in lower) or ("avs" in lower and "practice" in lower)
@@ -8726,8 +8739,6 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
         ]
         if not source_basis:
             continue
-        if "payton" in topic.lower() and "illinois" in raw_source_blob.lower():
-            continue
         source_blob = " ".join([str(best.get("summary_text") or "")] + [str(src.get("text") or "") for src in source_basis])
         if "according to one report" in source_blob.lower():
             named_sources = [_ce_hot_source_name(src).lower() for src in source_basis]
@@ -8784,6 +8795,7 @@ def _ce_hot_cards_from_pulse_feed(_all_tweets: list, _rss_headlines: list, lane:
             "signal_count": int(best.get("signal_count") or len(source_basis)),
             "cluster_sources": best.get("sources") or [],
             "action_prompt": _ce_hot_action_prompt(topic, source_blob),
+            "signal_detail": _ce_hot_signal_detail(topic, source_blob),
             "public_x": public_x,
             "creator_relevant": True,
             "confidence_label": "verified_hot",
@@ -11738,6 +11750,7 @@ def _ce_inspiration_dialog():
         _quality_scores = _idea.get("quality_scores") or _ce_hot_quality_scores(_idea)
         _source_evidence = _ce_hot_source_proof(_idea)
         _action_prompt = str(_idea.get("action_prompt") or "").strip()
+        _signal_detail = str(_idea.get("signal_detail") or "").strip()
         _confidence = str(_idea.get("confidence_label") or "").replace("_", " ").title()
         _risk = int(_idea.get("negative_signal_risk", 0) or 0)
         _risk_label = "high" if _risk >= 70 else "medium" if _risk >= 45 else "low"
@@ -11761,6 +11774,7 @@ def _ce_inspiration_dialog():
               f'<div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.9);line-height:1.65;margin-bottom:8px;white-space:pre-line;">{html.escape((_hook or _seed)[:520])}</div>'
               f'<div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;margin-bottom:8px;">{html.escape(_why)}</div>'
               f'<div style="font-size:10px;color:rgba(255,255,255,0.42);line-height:1.45;margin-bottom:7px;">Source proof: {html.escape(_source_evidence or "source-backed cluster")}</div>'
+              f'<div style="font-size:10px;color:rgba(255,255,255,0.50);line-height:1.45;margin-bottom:7px;">{html.escape(_signal_detail or "Signal detail: source-backed and ready for Creator Evolution.")}</div>'
               f'<div style="font-size:10px;color:rgba(45,212,191,0.70);line-height:1.45;margin-bottom:7px;">Creator action: {html.escape(_action_prompt or "Build the post around this exact source-backed tension.")}</div>'
               f'<div style="font-size:10px;color:#6F85A5;line-height:1.45;">{html.escape(_diagnostic)}</div>'
             f'</div>',
