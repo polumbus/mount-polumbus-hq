@@ -8666,6 +8666,27 @@ def _ce_hot_grading_html(scores: dict) -> str:
     return "".join(rows)
 
 
+def _ce_hot_compact_grading_html(scores: dict) -> str:
+    chips = []
+    for label in CE_HOT_GRADING_CRITERIA:
+        value = int((scores or {}).get(label, 0) or 0)
+        color = "#2DD4BF" if value == 10 else "#FBBF24" if value >= 8 else "#F87171"
+        chips.append(
+            f'<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border-radius:4px;'
+            f'background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.07);'
+            f'font-size:9px;line-height:1.2;color:#8FA6C6;white-space:nowrap;">'
+            f'{html.escape(label)} <b style="color:{color};font-size:10px;">{value}/10</b></span>'
+        )
+    return (
+        '<div style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,0.05);">'
+        '<div style="font-size:9px;font-weight:900;letter-spacing:1.1px;color:#2DD4BF;'
+        'text-transform:uppercase;margin-bottom:5px;">1-10 grading system</div>'
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;">'
+        + "".join(chips)
+        + "</div></div>"
+    )
+
+
 def _ce_hot_grade_summary(scores: dict) -> str:
     if scores and all(int(v) == 10 for v in scores.values()):
         return "10/10 across every grade"
@@ -12396,6 +12417,7 @@ def _ce_inspiration_dialog():
               f'</div>'
               f'<div style="font-size:14px;color:#E2E8F0;line-height:1.45;margin-bottom:6px;">{html.escape(_hook_preview)}</div>'
               f'<div style="font-size:10px;color:#7E91AD;line-height:1.35;">{html.escape(_why_preview)}</div>'
+              f'{_ce_hot_compact_grading_html(_quality_scores)}'
             f'</div>',
             unsafe_allow_html=True,
         )

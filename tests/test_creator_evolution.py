@@ -2241,6 +2241,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("QC source-backed", ui_block)
         self.assertIn("1-10 grading system", ui_block)
         self.assertIn("Candidate anchor:", ui_block)
+        self.assertIn("def _ce_hot_compact_grading_html", app_text)
+        self.assertIn("_ce_hot_compact_grading_html(_quality_scores)", ui_block)
         self.assertIn("_ce_hot_quality_scores", app_text)
         self.assertIn("def _ce_hot_build_source_text", app_text)
         self.assertIn("_build_source = _ce_hot_build_source_text(_idea)", ui_block)
