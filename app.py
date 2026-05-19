@@ -10495,6 +10495,8 @@ def _ce_source_subject_for_promo(source_text: str) -> str:
     if not clean:
         return "this roster decision"
     lower_clean = clean.lower()
+    if "vegas" in lower_clean and "broncos" in lower_clean and ("chiefs" in lower_clean or "chargers" in lower_clean or "odds" in lower_clean or "sb" in lower_clean or "super bowl" in lower_clean):
+        return "Vegas still pricing the Broncos behind Kansas City and the Chargers"
     if "jonah coleman" in lower_clean and ("rj harvey" in lower_clean or "protection" in lower_clean or "short-yardage" in lower_clean or "short yardage" in lower_clean):
         return "Jonah Coleman stealing Sean Payton trust snaps"
     if "sean payton" in lower_clean and "illinois" in lower_clean:
@@ -10560,7 +10562,12 @@ def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tupl
         return None, {}, []
     subject = _ce_source_subject_for_promo(source_text)
     lower_subject = subject.lower()
-    if "bo nix" in lower_subject or "ankle" in lower_subject or "qb" in lower_subject:
+    if "vegas" in lower_subject and "broncos" in lower_subject:
+        focus = "Vegas still not buying Denver"
+        detail = "the Broncos can look improved and still be priced behind the Chiefs and Chargers"
+        tension = "The real question is whether that gap is disrespect, roster reality, or the exact pressure Payton has to erase"
+        final = "That is the part the video is built around..."
+    elif "bo nix" in lower_subject or "ankle" in lower_subject or "qb" in lower_subject:
         focus = "Bo Nix"
         detail = "ankle ready and ankle trusted are two different Broncos conversations"
         tension = "The next QB decision is where the roster says how much trust is actually there"
@@ -10582,9 +10589,9 @@ def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tupl
         final = "That is where this Broncos running back story gets interesting..."
     else:
         focus = subject
-        detail = "the public headline and the actual decision pressure are not the same thing"
-        tension = "The important part is what the next roster move, film tell, or camp rep says underneath it"
-        final = "That is where the answer starts to leak out..."
+        detail = "the obvious reaction is only the surface layer"
+        tension = "The useful question is what decision, matchup, or trust gap is hiding underneath it"
+        final = "That is the piece the video has to pull apart..."
 
     if _normalize_tweet_format(fmt) == "Punchy Tweet":
         drafts = [
@@ -10594,15 +10601,15 @@ def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tupl
         ]
     elif _normalize_tweet_format(fmt) == "Long Tweet":
         drafts = [
-            f"{focus} is the headline, but {detail}. That matters because {tension.lower()}. The answer is not in the clean public line. It is in the next decision, the next rep, and the part nobody can fake once the pressure shows up...",
+            f"{focus}. {detail}. That matters because {tension.lower()}. The answer is not in the clean public line. It is in the next decision, the next rep, and the part nobody can fake once the pressure shows up...",
             f"The easy version is {focus}. The more interesting version is that {detail}. Once that part is on the table, every move after it becomes a trust test. That is why the next decision matters more than the first quote...",
-            f"{focus} only sounds settled if you stop at the headline. The better tell is whether the next move matches the public confidence. If it does not, then {detail}, and the whole conversation shifts before camp even gets clean...",
+            f"{focus} only sounds settled if you stop at the surface reaction. The better tell is whether the next move matches the public confidence. If it does not, then {detail}, and the whole conversation shifts before camp even gets clean...",
         ]
     else:
         drafts = [
-            f"{focus} is the headline, but {detail}. {tension}.\n\n{final}",
-            f"The clean version is {focus}. The useful version is {detail}. {tension} before the answer gets obvious.",
-            f"{focus} only looks settled from a distance. Up close, {detail}. {tension}.\n\nThat is the tension the video is built around...",
+            f"{focus}. {detail}. {tension}.\n\n{final}",
+            f"The easy take is {focus}. The better read is that {detail}. {tension} before the answer gets obvious.",
+            f"{focus} is not just a throwaway number. {detail}. {tension}.\n\nThat is the tension the video is built around...",
         ]
 
     data = {"pick": "1", "pick_reason": "Selected from deterministic Promo repair drafts that passed Creator Evolution quality gates."}
