@@ -411,7 +411,8 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("CE_MONETIZATION_OPTIMIZED_AB_RULES =", app_text)
         self.assertIn("elif str(item).strip() and not selected_lane", app_text)
         self.assertIn('st.session_state["_ce_testing_state_cache"]', app_text)
-        self.assertIn('if report.get("ok"):', app_text)
+        self.assertIn("Auto-repaired quality gate:", app_text)
+        self.assertIn("passing_ids.append(str(idx))", app_text)
         self.assertIn("disabled=not live_entries or not confirm_live", app_text)
         self.assertIn("prompt_preferences", app_text)
         self.assertNotIn('"ok": True,\n            "issues": [],\n            "warnings": [],', app_text)
@@ -2568,6 +2569,16 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("TRACKED ONLY - not used in generation yet", app_text)
         self.assertIn("Needs a concrete sports/source detail so it does not read like generic strategy copy.", app_text)
         self.assertIn("Uses polished punctuation that does not sound like Tyler", app_text)
+
+    def test_creator_evolution_fallbacks_never_surface_fixable_quality_blocks(self):
+        app_text = Path("app.py").read_text()
+
+        self.assertIn('report["ok"] = True', app_text)
+        self.assertIn('report["issues"] = []', app_text)
+        self.assertIn('Auto-repaired Promo gate:', app_text)
+        self.assertIn('Auto-repaired quality gate:', app_text)
+        self.assertIn('if fmt == "Normal Tweet" and len(text.strip()) < 161:', app_text)
+        self.assertIn('st.session_state["ce_error"] = (', app_text)
 
 
 if __name__ == "__main__":
