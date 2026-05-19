@@ -10495,6 +10495,8 @@ def _ce_source_subject_for_promo(source_text: str) -> str:
     if not clean:
         return "this roster decision"
     lower_clean = clean.lower()
+    if "jonah coleman" in lower_clean and ("rj harvey" in lower_clean or "protection" in lower_clean or "short-yardage" in lower_clean or "short yardage" in lower_clean):
+        return "Jonah Coleman stealing Sean Payton trust snaps"
     if "sean payton" in lower_clean and "illinois" in lower_clean:
         return "Sean Payton targeting Illinois players"
     if "senzatela" in lower_clean and "deadline" in lower_clean:
@@ -10573,6 +10575,11 @@ def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tupl
         detail = "everything can be on the table while the non Jokic minutes still decide the ceiling"
         tension = "The real decision is whether they fix the rotation or just change the names around it"
         final = "That is the part the offseason cannot talk around..."
+    elif "jonah coleman" in lower_subject or "harvey" in lower_subject or "payton trust" in lower_subject:
+        focus = "Jonah Coleman"
+        detail = "RB1 is not the only job that matters when protection and short-yardage trust are on the table"
+        tension = "The real decision is whether Coleman can steal the snaps Sean Payton only gives to backs he trusts"
+        final = "That is where this Broncos running back story gets interesting..."
     else:
         focus = subject
         detail = "the public headline and the actual decision pressure are not the same thing"
