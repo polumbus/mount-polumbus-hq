@@ -10613,9 +10613,9 @@ def _ce_promo_contract_repair_text(text: str, source_text: str, fmt: str, varian
         if 70 <= len(first_sentence) <= 175:
             clean = first_sentence
     open_loops = [
-        "The missing piece is whether the public read matches the decision pressure underneath it.\n\nThat is where the video gets weird...",
-        "The surface number is only the setup. The part that changes the read is the roster decision sitting underneath it...",
-        "The useful question is what that line exposes about the pressure point before everyone treats it like the answer...",
+        "If Payton's next camp decision treats that gap like film proof instead of noise, the whole Broncos conversation shifts...",
+        "Denver only has one way to flip that number, and it starts with the camp decision nobody is pricing correctly...",
+        "The odds say one thing. The next Broncos roster decision and film tell may say something a lot louder...",
     ]
     closer = open_loops[(variant - 1) % len(open_loops)]
     if any(marker in clean.lower()[-180:] for marker in (
@@ -10835,6 +10835,7 @@ PROMO REPAIR CONTRACT:
 - Make the viewer understand why the video has the missing answer.
 - Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.
 - Do not use generic filler like "the video is built around," "the easy take," "before the answer gets obvious," or "the public headline."
+- Do not use stock setup phrases like "the missing piece is," "the useful question is," "the surface number is," "the surface layer," or "the public read."
 - Do not replace the user's topic with a generic roster-pressure template.
 - All 3 options must be distinct Promo drafts that sell the unresolved video tension.
 """

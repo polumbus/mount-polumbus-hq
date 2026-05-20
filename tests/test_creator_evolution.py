@@ -2599,6 +2599,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("This is a YouTube-video promo, not a normal reaction tweet.", app_text)
         self.assertIn("Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.", app_text)
         self.assertIn("Do not replace the user's topic with a generic roster-pressure template.", app_text)
+        self.assertIn('Do not use stock setup phrases like "the missing piece is,"', app_text)
         self.assertIn("def _ce_repair_promo_options_to_contract", app_text)
         self.assertIn("_ce_repair_promo_options_to_contract(", app_text)
         self.assertIn("if _ce_is_promo_lane(lane):\n        return None, {}, []", app_text)
@@ -2608,6 +2609,12 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotIn("the public headline and the actual decision pressure are not the same thing", app_text)
         self.assertNotIn("The easy take is {focus}", app_text)
         self.assertNotIn("deterministic Promo repair drafts", app_text)
+        repair_block = app_text.split("open_loops = [", 1)[1].split("]", 1)[0]
+        self.assertNotIn("The missing piece is", repair_block)
+        self.assertNotIn("The useful question is", repair_block)
+        self.assertNotIn("The surface number is", repair_block)
+        self.assertNotIn("surface layer", repair_block)
+        self.assertNotIn("public read", repair_block)
 
     def test_app_promo_contract_repair_fixes_grok_normal_reaction_drafts(self):
         import app
@@ -2626,6 +2633,9 @@ class CreatorEvolutionTests(unittest.TestCase):
             text = repaired[f"option{idx}"]
             self.assertTrue(ce.draft_quality_report(text, "Normal Tweet", "Promo")["ok"], text)
             self.assertNotIn("the video is built around", text.lower())
+            self.assertNotIn("the missing piece is", text.lower())
+            self.assertNotIn("the useful question is", text.lower())
+            self.assertNotIn("the surface number is", text.lower())
 
 
 if __name__ == "__main__":
