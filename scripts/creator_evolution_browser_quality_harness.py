@@ -29,6 +29,18 @@ import creator_evolution as ce  # noqa: E402
 
 DEFAULT_URL = "http://127.0.0.1:8501/?token=b2e6b5b6a8c2e1f6&user=owner&page=Creator+Evolution"
 FORMATS = ["Punchy Tweet", "Normal Tweet", "Long Tweet", "Thread", "Article"]
+DEFAULT_VOICES = [
+    "Witty Edge",
+    "Comedic",
+    "Annoyed",
+    "Fired-Up",
+    "Skeptical",
+    "Critical",
+    "Promo",
+    "Celebratory",
+    "Deadpan",
+    "Sarcastic",
+]
 FORMAT_BUTTON = {
     "Punchy Tweet": "Punchy",
     "Normal Tweet": "Normal",
@@ -64,6 +76,19 @@ ADVERSARIAL_SEEDS = [
         "the Nuggets say everything is on the table while the same non-Jokic minutes keep wrecking games."
     ),
 ]
+STRESS_SEEDS_BY_VOICE = {
+    "Witty Edge": "Broncos fans are treating the depth chart like proof already, but the first padded practice usually exposes the player everyone was pretending was safe.",
+    "Comedic": "The Nuggets bench has reached the point where Jokic sits down and everyone starts acting like the WiFi went out during surgery.",
+    "Annoyed": "The Avs keep calling the goalie plan settled, then every shaky rebound turns into another public trust exercise nobody asked for.",
+    "Fired-Up": "The Broncos finally have real camp pressure everywhere, and this is exactly where a roster stops talking and starts punching back.",
+    "Skeptical": "Everyone wants to call Denver deeper, but depth only matters if Sean Payton trusts those guys when the boring reps get expensive.",
+    "Critical": "The Broncos cannot keep selling roster competition if the same veterans get protected the second a younger player makes it uncomfortable.",
+    "Promo": "Vegas has the Broncos behind the Chiefs and Chargers in Super Bowl odds, and that number is either disrespect or a warning before camp.",
+    "Celebratory": "Denver finally built a roster where the back end has to fight for jobs instead of just survive the offseason by reputation.",
+    "Deadpan": "The Broncos saying every job is open while everyone pretends they already know the depth chart is a very normal way to relax.",
+    "Sarcastic": "Love when a team says competition is real and then everyone gets surprised when the competition starts threatening comfortable names.",
+}
+STRESS_SEEDS = list(STRESS_SEEDS_BY_VOICE.values())
 FAILURE_PATTERNS = [
     "Creator Evolution rejected every generated draft",
     "AI unavailable",
@@ -73,6 +98,14 @@ FAILURE_PATTERNS = [
     "Exception",
     "No XAI_API_KEY",
     "No OPENAI_API_KEY",
+]
+BAD_OUTPUT_PATTERNS = [
+    "The missing piece is",
+    "The useful question is",
+    "The surface number is",
+    "the video is built around",
+    "The easy take is",
+    "the public headline and the actual decision pressure",
 ]
 
 
@@ -103,6 +136,19 @@ def _click_text(page, text: str, *, timeout: int = 5000) -> None:
         locator.click(timeout=timeout, force=True)
 
 
+def _active_page(page):
+    frame = page.locator('iframe[title="streamlitApp"]')
+    try:
+        if frame.count() > 0:
+            handle = frame.first.element_handle(timeout=5000)
+            content = handle.content_frame() if handle else None
+            if content:
+                return content
+    except Exception:
+        pass
+    return page
+
+
 def _select_format(page, fmt: str) -> None:
     _click_text(page, FORMAT_BUTTON[fmt], timeout=5000)
     page.wait_for_timeout(500)
@@ -123,7 +169,8 @@ def _select_voice(page, voice: str) -> None:
     except Exception:
         combo.fill(voice, timeout=5000)
         page.wait_for_timeout(300)
-        page.keyboard.press("Enter")
+        keyboard_owner = getattr(page, "keyboard", None) or page.page.keyboard
+        keyboard_owner.press("Enter")
     page.wait_for_timeout(500)
 
 
@@ -134,7 +181,17 @@ def _fill_concept(page, concept: str) -> None:
 
 
 def _click_evolve(page) -> None:
-    _click_text(page, "EVOLVE", timeout=5000)
+    try:
+        page.locator('div[data-dock="ce_evolve"]').click(timeout=5000, force=True)
+        return
+    except Exception:
+        pass
+    try:
+        _click_text(page, "EVOLVE", timeout=5000)
+        return
+    except Exception:
+        pass
+    _click_text(page, "ce_evolve", timeout=5000)
 
 
 def _body_text(page) -> str:
@@ -173,6 +230,11 @@ def _failure_hits(text: str) -> list[str]:
     return [pattern for pattern in FAILURE_PATTERNS if pattern.lower() in lower]
 
 
+def _bad_output_hits(text: str) -> list[str]:
+    lower = text.lower()
+    return [pattern for pattern in BAD_OUTPUT_PATTERNS if pattern.lower() in lower]
+
+
 def _run_case(page, *, fmt: str, voice: str, concept: str, seed_index: int, timeout_ms: int, screenshot_dir: Path) -> dict:
     start = time.monotonic()
     page.evaluate("window.scrollTo(0, 0)")
@@ -204,8 +266,9 @@ def _run_case(page, *, fmt: str, voice: str, concept: str, seed_index: int, time
     generated_preview = _generated_option_preview(page)
     result_text = generated_preview or _extract_result_text(body)
     hits = _failure_hits(result_text or body)
+    bad_hits = _bad_output_hits(result_text or body)
     option_count = max(_generated_option_count(page), len(re.findall(r"\bOPTION\s+[123]\b", result_text)))
-    if status == "ok" and (hits or option_count < 3):
+    if status == "ok" and (hits or bad_hits or option_count < 3):
         status = "failed"
     elif status == "ok":
         status = "passed"
@@ -214,7 +277,10 @@ def _run_case(page, *, fmt: str, voice: str, concept: str, seed_index: int, time
     if status != "passed":
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         screenshot_path = str(screenshot_dir / f"{_slug(voice)}-{_slug(fmt)}-seed{seed_index}.png")
-        page.screenshot(path=screenshot_path, full_page=True)
+        try:
+            page.screenshot(path=screenshot_path, full_page=True)
+        except Exception:
+            page.page.screenshot(path=screenshot_path, full_page=True)
 
     return {
         "format": fmt,
@@ -225,6 +291,7 @@ def _run_case(page, *, fmt: str, voice: str, concept: str, seed_index: int, time
         "elapsed_seconds": elapsed,
         "option_count": option_count,
         "failure_hits": hits,
+        "bad_output_hits": bad_hits,
         "preview": result_text[:2000],
         "screenshot": screenshot_path,
     }
@@ -236,22 +303,25 @@ def main() -> int:
     parser.add_argument("--voices", default="all")
     parser.add_argument("--formats", default="all")
     parser.add_argument("--max-cases", type=int, default=0, help="Optional smoke-run limit.")
-    parser.add_argument("--seed-mode", choices=["default", "adversarial"], default="default")
+    parser.add_argument("--seed-mode", choices=["default", "adversarial", "stress"], default="stress")
     parser.add_argument("--start-at", type=int, default=1, help="1-based case index for resuming a long run.")
     parser.add_argument("--timeout-ms", type=int, default=90000)
     parser.add_argument("--headful", action="store_true")
+    parser.add_argument("--chrome-executable", default="")
     parser.add_argument("--output", default="")
     args = parser.parse_args()
 
-    voices = _parse_csv(args.voices, list(ce.EMOTION_LANES))
+    voices = _parse_csv(args.voices, DEFAULT_VOICES)
     formats = _parse_csv(args.formats, FORMATS)
-    seeds = ADVERSARIAL_SEEDS if args.seed_mode == "adversarial" else SEEDS
+    seeds = ADVERSARIAL_SEEDS if args.seed_mode == "adversarial" else STRESS_SEEDS if args.seed_mode == "stress" else SEEDS
     cases = [
-        (fmt, voice, seed_index, concept)
+        (fmt, voice, seed_index, STRESS_SEEDS_BY_VOICE.get(voice, concept) if args.seed_mode == "stress" else concept)
         for fmt in formats
         for voice in voices
         for seed_index, concept in enumerate(seeds, 1)
     ]
+    if args.seed_mode == "stress":
+        cases = [(fmt, voice, 1, STRESS_SEEDS_BY_VOICE.get(voice, STRESS_SEEDS[0])) for fmt in formats for voice in voices]
     if args.start_at > 1:
         cases = cases[args.start_at - 1 :]
     if args.max_cases:
@@ -264,18 +334,22 @@ def main() -> int:
 
     results: list[dict] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=not args.headful)
+        launch_kwargs = {"headless": not args.headful}
+        if args.chrome_executable:
+            launch_kwargs["executable_path"] = args.chrome_executable
+        browser = p.chromium.launch(**launch_kwargs)
         page = browser.new_page(viewport={"width": 1400, "height": 1200})
         page.goto(args.url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(5000)
-        if "Creator Evolution" not in _body_text(page):
+        app_page = _active_page(page)
+        if "Creator Evolution" not in _body_text(app_page):
             raise SystemExit("Creator Evolution page did not load.")
 
         total = len(cases)
         for idx, (fmt, voice, seed_index, concept) in enumerate(cases, 1):
             print(f"[{idx}/{total}] {fmt} | {voice} | seed {seed_index}", flush=True)
             result = _run_case(
-                page,
+                app_page,
                 fmt=fmt,
                 voice=voice,
                 concept=concept,
