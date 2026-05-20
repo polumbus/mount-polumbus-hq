@@ -1180,6 +1180,16 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], report)
 
+    def test_promo_quality_gate_rejects_normal_reaction_without_video_cliffhanger(self):
+        bad = (
+            "Vegas has the Broncos behind the Chiefs and Chargers to win the Super Bowl. "
+            "They already wrote us off once. Now they are doing it again before the season even starts."
+        )
+        report = ce.draft_quality_report(bad, "Normal Tweet", "Promo")
+
+        self.assertFalse(report["ok"], report)
+        self.assertTrue(any("cliffhanger" in issue.lower() for issue in report["issues"]))
+
     def test_promo_fallback_examples_pass_quality_gate(self):
         examples = [
             (
@@ -1190,7 +1200,7 @@ class CreatorEvolutionTests(unittest.TestCase):
             (
                 "The clean version is Bo Nix. The useful version is that ankle ready and ankle trusted are two different "
                 "Broncos conversations. The next QB decision is where the roster says how much trust is actually there "
-                "before the answer gets obvious."
+                "right before the roster says it out loud."
             ),
             (
                 "Bo Nix only looks settled from a distance. Up close, ankle ready and ankle trusted are two different "

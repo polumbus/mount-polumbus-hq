@@ -1144,9 +1144,6 @@ PROMO_CLICKBAIT_PHRASES = (
 PROMO_CLIFFHANGER_MARKERS = (
     "...",
     "…",
-    "but",
-    "until",
-    "before",
     "right before",
     "the part nobody",
     "the part that changes",
@@ -1564,7 +1561,7 @@ def draft_quality_report(text: str, fmt: str = "Normal Tweet", lane: str = DEFAU
         if not has_promo_specific_tension(text):
             issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
         if not has_promo_cliffhanger(text):
-            warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
+            issues.append("Promo must end with a real video-tension cliffhanger or open loop.")
 
     if public_x.get("candidate_fit", 0) < 45:
         issues.append("Weak candidate/retrieval anchor: the first visible beat does not clearly signal the team, player, mechanism, or conversation cluster.")

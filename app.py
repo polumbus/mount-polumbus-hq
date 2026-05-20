@@ -10017,7 +10017,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         "will blow your mind", "click here",
     )
     promo_cliffhanger_markers = (
-        "...", "…", "but", "until", "before", "right before", "the part nobody", "the part that changes",
+        "...", "…", "right before", "the part nobody", "the part that changes",
         "what happens next", "where it gets interesting", "that's where", "the problem is",
         "the question is", "points somewhere else", "points somewhere more uncomfortable",
         "where the whole argument flips", "where the video gets weird", "missing third act",
@@ -10144,7 +10144,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
                     if not promo_has_specific_tension:
                         local_issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
                     if not any(marker in tail for marker in promo_cliffhanger_markers):
-                        local_warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
+                        local_issues.append("Promo must end with a real video-tension cliffhanger or open loop.")
                 if local_issues or local_warnings:
                     report = dict(report)
                     existing_issues = list(report.get("issues", []) or [])
@@ -10253,7 +10253,7 @@ def _ce_draft_quality_report(text: str, fmt: str, lane: str) -> dict:
         if not promo_has_specific_tension:
             issues.append("Promo needs a specific sports tension, contradiction, decision, stat, film tell, or fan assumption.")
         if not any(marker in tail for marker in promo_cliffhanger_markers):
-            warnings.append("Promo should end with a real video-tension cliffhanger or open loop.")
+            issues.append("Promo must end with a real video-tension cliffhanger or open loop.")
 
     public_x = cexa.public_x_draft_report(clean, fmt, lane)
     if public_x.get("candidate_fit", 0) < 45:
