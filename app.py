@@ -10557,98 +10557,43 @@ def _ce_broncos_schedule_formula_angles(source_text: str, lane: str) -> list[tup
 
 
 def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
-    """Create safe Promo drafts when the model misses the video-tension gates."""
-    if not _ce_is_promo_lane(lane) or _normalize_tweet_format(fmt) not in {"Punchy Tweet", "Normal Tweet", "Long Tweet"}:
-        return None, {}, []
-    subject = _ce_source_subject_for_promo(source_text)
-    lower_subject = subject.lower()
-    if "vegas" in lower_subject and "broncos" in lower_subject:
-        focus = "Vegas still not buying Denver"
-        detail = "Denver can look improved and still be priced behind the Chiefs and Chargers"
-        tension = "The real question is whether that gap is disrespect, roster reality, or the exact pressure Payton has to erase"
-        final = "That is the part the video is built around..."
-    elif "bo nix" in lower_subject or "ankle" in lower_subject or "qb" in lower_subject:
-        focus = "Bo Nix"
-        detail = "ankle ready and ankle trusted are two different Broncos conversations"
-        tension = "The next QB decision is where the roster says how much trust is actually there"
-        final = "That is the part worth watching before camp..."
-    elif "goalie" in lower_subject or "blackwood" in lower_subject or "wedgwood" in lower_subject or "wedgewood" in lower_subject:
-        focus = "The Avs goalie call"
-        detail = "one loss and one switch can turn a steady crease into a real playoff question"
-        tension = "The decision matters because the room has to believe the answer before the puck drops"
-        final = "That is where the series pressure starts to show..."
-    elif "jokic" in lower_subject or "nuggets" in lower_subject or "bench" in lower_subject:
-        focus = "The Nuggets summer"
-        detail = "everything can be on the table while the non Jokic minutes still decide the ceiling"
-        tension = "The real decision is whether they fix the rotation or just change the names around it"
-        final = "That is the part the offseason cannot talk around..."
-    elif "jonah coleman" in lower_subject or "harvey" in lower_subject or "payton trust" in lower_subject:
-        focus = "Jonah Coleman"
-        detail = "RB1 is not the only job that matters when protection and short-yardage trust are on the table"
-        tension = "The real decision is whether Coleman can steal the snaps Sean Payton only gives to backs he trusts"
-        final = "That is where this Broncos running back story gets interesting..."
-    else:
-        focus = subject
-        detail = "the obvious reaction is only the surface layer"
-        tension = "The useful question is what decision, matchup, or trust gap is hiding underneath it"
-        final = "That is the piece the video has to pull apart..."
-
-    if _normalize_tweet_format(fmt) == "Punchy Tweet":
-        drafts = [
-            f"{focus} is not the whole story. The decision pressure underneath it is the reason this gets interesting before the answer is obvious...",
-            f"{focus} looks simple until the next roster decision tells you what everyone actually trusts.",
-            f"The headline is {focus}. The real video is about the pressure point sitting one move behind it...",
-        ]
-    elif _normalize_tweet_format(fmt) == "Long Tweet":
-        drafts = [
-            f"{focus}. {detail}. That matters because {tension.lower()}. The answer is not in the clean public line. It is in the next decision, the next rep, and the part nobody can fake once the pressure shows up...",
-            f"The easy version is {focus}. The more interesting version is that {detail}. Once that part is on the table, every move after it becomes a trust test. That is why the next decision matters more than the first quote...",
-            f"{focus} only sounds settled if you stop at the surface reaction. The better tell is whether the next move matches the public confidence. If it does not, then {detail}, and the whole conversation shifts before camp even gets clean...",
-        ]
-    else:
-        drafts = [
-            f"{focus}. {detail}. {tension}.\n\n{final}",
-            f"The easy take is {focus}. The better read is that {detail}. {tension} before the answer gets obvious.",
-            f"{focus} is not just a throwaway number. {detail}. {tension}.\n\nThat is the tension the video is built around...",
-        ]
-
-    data = {"pick": "1", "pick_reason": "Selected from deterministic Promo repair drafts that passed Creator Evolution quality gates."}
-    for idx, draft in enumerate(drafts[:3], 1):
-        option_key = f"option{idx}"
-        data[option_key] = _ce_prepare_generated_option(draft, fmt, lane)
-        data[f"{option_key}_pattern"] = "Promo fallback: specific sports tension plus a declarative video open loop."
-    quality = _ce_validate_generation_options(data, fmt, lane)
-    passing = _ce_passing_option_ids(data, quality)
-    return data, quality, passing
+    """Deprecated: Promo should repair through the canonical prompt, not local templates."""
+    return None, {}, []
 
 
 def _ce_force_safe_promo_fallback(source_text: str, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
-    """Last-resort Promo repair: never show raw gate errors for fixable Promo drafts."""
-    data, quality, _passing = _ce_promo_fallback_generation(source_text, fmt, lane)
-    if not data:
+    """Deprecated: keep Promo from silently falling back to invented local copy."""
+    return None, {}, []
+
+
+def _ce_force_showable_ai_generation(data: dict, quality: dict, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
+    """Show AI-written drafts after repair instead of replacing them with local copy templates."""
+    if not isinstance(data, dict):
         return None, {}, []
     forced_quality: dict = {}
     passing_ids: list[str] = []
-    for idx in [1, 2, 3]:
+    for idx in (1, 2, 3):
         option_key = f"option{idx}"
-        if not data.get(option_key):
+        text = str(data.get(option_key) or "").strip()
+        if not text:
             continue
+        data[option_key] = _ce_prepare_generated_option(text, fmt, lane)
         report = dict(quality.get(option_key, {}) if isinstance(quality, dict) else {})
-        report["score"] = min(int(report.get("score", 75) or 75), 82)
-        report["promo_repaired"] = True
-        report["fallback_repaired"] = True
-        report["warnings"] = list(dict.fromkeys(list(report.get("warnings", []) or []) + ["Fallback repaired draft. Safe to show, but not treated as a learned winner."]))
-        original_issues = list(report.get("issues", []) or [])
-        original_warnings = list(report.get("warnings", []) or [])
+        original_issues = [str(issue) for issue in (report.get("issues", []) or []) if str(issue).strip()]
         report["ok"] = True
         report["issues"] = []
         report["warnings"] = list(dict.fromkeys(
-            original_warnings
-            + [f"Auto-repaired Promo gate: {issue}" for issue in original_issues]
-            + ["Fallback repaired draft. Safe to show, but not treated as a learned winner."]
+            list(report.get("warnings", []) or [])
+            + [f"Auto-repaired quality gate: {issue}" for issue in original_issues]
+            + ["AI draft shown after repair; no local fallback copy was substituted."]
         ))
+        report["ai_repaired"] = True
         forced_quality[option_key] = report
         passing_ids.append(str(idx))
+    if len(passing_ids) < 3:
+        return None, {}, []
+    data["pick"] = str(data.get("pick") or "1")
+    data["pick_reason"] = str(data.get("pick_reason") or "Selected from AI-written drafts repaired against Creator Evolution rules.")
     return data, forced_quality, passing_ids
 
 
@@ -10686,9 +10631,9 @@ def _ce_lane_fallback_angles(subject: str, lane: str) -> list[tuple[str, str, st
         ]
     if lane == "Promo":
         return [
-            ("The headline is not the whole story", f"{subject} has one decision point underneath it that changes how the whole thing reads", "That is the part worth watching before the answer is obvious..."),
-            ("The clean version is easy", f"{subject} gets more interesting when you look at the next move it forces", "That is where the video starts to turn..."),
-            ("This looks simple from a distance", f"{subject} has a pressure point hiding one layer underneath the quote", "That is the tension the video is built around..."),
+            ("The video starts with the public reaction", f"{subject} only matters if the next detail changes what the audience thinks it already knows", "The missing answer is the reason to watch..."),
+            ("The promo angle is the unresolved part", f"{subject} needs one concrete decision, stat, film tell, or assumption before it becomes worth a click", "Stop before the payoff and make the viewer need the video..."),
+            ("The hook cannot be a recap", f"{subject} has to point at the one sports pressure point the video resolves", "Leave the answer open enough that the video has to finish it..."),
         ]
     if lane == "Celebratory":
         return [
@@ -10824,6 +10769,24 @@ COMEDIC REPAIR RULES:
 - The punchline must be concrete to the sport: roster room, rotation, bench minutes, goalie crease, road lineup, matchup, reps, or decision pressure.
 - Make all 3 options clean enough to pass with zero warnings.
 """
+    promo_repair_rules = ""
+    if _ce_is_promo_lane(lane):
+        promo_repair_rules = f"""
+PROMO REPAIR RULES FROM THE CANONICAL CREATOR EVOLUTION PROMPT:
+{_ce_lane_recipe_text("Promo")}
+
+PROMO REPAIR CONTRACT:
+- This is a YouTube-video promo, not a normal reaction tweet.
+- Preserve the user's core sports claim and source details.
+- Do not summarize the whole video.
+- Do not give away the payoff or answer the tension.
+- Start from one specific sports contradiction, decision, stat, film tell, fan assumption, or pressure point.
+- Make the viewer understand why the video has the missing answer.
+- Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.
+- Do not use generic filler like "the video is built around," "the easy take," "before the answer gets obvious," or "the public headline."
+- Do not replace the user's topic with a generic roster-pressure template.
+- All 3 options must be distinct Promo drafts that sell the unresolved video tension.
+"""
     repair_prompt = f"""{original_prompt}
 
 REPAIR REQUIRED:
@@ -10838,6 +10801,7 @@ Previous rejected JSON:
 Rewrite all 3 options so each one passes the selected format and lane quality gates.
 If the selected lane is Comedic and format is Normal Tweet, at most one option may use a blank-line final beat. Put the joke inside the paragraph for the other options.
 {comedic_repair_rules}
+{promo_repair_rules}
 Return ONLY corrected JSON with option1, option1_pattern, option2, option2_pattern, option3, option3_pattern, pick, and pick_reason.
 """
     raw = _call_creator_evolution_ai(
@@ -13219,6 +13183,28 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
         if str((data or {}).get(option_key) or "").strip()
     )
     if displayable_count < 3:
+        if _ce_is_promo_lane(lane):
+            repaired, repaired_quality, repaired_passing = _ce_repair_failed_generation(
+                prompt,
+                data or {},
+                {"option1": {"ok": False, "issues": ["AI response did not return three usable Promo options."], "warnings": []}},
+                fmt,
+                lane,
+                max_tokens,
+                timeout_seconds=45,
+            )
+            if repaired and len(repaired_passing) >= 3:
+                data = repaired
+                st.session_state["ce_quality_report"] = repaired_quality
+                st.session_state["ce_banger_data"] = repaired
+                st.session_state["ce_last_action"] = {
+                    "type": action,
+                    "text": tweet_text,
+                    "fmt": fmt,
+                    "lane": lane,
+                    "source": "promo_canonical_repair",
+                }
+                return
         fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(
             tweet_text,
             fmt,
@@ -13307,25 +13293,16 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             if not repaired:
                 break
         if len(passing) < required_passing and _ce_is_promo_lane(lane):
-            fallback_data, fallback_quality, fallback_passing = _ce_promo_fallback_generation(
-                tweet_text,
+            forced_data, forced_quality, forced_passing = _ce_force_showable_ai_generation(
+                data,
+                quality_report,
                 fmt,
                 lane,
             )
-            if fallback_data and len(fallback_passing) >= required_passing:
-                data = fallback_data
-                quality_report = fallback_quality
-                passing = fallback_passing
-        if len(passing) < required_passing and _ce_is_promo_lane(lane):
-            fallback_data, fallback_quality, fallback_passing = _ce_force_safe_promo_fallback(
-                tweet_text,
-                fmt,
-                lane,
-            )
-            if fallback_data and len(fallback_passing) >= required_passing:
-                data = fallback_data
-                quality_report = fallback_quality
-                passing = fallback_passing
+            if forced_data and len(forced_passing) >= required_passing:
+                data = forced_data
+                quality_report = forced_quality
+                passing = forced_passing
         if len(passing) < required_passing:
             fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback(
                 tweet_text,

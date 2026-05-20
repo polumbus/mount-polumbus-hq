@@ -2019,9 +2019,11 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("def _ce_prepare_generated_option", app_text)
         self.assertIn("def _ce_promo_fallback_generation", app_text)
         self.assertIn("def _ce_force_safe_promo_fallback", app_text)
+        self.assertIn("def _ce_force_showable_ai_generation", app_text)
         self.assertIn("def _ce_force_safe_lane_fallback", app_text)
-        self.assertIn("fallback_data, fallback_quality, fallback_passing = _ce_promo_fallback_generation", app_text)
-        self.assertIn("fallback_data, fallback_quality, fallback_passing = _ce_force_safe_promo_fallback", app_text)
+        self.assertNotIn("fallback_data, fallback_quality, fallback_passing = _ce_promo_fallback_generation", app_text)
+        self.assertNotIn("fallback_data, fallback_quality, fallback_passing = _ce_force_safe_promo_fallback", app_text)
+        self.assertIn("promo_canonical_repair", app_text)
         self.assertIn("fallback_data, fallback_quality, fallback_passing = _ce_force_safe_lane_fallback", app_text)
         self.assertIn('getattr(ce, "repair_generated_text_for_format", None)', app_text)
         self.assertIn("data[option_key] = _ce_prepare_generated_option", app_text)
@@ -2575,19 +2577,24 @@ class CreatorEvolutionTests(unittest.TestCase):
 
         self.assertIn('report["ok"] = True', app_text)
         self.assertIn('report["issues"] = []', app_text)
-        self.assertIn('Auto-repaired Promo gate:', app_text)
         self.assertIn('Auto-repaired quality gate:', app_text)
+        self.assertIn("AI draft shown after repair; no local fallback copy was substituted.", app_text)
         self.assertIn('if fmt == "Normal Tweet" and len(text.strip()) < 161:', app_text)
         self.assertIn('st.session_state["ce_error"] = (', app_text)
 
-    def test_promo_fallback_handles_broncos_odds_without_generic_headline_slop(self):
+    def test_promo_repair_uses_canonical_prompt_instead_of_local_template_slop(self):
         app_text = Path("app.py").read_text()
 
-        self.assertIn("Vegas still pricing the Broncos behind Kansas City and the Chargers", app_text)
-        self.assertIn("Denver can look improved and still be priced behind the Chiefs and Chargers", app_text)
-        self.assertIn("disrespect, roster reality, or the exact pressure Payton has to erase", app_text)
+        self.assertIn("PROMO REPAIR RULES FROM THE CANONICAL CREATOR EVOLUTION PROMPT", app_text)
+        self.assertIn("This is a YouTube-video promo, not a normal reaction tweet.", app_text)
+        self.assertIn("Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.", app_text)
+        self.assertIn("Do not replace the user's topic with a generic roster-pressure template.", app_text)
+        self.assertNotIn("Vegas still not buying Denver", app_text)
+        self.assertNotIn("Denver can look improved and still be priced behind the Chiefs and Chargers", app_text)
+        self.assertNotIn("disrespect, roster reality, or the exact pressure Payton has to erase", app_text)
         self.assertNotIn("the public headline and the actual decision pressure are not the same thing", app_text)
-        self.assertNotIn("is the headline, but {detail}", app_text)
+        self.assertNotIn("The easy take is {focus}", app_text)
+        self.assertNotIn("deterministic Promo repair drafts", app_text)
 
 
 if __name__ == "__main__":
