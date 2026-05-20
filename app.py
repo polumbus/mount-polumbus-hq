@@ -10568,6 +10568,8 @@ def _ce_force_safe_promo_fallback(source_text: str, fmt: str, lane: str) -> tupl
 
 def _ce_force_showable_ai_generation(data: dict, quality: dict, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
     """Show AI-written drafts after repair instead of replacing them with local copy templates."""
+    if _ce_is_promo_lane(lane):
+        return None, {}, []
     if not isinstance(data, dict):
         return None, {}, []
     forced_quality: dict = {}
@@ -10595,6 +10597,55 @@ def _ce_force_showable_ai_generation(data: dict, quality: dict, fmt: str, lane: 
     data["pick"] = str(data.get("pick") or "1")
     data["pick_reason"] = str(data.get("pick_reason") or "Selected from AI-written drafts repaired against Creator Evolution rules.")
     return data, forced_quality, passing_ids
+
+
+def _ce_promo_contract_repair_text(text: str, source_text: str, fmt: str, variant: int) -> str:
+    clean = re.sub(r"\s+", " ", str(text or "").strip()).strip()
+    source = re.sub(r"\s+", " ", str(source_text or "").strip()).strip()
+    if not clean:
+        clean = source[:220].strip()
+    clean = re.sub(r"\s+(Watch now|Watch this|Full breakdown|Link below)\.?$", "", clean, flags=re.I).strip()
+    clean = clean.rstrip()
+    if clean.endswith("?"):
+        clean = clean[:-1].rstrip() + "."
+    if _normalize_tweet_format(fmt) == "Normal Tweet" and len(clean) > 130:
+        first_sentence = re.split(r"(?<=[.!])\s+", clean, maxsplit=1)[0].strip()
+        if 70 <= len(first_sentence) <= 175:
+            clean = first_sentence
+    open_loops = [
+        "The missing piece is whether the public read matches the decision pressure underneath it.\n\nThat is where the video gets weird...",
+        "The surface number is only the setup. The part that changes the read is the roster decision sitting underneath it...",
+        "The useful question is what that line exposes about the pressure point before everyone treats it like the answer...",
+    ]
+    closer = open_loops[(variant - 1) % len(open_loops)]
+    if any(marker in clean.lower()[-180:] for marker in (
+        "...", "…", "right before", "the part nobody", "the part that changes",
+        "what happens next", "where it gets interesting", "that's where", "the problem is",
+        "the question is", "points somewhere else", "points somewhere more uncomfortable",
+        "where the whole argument flips", "where the video gets weird", "missing third act",
+    )):
+        repaired = clean
+    else:
+        repaired = f"{clean} {closer}" if "\n\n" not in closer else f"{clean}\n\n{closer}"
+    repaired = _ce_prepare_generated_option(repaired, fmt, "Promo")
+    if _normalize_tweet_format(fmt) == "Normal Tweet" and len(repaired) < 140:
+        repaired = _ce_prepare_generated_option(f"{clean} {open_loops[variant % len(open_loops)]}", fmt, "Promo")
+    return repaired
+
+
+def _ce_repair_promo_options_to_contract(data: dict, source_text: str, fmt: str, lane: str) -> tuple[dict | None, dict, list[str]]:
+    if not _ce_is_promo_lane(lane) or not isinstance(data, dict):
+        return None, {}, []
+    repaired = {"pick": str(data.get("pick") or "1"), "pick_reason": "Repaired to the canonical Promo cliffhanger contract without substituting a local topic template."}
+    for idx in (1, 2, 3):
+        option_key = f"option{idx}"
+        raw = str(data.get(option_key) or "").strip()
+        if not raw:
+            return None, {}, []
+        repaired[option_key] = _ce_promo_contract_repair_text(raw, source_text, fmt, idx)
+        repaired[f"{option_key}_pattern"] = str(data.get(f"{option_key}_pattern") or "Promo contract repair: preserve the source tension and stop before the payoff.")
+    quality = _ce_validate_generation_options(repaired, fmt, lane)
+    return repaired, quality, _ce_passing_option_ids(repaired, quality)
 
 
 def _ce_lane_fallback_angles(subject: str, lane: str) -> list[tuple[str, str, str]]:
@@ -13292,6 +13343,17 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 continue
             if not repaired:
                 break
+        if len(passing) < required_passing and _ce_is_promo_lane(lane):
+            promo_data, promo_quality, promo_passing = _ce_repair_promo_options_to_contract(
+                data,
+                tweet_text,
+                fmt,
+                lane,
+            )
+            if promo_data and len(promo_passing) >= required_passing:
+                data = promo_data
+                quality_report = promo_quality
+                passing = promo_passing
         if len(passing) < required_passing and _ce_is_promo_lane(lane):
             forced_data, forced_quality, forced_passing = _ce_force_showable_ai_generation(
                 data,

@@ -2599,12 +2599,33 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("This is a YouTube-video promo, not a normal reaction tweet.", app_text)
         self.assertIn("Always end with a video-tension cliffhanger about why the viewer needs to watch the YouTube video.", app_text)
         self.assertIn("Do not replace the user's topic with a generic roster-pressure template.", app_text)
+        self.assertIn("def _ce_repair_promo_options_to_contract", app_text)
+        self.assertIn("_ce_repair_promo_options_to_contract(", app_text)
+        self.assertIn("if _ce_is_promo_lane(lane):\n        return None, {}, []", app_text)
         self.assertNotIn("Vegas still not buying Denver", app_text)
         self.assertNotIn("Denver can look improved and still be priced behind the Chiefs and Chargers", app_text)
         self.assertNotIn("disrespect, roster reality, or the exact pressure Payton has to erase", app_text)
         self.assertNotIn("the public headline and the actual decision pressure are not the same thing", app_text)
         self.assertNotIn("The easy take is {focus}", app_text)
         self.assertNotIn("deterministic Promo repair drafts", app_text)
+
+    def test_app_promo_contract_repair_fixes_grok_normal_reaction_drafts(self):
+        import app
+
+        source = "Vegas aint buying the Broncos, ok fine, but putting Denver behind the Chiefs and Chargers in the odds to win the SB"
+        data = {
+            "option1": "Vegas has the Broncos behind the Chiefs and Chargers to win the Super Bowl. They already wrote us off once. Now they are doing it again before the season even starts.",
+            "option2": "Vegas aint buying the Broncos. They have Denver behind both the Chiefs and the Chargers in the odds to win it all.",
+            "option3": "Putting Denver behind the Chiefs and Chargers for Super Bowl odds feels off. Vegas aint buying what we are selling.",
+            "pick": "1",
+        }
+        repaired, quality, passing = app._ce_repair_promo_options_to_contract(data, source, "Normal Tweet", "Promo")
+
+        self.assertEqual(passing, ["1", "2", "3"], quality)
+        for idx in (1, 2, 3):
+            text = repaired[f"option{idx}"]
+            self.assertTrue(ce.draft_quality_report(text, "Normal Tweet", "Promo")["ok"], text)
+            self.assertNotIn("the video is built around", text.lower())
 
 
 if __name__ == "__main__":
