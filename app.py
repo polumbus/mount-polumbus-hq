@@ -10564,7 +10564,7 @@ def _ce_promo_fallback_generation(source_text: str, fmt: str, lane: str) -> tupl
     lower_subject = subject.lower()
     if "vegas" in lower_subject and "broncos" in lower_subject:
         focus = "Vegas still not buying Denver"
-        detail = "the Broncos can look improved and still be priced behind the Chiefs and Chargers"
+        detail = "Denver can look improved and still be priced behind the Chiefs and Chargers"
         tension = "The real question is whether that gap is disrespect, roster reality, or the exact pressure Payton has to erase"
         final = "That is the part the video is built around..."
     elif "bo nix" in lower_subject or "ankle" in lower_subject or "qb" in lower_subject:

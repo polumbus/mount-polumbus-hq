@@ -2584,7 +2584,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         app_text = Path("app.py").read_text()
 
         self.assertIn("Vegas still pricing the Broncos behind Kansas City and the Chargers", app_text)
-        self.assertIn("the Broncos can look improved and still be priced behind the Chiefs and Chargers", app_text)
+        self.assertIn("Denver can look improved and still be priced behind the Chiefs and Chargers", app_text)
         self.assertIn("disrespect, roster reality, or the exact pressure Payton has to erase", app_text)
         self.assertNotIn("the public headline and the actual decision pressure are not the same thing", app_text)
         self.assertNotIn("is the headline, but {detail}", app_text)
