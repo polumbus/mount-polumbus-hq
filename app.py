@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 import hashlib
+import math
 import itertools
 import concurrent.futures
 import traceback
@@ -10299,10 +10300,71 @@ def _ce_option_keys(data: dict) -> list[str]:
     return sorted(keys, key=lambda key: int(str(key).replace("option", "") or 0))
 
 
+_CE_SOURCE_PRESERVING_LANES = {
+    "Witty Edge",
+    "Annoyed",
+    "Fired-Up",
+    "Skeptical",
+    "Promo",
+    "Celebratory",
+    "Deadpan",
+}
+
+
+def _ce_source_preservation_findings(draft_text: str, source_text: str, lane: str) -> list[str]:
+    if lane not in _CE_SOURCE_PRESERVING_LANES:
+        return []
+    source = re.sub(r"https?://\S+", " ", str(source_text or ""))
+    draft = str(draft_text or "")
+    source_words = re.findall(r"[A-Za-z][A-Za-z0-9']+", source)
+    if len(source_words) < 5:
+        return []
+    draft_lower = draft.lower()
+    stop = {
+        "about", "after", "again", "against", "because", "being", "could", "every", "from",
+        "have", "into", "just", "keep", "keeps", "more", "only", "over", "same", "should",
+        "that", "their", "there", "these", "this", "those", "through", "under", "when",
+        "where", "which", "while", "with", "would", "will", "your", "they", "them", "than",
+    }
+    signal_terms = []
+    for word in source_words:
+        clean = word.strip("'").lower()
+        if len(clean) < 4 or clean in stop:
+            continue
+        if clean not in signal_terms:
+            signal_terms.append(clean)
+    if not signal_terms:
+        return []
+    missing_terms = [term for term in signal_terms if term not in draft_lower]
+    present_count = len(signal_terms) - len(missing_terms)
+    required_count = max(2, math.ceil(len(signal_terms) * 0.55))
+    findings = []
+    if present_count < required_count:
+        findings.append(
+            "Drifted too far from the original draft: keep the majority of the user's named context and core claim visible."
+        )
+    proper_terms = []
+    for match in re.finditer(r"\b[A-Z][A-Za-z0-9']+(?:\s+[A-Z][A-Za-z0-9']+)?\b", source):
+        term = match.group(0).strip()
+        if term and term.lower() not in {"i", "the"} and term.lower() not in [x.lower() for x in proper_terms]:
+            proper_terms.append(term)
+    missing_proper = []
+    for term in proper_terms:
+        normalized = re.sub(r"^(the|a|an)\s+", "", term.lower()).strip()
+        if term.lower() not in draft_lower and normalized not in draft_lower:
+            missing_proper.append(term)
+    if proper_terms and len(missing_proper) >= max(1, math.ceil(len(proper_terms) * 0.5)):
+        findings.append(
+            "Dropped named source context from the original draft: " + ", ".join(missing_proper[:4])
+        )
+    return findings
+
+
 def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
                                     forbidden_phrases: list[str] | None = None,
                                     feedback_rules: list[dict] | None = None,
-                                    source_text: str = "") -> dict:
+                                    source_text: str = "",
+                                    enforce_source_preservation: bool = False) -> dict:
     """Validate options without trusting stale Creator Evolution module internals."""
     reports: dict = {}
     validator = getattr(ce, "validate_generation_options", None)
@@ -10349,6 +10411,12 @@ def _ce_validate_generation_options(data: dict, fmt: str, lane: str,
                 public_x_penalty += 6
             if public_x_penalty:
                 merged["score"] = max(0, min(100, int(merged.get("score", 100) or 100) - public_x_penalty))
+            if enforce_source_preservation:
+                preservation_issues = _ce_source_preservation_findings(str(data[option_key]), source_text, lane)
+                if preservation_issues:
+                    merged["issues"] = list(dict.fromkeys(merged["issues"] + preservation_issues))
+                    merged["ok"] = False
+                    merged["score"] = max(0, min(100, int(merged.get("score", 100) or 100) - 35))
             feedback_report = vtf.evaluate_feedback_constraints(str(data[option_key]), compat_rules, fmt, lane, source_text)
             hard_failures = list(feedback_report.get("hard_failures", []) or [])
             soft_warnings = list(feedback_report.get("soft_warnings", []) or [])
@@ -13263,22 +13331,40 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             lane,
         )
         if fallback_data and len(fallback_passing) >= 3:
+            if action == "evolve":
+                fallback_quality = _ce_validate_generation_options(
+                    fallback_data,
+                    fmt,
+                    lane,
+                    source_text=tweet_text,
+                    enforce_source_preservation=True,
+                )
+                fallback_passing = _ce_passing_option_ids(fallback_data, fallback_quality)
+            if len(fallback_passing) >= 3:
+                data = fallback_data
+                st.session_state["ce_quality_report"] = fallback_quality
+                st.session_state["ce_banger_data"] = fallback_data
+                st.session_state["ce_last_action"] = {
+                    "type": action,
+                    "text": tweet_text,
+                    "fmt": fmt,
+                    "lane": lane,
+                    "source": "blank_option_fallback",
+                }
+                return
             data = fallback_data
-            st.session_state["ce_quality_report"] = fallback_quality
-            st.session_state["ce_banger_data"] = fallback_data
-            st.session_state["ce_last_action"] = {
-                "type": action,
-                "text": tweet_text,
-                "fmt": fmt,
-                "lane": lane,
-                "source": "blank_option_fallback",
-            }
-            return
     if data and data.get("option1"):
         for option_key in ["option1", "option2", "option3"]:
             if data.get(option_key):
                 data[option_key] = _ce_prepare_generated_option(data[option_key], fmt, lane)
-        quality_report = _ce_validate_generation_options(data, fmt, lane)
+        _enforce_source_preservation = action == "evolve"
+        quality_report = _ce_validate_generation_options(
+            data,
+            fmt,
+            lane,
+            source_text=tweet_text,
+            enforce_source_preservation=_enforce_source_preservation,
+        )
         passing = _ce_passing_option_ids(data, quality_report)
         if lane == "Comedic":
             passing = _ce_clean_comedic_option_ids(data, quality_report)
@@ -13301,7 +13387,13 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 for target_idx, (_, text, pattern) in enumerate(combo, 1):
                     candidate[f"option{target_idx}"] = text
                     candidate[f"option{target_idx}_pattern"] = pattern or "Passed Creator Evolution Comedic quality gates."
-                candidate_quality = _ce_validate_generation_options(candidate, fmt, lane)
+                candidate_quality = _ce_validate_generation_options(
+                    candidate,
+                    fmt,
+                    lane,
+                    source_text=tweet_text,
+                    enforce_source_preservation=_enforce_source_preservation,
+                )
                 candidate_passing = _ce_clean_comedic_option_ids(candidate, candidate_quality)
                 if len(candidate_passing) == 3:
                     return candidate, candidate_quality, candidate_passing
@@ -13376,6 +13468,17 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 data = fallback_data
                 quality_report = fallback_quality
                 passing = fallback_passing
+        if _enforce_source_preservation:
+            quality_report = _ce_validate_generation_options(
+                data,
+                fmt,
+                lane,
+                source_text=tweet_text,
+                enforce_source_preservation=True,
+            )
+            passing = _ce_passing_option_ids(data, quality_report)
+            if lane == "Comedic":
+                passing = _ce_clean_comedic_option_ids(data, quality_report)
         if len(passing) < required_passing:
             failure_summary = _ce_quality_failure_summary(quality_report)
             st.session_state["ce_error"] = (

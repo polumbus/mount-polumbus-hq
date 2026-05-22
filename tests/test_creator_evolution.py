@@ -248,6 +248,18 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("SARCASTIC VOICE", sarcastic)
         self.assertIn("Source freedom for this lane", comedic)
 
+    def test_app_enforces_source_preservation_for_skeptical_evolve(self):
+        app_text = Path("app.py").read_text()
+        validator = app_text.split("def _ce_source_preservation_findings", 1)[1].split("def _ce_validate_generation_options", 1)[0]
+        run_block = app_text.split("def _run_ce_ai", 1)[1].split('@st.dialog("Build a Creator Evolution Tweet"', 1)[0]
+
+        self.assertIn('"Skeptical"', app_text.split("_CE_SOURCE_PRESERVING_LANES", 1)[1].split("def _ce_source_preservation_findings", 1)[0])
+        self.assertIn("Drifted too far from the original draft", validator)
+        self.assertIn("Dropped named source context", validator)
+        self.assertIn('_enforce_source_preservation = action == "evolve"', run_block)
+        self.assertIn("enforce_source_preservation=_enforce_source_preservation", run_block)
+        self.assertIn("enforce_source_preservation=True", run_block)
+
     def test_comedic_quality_rejects_wasted_setup_frames(self):
         for phrase in ("The funny part is", "The whole thing is", "You can always tell"):
             report = ce.draft_quality_report(
