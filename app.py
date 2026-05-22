@@ -10879,7 +10879,9 @@ def _ce_quality_failure_summary(quality_report: dict, limit: int = 5) -> str:
 
 def _ce_repair_failed_generation(original_prompt: str, data: dict, quality_report: dict,
                                  fmt: str, lane: str, max_tokens: int,
-                                 timeout_seconds: int = 30) -> tuple[dict | None, dict, list[str]]:
+                                 timeout_seconds: int = 30,
+                                 source_text: str = "",
+                                 enforce_source_preservation: bool = False) -> tuple[dict | None, dict, list[str]]:
     failure_summary = _ce_quality_failure_summary(quality_report, limit=8)
     comedic_repair_rules = ""
     if lane == "Comedic":
@@ -10923,6 +10925,11 @@ Previous rejected JSON:
 {json.dumps(data, ensure_ascii=False)[:3500]}
 
 Rewrite all 3 options so each one passes the selected format and lane quality gates.
+If the blocking issue says the draft drifted too far, preserve the user's original source text below: keep the same subject, claim, stance, named teams/players, decisions, stakes, caveats, and sequence of thought. Voice can sharpen the wording, but it cannot replace the argument with a new angle.
+If the blocking issue says options repeat the same opener, make the first visible beat of each option distinct while keeping the same original claim.
+Original source text to preserve:
+{source_text or "Use the CONCEPT/SOURCE MATERIAL above."}
+
 If the selected lane is Comedic and format is Normal Tweet, at most one option may use a blank-line final beat. Put the joke inside the paragraph for the other options.
 {comedic_repair_rules}
 {promo_repair_rules}
@@ -10940,7 +10947,13 @@ Return ONLY corrected JSON with option1, option1_pattern, option2, option2_patte
     for option_key in ["option1", "option2", "option3"]:
         if repaired.get(option_key):
             repaired[option_key] = _ce_prepare_generated_option(repaired[option_key], fmt, lane)
-    repaired_quality = _ce_validate_generation_options(repaired, fmt, lane)
+    repaired_quality = _ce_validate_generation_options(
+        repaired,
+        fmt,
+        lane,
+        source_text=source_text,
+        enforce_source_preservation=enforce_source_preservation,
+    )
     return repaired, repaired_quality, _ce_passing_option_ids(repaired, repaired_quality)
 
 
@@ -13316,6 +13329,8 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 lane,
                 max_tokens,
                 timeout_seconds=45,
+                source_text=tweet_text,
+                enforce_source_preservation=action == "evolve",
             )
             if repaired and len(repaired_passing) >= 3:
                 data = repaired
@@ -13421,6 +13436,8 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
                 fmt,
                 lane,
                 max_tokens,
+                source_text=tweet_text,
+                enforce_source_preservation=_enforce_source_preservation,
             )
             if lane == "Comedic":
                 repaired_passing = _ce_clean_comedic_option_ids(repaired or {}, repaired_quality or {})
@@ -13488,7 +13505,7 @@ def _run_ce_ai(action, tweet_text, fmt, lane):
             st.session_state["ce_error"] = (
                 "Creator Evolution rejected every generated draft for quality/safety. "
                 f"Blocking reason: {failure_summary or 'unknown quality failure'}. "
-                "Try a more specific source or lower-risk angle."
+                "The app tried to repair the drafts while preserving your original text; edit the draft only if you want to change the source claim."
             )
             st.session_state["ce_quality_report"] = quality_report
             return

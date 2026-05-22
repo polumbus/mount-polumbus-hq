@@ -264,6 +264,10 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn('_enforce_source_preservation = action == "evolve"', run_block)
         self.assertIn("enforce_source_preservation=_enforce_source_preservation", run_block)
         self.assertIn("enforce_source_preservation=True", run_block)
+        self.assertIn("source_text=tweet_text", run_block)
+        self.assertIn("If the blocking issue says the draft drifted too far", app_text)
+        self.assertIn("If the blocking issue says options repeat the same opener", app_text)
+        self.assertNotIn("Try a more specific source or lower-risk angle.", app_text)
 
     def test_comedic_quality_rejects_wasted_setup_frames(self):
         for phrase in ("The funny part is", "The whole thing is", "You can always tell"):
