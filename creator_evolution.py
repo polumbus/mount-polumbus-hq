@@ -2929,18 +2929,12 @@ def build_generation_prompt(seed: str, fmt: str, lane: str, state: dict[str, Any
         if lane == "Witty Edge"
         else "- The final line must create response pressure. Use a dramatic ending, an alluded question without a question mark, a declarative argument statement, a consequence line, or quote-tweet bait."
     )
-    if lane in {"Critical", "Sarcastic", "Comedic"}:
-        source_preservation_rule = (
-            "- Source freedom for this lane: keep the user's core subject, claim, and factual context, but you may substantially restructure, sharpen, reorder, compress, or reframe the wording to make the selected voice actually work.\n"
-            "- Do not preserve weak phrasing just because it was in the original tweet. For Critical, Sarcastic, and Comedic, the voice may replace the surface wording when a stronger diagnosis, sarcastic turn, or real joke requires it.\n"
-            "- Even with extra freedom, do not drift to a different topic, invent facts, drop essential named teams or players, or reverse the user's stance."
-        )
-    else:
-        source_preservation_rule = (
-            "- Preserve the user's original tweet idea. Unless the input is a structured Build Mode brief, keep the same core claim, subject, stance, and sequence of thought. Improve the wording with the selected voice instead of replacing the tweet with a new angle.\n"
-            "- Keep the majority of the user's original context visible. Do not drop named teams, players, decisions, stakes, caveats, or the main \"what I am saying\" just to make the voice louder or cleaner.\n"
-            "- Voice is a filter, not a reset button. The selected voice should sharpen, compress, punch up, or clarify the user's tweet while still feeling recognizably based on the tweet they gave you."
-        )
+    source_preservation_rule = (
+        "- Preserve the user's original tweet idea. Unless the input is a structured Build Mode brief, keep the same core claim, subject, stance, and sequence of thought. Improve the wording with the selected voice instead of replacing the tweet with a new angle.\n"
+        "- Keep the majority of the user's original context visible. Do not drop named teams, players, decisions, stakes, caveats, or the main \"what I am saying\" just to make the voice louder or cleaner.\n"
+        "- Voice is a filter, not a reset button. The selected voice should sharpen, compress, punch up, or clarify the user's tweet while still feeling recognizably based on the tweet they gave you.\n"
+        "- Even for Critical, Sarcastic, and Comedic, do not drift to a different topic, invent facts, drop essential named teams or players, reverse the user's stance, or replace their argument with a new one."
+    )
     return f"""{opening}
 
 {source_label}:

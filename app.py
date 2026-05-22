@@ -10302,12 +10302,16 @@ def _ce_option_keys(data: dict) -> list[str]:
 
 _CE_SOURCE_PRESERVING_LANES = {
     "Witty Edge",
+    "Tyler Voice",
+    "Comedic",
     "Annoyed",
     "Fired-Up",
     "Skeptical",
+    "Critical",
     "Promo",
     "Celebratory",
     "Deadpan",
+    "Sarcastic",
 }
 
 

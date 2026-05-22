@@ -216,7 +216,7 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertNotEqual(comedic, next_comedic)
         self.assertIn("one or two sentences", ce.voice_tuner_test_prompt("Comedic", "Punchy Tweet", 0))
 
-    def test_source_preservation_relaxes_for_transformational_lanes(self):
+    def test_source_preservation_applies_to_every_evolve_lane(self):
         standard = ce.build_generation_prompt(
             "The Broncos keep saying this roster is deeper, but camp will show if that is real.",
             "Normal Tweet",
@@ -246,14 +246,19 @@ class CreatorEvolutionTests(unittest.TestCase):
         self.assertIn("EDGY GROUP-CHAT SPORTS COMEDY", comedic)
         self.assertIn("Clear diagnosis with accountability", critical)
         self.assertIn("SARCASTIC VOICE", sarcastic)
-        self.assertIn("Source freedom for this lane", comedic)
+        for prompt in (standard, comedic, critical, sarcastic):
+            self.assertIn("Preserve the user's original tweet idea", prompt)
+            self.assertIn("Keep the majority of the user's original context visible", prompt)
+            self.assertNotIn("Source freedom for this lane", prompt)
 
     def test_app_enforces_source_preservation_for_skeptical_evolve(self):
         app_text = Path("app.py").read_text()
         validator = app_text.split("def _ce_source_preservation_findings", 1)[1].split("def _ce_validate_generation_options", 1)[0]
         run_block = app_text.split("def _run_ce_ai", 1)[1].split('@st.dialog("Build a Creator Evolution Tweet"', 1)[0]
+        preserving_block = app_text.split("_CE_SOURCE_PRESERVING_LANES", 1)[1].split("def _ce_source_preservation_findings", 1)[0]
 
-        self.assertIn('"Skeptical"', app_text.split("_CE_SOURCE_PRESERVING_LANES", 1)[1].split("def _ce_source_preservation_findings", 1)[0])
+        for lane in ce.EMOTION_LANES:
+            self.assertIn(f'"{lane}"', preserving_block)
         self.assertIn("Drifted too far from the original draft", validator)
         self.assertIn("Dropped named source context", validator)
         self.assertIn('_enforce_source_preservation = action == "evolve"', run_block)
